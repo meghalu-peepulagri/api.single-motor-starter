@@ -1,13 +1,14 @@
 import { sql } from "drizzle-orm";
-import { pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
-import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
+import { pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+export const statusEnum = pgEnum("status_enum", ["ACTIVE", "INACTIVE", "ARCHIVED"]);
+export const userTypeEnum = pgEnum("user_type", ["ADMIN", "USER"]);
 
 export const users = pgTable("users", {
     id: serial("id").primaryKey().notNull(),
 
     full_name: varchar("full_name").notNull(),
     email: varchar("email"),
-    phone: varchar("phone").notNull(),
+    phone: varchar("phone"),
 
     user_type: userTypeEnum().default("USER"),
 

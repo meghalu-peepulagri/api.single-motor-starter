@@ -1,6 +1,10 @@
 import envData from "../env.js";
-const dbConfig = {
-    connectionString: envData.DATABASE_URL,
+export const dbConfig = {
+    host: envData.DB_HOST,
+    port: Number(envData.DB_PORT),
+    user: envData.DB_USER,
+    password: envData.DB_PASSWORD,
+    name: envData.DB_NAME,
 };
 console.log("dbConfig", dbConfig);
 export default dbConfig;

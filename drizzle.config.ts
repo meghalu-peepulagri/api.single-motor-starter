@@ -1,13 +1,19 @@
 import { defineConfig } from "drizzle-kit";
-import dbConfig from "./src/config/db-config.js";
+import fs from "node:fs"
 
 export default defineConfig({
-  schema: "./src/schemas/*",
   dialect: "postgresql",
-  out: "./drizzle",
+  schema: "./dist/src/database/schemas/*",
+  out: "./migrations",
   dbCredentials: {
-    url: dbConfig.connectionString,
+    host: process.env.DB_HOST!,
+    port: Number(process.env.DB_PORT!),
+    user: process.env.DB_USER!,
+    password: process.env.DB_PASSWORD!,
+    database: process.env.DB_NAME!,
+    ssl: {
+      rejectUnauthorized: true,
+      ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
+    },
   },
 });
-
-

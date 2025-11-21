@@ -1,20 +1,16 @@
 import "dotenv/config";
 import type { InferOutput, ValiError } from "valibot";
-import { object, string, pipe, transform, parse, flatten } from "valibot";
+import { object, string, pipe, transform, parse, flatten, minValue, number } from "valibot";
 
 const VEnvSchema = object({
   API_VERSION: string(),
   DATABASE_URL: string(),
-  PORT: pipe(
-    string(),
-    transform((val) => {
-      const num = Number(val);
-      if (isNaN(num)) {
-        throw new Error(`PORT must be a valid number, received '${val}'`);
-      }
-      return num;
-    })
-  ),
+  PORT: string(),
+  DB_HOST: string(),
+  DB_USER: string(),
+  DB_PASSWORD: string(),
+  DB_NAME: string(),
+  DB_PORT: string(),
   JWT_SECRET: string(),
 });
 

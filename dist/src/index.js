@@ -1,8 +1,9 @@
 import { serve } from "@hono/node-server";
 import app from "./app.js";
-import env from "./env.js";
+import { config } from "dotenv";
+import appData from "./config/app-config.js";
 // import mqttServiceInstance from "./services/mqtt-services.js";
-const port = env.PORT;
+const port = Number(appData.api_version) || 3000;
 serve({
     fetch: app.fetch,
     port,

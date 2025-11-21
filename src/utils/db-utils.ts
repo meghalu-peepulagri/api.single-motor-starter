@@ -3,7 +3,7 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { and, getTableName, inArray, isNull, sql } from "drizzle-orm";
 
 import type { DBRecord, DBTable, DBTableColumns, InQueryData, OrderByQueryData, SortDirection, WhereQueryData } from "../types/db-types.js";
-import { db } from "../database/configuration.js";
+import db from "../database/configuration.js";
 
 
 function prepareSelectColumnsForQuery(table: DBTable, columnsToSelect?: any) {

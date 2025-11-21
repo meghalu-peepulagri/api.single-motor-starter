@@ -9,7 +9,7 @@ import ForbiddenException from "../exceptions/forbidden-exception.js";
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues } from "../services/db/base-db-services.js";
 import { users, type UsersTable } from "../database/schemas/users.js";
-import { jwtConfig } from "../config/jwtConfig.js";
+import { jwtConfig } from "../config/jwt-config.js";
 import { TOKEN_EXPIRED, TOKEN_REQUIRED, TOKEN_SIGNATURE_MISMATCH, USER_INACTIVE } from "../constants/app-constants.js";
 
 async function genJWTTokens(payload: JWTPayload) {

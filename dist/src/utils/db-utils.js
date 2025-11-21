@@ -1,5 +1,5 @@
 import { and, getTableName, inArray, isNull, sql } from "drizzle-orm";
-import { db } from "../database/configuration.js";
+import db from "../database/configuration.js";
 function prepareSelectColumnsForQuery(table, columnsToSelect) {
     if (!columnsToSelect) {
         return null;

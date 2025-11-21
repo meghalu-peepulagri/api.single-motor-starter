@@ -3,8 +3,8 @@ import { and, asc, count, desc, eq, getTableName, inArray, sql } from "drizzle-o
 import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData } from "../../types/db-types.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
 import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
-import { db } from "../../database/configuration.js";
 import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED, EMPTY_DB_DATA } from "../../constants/app-constants.js";
+import db from "../../database/configuration.js";
 
 async function getRecordById<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, id: number, columnsToSelect?: any): Promise<DBRecord<T> | Pick<DBRecord<T>, C> | null> {
   const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
