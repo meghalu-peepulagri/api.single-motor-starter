@@ -8,7 +8,7 @@ export const users = pgTable("users", {
 
     full_name: varchar("full_name").notNull(),
     email: varchar("email"),
-    phone: varchar("phone"),
+    phone: varchar("phone").notNull(),
 
     user_type: userTypeEnum().default("USER"),
 

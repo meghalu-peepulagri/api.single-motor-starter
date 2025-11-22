@@ -1,15 +1,15 @@
 import * as v from "valibot";
 
 import { userTypeEnum } from "../../constants/enum-types.js";
-import { EMAIL_REQUIRED, INVALID_PHONE_NUMBER, NAME_MIN_LENGTH, NAME_REQUIRED, PASSWORD_MIN_LENGTH, PASSWORD_REQUIRED, PHONE_NUMBER_REQUIRED, USER_TYPE_INVALID, USER_TYPE_REQUIRED, VALID_MAIL, VALID_NAME } from "../../constants/app-constants.js";
+import { EMAIL_REQUIRED, INVALID_PHONE_NUMBER, INVALID_PHONE_NUMBER_VALID_LENGTH, NAME_MIN_LENGTH, NAME_REQUIRED, PASSWORD_MIN_LENGTH, PASSWORD_REQUIRED, PHONE_NUMBER_REQUIRED, USER_TYPE_INVALID, USER_TYPE_REQUIRED, VALID_MAIL, VALID_NAME } from "../../constants/app-constants.js";
 
 
 const phoneValidator = v.pipe(
   v.string(PHONE_NUMBER_REQUIRED),
-  v.transform(value => value.trim()),
+  v.trim(),
   v.nonEmpty(PHONE_NUMBER_REQUIRED),
   v.regex(/^\d+$/, INVALID_PHONE_NUMBER),
-  v.regex(/^[6-9]\d{9}$/, INVALID_PHONE_NUMBER),
+  v.regex(/^[6-9]\d{9}$/, INVALID_PHONE_NUMBER_VALID_LENGTH),
 );
 
 
@@ -56,7 +56,6 @@ function requiredNumber(errorMessage: string) {
 export {
     emailValidator, nameValidator,
     passwordValidator, phoneValidator,
-    requiredNumber,
     userTypeValidator
 };
 

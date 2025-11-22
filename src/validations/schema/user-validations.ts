@@ -12,4 +12,5 @@ export const vAddUserValidator = v.object({
     created_by: v.optional(v.number()),
 });
 
+
 export type ValidatedAddUser = v.InferOutput<typeof vAddUserValidator>;

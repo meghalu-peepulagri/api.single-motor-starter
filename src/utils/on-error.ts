@@ -27,12 +27,8 @@ export function getValidationErrors(issues: BaseIssue<unknown>[] = []) {
 
 
 const onError: ErrorHandler = (err: any, c: Context) => {
-  const currentStatus = "status" in err
-    ? err.status
-    : c.newResponse(null).status;
-  const statusCode = currentStatus !== OK
-    ? (currentStatus as StatusCode)
-    : INTERNAL_SERVER_ERROR;
+  const currentStatus = "status" in err ? err.status : c.newResponse(null).status;
+  const statusCode = currentStatus !== OK? (currentStatus as StatusCode): INTERNAL_SERVER_ERROR;
 
   return c.json(
     {

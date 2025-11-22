@@ -2,34 +2,34 @@ import UnprocessableEntityException from "../exceptions/unprocessable-entity-exc
 
 import { safeParseAsync, type BaseSchema } from "valibot";
 import { getValidationErrors } from "../utils/on-error.js";
-import { vAddUserValidator, type ValidatedAddUser } from "./schema/user-validations.js";
+import { vAddUserValidator } from "./schema/user-validations.js";
 import type { AppActivity, ValidatedRequest } from "../types/app-types.js";
 
-
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
-    "signup": vAddUserValidator,
-
+  signup: vAddUserValidator,
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(
-    actionType: AppActivity,
-    reqData: any,
-    errorMessage: string,
+  actionType: AppActivity,
+  reqData: any,
+  errorMessage: string,
 ) {
-    const schema = schemaMap[actionType];
+  const schema = schemaMap[actionType];
 
-    if (!schema) {
-        throw new Error(`Schema not registered for activity: ${actionType}`);
-    }
+  if (!schema) {
+    throw new Error(`Schema not registered for activity: ${actionType}`);
+  }
 
-    const validation = await safeParseAsync(schema, reqData);
+  const validation = await safeParseAsync(schema, reqData, {
+    abortPipeEarly: true,
+  });
 
-    if (!validation.success) {
-        throw new UnprocessableEntityException(
-            errorMessage,
-            getValidationErrors(validation.issues),
-        );
-    }
+  if (!validation.success) {
+    throw new UnprocessableEntityException(
+      errorMessage,
+      getValidationErrors(validation.issues),
+    );
+  }
 
-    return validation.output as R;
+  return validation.output as R;
 }
