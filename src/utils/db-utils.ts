@@ -2,7 +2,7 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { and, getTableName, inArray, isNull, sql } from "drizzle-orm";
 
-import type { DBRecord, DBTable, DBTableColumns, InQueryData, OrderByQueryData, SortDirection, WhereQueryData } from "../types/db-types.js";
+import type { DBRecord, DBTable, DBTableColumns, InQueryData, OrderByQueryData, SortDirection, WhereQueryData, WhereQueryDataV2 } from "../types/db-types.js";
 import db from "../database/configuration.js";
 
 
@@ -29,9 +29,8 @@ function prepareWhereQueryConditions<T extends DBTable>(table: T, whereQueryData
   }
   const { columns, values, relations } = whereQueryData;
   const whereQueries: SQL[] = [];
-  const orQueries: SQL[] = [];
   for (let i = 0; i < columns.length; i++) {
-    const columnInfo = table[columns[i] as keyof typeof table] as unknown as SQLWrapper;
+    const columnInfo = sql.raw(`${getTableName(table)}.${String(columns[i])}`);
     const value = values[i];
     const relation = relations?.[i] ?? "=";
     switch (relation) {
@@ -68,7 +67,7 @@ function prepareWhereQueryConditions<T extends DBTable>(table: T, whereQueryData
         break;
 
       case "contains":
-        orQueries.push(sql`${columnInfo} ILIKE ${`%${value}%`}`);
+        whereQueries.push(sql`${columnInfo} ILIKE ${`%${value}%`}`);
         break;
 
       case "BETWEEN":
@@ -89,9 +88,6 @@ function prepareWhereQueryConditions<T extends DBTable>(table: T, whereQueryData
       default:
         break;
     }
-  }
-  if (orQueries.length > 0) {
-    whereQueries.push(sql`(${sql.join(orQueries, sql` OR `)})`);
   }
   return whereQueries;
 }
@@ -213,6 +209,43 @@ function parseOrderByQueryCondition<T extends DBTable>(orderBy: string | null, o
   return orderByQueryData;
 }
 
+function prepareWhereQueryConditionsV2<T extends DBTable>(table: T, whereQueryData?: WhereQueryDataV2<T>) {
+  if (!whereQueryData || whereQueryData.columns.length < 1) return null;
+
+  const base: WhereQueryData<T> = {
+    columns: whereQueryData.columns,
+    relations: whereQueryData.relations,
+    values: whereQueryData.values,
+  };
+
+  const conditions: SQL[] = prepareWhereQueryConditions<T>(table, base) || [];
+
+  if (whereQueryData.or && whereQueryData.or.length > 0) {
+    const orBlocks: SQL[] = [];
+
+    for (const group of whereQueryData.or) {
+      const v1: WhereQueryData<T> = {
+        columns: group.columns,
+        relations: group.relations,
+        values: group.values,
+      };
+
+      const inner = prepareWhereQueryConditions<T>(table, v1);
+      if (inner && inner.length > 0) {
+        orBlocks.push(sql`(${sql.join(inner, sql` OR `)})`);
+      }
+    }
+
+    if (orBlocks.length > 0) {
+      conditions.push(sql`(${sql.join(orBlocks, sql` OR `)})`);
+    }
+  }
+
+  return conditions.length ? conditions : null;
+}
+
+
+
 export {
   executeQuery,
   parseOrderByQuery,
@@ -221,4 +254,5 @@ export {
   prepareOrderByQueryConditions,
   prepareSelectColumnsForQuery,
   prepareWhereQueryConditions,
+  prepareWhereQueryConditionsV2,
 };

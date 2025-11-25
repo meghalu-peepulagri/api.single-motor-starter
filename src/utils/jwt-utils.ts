@@ -72,9 +72,9 @@ async function getUserDetailsFromToken(c: Context) {
     throw new UnauthorizedException(TOKEN_REQUIRED);
   }
   const decodedPayload = await verifyJWTToken(token);
- const user = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [decodedPayload.sub, "ARCHIVED"]);
-  if (!user)  throw new ForbiddenException(USER_INACTIVE);
-  
+  const user = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [decodedPayload.sub, "ARCHIVED"]);
+  if (!user) throw new ForbiddenException(USER_INACTIVE);
+
   const { created_at, updated_at, ...userDetails } = user;
 
   return userDetails;

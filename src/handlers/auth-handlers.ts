@@ -1,22 +1,22 @@
 import argon2 from "argon2";
 import type { Context } from "hono";
-import { INCORRECT_PASSWORD, INVALID_CREDENTIALS, INVALID_EMAIL_ID, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, SIGNUP_VALIDATION_CRITERIA, USER_CREATED } from "../constants/app-constants.js";
+import { INVALID_CREDENTIALS, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, SIGNUP_VALIDATION_CRITERIA, USER_CREATED } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
 import { users, type NewUser, type UsersTable } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { getSingleRecordByMultipleColumnValues, saveRecord } from "../services/db/base-db-services.js";
+import { genJWTTokensForUser } from "../utils/jwt-utils.js";
 import { parseUniqueConstraintError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
-import { validatedRequest } from "../validations/validate-request.js";
 import type { ValidatedSignInEmail, ValidatedSignUpUser } from "../validations/schema/user-validations.js";
-import UnauthorizedException from "../exceptions/unauthorized-exception.js";
-import { genJWTTokensForUser } from "../utils/jwt-utils.js";
+import { validatedRequest } from "../validations/validate-request.js";
 
 const paramsValidateException = new ParamsValidateException();
 
 export class AuthHandlers {
-    createUserHandlers = async (c: Context) => {
+    userRegisterHandlers = async (c: Context) => {
         try {
             const userPayload = c.get("user_payload");
             const reqBody = await c.req.json();

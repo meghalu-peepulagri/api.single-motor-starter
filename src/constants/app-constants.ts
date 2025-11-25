@@ -80,7 +80,8 @@ export const USER_TYPE_INVALID = "Invalid user type";
 export const USER_INACTIVE = "The user account is inactive";
 export const PASSWORD_SHOULD_CONTAIN_UPPERCASE = "Must contain at least one uppercase character";
 export const PASSWORD_SHOULD_CONTAIN_NUMBER = "Must contain at least one number";
-export const PASSWORD_SPECIAL_CHAR = "Must contain at least one special character"
+export const PASSWORD_SPECIAL_CHAR = "Must contain at least one special character";
+export const USERS_LIST = "Users list fetched successfully";
 
 
 // Token

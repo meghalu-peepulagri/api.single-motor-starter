@@ -12,13 +12,25 @@ export type DBTableColumns<T extends DBTable> = keyof DBRecord<T>;
 
 export type SortDirection = "asc" | "desc";
 
-export type Relations = "=" | "!=" | "<" | "<=" | ">" | ">=" | "ILIKE" | "BETWEEN" | "IN" | "IS NULL" | "contains";
+export type Relations = "=" | "!=" | "<" | "<=" | ">" | ">=" | "ILIKE" | "BETWEEN" | "IN" | "IS NULL" | "contains" | "or";
 
 export interface WhereQueryData<T extends DBTable> {
   columns: Array<keyof DBRecord<T>>;
   relations: Array<Relations>;
   values: any[];
 }
+
+export type WhereQueryDataV2<T extends DBTable> = {
+  columns: Array<keyof DBRecord<T>>;
+  relations: Array<Relations>;
+  values: any[];
+  or?: {
+    columns: Array<keyof DBRecord<T>>;
+    relations: Array<Relations>;
+    values: any[];
+  }[];
+};
+
 
 export interface OrderByQueryData<T extends DBTable> {
   columns: Array<DBTableColumns<T>>;
