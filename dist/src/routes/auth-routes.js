@@ -3,5 +3,6 @@ import { AuthHandlers } from "../handlers/auth-handlers.js";
 import { isOptionalAuthorized } from "../middlewares/isAuthorized.js";
 const authHandlers = new AuthHandlers();
 const authRoutes = factory.createApp();
-authRoutes.post("/register", isOptionalAuthorized, authHandlers.createUserHandlers);
+authRoutes.post("/register", isOptionalAuthorized, authHandlers.userRegisterHandlers);
+authRoutes.post("/signin-email", authHandlers.signInWithEmailHandlers);
 export default authRoutes;

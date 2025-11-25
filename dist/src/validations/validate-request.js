@@ -1,9 +1,10 @@
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 import { safeParseAsync } from "valibot";
 import { getValidationErrors } from "../utils/on-error.js";
-import { vAddUserValidator } from "./schema/user-validations.js";
+import { vSignInEmail, vSignUp } from "./schema/user-validations.js";
 const schemaMap = {
-    signup: vAddUserValidator,
+    "signup": vSignUp,
+    "signin-email": vSignInEmail,
 };
 export async function validatedRequest(actionType, reqData, errorMessage) {
     const schema = schemaMap[actionType];

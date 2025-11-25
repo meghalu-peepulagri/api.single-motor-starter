@@ -6,5 +6,4 @@ export const dbConfig = {
     password: envData.DB_PASSWORD,
     name: envData.DB_NAME,
 };
-console.log("dbConfig", dbConfig);
 export default dbConfig;

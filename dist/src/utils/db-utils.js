@@ -20,9 +20,8 @@ function prepareWhereQueryConditions(table, whereQueryData) {
     }
     const { columns, values, relations } = whereQueryData;
     const whereQueries = [];
-    const orQueries = [];
     for (let i = 0; i < columns.length; i++) {
-        const columnInfo = table[columns[i]];
+        const columnInfo = sql.raw(`${getTableName(table)}.${String(columns[i])}`);
         const value = values[i];
         const relation = relations?.[i] ?? "=";
         switch (relation) {
@@ -51,7 +50,7 @@ function prepareWhereQueryConditions(table, whereQueryData) {
                 whereQueries.push(isNull(columnInfo));
                 break;
             case "contains":
-                orQueries.push(sql `${columnInfo} ILIKE ${`%${value}%`}`);
+                whereQueries.push(sql `${columnInfo} ILIKE ${`%${value}%`}`);
                 break;
             case "BETWEEN":
                 if (typeof value === "object" && value !== null && "gte" in value && "lte" in value) {
@@ -69,9 +68,6 @@ function prepareWhereQueryConditions(table, whereQueryData) {
             default:
                 break;
         }
-    }
-    if (orQueries.length > 0) {
-        whereQueries.push(sql `(${sql.join(orQueries, sql ` OR `)})`);
     }
     return whereQueries;
 }
@@ -166,4 +162,32 @@ function parseOrderByQueryCondition(orderBy, orderType, defaultColumn = "created
     };
     return orderByQueryData;
 }
-export { executeQuery, parseOrderByQuery, parseOrderByQueryCondition, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions, };
+function prepareWhereQueryConditionsV2(table, whereQueryData) {
+    if (!whereQueryData || whereQueryData.columns.length < 1)
+        return null;
+    const base = {
+        columns: whereQueryData.columns,
+        relations: whereQueryData.relations,
+        values: whereQueryData.values,
+    };
+    const conditions = prepareWhereQueryConditions(table, base) || [];
+    if (whereQueryData.or && whereQueryData.or.length > 0) {
+        const orBlocks = [];
+        for (const group of whereQueryData.or) {
+            const v1 = {
+                columns: group.columns,
+                relations: group.relations,
+                values: group.values,
+            };
+            const inner = prepareWhereQueryConditions(table, v1);
+            if (inner && inner.length > 0) {
+                orBlocks.push(sql `(${sql.join(inner, sql ` OR `)})`);
+            }
+        }
+        if (orBlocks.length > 0) {
+            conditions.push(sql `(${sql.join(orBlocks, sql ` OR `)})`);
+        }
+    }
+    return conditions.length ? conditions : null;
+}
+export { executeQuery, parseOrderByQuery, parseOrderByQueryCondition, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions, prepareWhereQueryConditionsV2, };

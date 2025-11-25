@@ -1,11 +1,11 @@
 import { sign, verify } from "hono/jwt";
 import { JwtTokenExpired, JwtTokenInvalid, JwtTokenSignatureMismatched } from "hono/utils/jwt/types";
-import ForbiddenException from "../exceptions/forbidden-exception.js";
-import UnauthorizedException from "../exceptions/unauthorized-exception.js";
-import { getRecordById, getSingleRecordByMultipleColumnValues } from "../services/db/base-db-services.js";
-import { users } from "../database/schemas/users.js";
 import { jwtConfig } from "../config/jwt-config.js";
 import { TOKEN_EXPIRED, TOKEN_REQUIRED, TOKEN_SIGNATURE_MISMATCH, USER_INACTIVE } from "../constants/app-constants.js";
+import { users } from "../database/schemas/users.js";
+import ForbiddenException from "../exceptions/forbidden-exception.js";
+import UnauthorizedException from "../exceptions/unauthorized-exception.js";
+import { getSingleRecordByMultipleColumnValues } from "../services/db/base-db-services.js";
 async function genJWTTokens(payload) {
     const access_token_expiry = Math.floor(Date.now() / 1000) + jwtConfig.expires_in;
     const access_token_payload = {
@@ -62,4 +62,4 @@ async function getUserDetailsFromToken(c) {
     const { created_at, updated_at, ...userDetails } = user;
     return userDetails;
 }
-export { genJWTTokens, genJWTTokensForUser, getUserDetailsFromToken, verifyJWTToken, };
+export { genJWTTokens, genJWTTokensForUser, getUserDetailsFromToken, verifyJWTToken };

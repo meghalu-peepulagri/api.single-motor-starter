@@ -1,7 +1,7 @@
 import { ADDRESS_STRING } from "../../constants/app-constants.js";
 import { emailValidator, nameValidator, passwordValidator, phoneValidator, userTypeValidator } from "./vCommonSchemas.js";
 import * as v from "valibot";
-export const vAddUserValidator = v.object({
+export const vSignUp = v.object({
     full_name: nameValidator,
     email: emailValidator,
     phone: phoneValidator,
@@ -9,4 +9,8 @@ export const vAddUserValidator = v.object({
     address: v.optional(v.string(ADDRESS_STRING)),
     user_type: userTypeValidator,
     created_by: v.optional(v.number()),
+});
+export const vSignInEmail = v.object({
+    email: emailValidator,
+    password: v.pipe(v.string("Password is required"), v.nonEmpty("Password is required")),
 });
