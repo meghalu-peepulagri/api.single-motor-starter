@@ -16,8 +16,8 @@ export class AuthHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
-            const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : null;
-            const userData = { ...validUserReq, password: hashedPassword, created_by: userPayload.id ?? null };
+            const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("123456");
+            const userData = { ...validUserReq, password: hashedPassword, created_by: userPayload ? userPayload.id : null };
             await saveRecord(users, userData);
             return sendResponse(c, CREATED, USER_CREATED);
         }
@@ -29,7 +29,7 @@ export class AuthHandlers {
             if (pgError?.code === "23505") {
                 return parseUniqueConstraintError(pgError);
             }
-            console.error("Error at register user :", error.message);
+            console.error("Error at register user :", error);
             throw error;
         }
     };

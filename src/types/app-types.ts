@@ -1,9 +1,9 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import type { ValidatedAddUser } from "../validations/schema/user-validations.js";
+import type { ValidatedSignInEmail, ValidatedSignUpUser } from "../validations/schema/user-validations.js";
 
-export type ValidatedRequest = ValidatedAddUser
+export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail;
 
-export type AppActivity = "signup"
+export type AppActivity = "signup" | "signin-email";
 
 
 export interface IResp {

@@ -23,7 +23,7 @@ export const users = pgTable("users", {
 }, table => [
     uniqueIndex("unique_mail_idx").on(table.email),
     uniqueIndex("unique_phone_idx").on(table.phone),
-
+    uniqueIndex("valid_user").on(table.email, table.phone).where(sql`${table.status} != 'ARCHIVED'`),
 ]);
 
 export type User = typeof users.$inferSelect;

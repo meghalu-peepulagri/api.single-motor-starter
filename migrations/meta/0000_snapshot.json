@@ -1,5 +1,5 @@
 {
-  "id": "73699d26-eb62-4b09-9b25-05549780baed",
+  "id": "cc99606e-7ec0-4c07-a577-dddbf119f348",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -108,6 +108,28 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "valid_user": {
+          "name": "valid_user",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "phone",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
           "concurrently": false,
           "method": "btree",
           "with": {}

@@ -2,11 +2,13 @@ import UnprocessableEntityException from "../exceptions/unprocessable-entity-exc
 
 import { safeParseAsync, type BaseSchema } from "valibot";
 import { getValidationErrors } from "../utils/on-error.js";
-import { vAddUserValidator } from "./schema/user-validations.js";
 import type { AppActivity, ValidatedRequest } from "../types/app-types.js";
+import { vSignInEmail, vSignUp } from "./schema/user-validations.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
-  signup: vAddUserValidator,
+  "signup": vSignUp,
+  "signin-email": vSignInEmail,
+
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(

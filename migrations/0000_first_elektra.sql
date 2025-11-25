@@ -13,4 +13,5 @@ CREATE TABLE "users" (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX "unique_mail_idx" ON "users" USING btree ("email");--> statement-breakpoint
-CREATE UNIQUE INDEX "unique_phone_idx" ON "users" USING btree ("phone");
+CREATE UNIQUE INDEX "unique_phone_idx" ON "users" USING btree ("phone");--> statement-breakpoint
+CREATE UNIQUE INDEX "valid_user" ON "users" USING btree ("email","phone") WHERE "users"."status" != 'ARCHIVED';
