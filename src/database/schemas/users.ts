@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
-import { pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
-export const statusEnum = pgEnum("status_enum", ["ACTIVE", "INACTIVE", "ARCHIVED"]);
-export const userTypeEnum = pgEnum("user_type", ["ADMIN", "USER"]);
+import { pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
+// export const statusEnum = pgEnum("status_enum", ["ACTIVE", "INACTIVE", "ARCHIVED"]);
+// export const userTypeEnum = pgEnum("user_type", ["ADMIN", "USER"]);
 
 export const users = pgTable("users", {
     id: serial("id").primaryKey().notNull(),
@@ -19,10 +20,10 @@ export const users = pgTable("users", {
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
-    uniqueIndex("emailIdx").on(table.email),
-    uniqueIndex("phoneIdx").on(table.phone),
+    uniqueIndex("unique_mail_idx").on(table.email),
+    uniqueIndex("unique_phone_idx").on(table.phone),
 ]);
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
-export type UsersTable = typeof users;
+export type UsersTable = typeof users;  

@@ -1,5 +1,3 @@
-CREATE TYPE "public"."status_enum" AS ENUM('ACTIVE', 'INACTIVE', 'ARCHIVED');--> statement-breakpoint
-CREATE TYPE "public"."user_type" AS ENUM('ADMIN', 'USER');--> statement-breakpoint
 CREATE TABLE "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"full_name" varchar NOT NULL,
@@ -13,5 +11,5 @@ CREATE TABLE "users" (
 	"updated_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX "emailIdx" ON "users" USING btree ("email");--> statement-breakpoint
-CREATE UNIQUE INDEX "phoneIdx" ON "users" USING btree ("phone");
+CREATE UNIQUE INDEX "unique_mail_idx" ON "users" USING btree ("email");--> statement-breakpoint
+CREATE UNIQUE INDEX "unique_phone_idx" ON "users" USING btree ("phone");

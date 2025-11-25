@@ -1,7 +1,8 @@
 import { serve } from "@hono/node-server";
-
+import "dotenv/config";
 import app from "./app.js";
 import appData from "./config/app-config.js";
+import type { Context } from "hono";
 
 const port = Number(appData.port) || 3000;
 

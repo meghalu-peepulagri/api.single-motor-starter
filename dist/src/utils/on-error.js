@@ -15,12 +15,8 @@ export function getValidationErrors(issues = []) {
     return errors;
 }
 const onError = (err, c) => {
-    const currentStatus = "status" in err
-        ? err.status
-        : c.newResponse(null).status;
-    const statusCode = currentStatus !== OK
-        ? currentStatus
-        : INTERNAL_SERVER_ERROR;
+    const currentStatus = "status" in err ? err.status : c.newResponse(null).status;
+    const statusCode = currentStatus !== OK ? currentStatus : INTERNAL_SERVER_ERROR;
     return c.json({
         success: false,
         status: statusCode,

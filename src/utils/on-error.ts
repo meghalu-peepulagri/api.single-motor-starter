@@ -1,8 +1,10 @@
 import type { Context, ErrorHandler } from "hono";
 import type { ContentfulStatusCode, StatusCode } from "hono/utils/http-status";
 
-import { INTERNAL_SERVER_ERROR, OK } from "../constants/http-status-codes.js";
 import type { BaseIssue } from "valibot";
+import { INTERNAL_SERVER_ERROR, OK } from "../constants/http-status-codes.js";
+import ConflictException from "../exceptions/conflict-exception.js";
+import { UNIQUE_INDEX_MESSAGES } from "../constants/app-constants.js";
 
 export function getValidationErrors(issues: BaseIssue<unknown>[] = []) {
   const errors: Record<string, string> = {};
@@ -12,10 +14,10 @@ export function getValidationErrors(issues: BaseIssue<unknown>[] = []) {
       const last = path[path.length - 1];
 
       const field =
-        typeof last.key === "string"? last.key
+        typeof last.key === "string" ? last.key
           : typeof last.key === "number"
-          ? String(last.key)
-          : last.type;
+            ? String(last.key)
+            : last.type;
       errors[field] = issue.message;
     }
   }
@@ -24,11 +26,9 @@ export function getValidationErrors(issues: BaseIssue<unknown>[] = []) {
 }
 
 
-
-
 const onError: ErrorHandler = (err: any, c: Context) => {
   const currentStatus = "status" in err ? err.status : c.newResponse(null).status;
-  const statusCode = currentStatus !== OK? (currentStatus as StatusCode): INTERNAL_SERVER_ERROR;
+  const statusCode = currentStatus !== OK ? (currentStatus as StatusCode) : INTERNAL_SERVER_ERROR;
 
   return c.json(
     {
@@ -40,5 +40,14 @@ const onError: ErrorHandler = (err: any, c: Context) => {
     statusCode as ContentfulStatusCode,
   );
 };
+
+
+
+export function parseUniqueConstraintError(error: any) {
+  if (error?.code !== "23505") throw error;
+  const idx = error.constraint;
+  const message = idx && UNIQUE_INDEX_MESSAGES[idx] ? UNIQUE_INDEX_MESSAGES[idx] : "Duplicate value exist.";
+  throw new ConflictException(message)
+}
 
 export default onError;

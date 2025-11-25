@@ -51,7 +51,15 @@ export class ParamsValidateException {
     return ids;
   }
 
-  emptyBodyValidation(reqBody: any){
-    if (!reqBody || Object.keys(reqBody).length === 0) throw new BadRequestException("Empty payload received");
+  emptyBodyValidation(reqBody: any) {
+    if (!reqBody || !Object.keys(reqBody).length) throw new BadRequestException("Empty payload received");
+    return reqBody;
   }
+
+
+  static async safeJsonParse(req: any) {
+    const body = await req.json();
+    return body;
+  }
+
 }

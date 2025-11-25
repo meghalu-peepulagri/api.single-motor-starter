@@ -1,14 +1,14 @@
 {
-  "name": "api.single-starter",
+  "name": "api.single-motor-starter",
   "type": "module",
   "scripts": {
-    "dev": "dotenvx run tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "dotenvx run node dist/src/index.js",
+    "start": "node dist/src/index.js",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "db:gen": "npm run build && drizzle-kit generate",
-    "db:apply": "dotenvx run -- drizzle-kit migrate",
+    "db:apply": "npx drizzle-kit migrate",
     "db:studio": "npx drizzle-kit studio"
   },
   "dependencies": {

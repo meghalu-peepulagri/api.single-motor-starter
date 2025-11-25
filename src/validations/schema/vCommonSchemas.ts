@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import { userTypeEnum } from "../../constants/enum-types.js";
-import { EMAIL_REQUIRED, INVALID_PHONE_NUMBER, INVALID_PHONE_NUMBER_VALID_LENGTH, NAME_MIN_LENGTH, NAME_REQUIRED, PASSWORD_MIN_LENGTH, PASSWORD_REQUIRED, PHONE_NUMBER_REQUIRED, USER_TYPE_INVALID, USER_TYPE_REQUIRED, VALID_MAIL, VALID_NAME } from "../../constants/app-constants.js";
+import { EMAIL_REQUIRED, INVALID_PHONE_NUMBER, INVALID_PHONE_NUMBER_VALID_LENGTH, NAME_MIN_LENGTH, NAME_REQUIRED, PASSWORD_MIN_LENGTH, PASSWORD_REQUIRED, PASSWORD_SHOULD_CONTAIN_NUMBER, PASSWORD_SHOULD_CONTAIN_UPPERCASE, PASSWORD_SPECIAL_CHAR, PHONE_NUMBER_REQUIRED, USER_TYPE_INVALID, USER_TYPE_REQUIRED, VALID_MAIL, VALID_NAME } from "../../constants/app-constants.js";
 
 
 const phoneValidator = v.pipe(
@@ -22,11 +22,16 @@ const emailValidator = v.optional(
   ),
 );
 
-const passwordValidator = v.pipe(
-  v.string(PASSWORD_REQUIRED),
-  v.transform(value => value.trim()),
-  v.nonEmpty(PASSWORD_REQUIRED),
-  v.minLength(6, PASSWORD_MIN_LENGTH),
+const passwordValidator = v.optional(
+  v.pipe(
+    v.string(PASSWORD_REQUIRED),
+    v.transform(value => value.trim()),
+    v.nonEmpty(PASSWORD_REQUIRED),
+    v.minLength(6, PASSWORD_MIN_LENGTH),
+    v.regex(/^(?=.*[A-Z]).*$/, PASSWORD_SHOULD_CONTAIN_UPPERCASE),
+    v.regex(/^(?=.*[0-9]).*$/, PASSWORD_SHOULD_CONTAIN_NUMBER),
+    v.regex(/^(?=.*[@$!%*#?&]).*$/, PASSWORD_SPECIAL_CHAR),
+  )
 );
 
 const nameValidator = v.pipe(
@@ -54,8 +59,8 @@ function requiredNumber(errorMessage: string) {
 }
 
 export {
-    emailValidator, nameValidator,
-    passwordValidator, phoneValidator,
-    userTypeValidator
+  emailValidator, nameValidator,
+  passwordValidator, phoneValidator,
+  userTypeValidator
 };
 

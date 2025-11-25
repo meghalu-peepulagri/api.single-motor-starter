@@ -1,5 +1,5 @@
 {
-  "id": "562bb3a9-3d99-44bd-8d0e-38c2b8b5ebf1",
+  "id": "e74c87e8-bd25-4d8f-9ad9-b44a6e4c1a4d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -76,8 +76,8 @@
         }
       },
       "indexes": {
-        "emailIdx": {
-          "name": "emailIdx",
+        "unique_mail_idx": {
+          "name": "unique_mail_idx",
           "columns": [
             {
               "expression": "email",
@@ -91,8 +91,8 @@
           "method": "btree",
           "with": {}
         },
-        "phoneIdx": {
-          "name": "phoneIdx",
+        "unique_phone_idx": {
+          "name": "unique_phone_idx",
           "columns": [
             {
               "expression": "phone",
@@ -115,25 +115,7 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {
-    "public.status_enum": {
-      "name": "status_enum",
-      "schema": "public",
-      "values": [
-        "ACTIVE",
-        "INACTIVE",
-        "ARCHIVED"
-      ]
-    },
-    "public.user_type": {
-      "name": "user_type",
-      "schema": "public",
-      "values": [
-        "ADMIN",
-        "USER"
-      ]
-    }
-  },
+  "enums": {},
   "schemas": {},
   "sequences": {},
   "roles": {},
