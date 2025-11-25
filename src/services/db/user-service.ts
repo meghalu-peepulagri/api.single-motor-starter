@@ -2,15 +2,15 @@ import { and } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { users, type UsersTable } from "../../database/schemas/users.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
-import type { OrderByQueryData, WhereQueryDataV2 } from "../../types/db-types.js";
-import { prepareOrderByQueryConditions, prepareWhereQueryConditionsV2 } from "../../utils/db-utils.js";
+import type { OrderByQueryData, WhereQueryDataWithOr } from "../../types/db-types.js";
+import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
 
 
-export async function paginatedUsersList(whereQueryData: WhereQueryDataV2<UsersTable>, orderByQueryData: OrderByQueryData<UsersTable>,
+export async function paginatedUsersList(whereQueryData: WhereQueryDataWithOr<UsersTable>, orderByQueryData: OrderByQueryData<UsersTable>,
   pageParams: { page: number; pageSize: number; offset: number }) {
 
-  const whereConditions = prepareWhereQueryConditionsV2<UsersTable>(users, whereQueryData);
+  const whereConditions = prepareWhereQueryConditionsWithOr<UsersTable>(users, whereQueryData);
   const whereQuery = whereConditions && whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
   const orderQuery = prepareOrderByQueryConditions<UsersTable>(users, orderByQueryData);

@@ -2,7 +2,7 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { and, getTableName, inArray, isNull, sql } from "drizzle-orm";
 
-import type { DBRecord, DBTable, DBTableColumns, InQueryData, OrderByQueryData, SortDirection, WhereQueryData, WhereQueryDataV2 } from "../types/db-types.js";
+import type { DBRecord, DBTable, DBTableColumns, InQueryData, OrderByQueryData, SortDirection, WhereQueryData, WhereQueryDataWithAnd, WhereQueryDataWithOr } from "../types/db-types.js";
 import db from "../database/configuration.js";
 
 
@@ -209,7 +209,7 @@ function parseOrderByQueryCondition<T extends DBTable>(orderBy: string | null, o
   return orderByQueryData;
 }
 
-function prepareWhereQueryConditionsV2<T extends DBTable>(table: T, whereQueryData?: WhereQueryDataV2<T>) {
+function prepareWhereQueryConditionsWithOr<T extends DBTable>(table: T, whereQueryData?: WhereQueryDataWithOr<T>) {
   if (!whereQueryData || whereQueryData.columns.length < 1) return null;
 
   const base: WhereQueryData<T> = {
@@ -244,6 +244,36 @@ function prepareWhereQueryConditionsV2<T extends DBTable>(table: T, whereQueryDa
   return conditions.length ? conditions : null;
 }
 
+function prepareWhereQueryConditionsWithAnd<T extends DBTable>(table: T, whereQueryData?: WhereQueryDataWithAnd<T>) {
+  if (!whereQueryData || Object.keys(whereQueryData).length < 1 || whereQueryData.columns.length < 1) {
+    return null;
+  }
+  const whereQueryDataV1: WhereQueryData<T> = {
+    columns: whereQueryData.columns,
+    relations: whereQueryData.relations,
+    values: whereQueryData.values,
+  };
+  const conditions: SQL[] = prepareWhereQueryConditions<T>(table, whereQueryDataV1) || [];
+  if (whereQueryData.or && whereQueryData.or.length > 0) {
+    const orGroupSQLs: SQL[] = [];
+    for (const group of whereQueryData.or) {
+      const groupV1: WhereQueryData<T> = {
+        columns: group.columns,
+        relations: group.relations,
+        values: group.values,
+      };
+
+      const orConditions = prepareWhereQueryConditions<T>(table, groupV1);
+      if (orConditions && orConditions.length > 0) {
+        orGroupSQLs.push(sql`(${sql.join(orConditions, sql` AND `)})`);
+      }
+    }
+    if (orGroupSQLs.length > 0) {
+      conditions.push(sql`(${sql.join(orGroupSQLs, sql` OR `)})`);
+    }
+  }
+  return conditions.length > 0 ? conditions : null;
+}
 
 
 export {
@@ -254,5 +284,6 @@ export {
   prepareOrderByQueryConditions,
   prepareSelectColumnsForQuery,
   prepareWhereQueryConditions,
-  prepareWhereQueryConditionsV2,
+  prepareWhereQueryConditionsWithOr,
+  prepareWhereQueryConditionsWithAnd
 };

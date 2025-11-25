@@ -162,7 +162,7 @@ function parseOrderByQueryCondition(orderBy, orderType, defaultColumn = "created
     };
     return orderByQueryData;
 }
-function prepareWhereQueryConditionsV2(table, whereQueryData) {
+function prepareWhereQueryConditionsWithOr(table, whereQueryData) {
     if (!whereQueryData || whereQueryData.columns.length < 1)
         return null;
     const base = {
@@ -190,4 +190,33 @@ function prepareWhereQueryConditionsV2(table, whereQueryData) {
     }
     return conditions.length ? conditions : null;
 }
-export { executeQuery, parseOrderByQuery, parseOrderByQueryCondition, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions, prepareWhereQueryConditionsV2, };
+function prepareWhereQueryConditionsWithAnd(table, whereQueryData) {
+    if (!whereQueryData || Object.keys(whereQueryData).length < 1 || whereQueryData.columns.length < 1) {
+        return null;
+    }
+    const whereQueryDataV1 = {
+        columns: whereQueryData.columns,
+        relations: whereQueryData.relations,
+        values: whereQueryData.values,
+    };
+    const conditions = prepareWhereQueryConditions(table, whereQueryDataV1) || [];
+    if (whereQueryData.or && whereQueryData.or.length > 0) {
+        const orGroupSQLs = [];
+        for (const group of whereQueryData.or) {
+            const groupV1 = {
+                columns: group.columns,
+                relations: group.relations,
+                values: group.values,
+            };
+            const orConditions = prepareWhereQueryConditions(table, groupV1);
+            if (orConditions && orConditions.length > 0) {
+                orGroupSQLs.push(sql `(${sql.join(orConditions, sql ` AND `)})`);
+            }
+        }
+        if (orGroupSQLs.length > 0) {
+            conditions.push(sql `(${sql.join(orGroupSQLs, sql ` OR `)})`);
+        }
+    }
+    return conditions.length > 0 ? conditions : null;
+}
+export { executeQuery, parseOrderByQuery, parseOrderByQueryCondition, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions, prepareWhereQueryConditionsWithOr, prepareWhereQueryConditionsWithAnd };

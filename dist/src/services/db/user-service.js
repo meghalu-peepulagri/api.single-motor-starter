@@ -2,10 +2,10 @@ import { and } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { users } from "../../database/schemas/users.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
-import { prepareOrderByQueryConditions, prepareWhereQueryConditionsV2 } from "../../utils/db-utils.js";
+import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
 export async function paginatedUsersList(whereQueryData, orderByQueryData, pageParams) {
-    const whereConditions = prepareWhereQueryConditionsV2(users, whereQueryData);
+    const whereConditions = prepareWhereQueryConditionsWithOr(users, whereQueryData);
     const whereQuery = whereConditions && whereConditions.length > 0 ? and(...whereConditions) : undefined;
     const orderQuery = prepareOrderByQueryConditions(users, orderByQueryData);
     const usersList = await db.query.users.findMany({

@@ -1,10 +1,10 @@
 import type { User, UsersTable } from "../database/schemas/users.js";
-import type { WhereQueryDataV2 } from "../types/db-types.js";
+import type { WhereQueryDataWithOr } from "../types/db-types.js";
 
 
 export function userFilters(query: any, userPayload: User) {
 
-  const whereQueryData: WhereQueryDataV2<UsersTable> = {
+  const whereQueryData: WhereQueryDataWithOr<UsersTable> = {
     columns: ["status", "user_type"],
     relations: ["!=", "!="],
     values: ["ARCHIVED", "ADMIN"],
@@ -32,6 +32,7 @@ export function userFilters(query: any, userPayload: User) {
     whereQueryData.relations.push("=");
     whereQueryData.values.push(query.status);
   }
+
 
   return whereQueryData;
 }

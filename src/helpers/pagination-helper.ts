@@ -12,7 +12,7 @@ export function getPaginationData(page: number, pageSize: number, totalRecords: 
 }
 
 
-export function getPaginationOffset(query: any) {
+export function getPaginationOffParams(query: any) {
   const page = +query.page || 1;
   const pageSize = +query.page_size || 10;
   const offset = (page - 1) * pageSize;

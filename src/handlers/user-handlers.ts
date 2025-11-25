@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { USERS_LIST } from "../constants/app-constants.js";
-import { getPaginationOffset } from "../helpers/pagination-helper.js";
+import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { userFilters } from "../helpers/user-helper.js";
 import { paginatedUsersList } from "../services/db/user-service.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
@@ -12,7 +12,7 @@ export class UserHandlers {
     try {
       const userPayload = c.get("user_payload");
       const query = c.req.query();
-      const paginationParams = getPaginationOffset(query);
+      const paginationParams = getPaginationOffParams(query);
 
       const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
       const whereQueryData = userFilters(query, userPayload);

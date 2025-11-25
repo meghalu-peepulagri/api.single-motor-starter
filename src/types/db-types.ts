@@ -20,7 +20,18 @@ export interface WhereQueryData<T extends DBTable> {
   values: any[];
 }
 
-export type WhereQueryDataV2<T extends DBTable> = {
+export type WhereQueryDataWithOr<T extends DBTable> = {
+  columns: Array<keyof DBRecord<T>>;
+  relations: Array<Relations>;
+  values: any[];
+  or?: {
+    columns: Array<keyof DBRecord<T>>;
+    relations: Array<Relations>;
+    values: any[];
+  }[];
+};
+
+export type WhereQueryDataWithAnd<T extends DBTable> = {
   columns: Array<keyof DBRecord<T>>;
   relations: Array<Relations>;
   values: any[];
