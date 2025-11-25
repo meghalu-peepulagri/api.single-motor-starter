@@ -1,4 +1,6 @@
 import { INTERNAL_SERVER_ERROR, OK } from "../constants/http-status-codes.js";
+import ConflictException from "../exceptions/conflict-exception.js";
+import { UNIQUE_INDEX_MESSAGES } from "../constants/app-constants.js";
 export function getValidationErrors(issues = []) {
     const errors = {};
     for (const issue of issues) {
@@ -24,4 +26,11 @@ const onError = (err, c) => {
         errors: err.errData,
     }, statusCode);
 };
+export function parseUniqueConstraintError(error) {
+    if (error?.code !== "23505")
+        throw error;
+    const idx = error.constraint;
+    const message = idx && UNIQUE_INDEX_MESSAGES[idx] ? UNIQUE_INDEX_MESSAGES[idx] : "Duplicate value exist.";
+    throw new ConflictException(message);
+}
 export default onError;

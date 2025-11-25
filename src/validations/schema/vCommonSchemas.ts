@@ -13,13 +13,11 @@ const phoneValidator = v.pipe(
 );
 
 
-const emailValidator = v.optional(
-  v.pipe(
-    v.string(EMAIL_REQUIRED),
-    v.transform(value => value.trim()),
-    v.nonEmpty(EMAIL_REQUIRED),
-    v.email(VALID_MAIL),
-  ),
+const emailValidator = v.pipe(
+  v.string(EMAIL_REQUIRED),
+  v.transform(value => value.trim()),
+  v.nonEmpty(EMAIL_REQUIRED),
+  v.email(VALID_MAIL),
 );
 
 const passwordValidator = v.optional(

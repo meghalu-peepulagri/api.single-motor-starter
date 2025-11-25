@@ -40,7 +40,8 @@ export class ParamsValidateException {
         return ids;
     }
     emptyBodyValidation(reqBody) {
-        if (!reqBody || Object.keys(reqBody).length === 0)
+        if (!reqBody || !Object.keys(reqBody).length)
             throw new BadRequestException("Empty payload received");
+        return reqBody;
     }
 }

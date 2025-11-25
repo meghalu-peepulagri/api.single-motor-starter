@@ -2,51 +2,34 @@ import argon2 from "argon2";
 import { SIGNUP_VALIDATION_CRITERIA, USER_CREATED } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
 import { users } from "../database/schemas/users.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
-import factory from "../factory.js";
 import { saveRecord } from "../services/db/base-db-services.js";
+import { parseUniqueConstraintError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import db from "../database/configuration.js";
-import { log } from "console";
 const paramsValidateException = new ParamsValidateException();
 export class AuthHandlers {
-    // createUserHandlers = factory.createHandlers(
-    //     async (c: Context) => {
-    //         const reqBody = await c.req.json();
-    //         paramsValidateException.emptyBodyValidation(reqBody);
-    //         const validUserReq = await validatedRequest<ValidatedAddUser>("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
-    //         const hashedPassword = await argon2.hash(validUserReq.password);
-    //         const userData: NewUser = { ...validUserReq, password: hashedPassword };
-    //         // const { password, ...user } = await saveRecord<UsersTable>(users, userData);
-    //         const user = await db.insert(users).values(userData).onConflictDoNothing();
-    //         console.log("user", user);
-    //         // if (user.rowCount === 0) {
-    //         //     return sendResponse(c, 409, "Email or phone number already exists.");
-    //         // }
-    //         return sendResponse(c, CREATED, USER_CREATED, user);
-    //     },
-    // );
     createUserHandlers = async (c) => {
         try {
+            const userPayload = c.get("user_payload");
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
-            const hashedPassword = await argon2.hash(validUserReq.password);
-            const userData = { ...validUserReq, password: hashedPassword };
-            // const { password, ...user } = await saveRecord<UsersTable>(users, userData);
-            const user = await saveRecord(users, userData);
-            console.log("user", user);
-            // if (user.rowCount === 0) {
-            //     return sendResponse(c, 409, "Email or phone number already exists.");
-            // }
-            return sendResponse(c, CREATED, USER_CREATED, user);
+            const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : null;
+            const userData = { ...validUserReq, password: hashedPassword, created_by: userPayload.id ?? null };
+            await saveRecord(users, userData);
+            return sendResponse(c, CREATED, USER_CREATED);
         }
         catch (error) {
-            if (error.code === "23505") {
-                console.log("error", error);
+            if (error.message?.includes("Unexpected end of JSON")) {
+                throw new BadRequestException("Invalid or missing JSON body");
             }
-            console.error("Error in register user :", error);
+            const pgError = error.cause ?? error;
+            if (pgError?.code === "23505") {
+                return parseUniqueConstraintError(pgError);
+            }
+            console.error("Error at register user :", error.message);
             throw error;
         }
     };

@@ -56,10 +56,4 @@ export class ParamsValidateException {
     return reqBody;
   }
 
-
-  static async safeJsonParse(req: any) {
-    const body = await req.json();
-    return body;
-  }
-
 }

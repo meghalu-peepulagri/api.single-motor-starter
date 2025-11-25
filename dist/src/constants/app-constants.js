@@ -21,6 +21,11 @@ export const NAME_429 = "Too many requests";
 export const NAME_408 = "Request Timeout";
 export const NAME_500 = "Internal Server Error";
 export const SERVICE_UP = "Service is up and running";
+// Unique constraint messages
+export const UNIQUE_INDEX_MESSAGES = {
+    "unique_mail_idx": "Email already exist.",
+    "unique_phone_idx": "Phone number already exist.",
+};
 // Validations
 export const SIGNUP_VALIDATION_CRITERIA = "Signup details provided do not meet the required validation criteria";
 export const LOGIN_VALIDATION_CRITERIA = "Login details provided do not meet the required validation criteria";
@@ -50,7 +55,7 @@ export const USER_DELETED = "User deleted successfully";
 export const UNAUTHORIZED = "Access denied: Administrator privileges required";
 export const INVALID_PHONE = "Invalid phone number";
 export const ACCOUNT_EXISTED = "You already have an account. Please log in";
-export const EMAIL_REQUIRED = "Email ID is required";
+export const EMAIL_REQUIRED = "Email is required";
 export const PASSWORD_REQUIRED = "Password is required";
 export const INVALID_PASSWORD = "Invalid password";
 export const PHONE_INVALID_FORMAT = "Enter a valid phone number";
@@ -60,10 +65,14 @@ export const ALTERNATE_PHONE_NUMBER_REQUIRED = "Alternate phone number is requir
 export const INVALID_PHONE_NUMBER = "Invalid phone number(digits only)";
 export const INVALID_PHONE_NUMBER_VALID_LENGTH = "Invalid phone number (10 digits required)";
 export const PASSWORD_MIN_LENGTH = "Password should be min 6 characters";
+export const PASSWORD_SHOULD_CONTAIN = "Password must contain at least one letter and one number";
 export const NAME_MIN_LENGTH = "Name should be min 3 characters";
 export const USER_TYPE_REQUIRED = "User type is required";
 export const USER_TYPE_INVALID = "Invalid user type";
 export const USER_INACTIVE = "The user account is inactive";
+export const PASSWORD_SHOULD_CONTAIN_UPPERCASE = "Must contain at least one uppercase character";
+export const PASSWORD_SHOULD_CONTAIN_NUMBER = "Must contain at least one number";
+export const PASSWORD_SPECIAL_CHAR = "Must contain at least one special character";
 // Token
 export const TOKEN_REQUIRED = "Access token is required";
 export const TOKEN_EXPIRED = "Session is expired";

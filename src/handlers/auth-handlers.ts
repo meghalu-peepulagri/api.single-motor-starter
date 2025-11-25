@@ -16,11 +16,13 @@ const paramsValidateException = new ParamsValidateException();
 export class AuthHandlers {
     createUserHandlers = async (c: Context) => {
         try {
-            const reqBody = await ParamsValidateException.safeJsonParse(c.req);
+            const userPayload = c.get("user_payload");
+            const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest<ValidatedAddUser>("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
-            const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : null;
-            const userData: NewUser = { ...validUserReq, password: hashedPassword };
+
+            const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("123456");
+            const userData: NewUser = { ...validUserReq, password: hashedPassword, created_by: userPayload ? userPayload.id : null };
             await saveRecord<UsersTable>(users, userData);
 
             return sendResponse(c, CREATED, USER_CREATED);
@@ -34,7 +36,7 @@ export class AuthHandlers {
                 return parseUniqueConstraintError(pgError);
             }
 
-            console.error("Error at register user :", error.message);
+            console.error("Error at register user :", error);
             throw error;
         }
     }
