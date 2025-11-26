@@ -1,5 +1,5 @@
 import { ADDRESS_STRING } from "../../constants/app-constants.js";
-import { emailValidator, nameValidator, passwordValidator, phoneValidator, userTypeValidator } from "./vCommonSchemas.js";
+import { emailValidator, nameValidator, passwordValidator, phoneValidator, userTypeValidator } from "./common-validations.js";
 import * as v from "valibot";
 
 export const vSignUp = v.object({

@@ -45,6 +45,7 @@ const onError: ErrorHandler = (err: any, c: Context) => {
 
 export function parseUniqueConstraintError(error: any) {
   if (error?.code !== "23505") throw error;
+
   const idx = error.constraint;
   const message = idx && UNIQUE_INDEX_MESSAGES[idx] ? UNIQUE_INDEX_MESSAGES[idx] : "Duplicate value exist.";
   throw new ConflictException(message)

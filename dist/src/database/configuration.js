@@ -3,6 +3,7 @@ import fs from "node:fs";
 import pg from "pg";
 import env from "../env.js";
 import * as usersSchema from "./schemas/users.js";
+import * as locationsSchema from "./schemas/locations.js";
 const { Pool } = pg;
 const dbClient = new Pool({
     host: env.DB_HOST,
@@ -18,6 +19,7 @@ const dbClient = new Pool({
 const db = drizzle(dbClient, {
     schema: {
         ...usersSchema,
+        ...locationsSchema,
     },
 });
 export default db;

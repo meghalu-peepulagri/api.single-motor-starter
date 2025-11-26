@@ -28,12 +28,15 @@ export const SERVICE_UP = "Service is up and running";
 export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "unique_mail_idx": "Email already exist.",
   "unique_phone_idx": "Phone number already exist.",
+  "unique_location_per_user": "Location already exist.",
+  "locations_user_id_users_id_fk": "User not found.",
 };
 
 
 // Validations
 export const SIGNUP_VALIDATION_CRITERIA = "Signup details provided do not meet the required validation criteria";
 export const LOGIN_VALIDATION_CRITERIA = "Login details provided do not meet the required validation criteria";
+export const LOCATION_VALIDATION_CRITERIA = "Location details provided do not meet the required validation criteria";
 
 // Database
 
@@ -51,7 +54,6 @@ export const NAME_REQUIRED = "Name is required";
 export const VALID_NAME = "Name should contain characters only";
 export const LOGIN_DONE = "Login successfully";
 export const LOGOUT_DONE = "Logout successfully";
-export const USER_FOUND = "User found successfully";
 export const INVALID_CREDENTIALS = "Invalid credentials";
 export const USER_ID_REQUIRED = "User ID is required";
 export const USER_NOT_FOUND = "User not found";
@@ -60,9 +62,7 @@ export const EMAIL_ID_REQUIRED = "Email ID is required";
 export const INVALID_EMAIL_ID = "Invalid Email ID";
 export const USER_UPDATED = "User updated successfully";
 export const USER_DELETED = "User deleted successfully";
-export const UNAUTHORIZED = "Access denied: Administrator privileges required";
 export const INVALID_PHONE = "Invalid phone number";
-export const ACCOUNT_EXISTED = "You already have an account. Please log in";
 export const EMAIL_REQUIRED = "Email is required";
 export const PASSWORD_REQUIRED = "Password is required";
 export const INVALID_PASSWORD = "Invalid password";
@@ -77,11 +77,12 @@ export const PASSWORD_SHOULD_CONTAIN = "Password must contain at least one lette
 export const NAME_MIN_LENGTH = "Name should be min 3 characters";
 export const USER_TYPE_REQUIRED = "User type is required";
 export const USER_TYPE_INVALID = "Invalid user type";
-export const USER_INACTIVE = "The user account is inactive";
 export const PASSWORD_SHOULD_CONTAIN_UPPERCASE = "Must contain at least one uppercase character";
 export const PASSWORD_SHOULD_CONTAIN_NUMBER = "Must contain at least one number";
 export const PASSWORD_SPECIAL_CHAR = "Must contain at least one special character";
 export const USERS_LIST = "Users list fetched successfully";
+export const INVALID_USER_ID = "Invalid user ID";
+export const USER_DETAILS_FETCHED = "User details fetched successfully";
 
 
 // Token
@@ -109,6 +110,18 @@ export const MQTT_DISCONNECTED = "MQTT client disconnected";
 export const MQTT_NOT_CONNECTED = "MQTT client is not connected";
 export const NO_TOPIC_GRANTED = "No topics were granted during subscription";
 export const SUB_MQTT_CLIENT_NOT_CONNECTED = "Cannot subscribe, MQTT client is not connected";
+
+
+// location validations
+export const LOCATION_NAME_REQUIRED = "Location name is required";
+export const TITLE_MUST_BE_STRING = "Location must be a string";
+export const TITLE_REQUIRED = "Location is required";
+export const LOCATION_MIN_LEN = "Location should be min 3 characters";
+
+
+// Locations constants messages
+export const LOCATION_NOT_FOUND = "Location not found";
+export const LOCATION_ADDED = "Location added successfully";
 
 
 

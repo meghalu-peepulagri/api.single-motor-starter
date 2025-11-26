@@ -1,8 +1,8 @@
-import type { User, UsersTable } from "../database/schemas/users.js";
+import type { UsersTable } from "../database/schemas/users.js";
 import type { WhereQueryDataWithOr } from "../types/db-types.js";
 
 
-export function userFilters(query: any, userPayload: User) {
+export function userFilters(query: any) {
 
   const whereQueryData: WhereQueryDataWithOr<UsersTable> = {
     columns: ["status", "user_type"],
@@ -19,12 +19,6 @@ export function userFilters(query: any, userPayload: User) {
       relations: ["contains", "contains", "contains"],
       values: [search, search, search],
     });
-  }
-
-  if (userPayload.id) {
-    whereQueryData.columns.push("id");
-    whereQueryData.relations.push("!=");
-    whereQueryData.values.push(userPayload.id);
   }
 
   if (query.status) {

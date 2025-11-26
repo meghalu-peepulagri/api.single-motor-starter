@@ -1,4 +1,4 @@
-export function userFilters(query, userPayload) {
+export function userFilters(query) {
     const whereQueryData = {
         columns: ["status", "user_type"],
         relations: ["!=", "!="],
@@ -12,11 +12,6 @@ export function userFilters(query, userPayload) {
             relations: ["contains", "contains", "contains"],
             values: [search, search, search],
         });
-    }
-    if (userPayload.id) {
-        whereQueryData.columns.push("id");
-        whereQueryData.relations.push("!=");
-        whereQueryData.values.push(userPayload.id);
     }
     if (query.status) {
         whereQueryData.columns.push("status");

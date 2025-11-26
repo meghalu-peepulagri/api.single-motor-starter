@@ -4,6 +4,7 @@ import pg from "pg";
 
 import env from "../env.js";
 import * as usersSchema from "./schemas/users.js";
+import * as locationsSchema from "./schemas/locations.js";
 
 const { Pool } = pg;
 
@@ -18,9 +19,11 @@ const dbClient = new Pool({
     ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
   },
 });
+
 const db = drizzle(dbClient, {
   schema: {
     ...usersSchema,
+    ...locationsSchema,
   },
 });
 

@@ -16,7 +16,7 @@ const isAdmin = createMiddleware(async (c: Context, next) => {
   }
 });
 
-const isOwner = createMiddleware(async (c: Context, next) => {
+const isUser = createMiddleware(async (c: Context, next) => {
   const userPayload = await getUserDetailsFromToken(c);
   if (userPayload.user_type === "USER") {
     await next();
@@ -26,17 +26,8 @@ const isOwner = createMiddleware(async (c: Context, next) => {
   }
 });
 
-const isOwnerOrManager = createMiddleware(async (c: Context, next) => {
-  const userPayload = await getUserDetailsFromToken(c);
-  if (userPayload.user_type === "USER") {
-    await next();
-  }
-  else {
-    throw new ForbiddenException(FORBIDDEN);
-  }
-});
 
-const isOwnerOrAdmin = createMiddleware(async (c: Context, next) => {
+const isUserOrAdmin = createMiddleware(async (c: Context, next) => {
   const userPayload = await getUserDetailsFromToken(c);
   if (userPayload.user_type === "USER" || userPayload.user_type === "ADMIN") {
     await next();
@@ -44,17 +35,10 @@ const isOwnerOrAdmin = createMiddleware(async (c: Context, next) => {
   else { throw new ForbiddenException(FORBIDDEN); }
 });
 
-const isOwnerOrAdminOrManager = createMiddleware(async (c: Context, next) => {
-  const userPayload = await getUserDetailsFromToken(c);
-  if (userPayload.user_type === "USER" || userPayload.user_type === "ADMIN") {
-    await next();
-  }
-  else { throw new ForbiddenException(FORBIDDEN); }
-});
 
 export {
   isAdmin,
-  isOwner,
-  isOwnerOrAdmin, isOwnerOrAdminOrManager, isOwnerOrManager
+  isUser,
+  isUserOrAdmin
 };
 

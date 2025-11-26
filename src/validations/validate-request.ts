@@ -1,13 +1,15 @@
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 
 import { safeParseAsync, type BaseSchema } from "valibot";
-import { getValidationErrors } from "../utils/on-error.js";
 import type { AppActivity, ValidatedRequest } from "../types/app-types.js";
+import { getValidationErrors } from "../utils/on-error.js";
+import { vAddLocation } from "./schema/location-validations.js";
 import { vSignInEmail, vSignUp } from "./schema/user-validations.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,
   "signin-email": vSignInEmail,
+  "add-location": vAddLocation,
 
 };
 
