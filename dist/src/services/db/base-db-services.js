@@ -144,25 +144,15 @@ async function getSingleRecordByMultipleColumnValues(table, columns, relations, 
     }
     return results[0];
 }
-async function saveRecord(table, record) {
-    if (!record) {
-        throw new UnprocessableEntityException(EMPTY_DB_DATA);
-    }
-    const result = await db.insert(table).values(record).returning();
-    if (!Array.isArray(result) || result.length === 0) {
-        throw new UnprocessableEntityException(DB_SAVE_DATA_FAILED);
-    }
-    return result[0];
+async function saveSingleRecord(table, record, trx) {
+    const query = trx ? trx.insert(table).values(record).returning() : db.insert(table).values(record).returning();
+    const recordSaved = await query;
+    return recordSaved[0];
 }
-async function saveRecords(table, records) {
-    if (!records) {
-        throw new UnprocessableEntityException(EMPTY_DB_DATA);
-    }
-    const result = await db.insert(table).values(records).returning();
-    if (!Array.isArray(result) || result.length === 0) {
-        throw new UnprocessableEntityException(DB_SAVE_DATA_FAILED);
-    }
-    return result;
+async function saveRecords(table, records, trx) {
+    const query = trx ? trx.insert(table).values(records).returning() : db.insert(table).values(records).returning();
+    const recordsSaved = await query;
+    return recordsSaved;
 }
 async function updateRecordById(table, id, record) {
     const dataWithTimeStamps = { ...record, updated_at: new Date() };
@@ -208,6 +198,16 @@ async function softDeleteRecordById(table, id, record) {
         .where(eq(columnInfo, id))
         .returning();
     return result;
+}
+async function updateRecordByIdWithTrx(table, id, record, trx) {
+    const dataWithTimeStamps = { ...record };
+    const queryBuilder = trx || db;
+    const [updatedRecord] = await queryBuilder
+        .update(table)
+        .set(dataWithTimeStamps)
+        .where(eq(table.id, id))
+        .returning();
+    return updatedRecord;
 }
 async function exportData(table, projection, filters) {
     const initialQuery = db.select(projection).from(table);
@@ -280,4 +280,4 @@ async function updateMultipleRecordsByIds(table, ids, record) {
         .returning();
     return updatedRecords.length;
 }
-export { deleteRecordById, deleteRecordsByAColumnValue, deleteRecordsByMultipleColumnValues, exportData, getMultipleRecordsByAColumnValue, getMultipleRecordsByMultipleColumnValues, getPaginatedRecords, getPaginatedRecordsConditionally, getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveRecord, saveRecords, softDeleteRecordById, updateMultipleRecordsByIds, updateRecordByColumnValue, updateRecordById, updateRecordByMultipleColumnValues, };
+export { deleteRecordById, deleteRecordsByAColumnValue, deleteRecordsByMultipleColumnValues, exportData, getMultipleRecordsByAColumnValue, getMultipleRecordsByMultipleColumnValues, getPaginatedRecords, getPaginatedRecordsConditionally, getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, saveRecords, softDeleteRecordById, updateMultipleRecordsByIds, updateRecordByColumnValue, updateRecordById, updateRecordByMultipleColumnValues, updateRecordByIdWithTrx };

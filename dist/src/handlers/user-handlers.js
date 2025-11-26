@@ -1,11 +1,18 @@
-import { USER_DETAILS_FETCHED, USERS_LIST } from "../constants/app-constants.js";
+import { USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
+import db from "../database/configuration.js";
 import { users } from "../database/schemas/users.js";
+import NotFoundException from "../exceptions/not-found-exception.js";
+import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { userFilters } from "../helpers/user-helper.js";
-import { getRecordsConditionally } from "../services/db/base-db-services.js";
+import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, saveRecords, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { paginatedUsersList } from "../services/db/user-service.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
+import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
+import { validatedRequest } from "../validations/validate-request.js";
+import { userActivityLogs } from "../database/schemas/user-activity-logs.js";
+const paramsValidateException = new ParamsValidateException();
 export class UserHandlers {
     list = async (c) => {
         try {
@@ -42,6 +49,41 @@ export class UserHandlers {
         }
         catch (error) {
             console.error("Error at users basic list:", error);
+            throw error;
+        }
+    };
+    updateUserDetails = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const userId = +c.req.param("id");
+            paramsValidateException.validateId(userId, "user id");
+            const reqBody = await c.req.json();
+            paramsValidateException.emptyBodyValidation(reqBody);
+            const validUserReq = await validatedRequest("signup", reqBody, USER_UPDATE_VALIDATION_CRITERIA);
+            const verifiedUser = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [userId, "ARCHIVED"]);
+            if (!verifiedUser)
+                throw new NotFoundException(USER_NOT_FOUND);
+            const fieldsToTrack = ["full_name", "phone", "email"];
+            const logs = fieldsToTrack.filter((field) => validUserReq[field] !== verifiedUser[field]).map((field) => ({
+                field_name: field,
+                user_id: userId,
+                action: "UPDATED",
+                performed_by: userPayload.id,
+                old_data: String(verifiedUser[field] ?? ""),
+                new_data: String(validUserReq[field] ?? ""),
+            }));
+            await db.transaction(async (trx) => {
+                await updateRecordByIdWithTrx(users, userId, { ...validUserReq }, trx);
+                if (logs.length)
+                    await saveRecords(userActivityLogs, logs, trx);
+            });
+            return sendResponse(c, 200, USER_UPDATED);
+        }
+        catch (error) {
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            console.error("Error at update user details :", error);
             throw error;
         }
     };

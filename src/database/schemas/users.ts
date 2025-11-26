@@ -35,4 +35,5 @@ export type UsersTable = typeof users;
 
 export const userRelations = relations(users, ({ many }) => ({
     locations: many(users),
+    userActivities: many(users),
 }));

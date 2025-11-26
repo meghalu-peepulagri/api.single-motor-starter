@@ -32,6 +32,7 @@ export const UNIQUE_INDEX_MESSAGES = {
 export const SIGNUP_VALIDATION_CRITERIA = "Signup details provided do not meet the required validation criteria";
 export const LOGIN_VALIDATION_CRITERIA = "Login details provided do not meet the required validation criteria";
 export const LOCATION_VALIDATION_CRITERIA = "Location details provided do not meet the required validation criteria";
+export const USER_UPDATE_VALIDATION_CRITERIA = "User update details provided do not meet the required validation criteria";
 // Database
 export const DB_RECORD_NOT_FOUND = "Database record not found";
 export const DB_SAVE_DATA_FAILED = "Failed to save data in database";
@@ -52,7 +53,7 @@ export const USER_NOT_FOUND = "User not found";
 export const INCORRECT_PASSWORD = "Incorrect password";
 export const EMAIL_ID_REQUIRED = "Email ID is required";
 export const INVALID_EMAIL_ID = "Invalid Email ID";
-export const USER_UPDATED = "User updated successfully";
+export const USER_UPDATED = "User details updated successfully";
 export const USER_DELETED = "User deleted successfully";
 export const INVALID_PHONE = "Invalid phone number";
 export const EMAIL_REQUIRED = "Email is required";
