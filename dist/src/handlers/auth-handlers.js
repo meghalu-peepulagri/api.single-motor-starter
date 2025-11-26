@@ -1,6 +1,8 @@
 import argon2 from "argon2";
 import { INVALID_CREDENTIALS, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, SIGNUP_VALIDATION_CRITERIA, USER_CREATED } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
+import db from "../database/configuration.js";
+import { userActivityLogs } from "../database/schemas/user-activity-logs.js";
 import { users } from "../database/schemas/users.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
@@ -19,7 +21,19 @@ export class AuthHandlers {
             const validUserReq = await validatedRequest("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("123456");
             const userData = { ...validUserReq, password: hashedPassword, created_by: userPayload ? userPayload.id : null };
-            await saveSingleRecord(users, userData);
+            await db.transaction(async (trx) => {
+                const createdUser = await saveSingleRecord(users, userData, trx);
+                if (!createdUser)
+                    return;
+                const logData = {
+                    user_id: Number(createdUser.id),
+                    action: "REGISTERED",
+                    performed_by: userPayload?.id ?? Number(createdUser.id),
+                    old_data: null,
+                    new_data: null,
+                };
+                await saveSingleRecord(userActivityLogs, logData, trx);
+            });
             return sendResponse(c, CREATED, USER_CREATED);
         }
         catch (error) {

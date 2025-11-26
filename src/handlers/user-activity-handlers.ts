@@ -5,6 +5,7 @@ import { getRecordsConditionally } from "../services/db/base-db-services.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { sendResponse } from "../utils/send-response.js";
+import { USER_ACTIVITIES } from "../constants/app-constants.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -12,7 +13,7 @@ export class UserActivityHandlers {
 
   getUserActivities = async (c: Context) => {
     try {
-      const userId = +c.req.param("id");
+      const userId = +c.req.param("user_id");
       paramsValidateException.validateId(userId, "user id");
       const query = c.req.query();
       const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
@@ -23,8 +24,8 @@ export class UserActivityHandlers {
         values: [userId],
       }
 
-      const usersActivities = await getRecordsConditionally<UserActivityLogsTable>(userActivityLogs, whereQueryData, ["id", "user_id", "action", "old_data", "new_data"], orderQueryData);
-      return sendResponse(c, 200, "User activities", usersActivities);
+      const usersActivities = await getRecordsConditionally<UserActivityLogsTable>(userActivityLogs, whereQueryData, ["id", "user_id", "action", "old_data", "new_data", "field_name"], orderQueryData);
+      return sendResponse(c, 200, USER_ACTIVITIES, usersActivities);
     } catch (error: any) {
       console.error("Error at list of users  activities :", error);
       throw error;

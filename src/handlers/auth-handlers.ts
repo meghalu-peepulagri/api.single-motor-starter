@@ -2,6 +2,8 @@ import argon2 from "argon2";
 import type { Context } from "hono";
 import { INVALID_CREDENTIALS, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, SIGNUP_VALIDATION_CRITERIA, USER_CREATED } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
+import db from "../database/configuration.js";
+import { userActivityLogs, type NewUserActivityLog } from "../database/schemas/user-activity-logs.js";
 import { users, type NewUser, type UsersTable } from "../database/schemas/users.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
@@ -24,8 +26,19 @@ export class AuthHandlers {
 
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("123456");
             const userData: NewUser = { ...validUserReq, password: hashedPassword, created_by: userPayload ? userPayload.id : null };
-            await saveSingleRecord<UsersTable>(users, userData);
+            await db.transaction(async (trx) => {
+                const createdUser = await saveSingleRecord<UsersTable>(users, userData, trx);
+                if (!createdUser) return;
 
+                const logData: NewUserActivityLog = {
+                    user_id: Number(createdUser.id),
+                    action: "REGISTERED",
+                    performed_by: userPayload?.id ?? Number(createdUser.id),
+                    old_data: null,
+                    new_data: null,
+                };
+                await saveSingleRecord(userActivityLogs, logData, trx);
+            });
             return sendResponse(c, CREATED, USER_CREATED);
         } catch (error: any) {
             handleJsonParseError(error);

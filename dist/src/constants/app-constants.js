@@ -76,6 +76,7 @@ export const PASSWORD_SPECIAL_CHAR = "Must contain at least one special characte
 export const USERS_LIST = "Users list fetched successfully";
 export const INVALID_USER_ID = "Invalid user ID";
 export const USER_DETAILS_FETCHED = "User details fetched successfully";
+export const USER_ACTIVITIES = "User activities fetched successfully";
 // Token
 export const TOKEN_REQUIRED = "Access token is required";
 export const TOKEN_EXPIRED = "Session is expired";
