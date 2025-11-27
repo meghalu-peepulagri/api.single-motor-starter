@@ -4,12 +4,14 @@ import { safeParseAsync, type BaseSchema } from "valibot";
 import type { AppActivity, ValidatedRequest } from "../types/app-types.js";
 import { getValidationErrors } from "../utils/on-error.js";
 import { vAddLocation } from "./schema/location-validations.js";
-import { vSignInEmail, vSignUp } from "./schema/user-validations.js";
+import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,
   "signin-email": vSignInEmail,
   "add-location": vAddLocation,
+  "signin-phone": vSignInPhone,
+  "verify-otp": vVerifyOtp,
 
 };
 

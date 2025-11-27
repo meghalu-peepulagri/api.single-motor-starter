@@ -1,10 +1,10 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
-import type { ValidatedSignInEmail, ValidatedSignUpUser } from "../validations/schema/user-validations.js";
+import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 
-export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation;
+export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp;
 
-export type AppActivity = "signup" | "signin-email" | "add-location";
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp";
 
 
 export interface IResp {

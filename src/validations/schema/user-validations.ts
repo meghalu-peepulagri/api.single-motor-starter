@@ -1,5 +1,5 @@
 import { ADDRESS_STRING } from "../../constants/app-constants.js";
-import { emailValidator, nameValidator, passwordValidator, phoneValidator, userTypeValidator } from "./common-validations.js";
+import { emailValidator, nameValidator, otpValidator, passwordValidator, phoneValidator, userTypeValidator } from "./common-validations.js";
 import * as v from "valibot";
 
 export const vSignUp = v.object({
@@ -17,7 +17,19 @@ export const vSignInEmail = v.object({
     password: v.pipe(v.string("Password is required"), v.nonEmpty("Password is required")),
 });
 
+export const vSignInPhone = v.object({
+    phone: phoneValidator,
+    signature_id: v.optional(v.string()),
+});
+
+export const vVerifyOtp = v.object({
+    phone: phoneValidator,
+    otp: otpValidator,
+    fcm_token: v.nullish(v.string()),
+});
+
 
 export type ValidatedSignUpUser = v.InferOutput<typeof vSignUp>;
 export type ValidatedSignInEmail = v.InferOutput<typeof vSignInEmail>;
-
+export type ValidatedSignInPhone = v.InferOutput<typeof vSignInPhone>;
+export type ValidatedVerifyOtp = v.InferOutput<typeof vVerifyOtp>;

@@ -1,14 +1,18 @@
 import type { PgInsertValue } from "drizzle-orm/pg-core";
+import type { DeviceToken, DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import type { LocationsTable } from "../database/schemas/locations.js";
-import type { User, UsersTable } from "../database/schemas/users.js";
+import type { Otp, OtpTable } from "../database/schemas/otp.js";
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
+import type { User, UsersTable } from "../database/schemas/users.js";
 
-export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable;
+export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User : any |
   T extends LocationsTable ? Location : any |
-  T extends UserActivityLogsTable ? UserActivityLog : any;
+  T extends UserActivityLogsTable ? UserActivityLog : any |
+  T extends OtpTable ? Otp : any |
+  T extends DeviceTokensTable ? DeviceToken : any;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 

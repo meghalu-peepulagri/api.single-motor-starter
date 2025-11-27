@@ -1,1 +1,0 @@
-ALTER TABLE "user_activity_logs" ADD COLUMN "field_name" varchar;

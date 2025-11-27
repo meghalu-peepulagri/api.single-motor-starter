@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1764054168174,
-      "tag": "0000_first_elektra",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1764127621568,
-      "tag": "0001_abandoned_crystal",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1764154377199,
-      "tag": "0002_stiff_mongoose",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1764155328728,
-      "tag": "0003_fast_joshua_kane",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1764158578937,
-      "tag": "0004_thick_impossible_man",
+      "when": 1764218627765,
+      "tag": "0000_fat_medusa",
       "breakpoints": true
     }
   ]

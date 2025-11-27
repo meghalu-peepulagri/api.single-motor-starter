@@ -1,17 +1,25 @@
 import argon2 from "argon2";
-import { INVALID_CREDENTIALS, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, SIGNUP_VALIDATION_CRITERIA, USER_CREATED } from "../constants/app-constants.js";
+import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
 import db from "../database/configuration.js";
 import { userActivityLogs } from "../database/schemas/user-activity-logs.js";
 import { users } from "../database/schemas/users.js";
+import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
-import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
+import { prepareOTPData } from "../helpers/otp-helper.js";
+import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { OtpService } from "../services/db/otp-service.js";
 import { genJWTTokensForUser } from "../utils/jwt-utils.js";
 import { handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import moment from "moment";
+import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
+import { otps } from "../database/schemas/otp.js";
+import { deviceTokens } from "../database/schemas/device-tokens.js";
 const paramsValidateException = new ParamsValidateException();
+const otpService = new OtpService();
 export class AuthHandlers {
     userRegisterHandlers = async (c) => {
         try {
@@ -63,6 +71,65 @@ export class AuthHandlers {
             handleJsonParseError(error);
             console.error("Error at sign in with email :", error);
             throw error;
+        }
+    };
+    signInWithPhoneHandlers = async (c) => {
+        try {
+            const reqBody = await c.req.json();
+            paramsValidateException.emptyBodyValidation(reqBody);
+            const validatedPhone = await validatedRequest("signin-phone", reqBody, LOGIN_VALIDATION_CRITERIA);
+            const loginUser = await getSingleRecordByMultipleColumnValues(users, ["phone", "status"], ["=", "!="], [validatedPhone.phone, "ARCHIVED"]);
+            if (!loginUser)
+                throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
+            const otpData = prepareOTPData(loginUser, validatedPhone.phone, "SIGN_IN_WITH_OTP");
+            await otpService.createOTP(otpData);
+            // await smsSendingServiceProvider.sendSms(validReqData.output.phone, otpData.otp, validReqData.output.signature_id);
+            return sendResponse(c, CREATED, OTP_SENT);
+        }
+        catch (error) {
+            handleJsonParseError(error);
+            console.error("Error at sign in with phone :", error);
+            throw error;
+        }
+    };
+    signInWithOtpVerify = async (c) => {
+        try {
+            const reqBody = await c.req.json();
+            paramsValidateException.emptyBodyValidation(reqBody);
+            const validReqData = await validatedRequest("verify-otp", reqBody, VERIFY_OTP_VALIDATION_CRITERIA);
+            const user = await getSingleRecordByMultipleColumnValues(users, ["phone", "status"], ["=", "!="], [validReqData.phone, "ARCHIVED"]);
+            if (!user)
+                throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
+            const otpData = await otpService.fetchOtp({ phone: validReqData.phone });
+            const now = moment.utc();
+            const otpValidationErrors = {};
+            let otp = otpData[0];
+            if (!otp || otp.otp !== validReqData.otp || !otp.expires_at || moment.utc(otp.expires_at).isBefore(now)) {
+                otpValidationErrors.otp = INVALID_OTP;
+            }
+            if (Object.keys(otpValidationErrors).length > 0) {
+                throw new UnprocessableEntityException(VERIFY_OTP_VALIDATION_CRITERIA, otpValidationErrors);
+            }
+            const validOtp = otp;
+            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
+            const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
+            const { password, ...userDetails } = updatedUser;
+            const data = { user_details: userDetails, access_token, refresh_token };
+            if (validReqData.fcm_token) {
+                const fcmToken = validReqData.fcm_token;
+                const existingToken = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user.id]);
+                if (!existingToken) {
+                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues(deviceTokens, ["user_id"], ["="], [user.id]);
+                    if (!checkOtherDevice || checkOtherDevice.device_token !== fcmToken) {
+                        await saveSingleRecord(deviceTokens, { device_token: fcmToken, user_id: user.id });
+                    }
+                }
+            }
+            return sendResponse(c, 200, USER_LOGIN, data);
+        }
+        catch (err) {
+            console.error("Error at verify otp", err.message);
+            throw err;
         }
     };
 }

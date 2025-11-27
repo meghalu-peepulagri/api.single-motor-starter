@@ -38,6 +38,7 @@ export const SIGNUP_VALIDATION_CRITERIA = "Signup details provided do not meet t
 export const LOGIN_VALIDATION_CRITERIA = "Login details provided do not meet the required validation criteria";
 export const LOCATION_VALIDATION_CRITERIA = "Location details provided do not meet the required validation criteria";
 export const USER_UPDATE_VALIDATION_CRITERIA = "User update details provided do not meet the required validation criteria";
+export const VERIFY_OTP_VALIDATION_CRITERIA = "Verify OTP details provided do not meet the required validation criteria";
 
 // Database
 
@@ -85,6 +86,9 @@ export const USERS_LIST = "Users list fetched successfully";
 export const INVALID_USER_ID = "Invalid user ID";
 export const USER_DETAILS_FETCHED = "User details fetched successfully";
 export const USER_ACTIVITIES = "User activities fetched successfully";
+export const USER_NOT_EXIST_WITH_PHONE = "User not registered with this number";
+export const USER_LOGIN = "Login successfully";
+export const USER_LOGOUT = "Logout successfully";
 
 
 // Token
@@ -124,6 +128,15 @@ export const LOCATION_MIN_LEN = "Location should be min 3 characters";
 // Locations constants messages
 export const LOCATION_NOT_FOUND = "Location not found";
 export const LOCATION_ADDED = "Location added successfully";
+
+// OTP
+export const INVALID_OTP = "Invalid OTP";
+export const OTP_SENT = "OTP sent successfully";
+export const OTP_VERIFIED = "OTP verified successfully";
+export const OTP_REQUIRED = "OTP is required";
+export const INVALID_OTP_LENGTH = "Please enter a 4-digit OTP";
+
+
 
 
 

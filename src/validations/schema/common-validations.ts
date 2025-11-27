@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { EMAIL_REQUIRED, INVALID_PHONE_NUMBER, INVALID_PHONE_NUMBER_VALID_LENGTH, NAME_MIN_LENGTH, NAME_REQUIRED, PASSWORD_MIN_LENGTH, PASSWORD_REQUIRED, PASSWORD_SHOULD_CONTAIN_NUMBER, PASSWORD_SHOULD_CONTAIN_UPPERCASE, PASSWORD_SPECIAL_CHAR, PHONE_NUMBER_REQUIRED, TITLE_MUST_BE_STRING, TITLE_REQUIRED, USER_TYPE_INVALID, USER_TYPE_REQUIRED, VALID_MAIL, VALID_NAME } from "../../constants/app-constants.js";
+import { EMAIL_REQUIRED, INVALID_OTP, INVALID_OTP_LENGTH, INVALID_PHONE_NUMBER, INVALID_PHONE_NUMBER_VALID_LENGTH, NAME_MIN_LENGTH, NAME_REQUIRED, OTP_REQUIRED, PASSWORD_MIN_LENGTH, PASSWORD_REQUIRED, PASSWORD_SHOULD_CONTAIN_NUMBER, PASSWORD_SHOULD_CONTAIN_UPPERCASE, PASSWORD_SPECIAL_CHAR, PHONE_NUMBER_REQUIRED, TITLE_MUST_BE_STRING, TITLE_REQUIRED, USER_TYPE_INVALID, USER_TYPE_REQUIRED, VALID_MAIL, VALID_NAME } from "../../constants/app-constants.js";
 import { userTypeEnum } from "../../constants/enum-types.js";
 
 
@@ -56,6 +56,14 @@ const locationTitleValidator = v.pipe(
   v.minLength(3, NAME_MIN_LENGTH),
 );
 
+const otpValidator = v.pipe(
+  v.string(OTP_REQUIRED),
+  v.transform(value => value.trim()),
+  v.nonEmpty(OTP_REQUIRED),
+  v.regex(/^\d+$/, INVALID_OTP),
+  v.regex(/^\d{4}$/, INVALID_OTP_LENGTH),
+);
+
 
 function requiredNumber(errorMessage: string) {
   return v.pipe(
@@ -68,6 +76,6 @@ function requiredNumber(errorMessage: string) {
 export {
   emailValidator, locationTitleValidator, nameValidator,
   passwordValidator, phoneValidator,
-  userTypeValidator
+  userTypeValidator, otpValidator
 };
 
