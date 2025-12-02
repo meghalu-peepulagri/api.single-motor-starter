@@ -1,8 +1,8 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { statusEnum } from "../../constants/enum-types.js";
 import { fields } from "./fields.js";
 import { users } from "./users.js";
-import { statusEnum } from "../../constants/enum-types.js";
 export const modeEnum = pgEnum("mode_enum", ["LOCAL+MANUAL", "REMOTE+MANUAL", "LOCAL+AUTO", "REMOTE+AUTO"]);
 export const motors = pgTable("motors", {
     id: serial("id").primaryKey(),
@@ -28,5 +28,4 @@ export const motorRelations = relations(motors, ({ one, many }) => ({
         fields: [motors.created_by],
         references: [users.id]
     }),
-    fields: many(fields),
 }));

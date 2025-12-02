@@ -1,6 +1,6 @@
 import { INTERNAL_SERVER_ERROR, OK } from "../constants/http-status-codes.js";
 import ConflictException from "../exceptions/conflict-exception.js";
-import { UNIQUE_INDEX_MESSAGES } from "../constants/app-constants.js";
+import { FOREGIN_KEY_MESSAGES, UNIQUE_INDEX_MESSAGES } from "../constants/app-constants.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 export function getValidationErrors(issues = []) {
     const errors = {};
@@ -16,6 +16,19 @@ export function getValidationErrors(issues = []) {
         }
     }
     return errors;
+}
+export function validationErrors(issues = []) {
+    return issues.reduce((acc, issue) => {
+        if (!issue.path)
+            return acc;
+        const fullPath = issue.path
+            .map((p) => (p.key !== undefined ? p.key : p.index))
+            .join('.');
+        if (!fullPath)
+            return acc;
+        acc[fullPath] = issue.message;
+        return acc;
+    }, {});
 }
 const onError = (err, c) => {
     const currentStatus = "status" in err ? err.status : c.newResponse(null).status;
@@ -48,8 +61,12 @@ export function handleJsonParseError(error) {
 export function handleForeignKeyViolationError(error) {
     const pgError = error.cause ?? error;
     if (pgError?.code === "23503") {
+        const constraint = pgError.constraint ?? "";
+        const mappedMessage = FOREGIN_KEY_MESSAGES[constraint];
         const [, field, value] = pgError.detail?.match(/\((.*?)\)=\((.*?)\)/) || [];
-        throw new BadRequestException(field && value ? `Invalid foreign key: ${field} '${value}' does not exist` : "Invalid foreign key value: Referenced record not found");
+        const message = mappedMessage ? mappedMessage : field && value ? `Invalid foreign key: ${field} '${value}' does not exist.` : "Invalid foreign key value: Referenced record not found.";
+        throw new BadRequestException(message);
     }
+    throw error;
 }
 export default onError;

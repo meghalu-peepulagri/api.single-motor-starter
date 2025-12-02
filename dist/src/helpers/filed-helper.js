@@ -1,16 +1,4 @@
-export function checkDuplicateMotorTitles(motors) {
-    if (!Array.isArray(motors))
-        return [];
-    const titles = motors.map(m => (m?.name ?? "").toString().toLowerCase());
-    const duplicateIndexes = [];
-    for (let i = 0; i < titles.length; i++) {
-        if (titles.indexOf(titles[i]) !== i) {
-            duplicateIndexes.push(i);
-        }
-    }
-    return duplicateIndexes;
-}
-export function motorFilters(query) {
+export function fieldFilters(query) {
     const whereQueryData = {
         columns: ["status"],
         relations: ["!="],
@@ -34,6 +22,11 @@ export function motorFilters(query) {
         whereQueryData.columns.push("created_by");
         whereQueryData.relations.push("=");
         whereQueryData.values.push(query.created_by);
+    }
+    if (query.location_id) {
+        whereQueryData.columns.push("location_id");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push(query.location_id);
     }
     if (query.field_id) {
         whereQueryData.columns.push("id");

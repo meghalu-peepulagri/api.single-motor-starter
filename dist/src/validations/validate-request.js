@@ -1,9 +1,9 @@
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 import { safeParseAsync } from "valibot";
-import { getValidationErrors } from "../utils/on-error.js";
+import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
-import { vAddField } from "./schema/field-validations.js";
+import { validationErrors } from "../utils/on-error.js";
 const schemaMap = {
     "signup": vSignUp,
     "signin-email": vSignInEmail,
@@ -21,7 +21,7 @@ export async function validatedRequest(actionType, reqData, errorMessage) {
         abortPipeEarly: true,
     });
     if (!validation.success) {
-        throw new UnprocessableEntityException(errorMessage, getValidationErrors(validation.issues));
+        throw new UnprocessableEntityException(errorMessage, validationErrors(validation.issues));
     }
     return validation.output;
 }

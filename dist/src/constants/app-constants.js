@@ -25,8 +25,13 @@ export const SERVICE_UP = "Service is up and running";
 export const UNIQUE_INDEX_MESSAGES = {
     "unique_mail_idx": "Email already exist.",
     "unique_phone_idx": "Phone number already exist.",
-    "unique_location_per_user": "Location already exist.",
+    "unique_location_per_user": "Location name already exist.",
+    "unique_field_per_user_location": "Field name already exist.",
+};
+export const FOREGIN_KEY_MESSAGES = {
     "locations_user_id_users_id_fk": "User not found.",
+    "users_created_by_users_id_fk": "User not found.",
+    "fields_location_id_locations_id_fk": "Location not found.",
 };
 // Validations
 export const SIGNUP_VALIDATION_CRITERIA = "Signup details provided do not meet the required validation criteria";
@@ -106,12 +111,14 @@ export const NO_TOPIC_GRANTED = "No topics were granted during subscription";
 export const SUB_MQTT_CLIENT_NOT_CONNECTED = "Cannot subscribe, MQTT client is not connected";
 // location validations
 export const LOCATION_NAME_REQUIRED = "Location name is required";
-export const TITLE_MUST_BE_STRING = "Location must be a string";
-export const TITLE_REQUIRED = "Location is required";
-export const LOCATION_MIN_LEN = "Location should be min 3 characters";
+export const TITLE_MUST_BE_STRING = "Location name must be a string";
+export const TITLE_REQUIRED = "Location name is required";
+export const LOCATION_NAME_MIN_LEN = "Location name should be min 3 characters";
+export const LOCATION_NAME_INVALID = "Location name should contain characters only";
 // Locations constants messages
 export const LOCATION_NOT_FOUND = "Location not found";
 export const LOCATION_ADDED = "Location added successfully";
+export const LOCATION_REQUIRED = "Location is required";
 // OTP
 export const INVALID_OTP = "Invalid OTP";
 export const OTP_SENT = "OTP sent successfully";
@@ -123,7 +130,6 @@ export const ID_REQUIRED = "Id is required";
 export const ID_NUMBER = "Id must be a number";
 export const ID_INVALID = "Invalid Id";
 // Fields 
-export const LOCATION_REQUIRED = "Location is required";
 export const FIELDS_FETCHED = "Fields fetched successfully";
 export const FIELD_REQUIRED = "Field is required";
 export const FIELD_NOT_FOUND = "Field not found";
@@ -132,6 +138,9 @@ export const FIELD_UPDATED = "Field updated successfully";
 export const FIELD_DELETED = "Field deleted successfully";
 export const FIELD_NAME_REQUIRED = "Field name is required";
 export const ACRES_REQUIRED = "Acres is required";
+export const FIELD_NAME_MUST_STRING = "Field name must be a string";
+export const FIELD_NAME_MIN_LEN = "Field name should be min 3 characters";
+export const FIELD_NAME_INVALID = "Field name should contain characters only";
 // Motors 
 export const MOTOR_NAME = "Motor name must be string";
 export const MOTOR_REQUIRED = "Motor name is required";
