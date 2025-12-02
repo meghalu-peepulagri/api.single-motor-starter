@@ -1,7 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, index, integer, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
-import { locations } from "./locations.js";
 import { userActivityLogs } from "./user-activity-logs.js";
 import { fields } from "./fields.js";
 export const users = pgTable("users", {
@@ -25,8 +24,10 @@ export const users = pgTable("users", {
     uniqueIndex("unique_phone_idx").on(table.phone),
     uniqueIndex("valid_user").on(table.email, table.phone).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
+import { locations } from "./locations.js";
 export const userRelations = relations(users, ({ many }) => ({
-    locations: many(locations),
+    ownedLocations: many(locations, { relationName: "ownedLocations" }),
+    createdLocations: many(locations, { relationName: "createdLocations" }),
     userActivities: many(userActivityLogs),
     fields: many(fields),
 }));

@@ -43,7 +43,7 @@ export class FieldHandlers {
       const paginationParams = getPaginationOffParams(query);
       const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
       const whereQueryData = fieldFilters(query);
-      const fieldsList = await paginatedFieldsList(whereQueryData, orderQueryData, paginationParams, query);
+      const fieldsList = await paginatedFieldsList(whereQueryData, orderQueryData, paginationParams);
       return sendResponse(c, 200, FIELDS_FETCHED, fieldsList);
     } catch (error) {
       console.error("Error at list of fields :", error);

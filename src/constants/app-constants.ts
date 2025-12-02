@@ -46,6 +46,7 @@ export const LOCATION_VALIDATION_CRITERIA = "Location details provided do not me
 export const USER_UPDATE_VALIDATION_CRITERIA = "User update details provided do not meet the required validation criteria";
 export const VERIFY_OTP_VALIDATION_CRITERIA = "Verify OTP details provided do not meet the required validation criteria";
 export const FIELD_VALIDATION_CRITERIA = "Field details provided do not meet the required validation criteria";
+export const MOTOR_VALIDATION_CRITERIA = "Motor details provided do not meet the required validation criteria";
 
 // Database
 

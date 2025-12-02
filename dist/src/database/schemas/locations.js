@@ -18,13 +18,15 @@ export const locations = pgTable("locations", {
     uniqueIndex("unique_location_per_user").on(sql `lower(${table.name})`, table.user_id).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
 export const locationRelations = relations(locations, ({ one, many }) => ({
-    user: one(users, {
+    owner: one(users, {
         fields: [locations.user_id],
-        references: [users.id]
+        references: [users.id],
+        relationName: "ownedLocations"
     }),
-    created_by_user: one(users, {
+    creator: one(users, {
         fields: [locations.created_by],
-        references: [users.id]
+        references: [users.id],
+        relationName: "createdLocations"
     }),
     fields: many(fields),
 }));

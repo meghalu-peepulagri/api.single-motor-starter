@@ -19,6 +19,7 @@ export const fields = pgTable("fields", {
   index("filed_user_id_idx").on(table.created_by),
   index("location_id_idx").on(table.location_id),
   index("field_status_idx").on(table.status),
+  uniqueIndex("unique_field_per_user").on(table.created_by, table.id).where(sql`${table.status} != 'ARCHIVED'`),
   uniqueIndex("unique_field_per_user_location").on(sql`lower(${table.name})`, table.location_id, table.created_by).where(sql`${table.status} != 'ARCHIVED'`),
 ]);
 

@@ -15,6 +15,13 @@
       "when": 1764658816259,
       "tag": "0001_futuristic_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1764678406061,
+      "tag": "0002_violet_starhawk",
+      "breakpoints": true
     }
   ]
 }

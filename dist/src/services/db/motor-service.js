@@ -1,6 +1,6 @@
 import { SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
-export async function bulkUpdateMotors(motorsToUpdate, trx) {
+export async function bulkMotorsUpdate(motorsToUpdate, trx) {
     if (!motorsToUpdate || motorsToUpdate.length === 0)
         return;
     const queryBuilder = trx || db;

@@ -39,7 +39,7 @@ export async function addFieldWithMotorTransaction(validData: fieldInputType, us
 }
 
 export async function paginatedFieldsList(whereQueryData: WhereQueryDataWithOr<FieldsTable>, orderByQueryData: OrderByQueryData<FieldsTable>,
-  pageParams: { page: number; pageSize: number; offset: number }, query: any) {
+  pageParams: { page: number; pageSize: number; offset: number }) {
 
   const whereConditions = prepareWhereQueryConditionsWithOr<FieldsTable>(fields, whereQueryData);
   const whereQuery = whereConditions && whereConditions.length > 0 ? and(...whereConditions) : undefined;
@@ -86,7 +86,6 @@ export async function updateFieldWithMotorTransaction(validData: fieldInputType,
       id: Number(m.id),
       name: m.name,
       hp: Number(m.hp),
-      field_id: Number(updatedField.id),
     }));
 
     if (updateMotors.length > 0) {

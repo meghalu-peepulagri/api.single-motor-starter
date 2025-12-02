@@ -38,7 +38,7 @@ export class FieldHandlers {
             const paginationParams = getPaginationOffParams(query);
             const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
             const whereQueryData = fieldFilters(query);
-            const fieldsList = await paginatedFieldsList(whereQueryData, orderQueryData, paginationParams, query);
+            const fieldsList = await paginatedFieldsList(whereQueryData, orderQueryData, paginationParams);
             return sendResponse(c, 200, FIELDS_FETCHED, fieldsList);
         }
         catch (error) {
@@ -54,7 +54,7 @@ export class FieldHandlers {
             paramsValidateException.validateId(fieldId, "field id");
             paramsValidateException.emptyBodyValidation(fieldPayload);
             const validFieldReq = await validatedRequest("add-field", fieldPayload, FIELD_VALIDATION_CRITERIA);
-            await updateFieldWithMotorTransaction(validFieldReq, fieldId);
+            await updateFieldWithMotorTransaction(validFieldReq, fieldId, userPayload);
             return sendResponse(c, 200, FIELD_UPDATED);
         }
         catch (error) {

@@ -27,6 +27,7 @@ export const UNIQUE_INDEX_MESSAGES = {
     "unique_phone_idx": "Phone number already exist.",
     "unique_location_per_user": "Location name already exist.",
     "unique_field_per_user_location": "Field name already exist.",
+    "unique_motor_per_field": "Motor name already exist.",
 };
 export const FOREGIN_KEY_MESSAGES = {
     "locations_user_id_users_id_fk": "User not found.",
@@ -40,6 +41,7 @@ export const LOCATION_VALIDATION_CRITERIA = "Location details provided do not me
 export const USER_UPDATE_VALIDATION_CRITERIA = "User update details provided do not meet the required validation criteria";
 export const VERIFY_OTP_VALIDATION_CRITERIA = "Verify OTP details provided do not meet the required validation criteria";
 export const FIELD_VALIDATION_CRITERIA = "Field details provided do not meet the required validation criteria";
+export const MOTOR_VALIDATION_CRITERIA = "Motor details provided do not meet the required validation criteria";
 // Database
 export const DB_RECORD_NOT_FOUND = "Database record not found";
 export const DB_SAVE_DATA_FAILED = "Failed to save data in database";

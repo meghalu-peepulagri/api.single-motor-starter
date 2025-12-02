@@ -4,6 +4,7 @@ import userRoutes from "./user-routes.js";
 import locationRoutes from "./location-routes.js";
 import userActivitiesRoutes from "./user-activities.js";
 import fieldRoutes from "./field-routes.js";
+import motorRoutes from "./motor-routes.js";
 
 
 const indexRoute = new Hono();
@@ -13,6 +14,7 @@ indexRoute.route("/users", userRoutes);
 indexRoute.route("/locations", locationRoutes);
 indexRoute.route("/users-activities", userActivitiesRoutes);
 indexRoute.route("/fields", fieldRoutes);
+indexRoute.route("/motors", motorRoutes);
 
 
 export default indexRoute;

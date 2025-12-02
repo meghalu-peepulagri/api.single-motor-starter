@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "unique_field_per_user" ON "fields" USING btree ("created_by","id") WHERE "fields"."status" != 'ARCHIVED';
