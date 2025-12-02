@@ -1,17 +1,17 @@
-import { FIELD_ADDED, FIELD_VALIDATION_CRITERIA, FIELDS_FETCHED, SIMILAR_MOTOR_TITLE_NOT_ALLOWED } from "../constants/app-constants.js";
+import { FIELD_ADDED, FIELD_UPDATED, FIELD_VALIDATION_CRITERIA, FIELDS_FETCHED, SIMILAR_MOTOR_TITLE_NOT_ALLOWED } from "../constants/app-constants.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { fieldFilters } from "../helpers/filed-helper.js";
 import { checkDuplicateMotorTitles } from "../helpers/motor-helper.js";
-import { addFieldWithMotorTransaction, paginatedFieldsList } from "../services/db/field-services.js";
+import { getPaginationOffParams } from "../helpers/pagination-helper.js";
+import { addFieldWithMotorTransaction, paginatedFieldsList, updateFieldWithMotorTransaction } from "../services/db/field-services.js";
+import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { parseOrderByQueryCondition } from "../utils/db-utils.js";
-import { fieldFilters } from "../helpers/filed-helper.js";
 const paramsValidateException = new ParamsValidateException();
 export class FieldHandlers {
-    addFieldHandlers = async (c) => {
+    addField = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const fieldPayload = await c.req.json();
@@ -24,6 +24,7 @@ export class FieldHandlers {
             return sendResponse(c, 201, FIELD_ADDED);
         }
         catch (error) {
+            console.error("Error at add field :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
@@ -42,6 +43,26 @@ export class FieldHandlers {
         }
         catch (error) {
             console.error("Error at list of fields :", error);
+            throw error;
+        }
+    };
+    updateField = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const fieldId = +c.req.param("id");
+            const fieldPayload = await c.req.json();
+            paramsValidateException.validateId(fieldId, "field id");
+            paramsValidateException.emptyBodyValidation(fieldPayload);
+            const validFieldReq = await validatedRequest("add-field", fieldPayload, FIELD_VALIDATION_CRITERIA);
+            await updateFieldWithMotorTransaction(validFieldReq, fieldId);
+            return sendResponse(c, 200, FIELD_UPDATED);
+        }
+        catch (error) {
+            console.error("Error at update pond :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            console.error("Error at update pond :", error);
             throw error;
         }
     };

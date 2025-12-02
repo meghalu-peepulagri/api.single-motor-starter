@@ -25,14 +25,17 @@ export type NewLocation = typeof locations.$inferInsert;
 export type LocationsTable = typeof locations;
 
 export const locationRelations = relations(locations, ({ one, many }) => ({
-  user: one(users, {
+
+  owner: one(users, {
     fields: [locations.user_id],
-    references: [users.id]
+    references: [users.id],
+    relationName: "ownedLocations"
   }),
-  created_by_user: one(users, {
+  creator: one(users, {
     fields: [locations.created_by],
-    references: [users.id]
+    references: [users.id],
+    relationName: "createdLocations"
   }),
+
   fields: many(fields),
 }));
-

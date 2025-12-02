@@ -37,12 +37,33 @@ export class UserHandlers {
   userProfile = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      return sendResponse(c, 200, USER_DETAILS_FETCHED, userPayload);
+      type UserRow = typeof users.$inferSelect;
+      let user: UserRow | null = null;
+      const query = c.req.query();
+
+      if (query.user_id) {
+        const userId = +query.user_id;
+        paramsValidateException.validateId(userId, "user id");
+        if (userPayload?.id !== userId) {
+          const whereQueryData: WhereQueryData<UsersTable> = { columns: ["id", "status"], relations: ["=", "!="], values: [userId, "ARCHIVED"] };
+          const userRecord = await getSingleRecordByMultipleColumnValues<UsersTable>(users, whereQueryData.columns, whereQueryData.relations, whereQueryData.values);
+          if (!userRecord) throw new NotFoundException(USER_NOT_FOUND);
+          const { password, ...cleanUser } = userRecord;
+          user = cleanUser as UserRow;
+        } else {
+          user = userPayload;
+        }
+      } else {
+        user = userPayload;
+      }
+
+      return sendResponse(c, 200, USER_DETAILS_FETCHED, user);
     } catch (error: any) {
       console.error("Error at user profile : ", error);
       throw error;
     }
-  }
+  };
+
 
   usersBasicList = async (c: Context) => {
     try {
@@ -89,6 +110,7 @@ export class UserHandlers {
 
       return sendResponse(c, 200, USER_UPDATED);
     } catch (error: any) {
+      console.error("Error at update user details :", error);
       handleJsonParseError(error);
       parseDatabaseError(error);
       handleForeignKeyViolationError(error);

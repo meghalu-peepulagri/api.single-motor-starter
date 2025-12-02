@@ -1,4 +1,4 @@
-import { and, desc, ilike, ne } from "drizzle-orm";
+import { and, desc, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { fields, type FieldsTable } from "../../database/schemas/fields.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -8,9 +8,8 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import type { fieldInputType } from "../../types/app-types.js";
 import type { OrderByQueryData, WhereQueryDataWithOr } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
-import { getRecordsCount, saveRecords, saveSingleRecord } from "./base-db-services.js";
-import { Query } from "pg";
-import { motorFilters } from "../../helpers/motor-helper.js";
+import { getRecordsCount, saveRecords, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { bulkMotorsUpdate } from "./motor-service.js";
 
 
 export async function addFieldWithMotorTransaction(validData: fieldInputType, userPayload: User) {
@@ -27,7 +26,7 @@ export async function addFieldWithMotorTransaction(validData: fieldInputType, us
       ...motor,
       created_by: userPayload.id,
       created_at: new Date(baseTime.getTime() + index * 1000),
-      filed_id: createdField.id,
+      field_id: createdField.id,
     }));
 
     if (preparedMotorsData?.length) {
@@ -75,3 +74,36 @@ export async function paginatedFieldsList(whereQueryData: WhereQueryDataWithOr<F
   };
 
 }
+
+
+export async function updateFieldWithMotorTransaction(validData: fieldInputType, fieldId: number, userPayload: User) {
+  const { motors: motorsData = [], ...fieldData } = validData;
+  const fieldPayload = { ...fieldData, name: fieldData.field_name, acres: fieldData.acres ? String(fieldData.acres) : null };
+
+  await db.transaction(async trx => {
+    const updatedField = await updateRecordByIdWithTrx(fields, fieldId, fieldPayload, trx);
+    const updateMotors = motorsData.filter(m => m.id !== undefined).map(m => ({
+      id: Number(m.id),
+      name: m.name,
+      hp: Number(m.hp),
+      field_id: Number(updatedField.id),
+    }));
+
+    if (updateMotors.length > 0) {
+      await bulkMotorsUpdate(updateMotors, trx);
+    }
+
+    const motorsToCreate = motorsData.filter(m => m.id === undefined).map((m, index) => ({
+      name: m.name,
+      hp: String(m.hp),
+      field_id: Number(updatedField.id),
+      created_by: userPayload.id,
+      created_at: new Date(Date.now() + index * 1000)
+    }));
+
+    if (motorsToCreate.length > 0) {
+      await saveRecords<MotorsTable>(motors, motorsToCreate, trx);
+    }
+  });
+}
+

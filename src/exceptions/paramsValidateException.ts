@@ -12,7 +12,7 @@ export class ParamsValidateException {
     return trimmedValue;
   }
 
-  validateId(value: any, fieldName: string) {
+  validateId(value: number, fieldName: string) {
     const id = Number(value);
     if (!id || Number.isNaN(id) || id <= 0) {
       throw new BadRequestException(`Invalid ${fieldName}`);

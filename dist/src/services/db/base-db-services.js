@@ -1,8 +1,8 @@
 import { and, asc, count, desc, eq, getTableName, inArray, sql } from "drizzle-orm";
+import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED } from "../../constants/app-constants.js";
+import db from "../../database/configuration.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
 import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
-import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED, EMPTY_DB_DATA } from "../../constants/app-constants.js";
-import db from "../../database/configuration.js";
 async function getRecordById(table, id, columnsToSelect) {
     const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
     const columnInfo = sql.raw(`${getTableName(table)}.id`);
@@ -280,4 +280,4 @@ async function updateMultipleRecordsByIds(table, ids, record) {
         .returning();
     return updatedRecords.length;
 }
-export { deleteRecordById, deleteRecordsByAColumnValue, deleteRecordsByMultipleColumnValues, exportData, getMultipleRecordsByAColumnValue, getMultipleRecordsByMultipleColumnValues, getPaginatedRecords, getPaginatedRecordsConditionally, getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, saveRecords, softDeleteRecordById, updateMultipleRecordsByIds, updateRecordByColumnValue, updateRecordById, updateRecordByMultipleColumnValues, updateRecordByIdWithTrx };
+export { deleteRecordById, deleteRecordsByAColumnValue, deleteRecordsByMultipleColumnValues, exportData, getMultipleRecordsByAColumnValue, getMultipleRecordsByMultipleColumnValues, getPaginatedRecords, getPaginatedRecordsConditionally, getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, softDeleteRecordById, updateMultipleRecordsByIds, updateRecordByColumnValue, updateRecordById, updateRecordByIdWithTrx, updateRecordByMultipleColumnValues };

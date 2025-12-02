@@ -31,7 +31,27 @@ export class UserHandlers {
     userProfile = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            return sendResponse(c, 200, USER_DETAILS_FETCHED, userPayload);
+            let user = null;
+            const query = c.req.query();
+            if (query.user_id) {
+                const userId = +query.user_id;
+                paramsValidateException.validateId(userId, "user id");
+                if (userPayload?.id !== userId) {
+                    const whereQueryData = { columns: ["id", "status"], relations: ["=", "!="], values: [userId, "ARCHIVED"] };
+                    const userRecord = await getSingleRecordByMultipleColumnValues(users, whereQueryData.columns, whereQueryData.relations, whereQueryData.values);
+                    if (!userRecord)
+                        throw new NotFoundException(USER_NOT_FOUND);
+                    const { password, ...cleanUser } = userRecord;
+                    user = cleanUser;
+                }
+                else {
+                    user = userPayload;
+                }
+            }
+            else {
+                user = userPayload;
+            }
+            return sendResponse(c, 200, USER_DETAILS_FETCHED, user);
         }
         catch (error) {
             console.error("Error at user profile : ", error);
@@ -80,6 +100,7 @@ export class UserHandlers {
             return sendResponse(c, 200, USER_UPDATED);
         }
         catch (error) {
+            console.error("Error at update user details :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);

@@ -45,6 +45,7 @@ export class AuthHandlers {
             return sendResponse(c, CREATED, USER_CREATED);
         }
         catch (error) {
+            console.error("Error at register user :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             console.error("Error at register user :", error);
@@ -68,6 +69,7 @@ export class AuthHandlers {
             return sendResponse(c, CREATED, LOGIN_DONE, response);
         }
         catch (error) {
+            console.error("Error at sign in with email :", error);
             handleJsonParseError(error);
             console.error("Error at sign in with email :", error);
             throw error;
@@ -87,6 +89,7 @@ export class AuthHandlers {
             return sendResponse(c, CREATED, OTP_SENT);
         }
         catch (error) {
+            console.error("Error at sign in with phone :", error);
             handleJsonParseError(error);
             console.error("Error at sign in with phone :", error);
             throw error;
@@ -128,6 +131,7 @@ export class AuthHandlers {
             return sendResponse(c, 200, USER_LOGIN, data);
         }
         catch (err) {
+            console.error("Error at verify otp", err.message);
             handleJsonParseError(err);
             console.error("Error at verify otp", err.message);
             throw err;

@@ -1,6 +1,6 @@
 {
-  "id": "03889aae-e5d3-433c-a5b2-3916f80e7efb",
-  "prevId": "2d383c3f-6980-4b93-b330-9335211a24ac",
+  "id": "c860e21b-2f93-4a96-80c5-d82d3c54c2cc",
+  "prevId": "ba25418c-5969-4518-a457-0e91635d422b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -445,11 +445,17 @@
           "primaryKey": false,
           "notNull": true
         },
-        "filed_id": {
-          "name": "filed_id",
-          "type": "integer",
+        "hp": {
+          "name": "hp",
+          "type": "numeric(10, 2)",
           "primaryKey": false,
           "notNull": true
+        },
+        "field_id": {
+          "name": "field_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "state": {
           "name": "state",
@@ -536,7 +542,7 @@
               "nulls": "last"
             },
             {
-              "expression": "filed_id",
+              "expression": "field_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -550,12 +556,25 @@
         }
       },
       "foreignKeys": {
-        "motors_filed_id_fields_id_fk": {
-          "name": "motors_filed_id_fields_id_fk",
+        "motors_field_id_fields_id_fk": {
+          "name": "motors_field_id_fields_id_fk",
           "tableFrom": "motors",
           "tableTo": "fields",
           "columnsFrom": [
-            "filed_id"
+            "field_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "motors_created_by_users_id_fk": {
+          "name": "motors_created_by_users_id_fk",
+          "tableFrom": "motors",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
           ],
           "columnsTo": [
             "id"

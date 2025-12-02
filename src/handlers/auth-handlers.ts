@@ -49,6 +49,7 @@ export class AuthHandlers {
             });
             return sendResponse(c, CREATED, USER_CREATED);
         } catch (error: any) {
+            console.error("Error at register user :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             console.error("Error at register user :", error);
@@ -74,6 +75,7 @@ export class AuthHandlers {
             const response = { user_details: userWithoutPassword, access_token, refresh_token };
             return sendResponse(c, CREATED, LOGIN_DONE, response);
         } catch (error: any) {
+            console.error("Error at sign in with email :", error);
             handleJsonParseError(error);
             console.error("Error at sign in with email :", error);
             throw error;
@@ -94,6 +96,7 @@ export class AuthHandlers {
             // await smsSendingServiceProvider.sendSms(validReqData.output.phone, otpData.otp, validReqData.output.signature_id);
             return sendResponse(c, CREATED, OTP_SENT);
         } catch (error: any) {
+            console.error("Error at sign in with phone :", error);
             handleJsonParseError(error);
             console.error("Error at sign in with phone :", error);
             throw error;
@@ -147,6 +150,7 @@ export class AuthHandlers {
             return sendResponse(c, 200, USER_LOGIN, data);
         }
         catch (err: any) {
+            console.error("Error at verify otp", err.message);
             handleJsonParseError(err);
             console.error("Error at verify otp", err.message);
             throw err;

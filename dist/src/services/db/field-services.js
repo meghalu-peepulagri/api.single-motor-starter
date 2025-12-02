@@ -1,13 +1,12 @@
-import { and, desc, ilike, ne } from "drizzle-orm";
+import { and, desc, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { fields } from "../../database/schemas/fields.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
-import { getRecordsCount, saveRecords, saveSingleRecord } from "./base-db-services.js";
-import { Query } from "pg";
-import { motorFilters } from "../../helpers/motor-helper.js";
+import { getRecordsCount, saveRecords, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { bulkUpdateMotors } from "./motor-service.js";
 export async function addFieldWithMotorTransaction(validData, userPayload) {
     const { motors: motorsData, ...fieldData } = validData;
     const fieldPayload = { ...fieldData, name: fieldData.field_name, created_by: userPayload.id, acres: fieldData.acres ? String(fieldData.acres) : null };
@@ -19,7 +18,7 @@ export async function addFieldWithMotorTransaction(validData, userPayload) {
             ...motor,
             created_by: userPayload.id,
             created_at: new Date(baseTime.getTime() + index * 1000),
-            filed_id: createdField.id,
+            field_id: createdField.id,
         }));
         if (preparedMotorsData?.length) {
             await saveRecords(motors, preparedMotorsData, trx);
@@ -57,4 +56,20 @@ export async function paginatedFieldsList(whereQueryData, orderByQueryData, page
         pagination_info: pagination,
         records: fieldsList,
     };
+}
+export async function updateFieldWithMotorTransaction(validData, fieldId) {
+    const { motors: motorsData = [], ...fieldData } = validData;
+    const fieldPayload = { ...fieldData, name: fieldData.field_name, acres: fieldData.acres ? String(fieldData.acres) : null };
+    return await db.transaction(async (trx) => {
+        const updatedField = await updateRecordByIdWithTrx(fields, fieldId, fieldPayload, trx);
+        const updateMotors = motorsData.filter(m => m.id !== undefined).map(m => ({
+            id: Number(m.id),
+            name: m.name,
+            hp: Number(m.hp)
+        }));
+        if (updateMotors.length > 0) {
+            await bulkUpdateMotors(updateMotors, trx);
+        }
+        return updatedField;
+    });
 }

@@ -1,10 +1,10 @@
 import type { SQL } from "drizzle-orm";
 import { and, asc, count, desc, eq, getTableName, inArray, sql } from "drizzle-orm";
-import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData } from "../../types/db-types.js";
-import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
-import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
-import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED, EMPTY_DB_DATA } from "../../constants/app-constants.js";
+import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED } from "../../constants/app-constants.js";
 import db from "../../database/configuration.js";
+import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
+import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData } from "../../types/db-types.js";
+import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 
 async function getRecordById<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, id: number, columnsToSelect?: any): Promise<DBRecord<T> | Pick<DBRecord<T>, C> | null> {
   const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
@@ -274,7 +274,7 @@ async function softDeleteRecordById<T extends DBTable>(table: T, id: number, rec
 async function updateRecordByIdWithTrx<T extends DBTable>(table: T, id: number, record: UpdateRecordData<T>, trx?: any) {
   const dataWithTimeStamps = { ...record };
 
-  const queryBuilder = trx || db;
+    const queryBuilder = trx || db;
 
   const [updatedRecord] = await queryBuilder
     .update(table)
@@ -382,13 +382,9 @@ export {
   getRecordsConditionally,
   getRecordsCount,
   getSingleRecordByAColumnValue,
-  getSingleRecordByMultipleColumnValues,
-  saveSingleRecord,
-  saveRecords,
-  softDeleteRecordById,
+  getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, softDeleteRecordById,
   updateMultipleRecordsByIds,
   updateRecordByColumnValue,
-  updateRecordById,
-  updateRecordByMultipleColumnValues,
-  updateRecordByIdWithTrx
+  updateRecordById, updateRecordByIdWithTrx, updateRecordByMultipleColumnValues
 };
+

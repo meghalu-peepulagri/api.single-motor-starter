@@ -12,7 +12,6 @@ export async function paginatedUsersList(whereQueryData: WhereQueryDataWithOr<Us
 
   const whereConditions = prepareWhereQueryConditionsWithOr<UsersTable>(users, whereQueryData);
   const whereQuery = whereConditions && whereConditions.length > 0 ? and(...whereConditions) : undefined;
-
   const orderQuery = prepareOrderByQueryConditions<UsersTable>(users, orderByQueryData);
 
   const usersList = await db.query.users.findMany({
@@ -26,7 +25,6 @@ export async function paginatedUsersList(whereQueryData: WhereQueryDataWithOr<Us
   });
 
   const totalRecords = await getRecordsCount(users, whereConditions || []);
-
   const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
 
   return {

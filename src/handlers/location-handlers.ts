@@ -25,6 +25,7 @@ export class LocationHandlers {
       await saveSingleRecord<LocationsTable>(locations, newLocation);
       return sendResponse(c, 201, LOCATION_ADDED,);
     } catch (error: any) {
+      console.error("Error at add location :", error);
       handleJsonParseError(error);
       parseDatabaseError(error);
       handleForeignKeyViolationError(error);

@@ -30,6 +30,7 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "unique_phone_idx": "Phone number already exist.",
   "unique_location_per_user": "Location name already exist.",
   "unique_field_per_user_location": "Field name already exist.",
+  "unique_motor_per_field": "Motor name already exist.",
 };
 
 export const FOREGIN_KEY_MESSAGES: Record<string, string> = {
@@ -175,6 +176,7 @@ export const HP_REQUIRED = "HP is required";
 export const HP_MIN = "HP should be min 1";
 export const HP_MAX = "HP should be max 30";
 export const SIMILAR_MOTOR_TITLE_NOT_ALLOWED = "Duplicate motor titles are not allowed";
+export const MOTOR_ID_REQUIRED = "Motor Id is required";
 
 
 

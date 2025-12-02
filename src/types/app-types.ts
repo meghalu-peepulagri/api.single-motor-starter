@@ -29,6 +29,7 @@ export interface fieldInputType {
   location_id: number;
   acres?: number | undefined;
   motors?: {
+    id?: number;
     name: string;
     hp: number;
   }[] | undefined;

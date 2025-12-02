@@ -1,7 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, index, integer, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
-import { locations } from "./locations.js";
 import { userActivityLogs } from "./user-activity-logs.js";
 import { fields } from "./fields.js";
 
@@ -37,8 +36,11 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type UsersTable = typeof users;
 
+import { locations } from "./locations.js";
+
 export const userRelations = relations(users, ({ many }) => ({
-    locations: many(locations),
+    ownedLocations: many(locations, { relationName: "ownedLocations" }),
+    createdLocations: many(locations, { relationName: "createdLocations" }),
     userActivities: many(userActivityLogs),
     fields: many(fields),
 }));

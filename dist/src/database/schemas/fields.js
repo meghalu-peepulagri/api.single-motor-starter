@@ -2,7 +2,6 @@ import { relations, sql } from "drizzle-orm";
 import { index, integer, numeric, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum } from "../../constants/enum-types.js";
 import { locations } from "./locations.js";
-import { motors } from "./motors.js";
 import { users } from "./users.js";
 export const fields = pgTable("fields", {
     id: serial("id").primaryKey(),
@@ -28,5 +27,5 @@ export const fieldRelations = relations(fields, ({ one, many }) => ({
         fields: [fields.location_id],
         references: [locations.id]
     }),
-    motors: many(motors),
+    // motors: many(motors),
 }));

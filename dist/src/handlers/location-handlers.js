@@ -18,6 +18,7 @@ export class LocationHandlers {
             return sendResponse(c, 201, LOCATION_ADDED);
         }
         catch (error) {
+            console.error("Error at add location :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
