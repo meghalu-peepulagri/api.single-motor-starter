@@ -3,6 +3,7 @@ import { boolean, index, integer, pgTable, serial, timestamp, uniqueIndex, varch
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
 import { locations } from "./locations.js";
 import { userActivityLogs } from "./user-activity-logs.js";
+import { fields } from "./fields.js";
 
 
 export const users = pgTable("users", {
@@ -20,7 +21,7 @@ export const users = pgTable("users", {
 
     created_by: integer("created_by"),
     user_verified: boolean("user_verified").default(false),
-    
+
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
@@ -39,4 +40,5 @@ export type UsersTable = typeof users;
 export const userRelations = relations(users, ({ many }) => ({
     locations: many(locations),
     userActivities: many(userActivityLogs),
+    fields: many(fields),
 }));

@@ -4,15 +4,19 @@ import type { LocationsTable } from "../database/schemas/locations.js";
 import type { Otp, OtpTable } from "../database/schemas/otp.js";
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import type { User, UsersTable } from "../database/schemas/users.js";
+import type { Field, FieldsTable } from "../database/schemas/fields.js";
+import type { Motor, MotorsTable } from "../database/schemas/motors.js";
 
-export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable;
+export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User : any |
   T extends LocationsTable ? Location : any |
   T extends UserActivityLogsTable ? UserActivityLog : any |
   T extends OtpTable ? Otp : any |
-  T extends DeviceTokensTable ? DeviceToken : any;
+  T extends DeviceTokensTable ? DeviceToken : any |
+  T extends FieldsTable ? Field : any |
+  T extends MotorsTable ? Motor : any;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 
@@ -76,3 +80,4 @@ export interface PaginatedRecords<T extends DBTable> {
   pagination_info: PaginationInfo;
   records: DBRecord<T>[];
 }
+

@@ -1,0 +1,32 @@
+import { index, integer, numeric, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { users } from "./users.js";
+import { locations } from "./locations.js";
+import { statusEnum } from "../../constants/enum-types.js";
+import { relations, sql } from "drizzle-orm";
+import { motors } from "./motors.js";
+export const fields = pgTable("fields", {
+    id: serial("id").primaryKey(),
+    name: varchar("name").notNull(),
+    created_by: integer("created_by").notNull().references(() => users.id),
+    location_id: integer("location_id").notNull().references(() => locations.id),
+    acres: numeric("acres", { precision: 10, scale: 2 }),
+    status: statusEnum().default("ACTIVE"),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+    updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
+}, table => [
+    index("filed_user_id_idx").on(table.created_by),
+    index("location_id_idx").on(table.location_id),
+    index("field_status_idx").on(table.status),
+    uniqueIndex("unique_field_per_user_location").on(sql `lower(${table.name})`, table.location_id, table.created_by).where(sql `${table.status} != 'ARCHIVED'`),
+]);
+export const fieldRelations = relations(fields, ({ one, many }) => ({
+    user: one(users, {
+        fields: [fields.created_by],
+        references: [users.id]
+    }),
+    location: one(locations, {
+        fields: [fields.location_id],
+        references: [locations.id]
+    }),
+    motors: many(motors),
+}));

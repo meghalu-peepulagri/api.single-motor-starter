@@ -34,6 +34,7 @@ export const LOGIN_VALIDATION_CRITERIA = "Login details provided do not meet the
 export const LOCATION_VALIDATION_CRITERIA = "Location details provided do not meet the required validation criteria";
 export const USER_UPDATE_VALIDATION_CRITERIA = "User update details provided do not meet the required validation criteria";
 export const VERIFY_OTP_VALIDATION_CRITERIA = "Verify OTP details provided do not meet the required validation criteria";
+export const FIELD_VALIDATION_CRITERIA = "Field details provided do not meet the required validation criteria";
 // Database
 export const DB_RECORD_NOT_FOUND = "Database record not found";
 export const DB_SAVE_DATA_FAILED = "Failed to save data in database";
@@ -117,3 +118,30 @@ export const OTP_SENT = "OTP sent successfully";
 export const OTP_VERIFIED = "OTP verified successfully";
 export const OTP_REQUIRED = "OTP is required";
 export const INVALID_OTP_LENGTH = "Please enter a 4-digit OTP";
+// id validators 
+export const ID_REQUIRED = "Id is required";
+export const ID_NUMBER = "Id must be a number";
+export const ID_INVALID = "Invalid Id";
+// Fields 
+export const LOCATION_REQUIRED = "Location is required";
+export const FIELDS_FETCHED = "Fields fetched successfully";
+export const FIELD_REQUIRED = "Field is required";
+export const FIELD_NOT_FOUND = "Field not found";
+export const FIELD_ADDED = "Field added successfully";
+export const FIELD_UPDATED = "Field updated successfully";
+export const FIELD_DELETED = "Field deleted successfully";
+export const FIELD_NAME_REQUIRED = "Field name is required";
+export const ACRES_REQUIRED = "Acres is required";
+// Motors 
+export const MOTOR_NAME = "Motor name must be string";
+export const MOTOR_REQUIRED = "Motor name is required";
+export const MOTOR_NAME_STARTS_LETTER = "Motor name starts with letter";
+export const MOTOR_MIN_LENGTH = "Motor name has min 3 characters";
+export const MOTOR_NOT_FOUND = "Motor not found";
+export const MOTOR_ADDED = "Motor added successfully";
+export const MOTOR_UPDATED = "Motor updated successfully";
+export const MOTOR_DELETED = "Motor deleted successfully";
+export const HP_REQUIRED = "HP is required";
+export const HP_MIN = "HP should be min 1";
+export const HP_MAX = "HP should be max 30";
+export const SIMILAR_MOTOR_TITLE_NOT_ALLOWED = "Duplicate motor titles are not allowed";

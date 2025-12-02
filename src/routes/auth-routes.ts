@@ -8,5 +8,6 @@ const authRoutes = factory.createApp();
 authRoutes.post("/register", isOptionalAuthorized, authHandlers.userRegisterHandlers);
 authRoutes.post("/signin-email", authHandlers.signInWithEmailHandlers);
 authRoutes.post("/signin-phone", authHandlers.signInWithPhoneHandlers);
+authRoutes.post("/verify-otp", authHandlers.verifyOtpHandlers);
 
 export default authRoutes;

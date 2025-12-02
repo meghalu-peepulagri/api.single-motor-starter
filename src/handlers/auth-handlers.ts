@@ -1,25 +1,25 @@
 import argon2 from "argon2";
 import type { Context } from "hono";
+import moment from "moment";
 import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
 import db from "../database/configuration.js";
+import { deviceTokens, type DeviceTokensTable } from "../database/schemas/device-tokens.js";
+import { type NewOtp } from "../database/schemas/otp.js";
 import { userActivityLogs, type NewUserActivityLog } from "../database/schemas/user-activity-logs.js";
 import { users, type NewUser, type UsersTable } from "../database/schemas/users.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
+import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 import { prepareOTPData } from "../helpers/otp-helper.js";
-import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
 import { OtpService } from "../services/db/otp-service.js";
 import { genJWTTokensForUser } from "../utils/jwt-utils.js";
 import { handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import moment from "moment";
-import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
-import { otps, type NewOtp, type Otp, type OtpTable } from "../database/schemas/otp.js";
-import { deviceTokens, type DeviceTokensTable } from "../database/schemas/device-tokens.js";
 
 const paramsValidateException = new ParamsValidateException();
 const otpService = new OtpService();
@@ -101,7 +101,7 @@ export class AuthHandlers {
     }
 
 
-    signInWithOtpVerify = async (c: Context) => {
+    verifyOtpHandlers = async (c: Context) => {
         try {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
@@ -147,6 +147,7 @@ export class AuthHandlers {
             return sendResponse(c, 200, USER_LOGIN, data);
         }
         catch (err: any) {
+            handleJsonParseError(err);
             console.error("Error at verify otp", err.message);
             throw err;
         }

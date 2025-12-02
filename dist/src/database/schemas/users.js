@@ -3,6 +3,7 @@ import { boolean, index, integer, pgTable, serial, timestamp, uniqueIndex, varch
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
 import { locations } from "./locations.js";
 import { userActivityLogs } from "./user-activity-logs.js";
+import { fields } from "./fields.js";
 export const users = pgTable("users", {
     id: serial("id").primaryKey().notNull(),
     full_name: varchar("full_name").notNull(),
@@ -27,4 +28,5 @@ export const users = pgTable("users", {
 export const userRelations = relations(users, ({ many }) => ({
     locations: many(locations),
     userActivities: many(userActivityLogs),
+    fields: many(fields),
 }));

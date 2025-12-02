@@ -2,9 +2,10 @@ import UnprocessableEntityException from "../exceptions/unprocessable-entity-exc
 
 import { safeParseAsync, type BaseSchema } from "valibot";
 import type { AppActivity, ValidatedRequest } from "../types/app-types.js";
-import { getValidationErrors } from "../utils/on-error.js";
+import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
+import { validationErrors } from "../utils/on-error.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,
@@ -12,6 +13,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "add-location": vAddLocation,
   "signin-phone": vSignInPhone,
   "verify-otp": vVerifyOtp,
+  "add-field": vAddField,
 
 };
 
@@ -33,9 +35,10 @@ export async function validatedRequest<R extends ValidatedRequest>(
   if (!validation.success) {
     throw new UnprocessableEntityException(
       errorMessage,
-      getValidationErrors(validation.issues),
+      validationErrors(validation.issues),
     );
   }
 
   return validation.output as R;
 }
+

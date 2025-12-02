@@ -1,0 +1,32 @@
+import { relations, sql } from "drizzle-orm";
+import { index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { fields } from "./fields.js";
+import { users } from "./users.js";
+import { statusEnum } from "../../constants/enum-types.js";
+export const modeEnum = pgEnum("mode_enum", ["LOCAL+MANUAL", "REMOTE+MANUAL", "LOCAL+AUTO", "REMOTE+AUTO"]);
+export const motors = pgTable("motors", {
+    id: serial("id").primaryKey(),
+    name: varchar("name").notNull(),
+    filed_id: integer("filed_id").notNull().references(() => fields.id),
+    state: integer("state").notNull().default(0),
+    mode: modeEnum().notNull().default("LOCAL+AUTO"),
+    created_by: integer("created_by").notNull().references(() => users.id),
+    status: statusEnum().default("ACTIVE"),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+    updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
+}, table => [
+    index("motor_user_id_idx").on(table.created_by),
+    index("motor_idx").on(table.id),
+    uniqueIndex("unique_motor_per_field").on(sql `lower(${table.name})`, table.filed_id).where(sql `${table.status} != 'ARCHIVED'`),
+]);
+export const motorRelations = relations(motors, ({ one, many }) => ({
+    field: one(fields, {
+        fields: [motors.filed_id],
+        references: [fields.id]
+    }),
+    created_by_user: one(users, {
+        fields: [motors.created_by],
+        references: [users.id]
+    }),
+    fields: many(fields),
+}));
