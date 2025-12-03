@@ -66,6 +66,10 @@ function prepareWhereQueryConditions<T extends DBTable>(table: T, whereQueryData
         whereQueries.push(isNull(columnInfo));
         break;
 
+      case "LOWER":
+        whereQueries.push(sql`LOWER(${columnInfo}) = ${value}`);
+        break;
+
       case "contains":
         whereQueries.push(sql`${columnInfo} ILIKE ${`%${value}%`}`);
         break;

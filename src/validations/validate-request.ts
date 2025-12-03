@@ -7,6 +7,7 @@ import { vAddLocation } from "./schema/location-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { validationErrors } from "../utils/on-error.js";
 import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
+import { vAddStarter } from "./schema/starter-validations.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,
@@ -17,6 +18,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "add-field": vAddField,
   "add-motor": vAddMotor,
   "update-motor": vUpdateMotor,
+  "add-starter": vAddStarter,
 
 };
 

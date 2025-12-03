@@ -24,6 +24,10 @@ export const gateways = pgTable("gateways", {
   uniqueIndex("validate_gateway_name").on(sql`lower(${table.name})`).where(sql`${table.status} != 'ARCHIVED'`),
 ]);
 
+export type Gateway = typeof gateways.$inferSelect;
+export type NewGateway = typeof gateways.$inferInsert;
+export type GatewayTable = typeof gateways;
+
 export const gatewaysRelations = relations(gateways, ({ one }) => ({
   location: one(locations, {
     fields: [gateways.location_id],

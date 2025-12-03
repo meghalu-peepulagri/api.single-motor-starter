@@ -3,10 +3,11 @@ import type { ValidatedAddLocation } from "../validations/schema/location-valida
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { validatedAddField } from "../validations/schema/field-validations.js";
 import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
+import type { validatedAddStarter } from "../validations/schema/starter-validations.js";
 
-export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor;
+export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedAddStarter;
 
-export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor";
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "add-starter";
 
 
 export interface IResp {
@@ -40,3 +41,12 @@ export interface arrayOfMotorInputType {
   name: string;
   hp: number;
 }[];
+
+export interface starterBoxPayloadType {
+  name: string;
+  serial_number: string;
+  pcb_number: string;
+  starter_number: string;
+  mac_address: string;
+  gateway_id?: number | null | undefined;
+}

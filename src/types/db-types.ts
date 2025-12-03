@@ -6,8 +6,10 @@ import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas
 import type { User, UsersTable } from "../database/schemas/users.js";
 import type { Field, FieldsTable } from "../database/schemas/fields.js";
 import type { Motor, MotorsTable } from "../database/schemas/motors.js";
+import type { StarterBox, StarterBoxTable } from "../database/schemas/starter-boxes.js";
+import type { Gateway, GatewayTable } from "../database/schemas/gateways.js";
 
-export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable;
+export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User : any |
@@ -16,7 +18,9 @@ export type DBRecord<T extends DBTable> =
   T extends OtpTable ? Otp : any |
   T extends DeviceTokensTable ? DeviceToken : any |
   T extends FieldsTable ? Field : any |
-  T extends MotorsTable ? Motor : any;
+  T extends MotorsTable ? Motor : any |
+  T extends StarterBoxTable ? StarterBox : any |
+  T extends GatewayTable ? Gateway : any;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 
@@ -24,7 +28,7 @@ export type DBTableColumns<T extends DBTable> = keyof DBRecord<T>;
 
 export type SortDirection = "asc" | "desc";
 
-export type Relations = "=" | "!=" | "<" | "<=" | ">" | ">=" | "ILIKE" | "BETWEEN" | "IN" | "IS NULL" | "contains" | "or";
+export type Relations = "=" | "!=" | "<" | "<=" | ">" | ">=" | "ILIKE" | "BETWEEN" | "IN" | "IS NULL" | "contains" | "or" | "LOWER";
 
 export interface WhereQueryData<T extends DBTable> {
   columns: Array<keyof DBRecord<T>>;

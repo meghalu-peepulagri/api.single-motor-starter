@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { EMAIL_REQUIRED, FIELD_NAME_INVALID, FIELD_NAME_MIN_LEN, FIELD_NAME_MUST_STRING, FIELD_NAME_REQUIRED, HP_MAX, HP_MIN, HP_REQUIRED, ID_INVALID, ID_NUMBER, INVALID_OTP, INVALID_OTP_LENGTH, INVALID_PHONE_NUMBER, INVALID_PHONE_NUMBER_VALID_LENGTH, LOCATION_NAME_INVALID, LOCATION_NAME_MIN_LEN, MOTOR_MIN_LENGTH, MOTOR_NAME, MOTOR_NAME_STARTS_LETTER, MOTOR_REQUIRED, NAME_MIN_LENGTH, NAME_REQUIRED, OTP_REQUIRED, PASSWORD_MIN_LENGTH, PASSWORD_REQUIRED, PASSWORD_SHOULD_CONTAIN_NUMBER, PASSWORD_SHOULD_CONTAIN_UPPERCASE, PASSWORD_SPECIAL_CHAR, PHONE_NUMBER_REQUIRED, TITLE_MUST_BE_STRING, TITLE_REQUIRED, USER_TYPE_INVALID, USER_TYPE_REQUIRED, VALID_MAIL, VALID_NAME } from "../../constants/app-constants.js";
+import { DEVICE_MIN_LEN, DEVICE_NAME_REQUIRED, DEVICE_NAME_STARTS_LETTER, EMAIL_REQUIRED, FIELD_NAME_INVALID, FIELD_NAME_MIN_LEN, FIELD_NAME_MUST_STRING, FIELD_NAME_REQUIRED, HP_MAX, HP_MIN, HP_REQUIRED, ID_INVALID, ID_NUMBER, INVALID_OTP, INVALID_OTP_LENGTH, INVALID_PHONE_NUMBER, INVALID_PHONE_NUMBER_VALID_LENGTH, LOCATION_NAME_INVALID, LOCATION_NAME_MIN_LEN, MAC_MIN_LEN, MAC_REQUIRED, MOTOR_MIN_LENGTH, MOTOR_NAME, MOTOR_NAME_STARTS_LETTER, MOTOR_REQUIRED, NAME_MIN_LENGTH, NAME_REQUIRED, OTP_REQUIRED, PASSWORD_MIN_LENGTH, PASSWORD_REQUIRED, PASSWORD_SHOULD_CONTAIN_NUMBER, PASSWORD_SHOULD_CONTAIN_UPPERCASE, PASSWORD_SPECIAL_CHAR, PCB_MIN_LEN, PCB_NUMBER_REQUIRED, PHONE_NUMBER_REQUIRED, SERIAL_NO_MIN_LEN, SERIAL_NO_REQUIRED, SMALL_LETTERS_NOT_ALLOWED, STARTER_NUMBER_MIN_LEN, STARTER_NUMBER_REQUIRED, TITLE_MUST_BE_STRING, TITLE_REQUIRED, USER_TYPE_INVALID, USER_TYPE_REQUIRED, VALID_MAIL, VALID_NAME } from "../../constants/app-constants.js";
 import { userTypeEnum } from "../../constants/enum-types.js";
 
 
@@ -108,11 +108,60 @@ function requiredNumberOptional(errorMessage: string) {
   );
 }
 
+const aliasStarterNameValidator = v.optional(v.pipe(
+  v.string(DEVICE_NAME_REQUIRED),
+  v.transform(value => value.trim()),
+  v.nonEmpty(DEVICE_NAME_REQUIRED),
+  v.regex(/^[A-Z].*$/i, DEVICE_NAME_STARTS_LETTER),
+  v.minLength(3, DEVICE_MIN_LEN),
+));
+
+const starterBoxTitleValidator = v.pipe(
+  v.string(DEVICE_NAME_REQUIRED),
+  v.transform(value => value.trim()),
+  v.nonEmpty(DEVICE_NAME_REQUIRED),
+  v.regex(/^[A-Z].*$/i, DEVICE_NAME_STARTS_LETTER),
+  v.minLength(3, DEVICE_MIN_LEN),
+);
+
+
+const macAddressValidator = v.pipe(
+  v.string(MAC_REQUIRED),
+  v.transform(value => value.trim()),
+  v.nonEmpty(MAC_REQUIRED),
+  v.regex(/^([0-9A-Z:]+)$/, "Small letters or spaces are not allowed"),
+  v.minLength(3, MAC_MIN_LEN),
+);
+
+const serialNoValidator = v.pipe(
+  v.string(SERIAL_NO_REQUIRED),
+  v.transform(value => value.trim()),
+  v.nonEmpty(SERIAL_NO_REQUIRED),
+  v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED),
+  v.minLength(3, SERIAL_NO_MIN_LEN),
+);
+
+const pcbNumberValidator = v.pipe(
+  v.string(PCB_NUMBER_REQUIRED),
+  v.transform(value => value.trim()),
+  v.nonEmpty(PCB_NUMBER_REQUIRED),
+  v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED),
+  v.minLength(3, PCB_MIN_LEN),
+);
+
+const starterNumberValidator = v.pipe(
+  v.string(STARTER_NUMBER_REQUIRED),
+  v.trim(),
+  v.nonEmpty(STARTER_NUMBER_REQUIRED),
+  v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED),
+  v.minLength(3, STARTER_NUMBER_MIN_LEN),
+);
 
 
 export {
   emailValidator, locationTitleValidator, nameValidator,
   passwordValidator, phoneValidator,
-  userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator
+  userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator,
+  aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator, starterNumberValidator
 };
 

@@ -49,6 +49,9 @@ function prepareWhereQueryConditions(table, whereQueryData) {
             case "IS NULL":
                 whereQueries.push(isNull(columnInfo));
                 break;
+            case "LOWER":
+                whereQueries.push(sql `LOWER(${columnInfo}) = ${value}`);
+                break;
             case "contains":
                 whereQueries.push(sql `${columnInfo} ILIKE ${`%${value}%`}`);
                 break;

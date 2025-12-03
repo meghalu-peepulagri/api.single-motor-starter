@@ -14,7 +14,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     starter_number: varchar("starter_number").notNull(),
     status: statusEnum().notNull().default("ACTIVE"),
     user_id: integer("user_id").references(() => users.id),
-    created_by: integer("created_by").references(() => users.id),
+    created_by: integer("created_by").notNull().references(() => users.id),
     device_status: deviceStatusEnum().notNull().default("TEST"),
     gateway_id: integer("gateway_id").references(() => gateways.id),
     created_at: timestamp("created_at").notNull().defaultNow(),

@@ -10,6 +10,9 @@ import * as motorsSchema from "./schemas/motors.js";
 import * as otpSchema from "./schemas/otp.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
+import * as gatewaysSchema from "./schemas/gateways.js";
+import * as starterBoxSchema from "./schemas/starter-boxes.js";
+
 
 const { Pool } = pg;
 
@@ -34,6 +37,8 @@ const db = drizzle(dbClient, {
     ...otpSchema,
     ...deviceTokensSchema,
     ...userActivityLogsSchema,
+    ...starterBoxSchema,
+    ...gatewaysSchema
   },
 });
 
