@@ -8,5 +8,11 @@ export const vAddMotor = v.object({
   field_id: requiredNumber(FIELD_REQUIRED),
 });
 
+export const vUpdateMotor = v.object({
+  name: motorNameValidator,
+  hp: hpValidator,
+});
+
 
 export type validatedAddMotor = v.InferOutput<typeof vAddMotor>;
+export type validatedUpdateMotor = v.InferOutput<typeof vUpdateMotor>;

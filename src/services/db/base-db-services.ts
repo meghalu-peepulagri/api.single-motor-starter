@@ -5,6 +5,8 @@ import db from "../../database/configuration.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
 import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData } from "../../types/db-types.js";
 import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
+import type { PgTableWithColumns } from "drizzle-orm/pg-core";
+import BadRequestException from "../../exceptions/bad-request-exception.js";
 
 async function getRecordById<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, id: number, columnsToSelect?: any): Promise<DBRecord<T> | Pick<DBRecord<T>, C> | null> {
   const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
@@ -274,7 +276,7 @@ async function softDeleteRecordById<T extends DBTable>(table: T, id: number, rec
 async function updateRecordByIdWithTrx<T extends DBTable>(table: T, id: number, record: UpdateRecordData<T>, trx?: any) {
   const dataWithTimeStamps = { ...record };
 
-    const queryBuilder = trx || db;
+  const queryBuilder = trx || db;
 
   const [updatedRecord] = await queryBuilder
     .update(table)
@@ -368,6 +370,27 @@ async function updateMultipleRecordsByIds<T extends DBTable>(table: DBTable, ids
 
   return updatedRecords.length;
 }
+
+export function getTableColumnsWithDefaults<T extends DBTable>(table: T, defaultCols: string[], extraCols: string[] = []): string[] {
+
+  const tableColumns = Object.keys(table).filter((key) => {
+    const col = (table as any)[key];
+    return col && typeof col === "object" && "name" in col && "columnType" in col;
+  });
+
+  const merged = Array.from(new Set([...defaultCols, ...extraCols]));
+  const invalid = merged.filter(col => !tableColumns.includes(col));
+
+  if (invalid.length) {
+    throw new BadRequestException(
+      `Invalid column(s): [${invalid.join(", ")}].` +
+      `Valid columns for table [${getTableName(table)}]: [${tableColumns.join(", ")}]`
+    );
+  }
+
+  return merged;
+}
+
 
 export {
   deleteRecordById,

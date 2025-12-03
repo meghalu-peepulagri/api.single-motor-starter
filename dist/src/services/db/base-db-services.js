@@ -3,6 +3,7 @@ import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED } from "../..
 import db from "../../database/configuration.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
 import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
+import BadRequestException from "../../exceptions/bad-request-exception.js";
 async function getRecordById(table, id, columnsToSelect) {
     const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
     const columnInfo = sql.raw(`${getTableName(table)}.id`);
@@ -279,5 +280,18 @@ async function updateMultipleRecordsByIds(table, ids, record) {
         .where(inArray(columnInfo, ids))
         .returning();
     return updatedRecords.length;
+}
+export function getTableColumnsWithDefaults(table, defaultCols, extraCols = []) {
+    const tableColumns = Object.keys(table).filter((key) => {
+        const col = table[key];
+        return col && typeof col === "object" && "name" in col && "columnType" in col;
+    });
+    const merged = Array.from(new Set([...defaultCols, ...extraCols]));
+    const invalid = merged.filter(col => !tableColumns.includes(col));
+    if (invalid.length) {
+        throw new BadRequestException(`Invalid column(s): [${invalid.join(", ")}].` +
+            `Valid columns for table [${getTableName(table)}]: [${tableColumns.join(", ")}]`);
+    }
+    return merged;
 }
 export { deleteRecordById, deleteRecordsByAColumnValue, deleteRecordsByMultipleColumnValues, exportData, getMultipleRecordsByAColumnValue, getMultipleRecordsByMultipleColumnValues, getPaginatedRecords, getPaginatedRecordsConditionally, getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, softDeleteRecordById, updateMultipleRecordsByIds, updateRecordByColumnValue, updateRecordById, updateRecordByIdWithTrx, updateRecordByMultipleColumnValues };

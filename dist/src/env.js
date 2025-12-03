@@ -10,6 +10,10 @@ const VEnvSchema = object({
     DB_NAME: string(),
     DB_PORT: string(),
     JWT_SECRET: string(),
+    EMQX_API_KEY: string(),
+    EMQX_USERNAME: string(),
+    EMQX_PASSWORD: string(),
+    EMQX_CLIENT_ID: string(),
 });
 let envData;
 try {

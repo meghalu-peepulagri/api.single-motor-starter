@@ -6,3 +6,7 @@ export const vAddMotor = v.object({
     hp: hpValidator,
     field_id: requiredNumber(FIELD_REQUIRED),
 });
+export const vUpdateMotor = v.object({
+    name: motorNameValidator,
+    hp: hpValidator,
+});

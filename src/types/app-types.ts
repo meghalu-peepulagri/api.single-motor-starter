@@ -2,11 +2,11 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { validatedAddField } from "../validations/schema/field-validations.js";
-import type { validatedAddMotor } from "../validations/schema/motor-validations.js";
+import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
 
-export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor;
+export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor;
 
-export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor";
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor";
 
 
 export interface IResp {

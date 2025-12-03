@@ -4,7 +4,7 @@ import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { validationErrors } from "../utils/on-error.js";
-import { vAddMotor } from "./schema/motor-validations.js";
+import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
 const schemaMap = {
     "signup": vSignUp,
     "signin-email": vSignInEmail,
@@ -13,6 +13,7 @@ const schemaMap = {
     "verify-otp": vVerifyOtp,
     "add-field": vAddField,
     "add-motor": vAddMotor,
+    "update-motor": vUpdateMotor,
 };
 export async function validatedRequest(actionType, reqData, errorMessage) {
     const schema = schemaMap[actionType];

@@ -17,7 +17,7 @@ export const motors = pgTable("motors", {
   status: statusEnum().default("ACTIVE"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
-}, table => [
+}, (table: any) => [
   index("motor_user_id_idx").on(table.created_by),
   index("motor_idx").on(table.id),
   uniqueIndex("unique_motor_per_field").on(sql`lower(${table.name})`, table.field_id).where(sql`${table.status} != 'ARCHIVED'`),

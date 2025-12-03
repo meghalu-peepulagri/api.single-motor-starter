@@ -178,6 +178,7 @@ export const HP_MIN = "HP should be min 1";
 export const HP_MAX = "HP should be max 30";
 export const SIMILAR_MOTOR_TITLE_NOT_ALLOWED = "Duplicate motor titles are not allowed";
 export const MOTOR_ID_REQUIRED = "Motor Id is required";
+export const MOTOR_DETAILS_FETCHED = "Motor details fetched successfully";
 
 
 
