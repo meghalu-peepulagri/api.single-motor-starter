@@ -2,8 +2,9 @@ import { relations, sql } from "drizzle-orm";
 import { index, integer, numeric, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum } from "../../constants/enum-types.js";
 import { fields } from "./fields.js";
+import { starterBoxes } from "./starter-boxes.js";
 import { users } from "./users.js";
-export const modeEnum = pgEnum("mode_enum", ["LOCAL+MANUAL", "REMOTE+MANUAL", "LOCAL+AUTO", "REMOTE+AUTO"]);
+export const modeEnum = pgEnum("mode", ["LOCAL+MANUAL", "REMOTE+MANUAL", "LOCAL+AUTO", "REMOTE+AUTO"]);
 export const motors = pgTable("motors", {
     id: serial("id").primaryKey(),
     name: varchar("name").notNull(),
@@ -12,6 +13,7 @@ export const motors = pgTable("motors", {
     state: integer("state").notNull().default(0),
     mode: modeEnum().notNull().default("LOCAL+AUTO"),
     created_by: integer("created_by").notNull().references(() => users.id),
+    starter_id: integer("starter_id").references(() => starterBoxes.id),
     status: statusEnum().default("ACTIVE"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
@@ -28,5 +30,9 @@ export const motorRelations = relations(motors, ({ one, many }) => ({
     created_by_user: one(users, {
         fields: [motors.created_by],
         references: [users.id]
+    }),
+    starter: one(starterBoxes, {
+        fields: [motors.starter_id],
+        references: [starterBoxes.id]
     }),
 }));

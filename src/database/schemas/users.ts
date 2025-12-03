@@ -37,10 +37,15 @@ export type NewUser = typeof users.$inferInsert;
 export type UsersTable = typeof users;
 
 import { locations } from "./locations.js";
+import { gateways } from "./gateways.js";
+import { starterBoxes } from "./starter-boxes.js";
 
 export const userRelations = relations(users, ({ many }) => ({
     ownedLocations: many(locations, { relationName: "ownedLocations" }),
     createdLocations: many(locations, { relationName: "createdLocations" }),
     userActivities: many(userActivityLogs),
     fields: many(fields),
+    gateways: many(gateways),
+    locations: many(locations),
+    starterBoxes: many(starterBoxes),
 }));

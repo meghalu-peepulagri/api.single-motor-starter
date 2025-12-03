@@ -22,6 +22,20 @@
       "when": 1764678406061,
       "tag": "0002_violet_starhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1764756193397,
+      "tag": "0003_wonderful_phalanx",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1764756423452,
+      "tag": "0004_right_gamma_corps",
+      "breakpoints": true
     }
   ]
 }

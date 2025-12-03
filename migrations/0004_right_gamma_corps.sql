@@ -1,0 +1,2 @@
+CREATE TYPE "public"."mode" AS ENUM('LOCAL+MANUAL', 'REMOTE+MANUAL', 'LOCAL+AUTO', 'REMOTE+AUTO');--> statement-breakpoint
+ALTER TABLE "motors" ADD COLUMN "mode" "mode" DEFAULT 'LOCAL+AUTO' NOT NULL;

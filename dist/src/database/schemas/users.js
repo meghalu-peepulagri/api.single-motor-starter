@@ -25,9 +25,14 @@ export const users = pgTable("users", {
     uniqueIndex("valid_user").on(table.email, table.phone).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
 import { locations } from "./locations.js";
+import { gateways } from "./gateways.js";
+import { starterBoxes } from "./starter-boxes.js";
 export const userRelations = relations(users, ({ many }) => ({
     ownedLocations: many(locations, { relationName: "ownedLocations" }),
     createdLocations: many(locations, { relationName: "createdLocations" }),
     userActivities: many(userActivityLogs),
     fields: many(fields),
+    gateways: many(gateways),
+    locations: many(locations),
+    starterBoxes: many(starterBoxes),
 }));
