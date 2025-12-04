@@ -13,6 +13,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     pcb_number: varchar("pcb_number").notNull(),
     starter_number: varchar("starter_number").notNull(),
     status: statusEnum().notNull().default("ACTIVE"),
+    power: integer("power").notNull().default(0),
     user_id: integer("user_id").references(() => users.id),
     created_by: integer("created_by").notNull().references(() => users.id),
     device_status: deviceStatusEnum().notNull().default("TEST"),

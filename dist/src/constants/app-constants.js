@@ -207,3 +207,4 @@ export const STARTER_NUMBER_REQUIRED = "Starter Box Number is required";
 export const SMALL_LETTERS_NOT_ALLOWED = "Small characters not allowed";
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
+export const GATEWAY_NOT_FOUND = "Gateway not found";
