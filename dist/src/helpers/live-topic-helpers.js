@@ -1,65 +1,64 @@
-import { validateG01, validateG02, validateG03, validateG04 } from "./payload-validate-helpers.js";
+import { validateAndExtractLiveData } from "./payload-validate-helpers.js";
 export function validateLiveDataFormat(payload, topic) {
-    try {
-        const validKeys = ["G01", "G02", "G03", "G04"];
-        if (!payload || typeof payload !== "object") {
-            console.error(`Invalid live data payload for topic Format [${topic}] :`, payload);
-            return null;
-        }
-        const d = payload.D;
-        if (!d || typeof d !== "object") {
-            console.error(`Invalid 'D' field in live data topic Format [${topic}] :`, payload);
-            return null;
-        }
-        const matchedGroups = {};
-        validKeys.forEach(key => {
-            if (key in d) {
-                matchedGroups[key] = d[key];
-            }
-        });
-        if (Object.keys(matchedGroups).length === 0) {
-            console.error(`No valid group keys found in live data Format [${topic}] :`, payload);
-            return null;
-        }
-        return {
-            payload, matchedGroups
-        };
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        console.error(`Invalid payload [${topic}]`);
+        return null;
     }
-    catch (error) {
-        console.error("Error in live Data Topic Helper Format:", error);
-        throw error;
+    const d = payload.D;
+    if (!d || typeof d !== "object" || Array.isArray(d)) {
+        console.error(`Invalid or missing 'D' field [${topic}]`);
+        return null;
     }
+    const validGroups = ["G01", "G02", "G03", "G04"];
+    const matched = {};
+    for (const key of validGroups) {
+        if (key in d && d[key] != null && typeof d[key] === "object") {
+            matched[key] = d[key];
+        }
+    }
+    if (Object.keys(matched).length === 0) {
+        console.error(`No valid group found in payload [${topic}]`);
+        return null;
+    }
+    return {
+        original: payload,
+        groups: matched,
+    };
 }
-export function validateLiveDataPayload(groupIdObj, payload) {
-    try {
-        if (!groupIdObj || typeof groupIdObj !== "object") {
-            console.error("Invalid payload format");
+export function validateLiveDataContent(input) {
+    let fullPayload = null;
+    if (input?.original && (input.original.T != null || input.original.S != null || input.original.D)) {
+        fullPayload = input.original;
+    }
+    // Case 2: Raw full payload { T, S, D }
+    else if (input && (input.T != null || input.S != null || input.D)) {
+        fullPayload = input;
+    }
+    else if (input && typeof input === "object" && !Array.isArray(input)) {
+        const groupKey = Object.keys(input).find(k => ["G01", "G02", "G03", "G04"].includes(k));
+        if (!groupKey) {
+            console.error("[validateLiveDataContent] FATAL: No valid group (G01-G04) found — dropping message entirely");
             return null;
         }
-        const groupId = Object.keys(groupIdObj)[0];
-        const payload = groupIdObj[groupId];
-        let validData;
-        switch (groupId) {
-            case "G01":
-                validData = validateG01(payload);
-                break;
-            case "G02":
-                validData = validateG02(payload);
-                break;
-            case "G03":
-                validData = validateG03(payload);
-                break;
-            case "G04":
-                validData = validateG04(payload);
-                break;
-            default:
-                console.error("Invalid groupId received in live data payload:", groupIdObj);
-                return null;
-        }
-        return validData;
+        fullPayload = { T: null, S: null, D: { [groupKey]: input[groupKey], ct: null } };
+        console.error(`[validateLiveDataContent] Only group data received (missing T, S, ct) — wrapped for processing`);
     }
-    catch (error) {
-        console.error("Error in validate Live Data Payload:", error);
-        throw error;
+    else {
+        console.error("[validateLiveDataContent] Invalid input format — cannot parse payload");
+        return null;
     }
+    //  validation
+    const result = validateAndExtractLiveData(fullPayload);
+    if (!result.group) {
+        console.error("[validateLiveDataContent] CRITICAL: Group detection failed after wrapping — this should never happen");
+    }
+    return {
+        validated_payload: result.validated_payload,
+        data: result.data,
+        group: result.group,
+        errors: result.errors,
+        T: result.T,
+        S: result.S,
+        ct: result.ct,
+    };
 }

@@ -12,6 +12,7 @@ import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
 import * as gatewaysSchema from "./schemas/gateways.js";
 import * as starterBoxSchema from "./schemas/starter-boxes.js";
+import * as starterBoxParameters from "./schemas/starter-parameters.js";
 
 
 const { Pool } = pg;
@@ -38,7 +39,8 @@ const db = drizzle(dbClient, {
     ...deviceTokensSchema,
     ...userActivityLogsSchema,
     ...starterBoxSchema,
-    ...gatewaysSchema
+    ...gatewaysSchema,
+    ...starterBoxParameters
   },
 });
 

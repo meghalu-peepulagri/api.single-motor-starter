@@ -3,6 +3,7 @@ import { index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varcha
 import { users } from "./users.js";
 import { statusEnum } from "../../constants/enum-types.js";
 import { gateways } from "./gateways.js";
+import { motors } from "./motors.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY ", "TEST"]);
 export const starterBoxes = pgTable("starter_boxes", {
     id: serial("id").primaryKey(),
@@ -31,7 +32,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     uniqueIndex("validate_pcb_number").on(sql `lower(${table.pcb_number})`).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("validate_starter_number").on(sql `lower(${table.starter_number})`).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
-export const starterBoxesRelations = relations(starterBoxes, ({ one }) => ({
+export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => ({
     user: one(users, {
         fields: [starterBoxes.user_id],
         references: [users.id],
@@ -40,4 +41,5 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one }) => ({
         fields: [starterBoxes.gateway_id],
         references: [gateways.id],
     }),
+    motors: many(motors),
 }));

@@ -1,7 +1,8 @@
-import { parseTimestamp } from "./dns-helper.js";
+import { controlMode, lastOff, lastOn, motorState } from "./control-helpers.js";
+import { parseTimestamp } from "./dns-helpers.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 
-export function prepareLiveDataPayload(validatedData: any) {
+export function prepareLiveDataPayload(validatedData: any, starterData: any) {
   if (!validatedData || !validatedData.data) return null;
 
   const data = validatedData.data;
@@ -13,6 +14,7 @@ export function prepareLiveDataPayload(validatedData: any) {
   return {
 
     payload_version: cleanScalar(data.p_v) || 0,
+    packet_number: validatedData.T,
 
     // Line voltages
     line_voltage_r: llv[0],
@@ -30,28 +32,29 @@ export function prepareLiveDataPayload(validatedData: any) {
     power_present: cleanScalar(data.pwr) || 0,
     motor_mode: cleanScalar(data.mode) || 0,
     motor_state: cleanScalar(data.m_s) || 0,
-    mode_description: data.mode_description || "",
-    motor_description: data.motor_description || "",
+    mode_description: controlMode(data.mode) || "Unknown",
+    motor_description: motorState(data.m_s) || "Unknown",
 
     // Faults & alerts
     alert_code: cleanScalar(data.l_of) || 0,
-    alert_description: data.alert_description || "",
+    alert_description: data.alert_description || "Unknown",
     fault: cleanScalar(data.flt) || 0,
-    fault_description: data.fault_description || "",
+    fault_description: data.fault_description || "Unknown",
 
     last_on_code: cleanScalar(data.l_on) || 0,
-    last_on_description: data.last_on_description || "",
+    last_on_description: lastOn(data.l_on) || "Unknown",
     last_off_code: cleanScalar(data.l_of) || 0,
-    last_off_description: data.last_off_description || "",
+    last_off_description: lastOff(data.l_of) || "Unknown",
+    group_id: validatedData.group || null,
 
     // Timestamp
     time_stamp: parseTimestamp(data.ct),
-    valid_data: validatedData.validated_payload,
-
-    starter_id: data.starter_id || null,
-    mac_address: data.mac_address || null,
-    gateway_id: data.gateway_id || null,
-    user_id: data.user_id || null,
+    payload_valid: validatedData.validated_payload,
+    payload_errors: validatedData.errors,
+    starter_id: starterData.id || null,
+    gateway_id: starterData.gateway_id || null,
+    user_id: starterData.created_by || null,
+    motor_id: starterData.motors[0].id || null,
 
   };
 }

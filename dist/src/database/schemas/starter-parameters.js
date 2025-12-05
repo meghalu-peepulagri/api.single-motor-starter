@@ -1,11 +1,13 @@
-import { boolean, index, integer, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { starterBoxes } from "./starter-boxes.js";
 import { sql } from "drizzle-orm";
 import { gateways } from "./gateways.js";
 import { users } from "./users.js";
+import { motors } from "./motors.js";
 export const starterBoxParameters = pgTable("starter_parameters", {
     id: serial("id").primaryKey(),
-    payload_version: real("payload_version").notNull(),
+    payload_version: varchar("payload_version").notNull(),
+    packet_number: integer("packet_number").notNull().default(0),
     // Line voltage
     line_voltage_r: real("line_voltage_r").notNull().default(0),
     line_voltage_y: real("line_voltage_s").notNull().default(0),
@@ -36,13 +38,14 @@ export const starterBoxParameters = pgTable("starter_parameters", {
     time_stamp: varchar("time_stamp").notNull(),
     // References
     starter_id: integer("starter_id").notNull().references(() => starterBoxes.id),
-    mac_address: varchar("mac_address").references(() => starterBoxes.mac_address),
+    motor_id: integer("motor_id").notNull().references(() => motors.id),
     gateway_id: integer("gateway_id").references(() => gateways.id),
     user_id: integer("user_id").notNull().references(() => users.id),
-    valid_data: boolean("valid_data").notNull().default(false),
+    payload_valid: boolean("payload_valid").notNull().default(false),
+    payload_errors: jsonb('payload_errors').notNull().default(sql `'[]'::jsonb`),
+    group_id: varchar("group_id").notNull(),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [
-    index("starter_params_id_idx").on(table.starter_id),
-    index("user_id_idx").on(table.user_id),
+    index("starter_params_starter_id_idx").on(table.starter_id),
 ]);

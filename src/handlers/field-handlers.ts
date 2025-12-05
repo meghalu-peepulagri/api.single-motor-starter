@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { FIELD_ADDED, FIELD_UPDATED, FIELD_VALIDATION_CRITERIA, FIELDS_FETCHED, SIMILAR_MOTOR_TITLE_NOT_ALLOWED } from "../constants/app-constants.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
-import { fieldFilters } from "../helpers/filed-helper.js";
+import { fieldFilters } from "../helpers/filed-helpers.js";
 import { checkDuplicateMotorTitles } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { addFieldWithMotorTransaction, paginatedFieldsList, updateFieldWithMotorTransaction } from "../services/db/field-services.js";

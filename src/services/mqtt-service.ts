@@ -1,57 +1,173 @@
-import { MqttService } from "@core-services/mqtt";
 import mqttConfig from "../config/mqtt-config.js";
-import { validateLiveDataFormat, validateLiveDataPayload } from "../helpers/live-topic-helpers.js";
-import { prepareLiveDataPayload } from "../helpers/prepare-live-data-payload-helper.js";
+import { liveDataHandler } from "../helpers/mqtt-helpers.js";
 
 const { clientId, brokerUrl, username, password } = mqttConfig;
 
-const topics = ["peepul/+/live_data", "test2", "test3"];
+import type { MqttClient } from "mqtt";
 
-export const mqttConnect = () => {
-  try {
-    const mqttServiceInstance = MqttService.getInstance(clientId, brokerUrl, username, password, () => { });
-    mqttServiceInstance.connect(topics, true);
+import mqtt from "mqtt";
 
-    mqttServiceInstance.handler("peepul/+/live_data", (message: any, topic: string) => {
-      try {
-        const parsedMessage: any = (() => {
-          if (Buffer.isBuffer(message)) message = message.toString();
+export class MqttService {
+  private client: MqttClient | null = null;
+  private _motorService: any = null;
+  private _starterBoxService: any = null;
+  private _gatewayService: any = null;
+  private _motorStateUpdateService: any = null;
+  private _modeChangeTopicService: any = null;
+  private readonly clientId: string;
+  private readonly connectUrl: string;
+  private readonly username: string;
+  private readonly password: string;
 
-          if (typeof message === "string") {
-            if (!message.trim()) return null;
-            try {
-              return JSON.parse(message);
-            } catch {
-              console.warn({ topic }, "Invalid JSON string received. Skipping processing.");
-              return null;
-            }
-          }
+  constructor() {
+    this.clientId = clientId ?? `Cloud-dev${Math.floor(Math.random() * 1000)}`;
+    this.connectUrl = brokerUrl ?? "";
+    this.username = username ?? "";
+    this.password = password ?? "";
 
-          if (typeof message === "object" && message !== null) return message;
-          console.warn({ topic }, "Unsupported message type. Skipping processing.", message);
-          return null;
-        })();
+    const missing: string[] = [];
+    if (!this.connectUrl)
+      missing.push("MQTT Broker URL");
+    if (!this.username)
+      missing.push("MQTT username");
+    if (!this.password)
+      missing.push("MQTT password");
 
-        if (!parsedMessage) return;
+    if (missing.length > 0) {
+      const message = `${missing.join(", ")} is missing in configuration`;
+      console.error(message);
+    }
+  }
 
-        // Validate and format the live data structure
-        const formattedData = validateLiveDataFormat(parsedMessage, topic);
-        if (!formattedData) return;
 
-        // Validate the payload content
-        const validatedData = validateLiveDataPayload(formattedData.matchedGroups, formattedData.payload,);
-        if (!validatedData) return;
-
-        const preparedPayload = prepareLiveDataPayload(validatedData);
-        console.log('preparedPayload: ', preparedPayload);
-      } catch (error: any) {
-        console.error("Error at live data topic handler:", error);
-        throw error;
-      }
+  public connect(): MqttClient | null {
+    this.client = mqtt.connect(this.connectUrl, {
+      clientId: this.clientId,
+      clean: false,
+      connectTimeout: 4000,
+      username: this.username,
+      password: this.password,
+      reconnectPeriod: 1000,
     });
 
-  } catch (error: any) {
-    console.error("Error at mqtt connect:", error);
-    throw error;
+    this.client.on("connect", () => {
+      this.subscribe([
+        "peepul/+/live_data"
+      ]);
+    });
+
+    this.client.on("error", (error) => {
+      console.error("MQTT connection error:", error.message);
+    });
+
+    this.client.on("reconnect", () => {
+      console.warn("MQTT reconnecting...");
+    });
+
+    this.client.on("message", (topic, message) => {
+      this.processMessage(topic, message);
+    });
+
+    return this.client;
   }
-};
+
+  private processMessage = async (topic: string, message: any): Promise<void> => {
+    try {
+      if (Buffer.isBuffer(message)) {
+        message = message.toString();
+      }
+
+      if (typeof message === "string") {
+        if (message.length === 0 || !message.trim().startsWith("{")) {
+          console.warn({ topic }, "Empty or invalid string message received. Skipping processing.");
+          return;
+        }
+        message = JSON.parse(message);
+      }
+
+      const parsedMessage = message;
+
+      switch (true) {
+        case /^peepul\/[^/]+\/live_data$/.test(topic):
+          await liveDataHandler(topic, parsedMessage);
+          break;
+
+        default:
+          console.warn({ topic }, "No matching topic handler found.");
+      }
+    }
+    catch (error: any) {
+      console.error("Error while processing MQTT message:", error.message);
+      throw error;
+    }
+  };
+
+  publish = async (topic: string, message: string) => {
+    try {
+      if (!this.client?.connected) {
+        console.error({ topic, message }, "MQTT client is not connected. Cannot publish.");
+        return;
+      }
+
+      this.client.publish(topic, message, { qos: 1 }, (error) => {
+        if (error) {
+          console.error(400, { topic, message }, `Error publishing message: ${error.message}`);
+        }
+      });
+    }
+    catch (error: any) {
+      console.error(500, { topic, message, error: error.message, stack: error.stack }, "Error at publishing MQTT message", error.message);
+      throw error;
+    }
+  };
+
+  subscribe = async (topics: string | string[]) => {
+    try {
+      if (!this.client?.connected) {
+        console.error(400, { topics }, "Cannot subscribe, MQTT client is not connected.");
+        return;
+      }
+
+      const topicArray = Array.isArray(topics) ? topics : [topics];
+
+      this.client.subscribe(topicArray, { qos: 1 }, (error, granted) => {
+        if (error) {
+          console.error(400, { topics, error: error.message }, "Subscription error");
+        }
+        else if (granted?.length) {
+          granted.forEach(sub =>
+            console.log(`Subscribed to topic: ${sub.topic}`),
+
+          );
+        }
+        else {
+          console.error(400, { topics }, "No topics were granted during subscription");
+        }
+      });
+    }
+    catch (error: any) {
+      console.error(500, { topics, error: error.message, stack: error.stack }, "Exception at subscribe mqtt", error.message);
+      throw error;
+    }
+  };
+
+  disconnect = async (): Promise<void> => {
+    try {
+      if (!this.client?.connected) {
+        console.error(400, {}, "MQTT client is not connected.");
+        return;
+      }
+
+      this.client.end(() => {
+        console.error(200, {}, "MQTT client disconnected");
+      });
+    }
+    catch (error: any) {
+      console.error(500, { error: error.message, stack: error.stack }, "Error at disconnecting MQTT client:", error.message);
+      throw error;
+    }
+  };
+}
+
+// Create a single instance
+export const mqttServiceInstance = new MqttService();

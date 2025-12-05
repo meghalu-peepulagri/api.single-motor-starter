@@ -1,6 +1,6 @@
-import { parseTimestamp } from "./dns-helper.js";
+import { parseTimestamp } from "./dns-helpers.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
-export function prepareLiveDataPayload(validatedData) {
+export function prepareLiveDataPayload(validatedData, starterData) {
     if (!validatedData || !validatedData.data)
         return null;
     const data = validatedData.data;
@@ -9,6 +9,7 @@ export function prepareLiveDataPayload(validatedData) {
     const amp = cleanThreeNumberArray(data.amp || []);
     return {
         payload_version: cleanScalar(data.p_v) || 0,
+        packet_number: validatedData.T,
         // Line voltages
         line_voltage_r: llv[0],
         line_voltage_y: llv[1],
@@ -34,12 +35,14 @@ export function prepareLiveDataPayload(validatedData) {
         last_on_description: data.last_on_description || "",
         last_off_code: cleanScalar(data.l_of) || 0,
         last_off_description: data.last_off_description || "",
+        group_id: validatedData.group,
         // Timestamp
         time_stamp: parseTimestamp(data.ct),
-        valid_data: validatedData.validated_payload,
-        starter_id: data.starter_id || null,
-        mac_address: data.mac_address || null,
-        gateway_id: data.gateway_id || null,
-        user_id: data.user_id || null,
+        payload_valid: validatedData.validated_payload,
+        payload_errors: validatedData.errors,
+        starter_id: starterData.id || null,
+        gateway_id: starterData.gateway_id || null,
+        user_id: starterData.created_by || null,
+        motor_id: starterData.motors[0].id || null,
     };
 }
