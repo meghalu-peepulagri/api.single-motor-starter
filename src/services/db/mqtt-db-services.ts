@@ -3,6 +3,7 @@ import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
 import { controlMode } from "../../helpers/control-helpers.js";
+import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
 
@@ -31,6 +32,9 @@ export async function saveLiveDataTopic(insertedData: any, groupId: string) {
 
 export async function selectTopicAck(topicType: string, payload: any, topic: string) {
   switch (topicType) {
+    case "LIVE_DATA":
+      await liveDataHandler(payload, topic);
+      break;
     case "MOTOR_CONTROL_ACK":
       await motorControlAckHandler(payload, topic);
       break;

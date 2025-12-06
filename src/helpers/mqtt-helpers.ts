@@ -3,7 +3,7 @@ import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 
-export async function liveDataHandler(topic: string, parsedMessage: any) {
+export async function liveDataHandler(parsedMessage: any, topic: string,) {
   try {
 
     if (!parsedMessage) return;

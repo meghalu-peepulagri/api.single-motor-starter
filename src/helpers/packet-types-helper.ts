@@ -30,7 +30,7 @@ export const ACK_TYPES = {
 export function findTopicACKByType(payload: any) {
   const type = payload.T;
   switch (type) {
-    case 11: return "LIVE_DATA";
+    case 41: return "LIVE_DATA";
     case 31: return "MOTOR_CONTROL_ACK";
     case 32: return "MODE_CHANGE_ACK";
     case 33: return "SCHEDULING_ACK";
