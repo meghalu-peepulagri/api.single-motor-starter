@@ -8,5 +8,4 @@ function parseTimestamp(ct) {
     }
     return new Date().toISOString();
 }
-// Usage
 export { parseTimestamp };

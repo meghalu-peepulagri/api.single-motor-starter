@@ -78,3 +78,23 @@ export function getPacketDescription(code: number): string {
       return "Unknown Packet Type";
   }
 }
+
+export const signalQuality = (code: number) => {
+  if (code >= 2 && code <= 9) return "Marginal strength";
+  if (code >= 10 && code <= 14) return "OK strength";
+  if (code >= 15 && code <= 19) return "Good strength";
+  if (code >= 20 && code <= 30) return "Excellent strength";
+  return "Invalid signal code";
+};
+
+export function getValidStrength(value: number) {
+  return value >= 2 && value <= 20 ? value : 0;
+}
+
+export function getValidNetwork(value: number) {
+  if (value === 2) return "2G";
+  if (value === 4) return "4G";
+  return "Unknown";
+}
+
+

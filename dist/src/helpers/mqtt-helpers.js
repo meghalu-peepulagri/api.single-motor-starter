@@ -2,7 +2,7 @@ import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
-export async function liveDataHandler(topic, parsedMessage) {
+export async function liveDataHandler(parsedMessage, topic) {
     try {
         if (!parsedMessage)
             return;

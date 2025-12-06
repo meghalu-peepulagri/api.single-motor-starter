@@ -2,13 +2,10 @@ import mqttConfig from "../config/mqtt-config.js";
 import { liveDataHandler } from "../helpers/mqtt-helpers.js";
 const { clientId, brokerUrl, username, password } = mqttConfig;
 import mqtt from "mqtt";
+import { findTopicACKByType } from "../helpers/packet-types-helper.js";
+import { motorControlAckHandler, motorModeChangeAckHandler, selectTopicAck } from "./db/mqtt-db-services.js";
 export class MqttService {
     client = null;
-    _motorService = null;
-    _starterBoxService = null;
-    _gatewayService = null;
-    _motorStateUpdateService = null;
-    _modeChangeTopicService = null;
     clientId;
     connectUrl;
     username;
@@ -41,7 +38,7 @@ export class MqttService {
         });
         this.client.on("connect", () => {
             this.subscribe([
-                "peepul/+/live_data"
+                "peepul/+/tele", "peepul/+/motor_control/ack", "peepul/+/mode_change/ack", "peepul/+/status"
             ]);
         });
         this.client.on("error", (error) => {
@@ -69,8 +66,18 @@ export class MqttService {
             }
             const parsedMessage = message;
             switch (true) {
-                case /^peepul\/[^/]+\/live_data$/.test(topic):
+                case /^peepul\/[^/]+\/tele$/.test(topic):
                     await liveDataHandler(topic, parsedMessage);
+                    break;
+                case /^peepul\/[^/]+\/motor_control\/ack$/.test(topic):
+                    await motorControlAckHandler(parsedMessage, topic);
+                    break;
+                case /^peepul\/[^/]+\/mode_change\/ack$/.test(topic):
+                    await motorModeChangeAckHandler(parsedMessage, topic);
+                    break;
+                case /^peepul\/[^/]+\/status$/.test(topic):
+                    const topicType = findTopicACKByType(parsedMessage);
+                    await selectTopicAck(topicType, message, topic);
                     break;
                 default:
                     console.warn({ topic }, "No matching topic handler found.");

@@ -19,6 +19,8 @@ export const starterBoxes = pgTable("starter_boxes", {
     created_by: integer("created_by").notNull().references(() => users.id),
     device_status: deviceStatusEnum().notNull().default("TEST"),
     gateway_id: integer("gateway_id").references(() => gateways.id),
+    signal_quality: integer("signal_quality").notNull().default(0),
+    network_type: varchar("network_type").notNull().default("NUll"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [

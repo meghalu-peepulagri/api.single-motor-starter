@@ -22,6 +22,23 @@ export const ACK_TYPES = {
     HEART_BEAT: 40,
     LIVE_DATA: 11,
 };
+export function findTopicACKByType(payload) {
+    const type = payload.T;
+    switch (type) {
+        case 41: return "LIVE_DATA";
+        case 31: return "MOTOR_CONTROL_ACK";
+        case 32: return "MODE_CHANGE_ACK";
+        case 33: return "SCHEDULING_ACK";
+        case 34: return "CALIBRATION_ACK";
+        case 35: return "LIVE_DATA_REQUEST_ACK";
+        case 36: return "CONFIG_DATA_REQUEST_ACK";
+        case 37: return "SCHEDULING_DATA_REQUEST_ACK";
+        case 38: return "POWER_INFO_REQUEST_ACK";
+        case 39: return "DEVICE_INFO_ACK";
+        case 40: return "HEART_BEAT";
+        default: return "UNKNOWN";
+    }
+}
 export function getPacketDescription(code) {
     switch (code) {
         // ACK TYPES
@@ -50,3 +67,14 @@ export function getPacketDescription(code) {
             return "Unknown Packet Type";
     }
 }
+export const signalQuality = (code) => {
+    if (code >= 2 && code <= 9)
+        return "Marginal strength";
+    if (code >= 10 && code <= 14)
+        return "OK strength";
+    if (code >= 15 && code <= 19)
+        return "Good strength";
+    if (code >= 20 && code <= 30)
+        return "Excellent strength";
+    return "Invalid signal code";
+};

@@ -4,6 +4,7 @@ import { starterBoxes, type StarterBoxTable } from "../../database/schemas/start
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
 import { controlMode } from "../../helpers/control-helpers.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
+import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
 
@@ -40,6 +41,9 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
       break;
     case "MODE_CHANGE_ACK":
       await motorModeChangeAckHandler(payload, topic);
+      break;
+    case "HEART_BEAT":
+      await heartbeatHandler(payload, topic);
       break;
     default:
       return null;
@@ -119,6 +123,23 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
     await updateRecordById<MotorsTable>(motors, validMac.motors[0].id, { mode });
   } catch (error: any) {
     console.error("Error at motor control ack topic handler:", error);
+    throw error;
+  }
+}
+
+
+export async function heartbeatHandler(message: any, topic: string) {
+  try {
+    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+    if (!validMac?.id) {
+      console.error(`Any starter found with given MAC [${topic}]`)
+      return null;
+    };
+    const validStrength = getValidStrength(message.D.s_q);
+    const validNetwork = getValidNetwork(message.D.nwt);
+    await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { signal_quality: validStrength, network_type: validNetwork });
+  } catch (error: any) {
+    console.error("Error at heartbeat topic handler:", error);
     throw error;
   }
 }

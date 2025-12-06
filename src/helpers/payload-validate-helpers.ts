@@ -1,6 +1,3 @@
-// src/validators/liveDataValidator.ts
-// FINAL VERSION – p_v is NUMBER, everything strict & clean
-
 const isNumber = (v: any): v is number =>
   typeof v === "number" && Number.isFinite(v);
 
