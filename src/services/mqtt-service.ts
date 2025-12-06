@@ -6,7 +6,8 @@ const { clientId, brokerUrl, username, password } = mqttConfig;
 import type { MqttClient } from "mqtt";
 
 import mqtt from "mqtt";
-import { motorControlAckHandler, motorModeChangeAckHandler } from "./db/mqtt-db-services.js";
+import { findTopicACKByType } from "../helpers/packet-types-helper.js";
+import { motorControlAckHandler, motorModeChangeAckHandler, selectTopicAck } from "./db/mqtt-db-services.js";
 
 export class MqttService {
   private client: MqttClient | null = null;
@@ -48,7 +49,7 @@ export class MqttService {
 
     this.client.on("connect", () => {
       this.subscribe([
-        "peepul/+/live_data", "peepul/+/motor_control/ack", "peepul/+/mode_change/ack"
+        "peepul/+/tele", "peepul/+/motor_control/ack", "peepul/+/mode_change/ack", "peepul/+/status"
       ]);
     });
 
@@ -84,7 +85,7 @@ export class MqttService {
       const parsedMessage = message;
 
       switch (true) {
-        case /^peepul\/[^/]+\/live_data$/.test(topic):
+        case /^peepul\/[^/]+\/tele$/.test(topic):
           await liveDataHandler(topic, parsedMessage);
           break;
 
@@ -94,6 +95,11 @@ export class MqttService {
 
         case /^peepul\/[^/]+\/mode_change\/ack$/.test(topic):
           await motorModeChangeAckHandler(parsedMessage, topic);
+          break;
+
+        case /^peepul\/[^/]+\/status$/.test(topic):
+          const topicType = findTopicACKByType(parsedMessage);
+          await selectTopicAck(topicType, message, topic);
           break;
 
         default:

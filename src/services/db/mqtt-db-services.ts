@@ -9,7 +9,6 @@ import { getStarterByMacWithMotor } from "./starter-services.js";
 
 // Live data
 export async function saveLiveDataTopic(insertedData: any, groupId: string) {
-
   switch (groupId) {
     case "G01": //  Live data topic
       await updateStates(insertedData);
@@ -28,6 +27,20 @@ export async function saveLiveDataTopic(insertedData: any, groupId: string) {
     default:
       return null;
   }
+}
+
+export async function selectTopicAck(topicType: string, payload: any, topic: string) {
+  switch (topicType) {
+    case "MOTOR_CONTROL_ACK":
+      await motorControlAckHandler(payload, topic);
+      break;
+    case "MODE_CHANGE_ACK":
+      await motorModeChangeAckHandler(payload, topic);
+      break;
+    default:
+      return null;
+  }
+
 }
 
 export async function updateStates(insertedData: any) {
@@ -105,3 +118,7 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
     throw error;
   }
 }
+
+
+
+

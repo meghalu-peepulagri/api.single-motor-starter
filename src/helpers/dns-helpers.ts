@@ -11,5 +11,4 @@ function parseTimestamp(ct?: string): string {
   return new Date().toISOString();
 }
 
-// Usage
 export { parseTimestamp };
