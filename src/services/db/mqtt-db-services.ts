@@ -8,7 +8,7 @@ export async function saveLiveDataTopic(insertedData: any, groupId: string) {
 
   switch (groupId) {
     case "G01": //  Live data topic
-      await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, insertedData);
+      await updateStates(insertedData);
       break;
     case "G02":
       // Update Device power & motor state to ON
@@ -24,6 +24,16 @@ export async function saveLiveDataTopic(insertedData: any, groupId: string) {
     default:
       return null;
   }
+}
+
+export async function updateStates(insertedData: any) {
+  const { starter_id, motor_id, power_present, motor_state, mode_description } = insertedData;
+  if (!starter_id) return null;
+  await db.transaction(async (trx) => {
+    await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, insertedData, trx);
+    await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter_id, { power: power_present }, trx);
+    if (motor_id) await updateRecordByIdWithTrx<MotorsTable>(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
+  });
 }
 
 export async function updateDevicePowerAndMotorStateToON(insertedData: any) {

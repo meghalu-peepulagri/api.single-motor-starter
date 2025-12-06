@@ -43,7 +43,7 @@ export const starterBoxParameters = pgTable("starter_parameters", {
     user_id: integer("user_id").notNull().references(() => users.id),
     payload_valid: boolean("payload_valid").notNull().default(false),
     payload_errors: jsonb('payload_errors').notNull().default(sql `'[]'::jsonb`),
-    group_id: varchar("group_id").notNull(),
+    group_id: varchar("group_id"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [

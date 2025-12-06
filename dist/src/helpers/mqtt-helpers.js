@@ -7,7 +7,6 @@ export async function liveDataHandler(topic, parsedMessage) {
         if (!parsedMessage)
             return;
         const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-        console.log('validMac: ', validMac);
         if (!validMac) {
             console.error(`Any starter found with given MAC [${topic}]`);
             return null;
@@ -19,12 +18,10 @@ export async function liveDataHandler(topic, parsedMessage) {
             return;
         // Validate the payload content
         const validatedData = validateLiveDataContent(formattedData);
-        console.log('validatedData: ', validatedData);
         if (!validatedData)
             return;
         // Prepare the payload
         const preparedPayload = prepareLiveDataPayload(validatedData, validMac);
-        console.log('preparedPayload: ', preparedPayload);
         if (!preparedPayload)
             return;
         await saveLiveDataTopic(preparedPayload, preparedPayload.group_id);

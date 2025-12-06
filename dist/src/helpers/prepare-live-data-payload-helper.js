@@ -1,3 +1,4 @@
+import { controlMode, lastOff, lastOn, motorState } from "./control-helpers.js";
 import { parseTimestamp } from "./dns-helpers.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 export function prepareLiveDataPayload(validatedData, starterData) {
@@ -24,18 +25,18 @@ export function prepareLiveDataPayload(validatedData, starterData) {
         power_present: cleanScalar(data.pwr) || 0,
         motor_mode: cleanScalar(data.mode) || 0,
         motor_state: cleanScalar(data.m_s) || 0,
-        mode_description: data.mode_description || "",
-        motor_description: data.motor_description || "",
+        mode_description: controlMode(data.mode) || "Unknown",
+        motor_description: motorState(data.m_s) || "Unknown",
         // Faults & alerts
         alert_code: cleanScalar(data.l_of) || 0,
-        alert_description: data.alert_description || "",
+        alert_description: data.alert_description || "Unknown",
         fault: cleanScalar(data.flt) || 0,
-        fault_description: data.fault_description || "",
+        fault_description: data.fault_description || "Unknown",
         last_on_code: cleanScalar(data.l_on) || 0,
-        last_on_description: data.last_on_description || "",
+        last_on_description: lastOn(data.l_on) || "Unknown",
         last_off_code: cleanScalar(data.l_of) || 0,
-        last_off_description: data.last_off_description || "",
-        group_id: validatedData.group,
+        last_off_description: lastOff(data.l_of) || "Unknown",
+        group_id: validatedData.group || null,
         // Timestamp
         time_stamp: parseTimestamp(data.ct),
         payload_valid: validatedData.validated_payload,
