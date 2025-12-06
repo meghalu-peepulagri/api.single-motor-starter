@@ -52,8 +52,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: any) {
 }
 
 export async function updateDevicePowerONAndMotorStateOFF(insertedData: any) {
-  const { starter_id, motor_id, power_present, motor_state, mode_description } = insertedData;
-
+  const { starter_id, motor_id, power_present, motor_state } = insertedData;
   if (!starter_id || !motor_id || power_present !== 1) return null;
 
   await db.transaction(async (trx) => {
@@ -75,10 +74,8 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: any) {
 
 // Motor control ack
 export async function motorControlAckHandler(message: any, topic: string) {
-  console.log('message: ', message);
   try {
     const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-    console.log('validMac: ', validMac);
     if (!validMac?.id) {
       console.error(`Any starter found with given MAC [${topic}]`)
       return null;
