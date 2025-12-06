@@ -2,8 +2,12 @@ import db from "../../database/configuration.js";
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
-import { saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { controlMode } from "../../helpers/control-helpers.js";
+import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getStarterByMacWithMotor } from "./starter-services.js";
 
+
+// Live data
 export async function saveLiveDataTopic(insertedData: any, groupId: string) {
 
   switch (groupId) {
@@ -61,7 +65,6 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: any) {
 
 export async function updateDevicePowerAndMotorStateOFF(insertedData: any) {
   const { starter_id, motor_id, motor_state, mode_description } = insertedData;
-
   if (!starter_id || !motor_id) return null;
 
   await db.transaction(async (trx) => {
@@ -70,3 +73,38 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: any) {
   });
 }
 
+// Motor control ack
+export async function motorControlAckHandler(message: any, topic: string) {
+  console.log('message: ', message);
+  try {
+    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+    console.log('validMac: ', validMac);
+    if (!validMac?.id) {
+      console.error(`Any starter found with given MAC [${topic}]`)
+      return null;
+    };
+
+    await updateRecordById<MotorsTable>(motors, validMac.motors[0].id, { state: message.D });
+  } catch (error: any) {
+    console.error("Error at motor control ack topic handler:", error);
+    throw error;
+  }
+}
+
+
+// Motor mode ack
+export async function motorModeChangeAckHandler(message: any, topic: string) {
+  try {
+    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+    if (!validMac?.id) {
+      console.error(`Any starter found with given MAC [${topic}]`)
+      return null;
+    };
+
+    const mode = controlMode(message.D);
+    await updateRecordById<MotorsTable>(motors, validMac.motors[0].id, { mode });
+  } catch (error: any) {
+    console.error("Error at motor control ack topic handler:", error);
+    throw error;
+  }
+}

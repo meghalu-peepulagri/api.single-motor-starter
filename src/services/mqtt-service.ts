@@ -6,14 +6,10 @@ const { clientId, brokerUrl, username, password } = mqttConfig;
 import type { MqttClient } from "mqtt";
 
 import mqtt from "mqtt";
+import { motorControlAckHandler, motorModeChangeAckHandler } from "./db/mqtt-db-services.js";
 
 export class MqttService {
   private client: MqttClient | null = null;
-  private _motorService: any = null;
-  private _starterBoxService: any = null;
-  private _gatewayService: any = null;
-  private _motorStateUpdateService: any = null;
-  private _modeChangeTopicService: any = null;
   private readonly clientId: string;
   private readonly connectUrl: string;
   private readonly username: string;
@@ -52,7 +48,7 @@ export class MqttService {
 
     this.client.on("connect", () => {
       this.subscribe([
-        "peepul/+/live_data"
+        "peepul/+/live_data", "peepul/+/motor_control/ack", "peepul/+/mode_change/ack"
       ]);
     });
 
@@ -90,6 +86,14 @@ export class MqttService {
       switch (true) {
         case /^peepul\/[^/]+\/live_data$/.test(topic):
           await liveDataHandler(topic, parsedMessage);
+          break;
+
+        case /^peepul\/[^/]+\/motor_control\/ack$/.test(topic):
+          await motorControlAckHandler(parsedMessage, topic);
+          break;
+
+        case /^peepul\/[^/]+\/mode_change\/ack$/.test(topic):
+          await motorModeChangeAckHandler(parsedMessage, topic);
           break;
 
         default:
