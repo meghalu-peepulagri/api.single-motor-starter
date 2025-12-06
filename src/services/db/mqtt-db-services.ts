@@ -143,7 +143,3 @@ export async function heartbeatHandler(message: any, topic: string) {
     throw error;
   }
 }
-
-
-
-

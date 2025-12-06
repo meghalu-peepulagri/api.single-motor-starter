@@ -78,3 +78,13 @@ export const signalQuality = (code) => {
         return "Excellent strength";
     return "Invalid signal code";
 };
+export function getValidStrength(value) {
+    return value >= 2 && value <= 20 ? value : 0;
+}
+export function getValidNetwork(value) {
+    if (value === 2)
+        return "2G";
+    if (value === 4)
+        return "4G";
+    return "Unknown";
+}
