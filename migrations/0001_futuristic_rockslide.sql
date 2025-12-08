@@ -1,1 +1,0 @@
-ALTER TABLE "motors" ALTER COLUMN "hp" SET DATA TYPE numeric(10, 2);

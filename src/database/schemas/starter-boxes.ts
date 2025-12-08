@@ -6,9 +6,7 @@ import { gateways } from "./gateways.js";
 import { motors } from "./motors.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY ", "TEST"]);
 
-
 export const starterBoxes = pgTable("starter_boxes", {
-
   id: serial("id").primaryKey(),
   name: varchar("name").notNull(),
   alias_name: varchar("alias_name"),

@@ -5,64 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1764657695036,
-      "tag": "0000_sleepy_la_nuit",
+      "when": 1765180706362,
+      "tag": "0000_lovely_night_nurse",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1764658816259,
-      "tag": "0001_futuristic_rockslide",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1764678406061,
-      "tag": "0002_violet_starhawk",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1764756193397,
-      "tag": "0003_wonderful_phalanx",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1764756423452,
-      "tag": "0004_right_gamma_corps",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1764831167033,
-      "tag": "0005_abandoned_betty_ross",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1764957800194,
-      "tag": "0006_jazzy_kingpin",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1764962523886,
-      "tag": "0007_curvy_mentallo",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1765006053610,
-      "tag": "0008_plain_virginia_dare",
+      "when": 1765180948862,
+      "tag": "0001_special_salo",
       "breakpoints": true
     }
   ]

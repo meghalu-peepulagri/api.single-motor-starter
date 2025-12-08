@@ -26,39 +26,48 @@ export function validateLiveDataFormat(payload, topic) {
     };
 }
 export function validateLiveDataContent(input) {
-    let fullPayload = null;
-    if (input?.original && (input.original.T != null || input.original.S != null || input.original.D)) {
-        fullPayload = input.original;
+    if (!input || typeof input !== "object")
+        return null;
+    // Fast path: input.original carries the real payload
+    const orig = input.original;
+    if (orig && (orig.T != null || orig.S != null || orig.D != null)) {
+        return finalize(orig);
     }
-    // Case 2: Raw full payload { T, S, D }
-    else if (input && (input.T != null || input.S != null || input.D)) {
-        fullPayload = input;
+    // Fast path: input itself is the full payload
+    if (input.T != null || input.S != null || input.D != null) {
+        return finalize(input);
     }
-    else if (input && typeof input === "object" && !Array.isArray(input)) {
-        const groupKey = Object.keys(input).find(k => ["G01", "G02", "G03", "G04"].includes(k));
-        if (!groupKey) {
-            console.error("[validateLiveDataContent] FATAL: No valid group (G01-G04) found — dropping message entirely");
-            return null;
+    // Group-only object (G01..G04) -> wrap into expected structure
+    const groupKey = findGroupKey(input);
+    if (groupKey) {
+        const wrapped = { T: null, S: null, D: { [groupKey]: input[groupKey], ct: null } };
+        return finalize(wrapped);
+    }
+    return null;
+    function findGroupKey(obj) {
+        const valid = new Set(["G01", "G02", "G03", "G04"]);
+        for (const k of Object.keys(obj)) {
+            if (valid.has(k))
+                return k;
         }
-        fullPayload = { T: null, S: null, D: { [groupKey]: input[groupKey], ct: null } };
-        console.error(`[validateLiveDataContent] Only group data received (missing T, S, ct) — wrapped for processing`);
-    }
-    else {
-        console.error("[validateLiveDataContent] Invalid input format — cannot parse payload");
         return null;
     }
-    //  validation
-    const result = validateAndExtractLiveData(fullPayload);
-    if (!result.group) {
-        console.error("[validateLiveDataContent] CRITICAL: Group detection failed after wrapping — this should never happen");
+    function finalize(fullPayload) {
+        const result = validateAndExtractLiveData(fullPayload);
+        if (!result)
+            return null;
+        if (!result.group) {
+            console.error("[validateLiveDataContent] Missing group after validation");
+            return null;
+        }
+        return {
+            validated_payload: !!result.validated_payload,
+            data: result.data,
+            group: result.group ?? null,
+            errors: Array.isArray(result.errors) ? result.errors : [],
+            T: result.T ?? null,
+            S: result.S ?? null,
+            ct: result.ct ?? null,
+        };
     }
-    return {
-        validated_payload: result.validated_payload,
-        data: result.data,
-        group: result.group,
-        errors: result.errors,
-        T: result.T,
-        S: result.S,
-        ct: result.ct,
-    };
 }

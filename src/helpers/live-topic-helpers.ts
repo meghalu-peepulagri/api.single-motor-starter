@@ -1,4 +1,5 @@
-import { validateAndExtractLiveData, type LiveDataResult } from "./payload-validate-helpers.js";
+import type { ValidationOutput } from "../types/app-types.js";
+import { validateAndExtractLiveData } from "./payload-validate-helpers.js";
 
 export function validateLiveDataFormat(payload: any, topic: string) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -32,49 +33,54 @@ export function validateLiveDataFormat(payload: any, topic: string) {
   };
 }
 
-export function validateLiveDataContent(input: any): {
-  validated_payload: boolean; data: any; group: string | null;
-  errors: string[]; T: number | null; S: number | null; ct: string | null;
-} | null {
-  let fullPayload: any = null;
+export function validateLiveDataContent(input: any): ValidationOutput | null {
+  if (!input || typeof input !== "object") return null;
 
-  if (input?.original && (input.original.T != null || input.original.S != null || input.original.D)) {
-    fullPayload = input.original;
+  // Fast path: input.original carries the real payload
+  const orig = input.original;
+  if (orig && (orig.T != null || orig.S != null || orig.D != null)) {
+    return finalize(orig);
   }
-  // Case 2: Raw full payload { T, S, D }
-  else if (input && (input.T != null || input.S != null || input.D)) {
-    fullPayload = input;
-  }
-  else if (input && typeof input === "object" && !Array.isArray(input)) {
-    const groupKey = Object.keys(input).find(k => ["G01", "G02", "G03", "G04"].includes(k));
 
-    if (!groupKey) {
-      console.error("[validateLiveDataContent] FATAL: No valid group (G01-G04) found — dropping message entirely");
-      return null;
+  // Fast path: input itself is the full payload
+  if (input.T != null || input.S != null || input.D != null) {
+    return finalize(input);
+  }
+
+  // Group-only object (G01..G04) -> wrap into expected structure
+  const groupKey = findGroupKey(input);
+  if (groupKey) {
+    const wrapped = { T: null, S: null, D: { [groupKey]: input[groupKey], ct: null } };
+    return finalize(wrapped);
+  }
+
+  return null;
+
+  function findGroupKey(obj: Record<string, any>): string | null {
+    const valid = new Set(["G01", "G02", "G03", "G04"]);
+    for (const k of Object.keys(obj)) {
+      if (valid.has(k)) return k;
     }
-
-    fullPayload = { T: null, S: null, D: { [groupKey]: input[groupKey], ct: null } };
-    console.error(`[validateLiveDataContent] Only group data received (missing T, S, ct) — wrapped for processing`);
-  }
-  else {
-    console.error("[validateLiveDataContent] Invalid input format — cannot parse payload");
     return null;
   }
 
-  //  validation
-  const result: LiveDataResult = validateAndExtractLiveData(fullPayload);
+  function finalize(fullPayload: any): ValidationOutput | null {
+    const result = validateAndExtractLiveData(fullPayload);
+    if (!result) return null;
 
-  if (!result.group) {
-    console.error("[validateLiveDataContent] CRITICAL: Group detection failed after wrapping — this should never happen");
+    if (!result.group) {
+      console.error("[validateLiveDataContent] Missing group after validation");
+      return null;
+    }
+
+    return {
+      validated_payload: !!result.validated_payload,
+      data: result.data,
+      group: result.group ?? null,
+      errors: Array.isArray(result.errors) ? result.errors : [],
+      T: result.T ?? null,
+      S: result.S ?? null,
+      ct: result.ct ?? null,
+    };
   }
-
-  return {
-    validated_payload: result.validated_payload,
-    data: result.data,
-    group: result.group,
-    errors: result.errors,
-    T: result.T,
-    S: result.S,
-    ct: result.ct,
-  };
 }

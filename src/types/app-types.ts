@@ -50,3 +50,13 @@ export interface starterBoxPayloadType {
   mac_address: string;
   gateway_id?: number | null | undefined;
 }
+
+export interface ValidationOutput {
+  validated_payload: boolean;
+  data: any;
+  group: string | null;
+  errors: string[];
+  T: number | null;
+  S: number | null;
+  ct: string | null;
+};

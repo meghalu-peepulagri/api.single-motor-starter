@@ -4,7 +4,8 @@ import { statusEnum } from "../../constants/enum-types.js";
 import { fields } from "./fields.js";
 import { starterBoxes } from "./starter-boxes.js";
 import { users } from "./users.js";
-export const modeEnum = pgEnum("mode", ["LOCAL+MANUAL", "REMOTE+MANUAL", "LOCAL+AUTO", "REMOTE+AUTO"]);
+export const modeEnum = pgEnum("mode_enum", ["LOCAL", "AUTO"]);
+
 
 export const motors = pgTable("motors", {
   id: serial("id").primaryKey(),
@@ -12,7 +13,7 @@ export const motors = pgTable("motors", {
   hp: numeric("hp", { precision: 10, scale: 2 }).notNull(),
   field_id: integer("field_id").references(() => fields.id),
   state: integer("state").notNull().default(0),
-  mode: modeEnum().notNull().default("LOCAL+AUTO"),
+  mode: modeEnum().default("AUTO").notNull(),
   created_by: integer("created_by").notNull().references(() => users.id),
   starter_id: integer("starter_id").references(() => starterBoxes.id),
   status: statusEnum().default("ACTIVE"),

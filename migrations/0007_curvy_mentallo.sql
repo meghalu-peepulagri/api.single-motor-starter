@@ -1,1 +1,0 @@
-ALTER TABLE "starter_parameters" ADD COLUMN "group_id" varchar ;
