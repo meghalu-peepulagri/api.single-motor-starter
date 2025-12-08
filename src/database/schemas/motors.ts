@@ -4,8 +4,8 @@ import { statusEnum } from "../../constants/enum-types.js";
 import { fields } from "./fields.js";
 import { starterBoxes } from "./starter-boxes.js";
 import { users } from "./users.js";
-export const modeEnum = pgEnum("mode_enum", ["LOCAL", "AUTO"]);
-
+export const modeEnum = pgEnum("mode_enum", ["MANUAL", "AUTO"]);
+// 0 = AUTO, 1 = MANUAL
 
 export const motors = pgTable("motors", {
   id: serial("id").primaryKey(),

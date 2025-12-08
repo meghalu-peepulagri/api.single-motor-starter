@@ -55,6 +55,5 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
     gateway_id: starterData.gateway_id || null,
     user_id: starterData.created_by || null,
     motor_id: starterData.motors[0].id || null,
-
   };
 }

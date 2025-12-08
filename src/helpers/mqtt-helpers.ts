@@ -4,12 +4,9 @@ import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-he
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 
 export async function liveDataHandler(topic: string, parsedMessage: any) {
-  console.log('topic: ', topic);
   try {
     if (!parsedMessage) return;
     const mac = typeof topic === "string" && topic.includes("/") ? topic.split("/")[1] : null;
-    console.log('mac: ', mac);
-
     if (!mac) {
       console.error(`Invalid MQTT topic or missing MAC [${mac}]:`, topic);
       return null;
@@ -35,7 +32,7 @@ export async function liveDataHandler(topic: string, parsedMessage: any) {
     if (!prepared) return null;
 
     // Save final payload
-    await saveLiveDataTopic(prepared, prepared.group_id);
+    await saveLiveDataTopic(prepared, prepared.group_id, validMac);
   }
   catch (err: any) {
     console.error("Error at live data topic handler:", err);

@@ -3,12 +3,10 @@ import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 export async function liveDataHandler(topic, parsedMessage) {
-    console.log('topic: ', topic);
     try {
         if (!parsedMessage)
             return;
         const mac = typeof topic === "string" && topic.includes("/") ? topic.split("/")[1] : null;
-        console.log('mac: ', mac);
         if (!mac) {
             console.error(`Invalid MQTT topic or missing MAC [${mac}]:`, topic);
             return null;
@@ -32,7 +30,7 @@ export async function liveDataHandler(topic, parsedMessage) {
         if (!prepared)
             return null;
         // Save final payload
-        await saveLiveDataTopic(prepared, prepared.group_id);
+        await saveLiveDataTopic(prepared, prepared.group_id, validMac);
     }
     catch (err) {
         console.error("Error at live data topic handler:", err);

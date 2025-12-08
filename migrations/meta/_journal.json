@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1765180706362,
-      "tag": "0000_lovely_night_nurse",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1765180948862,
-      "tag": "0001_special_salo",
+      "when": 1765181605404,
+      "tag": "0000_normal_randall",
       "breakpoints": true
     }
   ]

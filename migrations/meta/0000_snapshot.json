@@ -1,5 +1,5 @@
 {
-  "id": "7826dc64-b27e-4999-95a5-9cba84c5ed11",
+  "id": "05f280f9-776e-4d6c-ac82-e11c9ee4a35e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -642,6 +642,14 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "mode": {
+          "name": "mode",
+          "type": "mode_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'AUTO'"
         },
         "created_by": {
           "name": "created_by",
@@ -1773,6 +1781,14 @@
       "values": [
         "ACTIVE",
         "INACTIVE"
+      ]
+    },
+    "public.mode_enum": {
+      "name": "mode_enum",
+      "schema": "public",
+      "values": [
+        "MANUAL",
+        "AUTO"
       ]
     },
     "public.device_status": {

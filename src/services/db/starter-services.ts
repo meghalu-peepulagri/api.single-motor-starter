@@ -23,12 +23,18 @@ export async function getStarterByMacWithMotor(mac: string) {
       id: true,
       created_by: true,
       gateway_id: true,
-
+      power: true,
+      signal_quality: true,
+      network_type: true
     },
     with: {
       motors: {
         columns: {
           id: true,
+          name: true,
+          hp: true,
+          state: true,
+          mode: true
         },
       },
     },

@@ -1,4 +1,5 @@
 -- CREATE TYPE "public"."device_token_status" AS ENUM('ACTIVE', 'INACTIVE');--> statement-breakpoint
+-- CREATE TYPE "public"."mode_enum" AS ENUM('MANUAL', 'AUTO');--> statement-breakpoint
 -- CREATE TYPE "public"."device_status" AS ENUM('ASSIGNED', 'DEPLOYED', 'READY ', 'TEST');--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "device_tokens" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS  "motors" (
 	"hp" numeric(10, 2) NOT NULL,
 	"field_id" integer,
 	"state" integer DEFAULT 0 NOT NULL,
+	"mode" "mode_enum" DEFAULT 'AUTO' NOT NULL,
 	"created_by" integer NOT NULL,
 	"starter_id" integer,
 	"status" "status_enum" DEFAULT 'ACTIVE',

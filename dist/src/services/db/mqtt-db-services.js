@@ -8,21 +8,21 @@ import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-he
 import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
 // Live data
-export async function saveLiveDataTopic(insertedData, groupId) {
+export async function saveLiveDataTopic(insertedData, groupId, previousData) {
     switch (groupId) {
         case "G01": //  Live data topic
-            await updateStates(insertedData);
+            await updateStates(insertedData, previousData);
             break;
         case "G02":
             // Update Device power & motor state to ON
-            await updateDevicePowerAndMotorStateToON(insertedData);
+            await updateDevicePowerAndMotorStateToON(insertedData, previousData);
             break;
         case "G03":
             // Update Device power On & motor state to Off
-            await updateDevicePowerONAndMotorStateOFF(insertedData);
+            await updateDevicePowerONAndMotorStateOFF(insertedData, previousData);
             break;
         case "G04":
-            await updateDevicePowerAndMotorStateOFF(insertedData);
+            await updateDevicePowerAndMotorStateOFF(insertedData, previousData);
             break;
         default:
             return null;
@@ -46,56 +46,68 @@ export async function selectTopicAck(topicType, payload, topic) {
             return null;
     }
 }
-export async function updateStates(insertedData) {
+export async function updateStates(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description } = insertedData;
+    const { power, state, mode } = previousData;
     if (!starter_id)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
-        await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-        if (motor_id)
+        if (power_present !== power)
+            await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
+        if (motor_id && motor_state !== state || mode_description !== mode)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
     });
 }
-export async function updateDevicePowerAndMotorStateToON(insertedData) {
+export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description } = insertedData;
+    const { power, state, mode } = previousData;
     if (!starter_id || !motor_id || power_present !== 1)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
-        await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: 1 }, trx);
-        await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
+        if (power_present !== power)
+            await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: 1 }, trx);
+        if (motor_id && motor_state !== state || mode_description !== mode)
+            await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
     });
 }
-export async function updateDevicePowerONAndMotorStateOFF(insertedData) {
+export async function updateDevicePowerONAndMotorStateOFF(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state } = insertedData;
+    const { power, state } = previousData;
     if (!starter_id || !motor_id || power_present !== 1)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
-        await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: 1 }, trx);
-        await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
+        if (power_present !== power)
+            await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: 1 }, trx);
+        if (motor_id && motor_state !== state)
+            await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
     });
 }
-export async function updateDevicePowerAndMotorStateOFF(insertedData) {
-    const { starter_id, motor_id, motor_state, mode_description } = insertedData;
+export async function updateDevicePowerAndMotorStateOFF(insertedData, previousData) {
+    const { starter_id, motor_id, motor_state, mode_description, power_present } = insertedData;
+    const { power, state, mode } = previousData;
     if (!starter_id || !motor_id)
         return null;
     await db.transaction(async (trx) => {
-        await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: 0 }, trx);
-        await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
+        if (power_present !== power)
+            await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
+        if (motor_id && motor_state !== state || mode_description !== mode)
+            await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
     });
 }
 // Motor control ack
 export async function motorControlAckHandler(message, topic) {
     try {
         const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-        if (!validMac?.id) {
+        if (!validMac?.id || !validMac.motors.length) {
             console.error(`Any starter found with given MAC [${topic}]`);
             return null;
         }
         ;
-        await updateRecordById(motors, validMac.motors[0].id, { state: message.D });
+        if (message.D !== validMac.motors[0].state)
+            await updateRecordById(motors, validMac.motors[0].id, { state: message.D });
     }
     catch (error) {
         console.error("Error at motor control ack topic handler:", error);
@@ -106,13 +118,14 @@ export async function motorControlAckHandler(message, topic) {
 export async function motorModeChangeAckHandler(message, topic) {
     try {
         const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-        if (!validMac?.id) {
+        if (!validMac?.id || !validMac.motors.length) {
             console.error(`Any starter found with given MAC [${topic}]`);
             return null;
         }
         ;
         const mode = controlMode(message.D);
-        await updateRecordById(motors, validMac.motors[0].id, { mode });
+        if (mode !== validMac.motors[0].mode)
+            await updateRecordById(motors, validMac.motors[0].id, { mode });
     }
     catch (error) {
         console.error("Error at motor control ack topic handler:", error);
@@ -129,7 +142,8 @@ export async function heartbeatHandler(message, topic) {
         ;
         const validStrength = getValidStrength(message.D.s_q);
         const validNetwork = getValidNetwork(message.D.nwt);
-        await updateRecordById(starterBoxes, validMac.id, { signal_quality: validStrength, network_type: validNetwork });
+        if (validMac.signal_quality !== validStrength || validMac.network_type !== message.D.nwt)
+            await updateRecordById(starterBoxes, validMac.id, { signal_quality: validStrength, network_type: validNetwork });
     }
     catch (error) {
         console.error("Error at heartbeat topic handler:", error);
