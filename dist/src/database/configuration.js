@@ -12,6 +12,7 @@ import * as usersSchema from "./schemas/users.js";
 import * as gatewaysSchema from "./schemas/gateways.js";
 import * as starterBoxSchema from "./schemas/starter-boxes.js";
 import * as starterBoxParameters from "./schemas/starter-parameters.js";
+import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
 const { Pool } = pg;
 const dbClient = new Pool({
     host: env.DB_HOST,
@@ -35,7 +36,8 @@ const db = drizzle(dbClient, {
         ...userActivityLogsSchema,
         ...starterBoxSchema,
         ...gatewaysSchema,
-        ...starterBoxParameters
+        ...starterBoxParameters,
+        ...motorSchedulesSchema,
     },
 });
 export default db;

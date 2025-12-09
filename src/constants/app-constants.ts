@@ -48,6 +48,7 @@ export const VERIFY_OTP_VALIDATION_CRITERIA = "Verify OTP details provided do no
 export const FIELD_VALIDATION_CRITERIA = "Field details provided do not meet the required validation criteria";
 export const MOTOR_VALIDATION_CRITERIA = "Motor details provided do not meet the required validation criteria";
 export const STARTER_BOX_VALIDATION_CRITERIA = "Starter Box details provided do not meet the required validation criteria";
+export const CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Create motor schedule details provided do not meet the required validation criteria";
 
 // Database
 
@@ -236,7 +237,31 @@ export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
 
 
-
+// Motor schedule 
+export const SCHEDULE_TYPES = ["ONE_TIME", "DAILY", "WEEKLY"] as const;
+export const SCHEDULED_CREATED = "Motor schedule created successfully";
+export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with a motor same type & time";
+export const SCHEDULE_TYPE_IS_REQUIRED = "Schedule type is required";
+export const INVALID_SCHEDULED_TYPE = "Invalid schedule type";
+export const SCHEDULE_DATE_REQUIRED = "Schedule date is required";
+export const SCHEDULE_DATE_FORMAT = "Schedule date must be in YYYY-MM-DD format";
+export const SCHEDULE_START_TIME_REQUIRED = "Start time is required";
+export const SCHEDULE_START_TIME_INVALID = "Invalid start time";
+export const SCHEDULE_END_TIME_REQUIRED = "End time is required";
+export const SCHEDULE_END_TIME_INVALID = "Invalid end time";
+export const INVALID_DAYS_WEEK = "Invalid day of week";
+export const SCHEDULED_LIST_FETCHED = "Motor scheduled list fetches successfully";
+export const SCHEDULE_UPDATED = "Motor Schedule updated successfully";
+export const SCHEDULE_NOT_FOUND = "Motor schedule id not found";
+export const SCHEDULE_DELETED = "Motor Schedule deleted successfully";
+export const SCHEDULE_STATUS = ["PENDING", "RUNNING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "RESCHEDULED"] as const;
+export const INVALID_SCHEDULED_STATUS = "Invalid schedule status";
+export const SCHEDULE_STATUS_DAILY_WEEKLY = ["DAILY", "WEEKLY"] as const;
+export const All_USER_TYPES = ["OWNER", "MANAGER", "SUPERVISOR", "USER"];
+export const ALL_ADMIN_TYPES = ["ADMIN", "SUPER_ADMIN"];
+export const ALL_WRITE_TYPES = ["OWNER", "MANAGER"];
+export const ALL_WRITE_READ_TYPES = ["OWNER", "MANAGER", "SUPERVISOR", "USER"];
+export const MOTORS_ARRAY_REQUIRED = "Motors must be a non-empty array of motors with starter IDs.";
 
 
 

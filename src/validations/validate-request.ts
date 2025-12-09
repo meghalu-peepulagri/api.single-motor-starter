@@ -8,6 +8,7 @@ import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-v
 import { validationErrors } from "../utils/on-error.js";
 import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
 import { vAddStarter } from "./schema/starter-validations.js";
+import { vAddMotorSchedule } from "./schema/motor-schedule-validators.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,
@@ -19,7 +20,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "add-motor": vAddMotor,
   "update-motor": vUpdateMotor,
   "add-starter": vAddStarter,
-
+  "create-motor-schedule": vAddMotorSchedule,
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(
