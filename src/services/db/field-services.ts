@@ -1,4 +1,4 @@
-import { and, desc, ne } from "drizzle-orm";
+import { and, desc, isNotNull, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { fields, type FieldsTable } from "../../database/schemas/fields.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -11,6 +11,7 @@ import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from
 import { getRecordsCount, saveRecords, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { bulkMotorsUpdate } from "./motor-service.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 
 
 export async function addFieldWithMotorTransaction(validData: fieldInputType, userPayload: User) {
@@ -52,51 +53,55 @@ export async function paginatedFieldsList(whereQueryData: WhereQueryDataWithOr<F
     limit: pageParams.pageSize,
     offset: pageParams.offset,
     columns: {
-      id: true,
-      name: true,
-      acres: true,
-      location_id: true,
-      status: true,
-      created_by: true,
-      created_at: true,
-      updated_at: true,
+      id: true, name: true, acres: true, status: true,
+      created_at: true, updated_at: true,
     },
     with: {
       location: {
         where: ne(locations.status, "ARCHIVED"),
-        columns: {
-          id: true,
-          name: true,
-        },
+        columns: { id: true, name: true },
       },
+
       motors: {
         where: ne(motors.status, "ARCHIVED"),
         orderBy: [desc(motors.created_at)],
         columns: {
-          id: true,
-          name: true,
-          hp: true,
-          mode: true,
-          state: true,
+          id: true, name: true, hp: true, mode: true, state: true,
         },
+
         with: {
           starter: {
             where: ne(starterBoxes.status, "ARCHIVED"),
             columns: {
-              id: true,
-              name: true,
-              status: true,
-              mac_address: true,
-              signal_quality: true,
-              power: true,
-              network_type: true
+              id: true, name: true, status: true, mac_address: true,
+              signal_quality: true, power: true, network_type: true,
+            },
+            with: {
+              starterParameters: {
+                where: isNotNull(starterBoxParameters.time_stamp),
+                orderBy: [desc(starterBoxParameters.time_stamp)],
+                limit: 1,
+                columns: {
+                  id: true,
+                  time_stamp: true,
+                  fault: true,
+                  fault_description: true,
+
+                  line_voltage_r: true,
+                  line_voltage_y: true,
+                  line_voltage_b: true,
+
+                  current_r: true,
+                  current_y: true,
+                  current_b: true,
+                },
+              },
             },
           },
         },
       },
     },
   } as any);
-
   const totalRecords = await getRecordsCount(fields, whereConditions || []);
   const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
   return {

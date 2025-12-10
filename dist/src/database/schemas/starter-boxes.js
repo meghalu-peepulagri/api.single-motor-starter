@@ -1,8 +1,9 @@
-import { sql, relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
-import { users } from "./users.js";
 import { statusEnum } from "../../constants/enum-types.js";
 import { gateways } from "./gateways.js";
+import { starterBoxParameters } from "./starter-parameters.js";
+import { users } from "./users.js";
 import { motors } from "./motors.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY ", "TEST"]);
 export const starterBoxes = pgTable("starter_boxes", {
@@ -44,4 +45,5 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => 
         references: [gateways.id],
     }),
     motors: many(motors),
+    starterParameters: many(starterBoxParameters),
 }));

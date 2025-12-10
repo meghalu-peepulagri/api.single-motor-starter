@@ -4,6 +4,7 @@ import { statusEnum } from "../../constants/enum-types.js";
 import { fields } from "./fields.js";
 import { starterBoxes } from "./starter-boxes.js";
 import { users } from "./users.js";
+import { starterBoxParameters } from "./starter-parameters.js";
 export const modeEnum = pgEnum("mode_enum", ["MANUAL", "AUTO"]);
 // 0 = AUTO, 1 = MANUAL
 
@@ -42,7 +43,10 @@ export const motorRelations = relations(motors, ({ one, many }) => ({
 
   starter: one(starterBoxes, {
     fields: [motors.starter_id],
-    references: [starterBoxes.id]
+    references: [starterBoxes.id],
   }),
 
+  starterParameters: many(starterBoxParameters, {
+    relationName: "motorParameters",
+  }),
 }));

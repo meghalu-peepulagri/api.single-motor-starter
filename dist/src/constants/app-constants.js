@@ -123,6 +123,10 @@ export const LOCATION_NAME_INVALID = "Location name should contain characters on
 export const LOCATION_NOT_FOUND = "Location not found";
 export const LOCATION_ADDED = "Location added successfully";
 export const LOCATION_REQUIRED = "Location is required";
+export const LOCATION_FETCHED = "Location fetched successfully";
+export const LOCATIONS_FETCHED = "Locations fetched successfully";
+export const LOCATION_UPDATED = "Location updated successfully";
+export const LOCATION_DELETED = "Location deleted successfully";
 // OTP
 export const INVALID_OTP = "Invalid OTP";
 export const OTP_SENT = "OTP sent successfully";

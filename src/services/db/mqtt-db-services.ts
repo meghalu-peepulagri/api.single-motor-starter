@@ -102,7 +102,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: any, previ
 // Motor control ack
 export async function motorControlAckHandler(message: any, topic: string) {
   try {
-    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+    const validMac : any = await getStarterByMacWithMotor(topic.split("/")[1]);
     if (!validMac?.id || !validMac.motors.length) {
       console.error(`Any starter found with given MAC [${topic}]`)
       return null;
@@ -119,7 +119,7 @@ export async function motorControlAckHandler(message: any, topic: string) {
 // Motor mode ack
 export async function motorModeChangeAckHandler(message: any, topic: string) {
   try {
-    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+    const validMac : any = await getStarterByMacWithMotor(topic.split("/")[1]);
     if (!validMac?.id || !validMac.motors.length) {
       console.error(`Any starter found with given MAC [${topic}]`)
       return null;

@@ -1,4 +1,4 @@
-import { controlMode, lastOff, lastOn, motorState } from "./control-helpers.js";
+import { controlMode, getAlertDescription, getFaultDescription, lastOff, lastOn, motorState } from "./control-helpers.js";
 import { parseTimestamp } from "./dns-helpers.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 
@@ -36,10 +36,10 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
     motor_description: motorState(data.m_s) || "Unknown",
 
     // Faults & alerts
-    alert_code: cleanScalar(data.l_of) || 0,
-    alert_description: data.alert_description || "Unknown",
-    fault: cleanScalar(data.flt) || 0,
-    fault_description: data.fault_description || "Unknown",
+    alert_code: cleanScalar(data.alert_code) || 0,
+    alert_description: getAlertDescription(data.alert_code) || "Unknown",
+    fault: cleanScalar(data.fault) || 0,
+    fault_description: getFaultDescription(data.fault) || "Unknown",
 
     last_on_code: cleanScalar(data.l_on) || 0,
     last_on_description: lastOn(data.l_on) || "Unknown",

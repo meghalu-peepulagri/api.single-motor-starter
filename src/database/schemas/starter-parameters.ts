@@ -1,6 +1,6 @@
 import { boolean, index, integer, jsonb, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { starterBoxes } from "./starter-boxes.js";
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { gateways } from "./gateways.js";
 import { users } from "./users.js";
 import { motors } from "./motors.js";
@@ -63,3 +63,24 @@ export const starterBoxParameters = pgTable("starter_parameters", {
 export type StarterBoxParameters = typeof starterBoxParameters.$inferSelect;
 export type NewStarterBoxParameters = typeof starterBoxParameters.$inferInsert;
 export type StarterBoxParametersTable = typeof starterBoxParameters;
+
+export const starterBoxParametersRelations = relations(starterBoxParameters, ({ one }) => ({
+  starter: one(starterBoxes, {
+    fields: [starterBoxParameters.starter_id],
+    references: [starterBoxes.id],
+  }),
+
+  motor: one(motors, {
+    fields: [starterBoxParameters.motor_id],
+    references: [motors.id],
+  }),
+
+  gateway: one(gateways, {
+    fields: [starterBoxParameters.gateway_id],
+    references: [gateways.id],
+  }),
+  user: one(users, {
+    fields: [starterBoxParameters.user_id],
+    references: [users.id],
+  })
+}));
