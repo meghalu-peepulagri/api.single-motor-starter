@@ -10,6 +10,7 @@ import type { OrderByQueryData, WhereQueryDataWithOr } from "../../types/db-type
 import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
 import { getRecordsCount, saveRecords, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { bulkMotorsUpdate } from "./motor-service.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 
 
 export async function addFieldWithMotorTransaction(validData: fieldInputType, userPayload: User) {
@@ -51,17 +52,47 @@ export async function paginatedFieldsList(whereQueryData: WhereQueryDataWithOr<F
     limit: pageParams.pageSize,
     offset: pageParams.offset,
     columns: {
-      id: true, name: true, acres: true, location_id: true, status: true, created_by: true, created_at: true, updated_at: true,
+      id: true,
+      name: true,
+      acres: true,
+      location_id: true,
+      status: true,
+      created_by: true,
+      created_at: true,
+      updated_at: true,
     },
     with: {
       location: {
         where: ne(locations.status, "ARCHIVED"),
-        columns: { id: true, name: true },
+        columns: {
+          id: true,
+          name: true,
+        },
       },
       motors: {
         where: ne(motors.status, "ARCHIVED"),
-        orderBy: desc(motors.created_at),
-        columns: { id: true, name: true },
+        orderBy: [desc(motors.created_at)],
+        columns: {
+          id: true,
+          name: true,
+          hp: true,
+          mode: true,
+          state: true,
+        },
+        with: {
+          starter: {
+            where: ne(starterBoxes.status, "ARCHIVED"),
+            columns: {
+              id: true,
+              name: true,
+              status: true,
+              mac_address: true,
+              signal_quality: true,
+              power: true,
+              network_type: true
+            },
+          },
+        },
       },
     },
   } as any);
