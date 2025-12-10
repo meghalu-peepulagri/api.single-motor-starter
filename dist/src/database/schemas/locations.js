@@ -28,5 +28,6 @@ export const locationRelations = relations(locations, ({ one, many }) => ({
         references: [users.id],
         relationName: "createdLocations"
     }),
+    locations: many(locations),
     fields: many(fields),
 }));

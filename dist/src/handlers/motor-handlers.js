@@ -6,6 +6,10 @@ import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, sav
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { parseOrderByQueryCondition } from "../utils/db-utils.js";
+import { getPaginationOffParams } from "../helpers/pagination-helper.js";
+import { motorFilters } from "../helpers/motor-helper.js";
+import { paginatedMotorsList } from "../services/db/motor-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorHandlers {
     addMotor = async (c) => {
@@ -86,6 +90,21 @@ export class MotorHandlers {
         }
         catch (error) {
             console.error("Error at delete motor :", error);
+            throw error;
+        }
+    };
+    getAllMotors = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const query = c.req.query();
+            const paginationParams = getPaginationOffParams(query);
+            const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
+            const whereQueryData = motorFilters(query, userPayload);
+            const motors = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
+            return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motors);
+        }
+        catch (error) {
+            console.error("Error at get all motors :", error);
             throw error;
         }
     };

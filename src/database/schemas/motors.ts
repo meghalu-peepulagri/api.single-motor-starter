@@ -46,6 +46,11 @@ export const motorRelations = relations(motors, ({ one, many }) => ({
     references: [starterBoxes.id],
   }),
 
+  location: one(locations, {
+    fields: [motors.location_id],
+    references: [locations.id],
+  }),
+
   starterParameters: many(starterBoxParameters, {
     relationName: "motorParameters",
   }),

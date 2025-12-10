@@ -7,6 +7,7 @@ import { starterBoxParameters } from "../../database/schemas/starter-parameters.
 import { getRecordsCount } from "./base-db-services.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { locations } from "../../database/schemas/locations.js";
 
 export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?: string | null; hp?: number | null }>, trx?: any): Promise<void> {
   if (!motorsToUpdate || motorsToUpdate.length === 0) return;
@@ -58,19 +59,14 @@ export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?
 }
 
 
-export async function paginatedMotorsList(
-  whereQueryData: WhereQueryData<MotorsTable>,
-  orderByQueryData: OrderByQueryData<MotorsTable>,
+export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsTable>, orderByQueryData: OrderByQueryData<MotorsTable>,
   pageParams: { page: number; pageSize: number; offset: number }
 ) {
-  // Prepare WHERE conditions
   const whereConditions = prepareWhereQueryConditions<MotorsTable>(motors, whereQueryData);
   const whereQuery = whereConditions?.length ? and(...whereConditions) : undefined;
 
-  // Prepare ORDER BY
   const orderQuery = prepareOrderByQueryConditions<MotorsTable>(motors, orderByQueryData);
 
-  // Fetch paginated list
   const motorsList = await db.query.motors.findMany({
     where: whereQuery,
     orderBy: orderQuery,
@@ -86,6 +82,11 @@ export async function paginatedMotorsList(
     },
 
     with: {
+      location: {
+        where: ne(locations.status, "ARCHIVED"),
+        columns: { id: true, name: true },
+      },
+
       starter: {
         where: ne(starterBoxes.status, "ARCHIVED"),
         columns: {
@@ -107,7 +108,7 @@ export async function paginatedMotorsList(
             columns: {
               id: true,
               time_stamp: true,
-              fault_code: true,
+              fault: true,
               fault_description: true,
 
               line_voltage_r: true,
@@ -124,10 +125,9 @@ export async function paginatedMotorsList(
     },
   } as any);
 
-  // Count total records
+  // TOTAL COUNT
   const totalRecords = await getRecordsCount(motors, whereConditions || []);
 
-  // Prepare pagination metadata
   const pagination = getPaginationData(
     pageParams.page,
     pageParams.pageSize,
@@ -139,5 +139,3 @@ export async function paginatedMotorsList(
     records: motorsList,
   };
 }
-
-
