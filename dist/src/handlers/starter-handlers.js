@@ -15,9 +15,11 @@ export class StarterHandlers {
             const starterBoxPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(starterBoxPayload);
             const validStarterBoxReq = await validatedRequest("add-starter", starterBoxPayload, STARTER_BOX_VALIDATION_CRITERIA);
-            const existedGateway = await getSingleRecordByMultipleColumnValues(gateways, ["id", "status"], ["=", "!="], [validStarterBoxReq.gateway_id, "ARCHIVED"]);
-            if (!existedGateway)
-                throw new BadRequestException(GATEWAY_NOT_FOUND);
+            if (validStarterBoxReq.gateway_id) {
+                const existedGateway = await getSingleRecordByMultipleColumnValues(gateways, ["id", "status"], ["=", "!="], [validStarterBoxReq.gateway_id, "ARCHIVED"]);
+                if (!existedGateway)
+                    throw new BadRequestException(GATEWAY_NOT_FOUND);
+            }
             await addStarterWithTransaction(validStarterBoxReq, userPayload);
             return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY);
         }

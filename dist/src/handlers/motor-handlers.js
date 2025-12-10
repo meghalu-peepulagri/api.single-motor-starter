@@ -1,5 +1,4 @@
-import { FIELD_NOT_FOUND, MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
-import { fields } from "../database/schemas/fields.js";
+import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { motors } from "../database/schemas/motors.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
@@ -15,10 +14,13 @@ export class MotorHandlers {
             const motorPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(motorPayload);
             const validMotorReq = await validatedRequest("add-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
-            const field = await getSingleRecordByMultipleColumnValues(fields, ["id", "status"], ["=", "!="], [validMotorReq.field_id, "ARCHIVED"]);
-            if (!field)
-                throw new NotFoundException(FIELD_NOT_FOUND);
-            await saveSingleRecord(motors, { ...validMotorReq, created_by: userPayload.id, hp: validMotorReq.hp.toString() });
+            // const field = await getSingleRecordByMultipleColumnValues<FieldsTable>(fields, ["id", "status"], ["=", "!="], [validMotorReq.field_id, "ARCHIVED"]);
+            // if (!field) throw new NotFoundException(FIELD_NOT_FOUND);
+            const preparedMotorPayload = {
+                name: validMotorReq.name, created_by: userPayload.id, location_id: validMotorReq.location_id,
+                hp: validMotorReq.hp.toString(),
+            };
+            await saveSingleRecord(motors, preparedMotorPayload);
             return sendResponse(c, 201, MOTOR_ADDED);
         }
         catch (error) {

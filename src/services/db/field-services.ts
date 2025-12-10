@@ -128,7 +128,7 @@ export async function updateFieldWithMotorTransaction(validData: fieldInputType,
       await bulkMotorsUpdate(updateMotors, trx);
     }
 
-    const motorsToCreate = motorsData.filter(m => m.id === undefined).map((m, index) => ({
+    const motorsToCreate: any = motorsData.filter(m => m.id === undefined).map((m, index) => ({
       name: m.name,
       hp: String(m.hp),
       field_id: Number(updatedField.id),

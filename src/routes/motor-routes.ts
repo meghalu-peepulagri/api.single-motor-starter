@@ -6,6 +6,7 @@ const motorHandlers = new MotorHandlers();
 const motorRoutes = factory.createApp();
 
 motorRoutes.post("/", isAuthorized, motorHandlers.addMotor);
+motorRoutes.get("/", isAuthorized, motorHandlers.getAllMotors);
 motorRoutes.get("/:id", isAuthorized, motorHandlers.getSingleMotor);
 motorRoutes.patch("/:id", isAuthorized, motorHandlers.updateMotor);
 motorRoutes.delete("/:id", isAuthorized, motorHandlers.deleteMotor);

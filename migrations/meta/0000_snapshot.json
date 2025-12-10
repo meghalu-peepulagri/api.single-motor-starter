@@ -1,5 +1,5 @@
 {
-  "id": "05f280f9-776e-4d6c-ac82-e11c9ee4a35e",
+  "id": "f01ab719-538e-43cf-9acf-669b4aba3aae",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -630,11 +630,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "field_id": {
-          "name": "field_id",
+        "location_id": {
+          "name": "location_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "state": {
           "name": "state",
@@ -717,8 +717,8 @@
           "method": "btree",
           "with": {}
         },
-        "unique_motor_per_field": {
-          "name": "unique_motor_per_field",
+        "unique_motor_per_location": {
+          "name": "unique_motor_per_location",
           "columns": [
             {
               "expression": "lower(\"name\")",
@@ -727,7 +727,7 @@
               "nulls": "last"
             },
             {
-              "expression": "field_id",
+              "expression": "location_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -741,12 +741,12 @@
         }
       },
       "foreignKeys": {
-        "motors_field_id_fields_id_fk": {
-          "name": "motors_field_id_fields_id_fk",
+        "motors_location_id_locations_id_fk": {
+          "name": "motors_location_id_locations_id_fk",
           "tableFrom": "motors",
-          "tableTo": "fields",
+          "tableTo": "locations",
           "columnsFrom": [
-            "field_id"
+            "location_id"
           ],
           "columnsTo": [
             "id"
@@ -950,6 +950,12 @@
         },
         "gateway_id": {
           "name": "gateway_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_id": {
+          "name": "location_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -1158,6 +1164,19 @@
           "tableTo": "gateways",
           "columnsFrom": [
             "gateway_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "starter_boxes_location_id_locations_id_fk": {
+          "name": "starter_boxes_location_id_locations_id_fk",
+          "tableFrom": "starter_boxes",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "location_id"
           ],
           "columnsTo": [
             "id"

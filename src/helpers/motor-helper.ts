@@ -1,6 +1,6 @@
 import type { arrayOfMotorInputType } from "../types/app-types.js";
 import type { MotorsTable } from "../database/schemas/motors.js";
-import type { WhereQueryDataWithOr } from "../types/db-types.js";
+import type { WhereQueryData, WhereQueryDataWithOr } from "../types/db-types.js";
 
 
 
@@ -17,22 +17,19 @@ export function checkDuplicateMotorTitles(motors: arrayOfMotorInputType[] | unde
   return duplicateIndexes;
 }
 
-export function motorFilters(query: any) {
+export function motorFilters(query: any, user: any) {
 
-  const whereQueryData: WhereQueryDataWithOr<MotorsTable> = {
+  const whereQueryData: WhereQueryData<MotorsTable> = {
     columns: ["status"],
     relations: ["!="],
     values: ["ARCHIVED"],
-    or: []
   };
 
   if (query.search_string?.trim()) {
     const search = query.search_string.trim();
-    whereQueryData.or!.push({
-      columns: ["name"],
-      relations: ["contains"],
-      values: [search],
-    });
+    whereQueryData.columns.push("name");
+    whereQueryData.relations.push("contains");
+    whereQueryData.values.push(search);
   }
 
   if (query.status) {
@@ -41,16 +38,16 @@ export function motorFilters(query: any) {
     whereQueryData.values.push(query.status);
   }
 
-  if (query.created_by) {
+  if (user.id) {
     whereQueryData.columns.push("created_by");
     whereQueryData.relations.push("=");
-    whereQueryData.values.push(query.created_by);
+    whereQueryData.values.push(user.id);
   }
 
-  if (query.field_id) {
-    whereQueryData.columns.push("id");
+  if (query.location_id) {
+    whereQueryData.columns.push("location_id");
     whereQueryData.relations.push("=");
-    whereQueryData.values.push(query.field_id);
+    whereQueryData.values.push(query.location_id);
   }
 
 

@@ -1,6 +1,5 @@
 import type { Context } from "hono";
-import { FIELD_NOT_FOUND, MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
-import { fields, type FieldsTable } from "../database/schemas/fields.js";
+import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
@@ -9,6 +8,10 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { parseOrderByQueryCondition } from "../utils/db-utils.js";
+import { getPaginationOffParams } from "../helpers/pagination-helper.js";
+import { motorFilters } from "../helpers/motor-helper.js";
+import { paginatedMotorsList } from "../services/db/motor-service.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -21,10 +24,14 @@ export class MotorHandlers {
       paramsValidateException.emptyBodyValidation(motorPayload);
       const validMotorReq = await validatedRequest<validatedAddMotor>("add-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
 
-      const field = await getSingleRecordByMultipleColumnValues<FieldsTable>(fields, ["id", "status"], ["=", "!="], [validMotorReq.field_id, "ARCHIVED"]);
-      if (!field) throw new NotFoundException(FIELD_NOT_FOUND);
+      // const field = await getSingleRecordByMultipleColumnValues<FieldsTable>(fields, ["id", "status"], ["=", "!="], [validMotorReq.field_id, "ARCHIVED"]);
+      // if (!field) throw new NotFoundException(FIELD_NOT_FOUND);
+      const preparedMotorPayload: any = {
+        name: validMotorReq.name, created_by: userPayload.id, location_id: validMotorReq.location_id,
+        hp: validMotorReq.hp.toString(),
+      }
 
-      await saveSingleRecord<MotorsTable>(motors, { ...validMotorReq, created_by: userPayload.id, hp: validMotorReq.hp.toString() });
+      await saveSingleRecord<MotorsTable>(motors, preparedMotorPayload);
       return sendResponse(c, 201, MOTOR_ADDED);
     } catch (error: any) {
       console.error("Error at add motor :", error);
@@ -89,6 +96,22 @@ export class MotorHandlers {
       return sendResponse(c, 200, MOTOR_DELETED);
     } catch (error: any) {
       console.error("Error at delete motor :", error);
+      throw error;
+    }
+  }
+
+
+  getAllMotors = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const query = c.req.query();
+      const paginationParams = getPaginationOffParams(query);
+      const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
+      const whereQueryData = motorFilters(query, userPayload);
+      const motors = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
+      return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motors);
+    } catch (error: any) {
+      console.error("Error at get all motors :", error);
       throw error;
     }
   }

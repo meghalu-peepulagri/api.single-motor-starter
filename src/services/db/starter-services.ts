@@ -8,7 +8,7 @@ import { saveSingleRecord } from "./base-db-services.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
-  const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
+  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload);
   await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData);
 
 }

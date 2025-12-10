@@ -7,6 +7,7 @@ export const vAddStarter = v.object({
   pcb_number: pcbNumberValidator,
   starter_number: starterNumberValidator,
   mac_address: macAddressValidator,
+  
   //  Optional fields
   gateway_id: v.optional(v.union([v.number(), v.null()])),
 

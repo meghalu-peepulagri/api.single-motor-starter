@@ -5,6 +5,7 @@ import { gateways } from "./gateways.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { users } from "./users.js";
 import { motors } from "./motors.js";
+import { locations } from "./locations.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY ", "TEST"]);
 
 export const starterBoxes = pgTable("starter_boxes", {
@@ -22,6 +23,7 @@ export const starterBoxes = pgTable("starter_boxes", {
 
   device_status: deviceStatusEnum().notNull().default("TEST"),
   gateway_id: integer("gateway_id").references(() => gateways.id),
+  location_id: integer("location_id").references(() => locations.id),
   signal_quality: integer("signal_quality").notNull().default(0),
   network_type: varchar("network_type").notNull().default("NUll"),
   created_at: timestamp("created_at").notNull().defaultNow(),
