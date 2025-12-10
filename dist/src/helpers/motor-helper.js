@@ -27,7 +27,7 @@ export function motorFilters(query, user) {
         whereQueryData.relations.push("=");
         whereQueryData.values.push(query.status);
     }
-    if (user.id) {
+    if (user.id && user.user_type !== "ADMIN") {
         whereQueryData.columns.push("created_by");
         whereQueryData.relations.push("=");
         whereQueryData.values.push(user.id);
