@@ -1,14 +1,14 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
-import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { validatedAddField } from "../validations/schema/field-validations.js";
-import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
-import type { validatedAddStarter } from "../validations/schema/starter-validations.js";
+import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../validations/schema/motor-schedule-validators.js";
+import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
+import type { validatedAddStarter, validatedAssignStarter } from "../validations/schema/starter-validations.js";
+import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 
-export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedAddStarter | ValidatedMotorSchedule | ValidatedMotorScheduleArray;
+export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedAddStarter | ValidatedMotorSchedule | ValidatedMotorScheduleArray | validatedAssignStarter;
 
-export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "add-starter" | "create-motor-schedule";
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "add-starter" | "create-motor-schedule" | "assign-starter";
 
 
 export interface IResp {
@@ -45,7 +45,6 @@ export interface arrayOfMotorInputType {
 
 export interface starterBoxPayloadType {
   name: string;
-  serial_number: string;
   pcb_number: string;
   starter_number: string;
   mac_address: string;
@@ -61,3 +60,10 @@ export interface ValidationOutput {
   S: number | null;
   ct: string | null;
 };
+
+export interface AssignStarterType {
+  pcb_number: string;
+  motor_name: string;
+  location_id: number;
+  hp: number;
+}

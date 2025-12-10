@@ -1,17 +1,44 @@
-import { and, Column, eq, ne } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
+import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import type { User } from "../../database/schemas/users.js";
 import { prepareStarterData } from "../../helpers/starter-hepler.js";
-import type { starterBoxPayloadType } from "../../types/app-types.js";
-import { saveSingleRecord } from "./base-db-services.js";
+import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
+import { saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
   const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload);
   await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData);
-
 }
+
+export async function assignStarterWithTransaction(
+  payload: AssignStarterType,
+  userPayload: User,
+  starterBoxPayload: starterBoxPayloadType
+) {
+  return await db.transaction(async (trx) => {
+
+    await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBoxPayload.id, {
+      user_id: userPayload.id,
+    },
+      trx
+    );
+
+    await saveSingleRecord<MotorsTable>(motors,
+      {
+        name: payload.motor_name,
+        hp: String(payload.hp),
+        starter_id: starterBoxPayload.id,
+        created_by: userPayload.id,
+        location_id: payload.location_id
+      },
+      trx
+    );
+  });
+}
+
 
 export async function getStarterByMacWithMotor(mac: string) {
   return await db.query.starterBoxes.findFirst({

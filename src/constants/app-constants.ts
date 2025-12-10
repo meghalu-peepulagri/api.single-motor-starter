@@ -235,6 +235,9 @@ export const SERIAL_NO_REQUIRED = "MCU Serial Number is required";
 export const PCB_NUMBER_REQUIRED = "PCB Number is required";
 export const STARTER_NUMBER_REQUIRED = "Starter Box Number is required";
 export const SMALL_LETTERS_NOT_ALLOWED = "Small characters not allowed";
+export const STARTER_ASSIGNED_SUCCESSFULLY = "Starter assigned successfully";
+export const STARTER_ALREADY_ASSIGNED = "Starter already assigned";
+export const STARER_NOT_DEPLOYED = "Starter not deployed yet";
 
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
