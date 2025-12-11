@@ -26,15 +26,3 @@ export const fields = pgTable("fields", {
 export type Field = typeof fields.$inferSelect;
 export type NewField = typeof fields.$inferInsert;
 export type FieldsTable = typeof fields;
-
-export const fieldRelations = relations(fields, ({ one, many }) => ({
-  user: one(users, {
-    fields: [fields.created_by],
-    references: [users.id]
-  }),
-  location: one(locations, {
-    fields: [fields.location_id],
-    references: [locations.id]
-  }),
-  motors: many(motors),
-}));

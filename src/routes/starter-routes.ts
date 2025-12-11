@@ -8,6 +8,7 @@ const starterRoutes = factory.createApp();
 
 
 starterRoutes.post("/", isAuthorized, motorHandlers.addStarterBox);
+starterRoutes.patch("/:id", isAuthorized, motorHandlers.deleteStarterBox);
 starterRoutes.get("/mobile", isAuthorized, motorHandlers.starterListMobile);
 starterRoutes.get("/web/all", isAuthorized, isAdmin, motorHandlers.starterListWeb);
 starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);

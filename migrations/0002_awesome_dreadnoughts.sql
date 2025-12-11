@@ -1,0 +1,2 @@
+CREATE TYPE "public"."starter_type" AS ENUM('SINGLE_STARTER', 'MULTI_STARTER');--> statement-breakpoint
+ALTER TABLE "starter_boxes" ADD COLUMN "starter_type" "starter_type" DEFAULT 'SINGLE_STARTER' NOT NULL;

@@ -1,9 +1,8 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum } from "../../constants/enum-types.js";
-import { users } from "./users.js";
-import { fields } from "./fields.js";
 import { motors } from "./motors.js";
+import { users } from "./users.js";
 
 export const locations = pgTable("locations", {
   id: serial("id").primaryKey(),

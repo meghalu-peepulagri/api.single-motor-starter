@@ -20,14 +20,3 @@ export const fields = pgTable("fields", {
     uniqueIndex("unique_field_per_user").on(table.created_by, table.id).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("unique_field_per_user_location").on(sql `lower(${table.name})`, table.location_id, table.created_by).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
-export const fieldRelations = relations(fields, ({ one, many }) => ({
-    user: one(users, {
-        fields: [fields.created_by],
-        references: [users.id]
-    }),
-    location: one(locations, {
-        fields: [fields.location_id],
-        references: [locations.id]
-    }),
-    motors: many(motors),
-}));

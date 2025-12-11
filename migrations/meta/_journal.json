@@ -15,6 +15,13 @@
       "when": 1765367654466,
       "tag": "0001_demonic_riptide",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1765444895287,
+      "tag": "0002_awesome_dreadnoughts",
+      "breakpoints": true
     }
   ]
 }

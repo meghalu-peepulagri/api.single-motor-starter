@@ -49,6 +49,7 @@ export const FIELD_VALIDATION_CRITERIA = "Field details provided do not meet the
 export const MOTOR_VALIDATION_CRITERIA = "Motor details provided do not meet the required validation criteria";
 export const STARTER_BOX_VALIDATION_CRITERIA = "Starter Box details provided do not meet the required validation criteria";
 export const CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Create motor schedule details provided do not meet the required validation criteria";
+export const REPLACE_STARTER_BOX_VALIDATION_CRITERIA = "Replace starter box details provided do not meet the required validation criteria";
 
 // Database
 
@@ -183,20 +184,21 @@ export const HP_REQUIRED = "HP is required";
 export const HP_MIN = "HP should be min 1";
 export const HP_MAX = "HP should be max 30";
 export const SIMILAR_MOTOR_TITLE_NOT_ALLOWED = "Duplicate motor titles are not allowed";
-export const MOTOR_ID_REQUIRED = "Motor Id is required";
+export const MOTOR_ID_REQUIRED = "Motor is required";
 export const MOTOR_DETAILS_FETCHED = "Motor details fetched successfully";
 
 
 // Starter Box
-export const STARTER_BOX_ADDED_SUCCESSFULLY = "Starter box added successfully";
-export const STARTER_BOX_UPDATED_SUCCESSFULLY = "Starter box updated successfully";
-export const STARTER_BOX_DELETED_SUCCESSFULLY = "Starter box deleted successfully";
-export const STARTER_BOX_REQUIRED = "Starter box is required";
-export const STARTER_BOX_NOT_FOUND = "Starter box not found";
-export const STARTER_BOX_ID_REQUIRED = "Starter box id is required";
-export const STARTER_BOX_DETAILS_FETCHED = "Starter box details fetched successfully";
+export const STARTER_BOX_ADDED_SUCCESSFULLY = "Device box added successfully";
+export const STARTER_BOX_UPDATED_SUCCESSFULLY = "Device box updated successfully";
+export const STARTER_BOX_DELETED_SUCCESSFULLY = "Device deleted successfully";
+export const STARTER_REMOVED_SUCCESS = "Device removed successfully";
+export const STARTER_BOX_REQUIRED = "Device is required";
+export const STARTER_BOX_NOT_FOUND = "Device not found";
+export const STARTER_BOX_ID_REQUIRED = "Device box id is required";
+export const STARTER_BOX_DETAILS_FETCHED = "Device box details fetched successfully";
 export const DEVICE_NAME_REQUIRED = "Name is required";
-export const DEVICE_ID_REQUIRED = "Device id is required";
+export const DEVICE_ID_REQUIRED = "Device is required";
 export const POND_REQUIRED = "Pond is required";
 export const DEVICE_FETCH_SUCCESS = "Device fetched successfully";
 export const DEVICE_NAME_UPDATED = "Device name updated successfully";
@@ -224,7 +226,7 @@ export const DEVICE_MIN_LEN = "Name has min 3 characters";
 export const SERIAL_NO_MIN_LEN = "MCU Serial Number has min 3 characters";
 export const MCU_MIN_LEN = "MCU Number has min 3 characters";
 export const PCB_MIN_LEN = "PCB Number has min 3 characters";
-export const STARTER_NUMBER_MIN_LEN = "Starter Box Number has min 3 characters";
+export const STARTER_NUMBER_MIN_LEN = "Device Box Number has min 3 characters";
 
 export const DEVICE_NAME_STARTS_LETTER = "Name starts with Character";
 
@@ -233,12 +235,13 @@ export const MAC_REQUIRED = "MAC Address is required";
 export const MAC_MIN_LEN = "MAC Address has min 3 characters";
 export const SERIAL_NO_REQUIRED = "MCU Serial Number is required";
 export const PCB_NUMBER_REQUIRED = "PCB Number is required";
-export const STARTER_NUMBER_REQUIRED = "Starter Box Number is required";
+export const STARTER_NUMBER_REQUIRED = "Device Box Number is required";
 export const SMALL_LETTERS_NOT_ALLOWED = "Small characters not allowed";
-export const STARTER_ASSIGNED_SUCCESSFULLY = "Starter assigned successfully";
+export const STARTER_ASSIGNED_SUCCESSFULLY = "Device assigned successfully";
 export const STARTER_ALREADY_ASSIGNED = "Starter already assigned";
-export const STARER_NOT_DEPLOYED = "Starter not deployed yet";
-export const STARTER_LIST_FETCHED = "Starters fetches successfully";
+export const STARER_NOT_DEPLOYED = "Device not deployed yet";
+export const STARTER_LIST_FETCHED = "Device fetches successfully";
+export const STARTER_REPLACED_SUCCESSFULLY = "Device location updated successfully";
 
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";

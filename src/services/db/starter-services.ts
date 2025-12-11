@@ -1,6 +1,6 @@
 import { and, eq, ne, isNotNull, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
-import { motors, type MotorsTable } from "../../database/schemas/motors.js";
+import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import type { User } from "../../database/schemas/users.js";
 import { prepareStarterData } from "../../helpers/starter-hepler.js";
@@ -173,4 +173,11 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
     pagination_info: pagination,
     records: starterList,
   };
+}
+
+export async function replaceStarterWithTransaction(motor: Motor, starter: StarterBox, locationId: number) {
+  return await db.transaction(async (trx) => {
+    await updateRecordByIdWithTrx<MotorsTable>(motors, motor.id, { location_id: locationId }, trx);
+    await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter.id, { location_id: locationId }, trx);
+  })
 }

@@ -150,3 +150,9 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
         records: starterList,
     };
 }
+export async function replaceStarterWithTransaction(motor, starter, locationId) {
+    return await db.transaction(async (trx) => {
+        await updateRecordByIdWithTrx(motors, motor.id, { location_id: locationId }, trx);
+        await updateRecordByIdWithTrx(starterBoxes, starter.id, { location_id: locationId }, trx);
+    });
+}

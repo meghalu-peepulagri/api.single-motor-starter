@@ -7,6 +7,7 @@ import { users } from "./users.js";
 import { motors } from "./motors.js";
 import { locations } from "./locations.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY ", "TEST"]);
+export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
 
 export const starterBoxes = pgTable("starter_boxes", {
   id: serial("id").primaryKey(),
@@ -25,6 +26,7 @@ export const starterBoxes = pgTable("starter_boxes", {
   location_id: integer("location_id").references(() => locations.id),
   signal_quality: integer("signal_quality").notNull().default(0),
   network_type: varchar("network_type").notNull().default("NUll"),
+  starter_type: starterType().notNull().default("SINGLE_STARTER"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [

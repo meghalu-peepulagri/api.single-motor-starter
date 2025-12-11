@@ -5,7 +5,7 @@ import { vAddLocation } from "./schema/location-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { validationErrors } from "../utils/on-error.js";
 import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
-import { vAddStarter, vAssignStarter } from "./schema/starter-validations.js";
+import { vAddStarter, vAssignStarter, vReplaceStarter } from "./schema/starter-validations.js";
 import { vAddMotorSchedule } from "./schema/motor-schedule-validators.js";
 const schemaMap = {
     "signup": vSignUp,
@@ -18,7 +18,8 @@ const schemaMap = {
     "update-motor": vUpdateMotor,
     "add-starter": vAddStarter,
     "create-motor-schedule": vAddMotorSchedule,
-    "assign-starter": vAssignStarter
+    "assign-starter": vAssignStarter,
+    "replace-starter": vReplaceStarter,
 };
 export async function validatedRequest(actionType, reqData, errorMessage) {
     const schema = schemaMap[actionType];
