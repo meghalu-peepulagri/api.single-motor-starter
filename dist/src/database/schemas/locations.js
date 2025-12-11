@@ -3,6 +3,7 @@ import { index, integer, pgTable, serial, timestamp, uniqueIndex, varchar } from
 import { statusEnum } from "../../constants/enum-types.js";
 import { users } from "./users.js";
 import { fields } from "./fields.js";
+import { motors } from "./motors.js";
 export const locations = pgTable("locations", {
     id: serial("id").primaryKey(),
     name: varchar("name").notNull(),
@@ -28,6 +29,5 @@ export const locationRelations = relations(locations, ({ one, many }) => ({
         references: [users.id],
         relationName: "createdLocations"
     }),
-    locations: many(locations),
-    fields: many(fields),
+    motors: many(motors),
 }));

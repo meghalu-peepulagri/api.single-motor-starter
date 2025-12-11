@@ -8,5 +8,6 @@ const locationRoutes = factory.createApp();
 
 locationRoutes.post("/", isAuthorized, locationHandlers.addLocation);
 locationRoutes.get("/", isAuthorized, locationHandlers.list);
+locationRoutes.get("/basic", isAuthorized, locationHandlers.listBasic);
 
 export default locationRoutes;

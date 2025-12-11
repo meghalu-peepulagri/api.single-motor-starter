@@ -1,50 +1,24 @@
-import type { LocationsTable } from "../database/schemas/locations.js";
-import type { WhereQueryDataWithOr } from "../types/db-types.js";
+import { eq, ilike, ne, or } from "drizzle-orm";
+import { locations } from "../database/schemas/locations.js";
 
-export function locationFilters(query: any, user: any) {
-  console.log('user: ', user);
-
-  const whereQueryData: WhereQueryDataWithOr<LocationsTable> = {
-    columns: ["status"],
-    relations: ["!="],
-    values: ["ARCHIVED"],
-    or: []
-  };
+export function locationFilters(query: any, userId: number) {
+  const filters: any[] = [];
+  filters.push(ne(locations.status, "ARCHIVED"));
 
   if (query.search_string?.trim()) {
-    const search = query.search_string.trim();
-    whereQueryData.columns.push("name");
-    whereQueryData.relations.push("contains");
-    whereQueryData.values.push(search);
+    const s = `%${query.search_string.trim()}%`;
+    filters.push(ilike(locations.name, s));
   }
 
   if (query.status) {
-    whereQueryData.columns.push("status");
-    whereQueryData.relations.push("=");
-    whereQueryData.values.push(query.status);
+    filters.push(eq(locations.status, query.status));
   }
 
-  if (query.location_id) {
-    whereQueryData.or!.push({
-      columns: ["user_id", "created_by"],
-      relations: ["=", "="],
-      values: [query.location_id, query.location_id],
-    });
+  if (query.location_id && !isNaN(Number(query.location_id))) {
+    const locUserId = Number(query.location_id);
+    filters.push(or(eq(locations.user_id, locUserId), eq(locations.created_by, locUserId)));
   }
 
-  if (user?.id) {
-    whereQueryData.or!.push({
-      columns: ["user_id", "created_by"],
-      relations: ["=", "="],
-      values: [user.id, user.id],
-    });
-  }
-
-  if (query.field_id) {
-    whereQueryData.columns.push("id");
-    whereQueryData.relations.push("=");
-    whereQueryData.values.push(query.field_id);
-  }
-
-  return whereQueryData;
+  filters.push(or(eq(locations.user_id, userId), eq(locations.created_by, userId)));
+  return filters;
 }
