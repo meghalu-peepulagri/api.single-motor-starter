@@ -73,6 +73,7 @@ export const starterBoxParametersRelations = relations(starterBoxParameters, ({ 
   motor: one(motors, {
     fields: [starterBoxParameters.motor_id],
     references: [motors.id],
+    relationName: "motorParameters",
   }),
 
   gateway: one(gateways, {

@@ -1,16 +1,19 @@
 import type { Context } from "hono";
-import { GATEWAY_NOT_FOUND, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { GATEWAY_NOT_FOUND, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED } from "../constants/app-constants.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { getSingleRecordByMultipleColumnValues } from "../services/db/base-db-services.js";
-import { addStarterWithTransaction, assignStarterWithTransaction } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, assignStarterWithTransaction, paginatedStarterList, paginatedStarterListForMobile } from "../services/db/starter-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignStarter } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import type { User } from "../database/schemas/users.js";
+import { getPaginationOffParams } from "../helpers/pagination-helper.js";
+import { parseOrderByQueryCondition } from "../utils/db-utils.js";
+import { starterFilters } from "../helpers/starter-hepler.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -65,4 +68,36 @@ export class StarterHandlers {
       throw error;
     }
   }
+
+  starterListWeb = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const query = c.req.query();
+      const paginationParams = getPaginationOffParams(query);
+      const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
+      const whereQueryData = starterFilters(query, userPayload);
+      const starterList = await paginatedStarterList(whereQueryData, orderQueryData, paginationParams);
+      return sendResponse(c, 200, STARTER_LIST_FETCHED, starterList);
+    } catch (error: any) {
+      console.error("Error at starter list for web :", error);
+      throw error;
+    }
+  }
+
+
+  starterListMobile = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const query = c.req.query();
+      const paginationParams = getPaginationOffParams(query);
+      const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
+      const whereQueryData = starterFilters(query, userPayload);
+      const starterList = await paginatedStarterListForMobile(whereQueryData, orderQueryData, paginationParams);
+      return sendResponse(c, 200, STARTER_LIST_FETCHED, starterList);
+    } catch (error: any) {
+      console.error("Error at starter list for mobile :", error);
+      throw error;
+    }
+  }
+
 }

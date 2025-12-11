@@ -31,10 +31,6 @@ export type NewMotor = typeof motors.$inferInsert;
 export type MotorsTable = typeof motors;
 
 export const motorRelations = relations(motors, ({ one, many }) => ({
-  // field: one(fields, {
-  //   fields: [motors.field_id],
-  //   references: [fields.id]
-  // }),
 
   created_by_user: one(users, {
     fields: [motors.created_by],

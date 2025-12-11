@@ -1,11 +1,27 @@
-import { and, Column, eq, ne } from "drizzle-orm";
+import { and, eq, ne, isNotNull, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
+import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { prepareStarterData } from "../../helpers/starter-hepler.js";
-import { saveSingleRecord } from "./base-db-services.js";
+import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
+import { locations } from "../../database/schemas/locations.js";
+import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { getPaginationData } from "../../helpers/pagination-helper.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     await saveSingleRecord(starterBoxes, preparedStarerData);
+}
+export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload) {
+    return await db.transaction(async (trx) => {
+        await updateRecordByIdWithTrx(starterBoxes, starterBoxPayload.id, {
+            user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
+        }, trx);
+        await saveSingleRecord(motors, {
+            name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
+            location_id: payload.location_id, created_by: userPayload.id,
+        }, trx);
+    });
 }
 export async function getStarterByMacWithMotor(mac) {
     return await db.query.starterBoxes.findFirst({
@@ -30,4 +46,107 @@ export async function getStarterByMacWithMotor(mac) {
             },
         },
     });
+}
+export async function paginatedStarterList(WhereQueryData, orderByQueryData, pageParams) {
+    const whereQuery = WhereQueryData?.length ? and(...WhereQueryData) : undefined;
+    const orderQuery = prepareOrderByQueryConditions(starterBoxes, orderByQueryData);
+    const starterList = await db.query.starterBoxes.findMany({
+        where: whereQuery,
+        orderBy: orderQuery,
+        limit: pageParams.pageSize,
+        offset: pageParams.offset,
+        columns: {
+            id: true,
+            name: true,
+            mac_address: true,
+            pcb_number: true,
+            starter_number: true,
+            power: true,
+            signal_quality: true,
+            network_type: true,
+            user_id: true,
+        },
+        with: {
+            motors: {
+                where: ne(motors.status, "ARCHIVED"),
+                columns: {
+                    id: true,
+                    name: true,
+                    hp: true,
+                    state: true,
+                    mode: true,
+                },
+                with: {
+                    location: {
+                        where: ne(locations.status, "ARCHIVED"),
+                        columns: { id: true, name: true },
+                    },
+                    starterParameters: {
+                        where: isNotNull(starterBoxParameters.time_stamp),
+                        orderBy: [desc(starterBoxParameters.time_stamp)],
+                        limit: 1,
+                        columns: {
+                            id: true,
+                            line_voltage_r: true,
+                            line_voltage_y: true,
+                            line_voltage_b: true,
+                            current_r: true,
+                            current_y: true,
+                            current_b: true,
+                            time_stamp: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+    const totalRecords = await getRecordsCount(starterBoxes, WhereQueryData || []);
+    const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
+    return {
+        pagination_info: pagination,
+        records: starterList,
+    };
+}
+export async function paginatedStarterListForMobile(WhereQueryData, orderByQueryData, pageParams) {
+    const whereQuery = WhereQueryData?.length ? and(...WhereQueryData) : undefined;
+    const orderQuery = prepareOrderByQueryConditions(starterBoxes, orderByQueryData);
+    const starterList = await db.query.starterBoxes.findMany({
+        where: whereQuery,
+        orderBy: orderQuery,
+        limit: pageParams.pageSize,
+        offset: pageParams.offset,
+        columns: {
+            id: true,
+            name: true,
+            pcb_number: true,
+            starter_number: true,
+            power: true,
+            signal_quality: true,
+            network_type: true,
+        },
+        with: {
+            motors: {
+                where: ne(motors.status, "ARCHIVED"),
+                columns: {
+                    id: true,
+                    name: true,
+                    hp: true,
+                    state: true,
+                    mode: true,
+                },
+                with: {
+                    location: {
+                        where: ne(locations.status, "ARCHIVED"),
+                        columns: { id: true, name: true },
+                    },
+                },
+            },
+        },
+    });
+    const totalRecords = await getRecordsCount(starterBoxes, WhereQueryData || []);
+    const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
+    return {
+        pagination_info: pagination,
+        records: starterList,
+    };
 }

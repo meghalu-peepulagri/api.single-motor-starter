@@ -25,10 +25,6 @@ export const motors = pgTable("motors", {
     uniqueIndex("unique_motor_per_location").on(sql `lower(${table.name})`, table.location_id).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
 export const motorRelations = relations(motors, ({ one, many }) => ({
-    // field: one(fields, {
-    //   fields: [motors.field_id],
-    //   references: [fields.id]
-    // }),
     created_by_user: one(users, {
         fields: [motors.created_by],
         references: [users.id]
