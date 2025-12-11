@@ -42,17 +42,17 @@ export class StarterHandlers {
   }
 
 
-  assignStarter = async (c: Context) => {
+  assignStarterMobile = async (c: Context) => {
     try {
       const userPayload: User = c.get("user_payload");
       const reqData = await c.req.json();
       paramsValidateException.emptyBodyValidation(reqData);
 
       const validatedReqData = await validatedRequest<validatedAssignStarter>("assign-starter", reqData, STARTER_BOX_VALIDATION_CRITERIA);
-      const starterBox = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["pcb_number", "status"], ["=", "!="], [validatedReqData.pcb_number, "ARCHIVED"], ["id", "status"]);
+      const starterBox = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["pcb_number", "status"], ["LOWER", "!="], [validatedReqData.pcb_number.toLowerCase(), "ARCHIVED"], ["id", "device_status", "status"]);
       if (!starterBox) throw new BadRequestException(STARTER_BOX_NOT_FOUND);
-      if (starterBox.status === "ASSIGNED") throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
-      if (starterBox.status !== "DEPLOYED") throw new BadRequestException(STARER_NOT_DEPLOYED);
+      if (starterBox.device_status === "ASSIGNED") throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
+      if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARER_NOT_DEPLOYED);
 
       await assignStarterWithTransaction(validatedReqData, userPayload, starterBox);
       return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);

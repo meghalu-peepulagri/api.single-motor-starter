@@ -162,6 +162,7 @@ export {
   emailValidator, locationTitleValidator, nameValidator,
   passwordValidator, phoneValidator,
   userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator,
-  aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator, starterNumberValidator
+  aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator,
+   starterNumberValidator
 };
 

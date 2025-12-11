@@ -6,5 +6,6 @@ const motorHandlers = new StarterHandlers();
 const starterRoutes = factory.createApp();
 
 starterRoutes.post("/", isAuthorized, motorHandlers.addStarterBox);
+starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);
 
 export default starterRoutes;

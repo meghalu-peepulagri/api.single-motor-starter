@@ -1,6 +1,6 @@
 import * as v from "valibot";
-import { hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, requiredNumber, serialNoValidator, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
 import { LOCATION_REQUIRED } from "../../constants/app-constants.js";
+import { hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, requiredNumber, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
 
 export const vAddStarter = v.object({
   name: starterBoxTitleValidator,
