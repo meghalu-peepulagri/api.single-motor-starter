@@ -6,11 +6,12 @@ import { isAuthorized } from "../middlewares/isAuthorized.js";
 const motorHandlers = new StarterHandlers();
 const starterRoutes = factory.createApp();
 
-
 starterRoutes.post("/", isAuthorized, motorHandlers.addStarterBox);
-starterRoutes.patch("/:id", isAuthorized, motorHandlers.deleteStarterBox);
+starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);
+starterRoutes.patch("/replace", isAuthorized, motorHandlers.replaceStarterLocation);
 starterRoutes.get("/mobile", isAuthorized, motorHandlers.starterListMobile);
 starterRoutes.get("/web/all", isAuthorized, isAdmin, motorHandlers.starterListWeb);
-starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);
+starterRoutes.get("/:id/motors/:motor_id/analytics", isAuthorized, motorHandlers.starterAnalytics);
+starterRoutes.patch("/:id", isAuthorized, motorHandlers.deleteStarterBox);
 
 export default starterRoutes;

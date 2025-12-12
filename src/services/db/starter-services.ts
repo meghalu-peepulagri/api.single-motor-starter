@@ -1,16 +1,18 @@
-import { and, eq, ne, isNotNull, desc } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
+import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
+import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import type { User } from "../../database/schemas/users.js";
+import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
+import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
+import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareStarterData } from "../../helpers/starter-hepler.js";
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
+import type { OrderByQueryData } from "../../types/db-types.js";
+import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
-import type { OrderByQueryData, WhereQueryDataWithOr } from "../../types/db-types.js";
-import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
-import { locations } from "../../database/schemas/locations.js";
-import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { getPaginationData } from "../../helpers/pagination-helper.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
@@ -181,3 +183,25 @@ export async function replaceStarterWithTransaction(motor: Motor, starter: Start
     await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter.id, { location_id: locationId }, trx);
   })
 }
+
+export async function getStarterAnalytics(motorId: number, starterId: number, fromDate: string, toDate: string, parameter: string) {
+  const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
+  const { selectedFieldsMain } = buildAnalyticsFilter(parameter);
+
+  const startOfDayDate = new Date(startOfDayUTC);
+  const endOfDayDate = new Date(endOfDayUTC);
+
+  return await db
+    .select(selectedFieldsMain)
+    .from(starterBoxParameters)
+    .where(
+      and(
+        eq(starterBoxParameters.motor_id, motorId),
+        eq(starterBoxParameters.starter_id, starterId),
+        gte(starterBoxParameters.time_stamp, startOfDayDate.toISOString()),
+        lte(starterBoxParameters.time_stamp, endOfDayDate.toISOString()),
+      ),
+    )
+    .orderBy(asc(starterBoxParameters.time_stamp));
+
+};

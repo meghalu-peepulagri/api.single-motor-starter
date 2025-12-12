@@ -1,13 +1,15 @@
-import { and, eq, ne, isNotNull, desc } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
+import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
-import { prepareStarterData } from "../../helpers/starter-hepler.js";
-import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
-import { locations } from "../../database/schemas/locations.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
+import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
+import { prepareStarterData } from "../../helpers/starter-hepler.js";
+import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
+import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     await saveSingleRecord(starterBoxes, preparedStarerData);
@@ -156,3 +158,15 @@ export async function replaceStarterWithTransaction(motor, starter, locationId) 
         await updateRecordByIdWithTrx(starterBoxes, starter.id, { location_id: locationId }, trx);
     });
 }
+export async function getStarterAnalytics(motorId, starterId, fromDate, toDate, parameter) {
+    const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
+    const { selectedFieldsMain } = buildAnalyticsFilter(parameter);
+    const startOfDayDate = new Date(startOfDayUTC);
+    const endOfDayDate = new Date(endOfDayUTC);
+    return await db
+        .select(selectedFieldsMain)
+        .from(starterBoxParameters)
+        .where(and(eq(starterBoxParameters.motor_id, motorId), eq(starterBoxParameters.starter_id, starterId), gte(starterBoxParameters.time_stamp, startOfDayDate.toISOString()), lte(starterBoxParameters.time_stamp, endOfDayDate.toISOString())))
+        .orderBy(asc(starterBoxParameters.time_stamp));
+}
+;

@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Context } from "hono";
+import moment from "moment";
 import { GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
@@ -9,10 +10,11 @@ import type { User } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { getUTCFromDateAndToDate } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-hepler.js";
 import { getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
-import { addStarterWithTransaction, assignStarterWithTransaction, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, assignStarterWithTransaction, getStarterAnalytics, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -157,4 +159,32 @@ export class StarterHandlers {
     }
   }
 
+  starterAnalytics = async (c: Context) => {
+    try {
+      const query = c.req.query();
+      const starterId = +c.req.param("id");
+      const motorId = +c.req.param("motor_id");
+      paramsValidateException.validateId(starterId, "Device id");
+      paramsValidateException.validateId(motorId, "Motor id");
+
+      let fromDate = query.from_date || "";
+      let toDate = query.to_date || "";
+      const parameter = query.parameter;
+
+      if (!fromDate || !toDate) {
+        const today = moment().tz("Asia/Kolkata");
+        const startDay = today.clone().subtract(24, "hours").format();
+        const endDay = today.format();
+        const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(startDay, endDay);
+        fromDate = startOfDayUTC;
+        toDate = endOfDayUTC;
+      }
+
+      const starterList = await getStarterAnalytics(starterId, motorId, fromDate, toDate, parameter);
+      return sendResponse(c, 200, STARTER_LIST_FETCHED, starterList);
+    } catch (error: any) {
+      console.error("Error at starter analytics :", error);
+      throw error;
+    }
+  }
 }
