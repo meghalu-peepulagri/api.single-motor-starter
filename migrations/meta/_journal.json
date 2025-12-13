@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1765361581429,
-      "tag": "0000_marvelous_miek",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1765367654466,
-      "tag": "0001_demonic_riptide",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1765444895287,
-      "tag": "0002_awesome_dreadnoughts",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1765512107237,
-      "tag": "0003_secret_yellowjacket",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1765512332142,
-      "tag": "0004_modern_nebula",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1765609046192,
-      "tag": "0005_dark_zombie",
+      "when": 1765623443876,
+      "tag": "0000_absent_silver_centurion",
       "breakpoints": true
     }
   ]

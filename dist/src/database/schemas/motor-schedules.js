@@ -1,8 +1,9 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
-import { motorScheduleTypeEnum, scheduleStatusEnum } from "../../constants/enum-types.js";
+import { index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { fields } from "./fields.js";
 import { motors } from "./motors.js";
+export const motorScheduleTypeEnum = pgEnum("schedule_type", ["ONE_TIME", "DAILY", "WEEKLY"]);
+export const scheduleStatusEnum = pgEnum("schedule_status", ["PENDING", "RUNNING", "SCHEDULED", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "RESCHEDULED"]);
 export const motorSchedules = pgTable("motor_schedules", {
     id: serial("id").primaryKey().notNull(),
     pond_id: integer("pond_id").notNull().references(() => fields.id),

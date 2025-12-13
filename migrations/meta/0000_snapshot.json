@@ -1,9 +1,195 @@
 {
-  "id": "f01ab719-538e-43cf-9acf-669b4aba3aae",
+  "id": "4a7aa166-ffe6-47ce-ab4d-0d429dee2ed9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.alerts_faults": {
+      "name": "alerts_faults",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "starter_id": {
+          "name": "starter_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motor_id": {
+          "name": "motor_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alert_code": {
+          "name": "alert_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alert_description": {
+          "name": "alert_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fault_code": {
+          "name": "fault_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fault_description": {
+          "name": "fault_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "alertsFaultsStarterMotorTimeDescIdx": {
+          "name": "alertsFaultsStarterMotorTimeDescIdx",
+          "columns": [
+            {
+              "expression": "starter_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "motor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "\"timestamp\" desc",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "alertsFaultsFaultFilterIdx": {
+          "name": "alertsFaultsFaultFilterIdx",
+          "columns": [
+            {
+              "expression": "fault_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "fault_description",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"alerts_faults\".\"fault_code\" IS NOT NULL \n  AND \"alerts_faults\".\"fault_code\" <> 0\n  AND \"alerts_faults\".\"fault_description\" IS NOT NULL\n  AND \"alerts_faults\".\"fault_description\" NOT IN ('Unknown Fault','No Fault')\n",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "alertsFaultsAlertFilterIdx": {
+          "name": "alertsFaultsAlertFilterIdx",
+          "columns": [
+            {
+              "expression": "alert_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "alert_description",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"alerts_faults\".\"alert_code\" IS NOT NULL \n  AND \"alerts_faults\".\"alert_code\" <> 0\n  AND \"alerts_faults\".\"alert_description\" IS NOT NULL\n  AND \"alerts_faults\".\"alert_description\" NOT IN ('Unknown Alert','No Alert')\n",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "alerts_faults_starter_id_starter_boxes_id_fk": {
+          "name": "alerts_faults_starter_id_starter_boxes_id_fk",
+          "tableFrom": "alerts_faults",
+          "tableTo": "starter_boxes",
+          "columnsFrom": [
+            "starter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "alerts_faults_motor_id_motors_id_fk": {
+          "name": "alerts_faults_motor_id_motors_id_fk",
+          "tableFrom": "alerts_faults",
+          "tableTo": "motors",
+          "columnsFrom": [
+            "motor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "alerts_faults_user_id_users_id_fk": {
+          "name": "alerts_faults_user_id_users_id_fk",
+          "tableFrom": "alerts_faults",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.device_tokens": {
       "name": "device_tokens",
       "schema": "",
@@ -608,6 +794,342 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.motors_run_time": {
+      "name": "motors_run_time",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "motor_id": {
+          "name": "motor_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "starter_box_id": {
+          "name": "starter_box_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "start_time": {
+          "name": "start_time",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_time": {
+          "name": "end_time",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration": {
+          "name": "duration",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motor_state": {
+          "name": "motor_state",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motor_mode": {
+          "name": "motor_mode",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "motorIdxRunTime": {
+          "name": "motorIdxRunTime",
+          "columns": [
+            {
+              "expression": "motor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "starterBoxIdxRunTime": {
+          "name": "starterBoxIdxRunTime",
+          "columns": [
+            {
+              "expression": "starter_box_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "pondIdxRunTime": {
+          "name": "pondIdxRunTime",
+          "columns": [
+            {
+              "expression": "location_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "motors_run_time_motor_id_motors_id_fk": {
+          "name": "motors_run_time_motor_id_motors_id_fk",
+          "tableFrom": "motors_run_time",
+          "tableTo": "motors",
+          "columnsFrom": [
+            "motor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "motors_run_time_starter_box_id_starter_boxes_id_fk": {
+          "name": "motors_run_time_starter_box_id_starter_boxes_id_fk",
+          "tableFrom": "motors_run_time",
+          "tableTo": "starter_boxes",
+          "columnsFrom": [
+            "starter_box_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "motors_run_time_location_id_locations_id_fk": {
+          "name": "motors_run_time_location_id_locations_id_fk",
+          "tableFrom": "motors_run_time",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.motor_schedules": {
+      "name": "motor_schedules",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "pond_id": {
+          "name": "pond_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "motor_id": {
+          "name": "motor_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "schedule_type": {
+          "name": "schedule_type",
+          "type": "schedule_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ONE_TIME'"
+        },
+        "schedule_date": {
+          "name": "schedule_date",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "days_of_week": {
+          "name": "days_of_week",
+          "type": "integer[]",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'{}'::integer[]"
+        },
+        "start_time": {
+          "name": "start_time",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_time": {
+          "name": "end_time",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "schedule_status": {
+          "name": "schedule_status",
+          "type": "schedule_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDING'"
+        },
+        "acknowledgement": {
+          "name": "acknowledgement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "motorScheduleMotorIdx": {
+          "name": "motorScheduleMotorIdx",
+          "columns": [
+            {
+              "expression": "motor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uniqueMotorSchedule": {
+          "name": "uniqueMotorSchedule",
+          "columns": [
+            {
+              "expression": "motor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "schedule_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_time",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "end_time",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "motor_schedules_pond_id_fields_id_fk": {
+          "name": "motor_schedules_pond_id_fields_id_fk",
+          "tableFrom": "motor_schedules",
+          "tableTo": "fields",
+          "columnsFrom": [
+            "pond_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "motor_schedules_motor_id_motors_id_fk": {
+          "name": "motor_schedules_motor_id_motors_id_fk",
+          "tableFrom": "motor_schedules",
+          "tableTo": "motors",
+          "columnsFrom": [
+            "motor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.motors": {
       "name": "motors",
       "schema": "",
@@ -895,12 +1417,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "serial_number": {
-          "name": "serial_number",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": true
-        },
         "pcb_number": {
           "name": "pcb_number",
           "type": "varchar",
@@ -973,6 +1489,14 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'NUll'"
+        },
+        "starter_type": {
+          "name": "starter_type",
+          "type": "starter_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'SINGLE_STARTER'"
         },
         "created_at": {
           "name": "created_at",
@@ -1055,22 +1579,6 @@
           "columns": [
             {
               "expression": "lower(\"name\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"starter_boxes\".\"status\" != 'ARCHIVED'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "validate_serial_number": {
-          "name": "validate_serial_number",
-          "columns": [
-            {
-              "expression": "lower(\"serial_number\")",
               "asc": true,
               "isExpression": true,
               "nulls": "last"
@@ -1802,6 +2310,29 @@
         "INACTIVE"
       ]
     },
+    "public.schedule_type": {
+      "name": "schedule_type",
+      "schema": "public",
+      "values": [
+        "ONE_TIME",
+        "DAILY",
+        "WEEKLY"
+      ]
+    },
+    "public.schedule_status": {
+      "name": "schedule_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "RUNNING",
+        "SCHEDULED",
+        "COMPLETED",
+        "FAILED",
+        "PAUSED",
+        "CANCELLED",
+        "RESCHEDULED"
+      ]
+    },
     "public.mode_enum": {
       "name": "mode_enum",
       "schema": "public",
@@ -1818,6 +2349,14 @@
         "DEPLOYED",
         "READY ",
         "TEST"
+      ]
+    },
+    "public.starter_type": {
+      "name": "starter_type",
+      "schema": "public",
+      "values": [
+        "SINGLE_STARTER",
+        "MULTI_STARTER"
       ]
     }
   },

@@ -1,1 +1,0 @@
-ALTER TABLE "motors_run_time" DROP COLUMN "motor_ref_id";
