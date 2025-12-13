@@ -38,7 +38,7 @@ export class MqttService {
         });
         this.client.on("connect", () => {
             this.subscribe([
-                "peepul/+/tele", "peepul/+/motor_control/ack", "peepul/+/mode_change/ack", "peepul/+/status"
+                "peepul/+/tele", "peepul/+/status"
             ]);
         });
         this.client.on("error", (error) => {

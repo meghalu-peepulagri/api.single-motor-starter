@@ -1,5 +1,7 @@
+import { ALREADY_SCHEDULED_EXISTS } from "../constants/app-constants.js";
 import type { MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 import type { arrayOfMotorInputType } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
 
@@ -106,3 +108,43 @@ export function buildAnalyticsFilter(parameter: string) {
 
   return { selectedFieldsMain };
 }
+
+export function extractPreviousData(previousData: any, motorId: number) {
+  const power = previousData?.power ?? null;
+
+  const motor = previousData?.motors?.find((m: any) => m.id === motorId) || {};
+  const prevState = motor.state ?? 0;
+  const prevMode = motor.mode ?? null;
+  const locationId = motor.location_id ?? null;
+  const created_by = motor.created_by ?? null;
+
+  return { power, prevState, prevMode, locationId, created_by };
+}
+
+export async function checkMotorScheduleConflict(validatedReqData: any, existingMotorSchedule: any) {
+  if (!existingMotorSchedule)
+    return;
+
+  const newStart = validatedReqData.output.start_time;
+  const newEnd = validatedReqData.output.end_time;
+  const existStart = existingMotorSchedule.start_time;
+  const existEnd = existingMotorSchedule.end_time;
+
+  // Exact match
+  if (newStart === existStart && newEnd === existEnd) {
+    throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
+  }
+
+  //  Overlap check (if times intersect at all)
+  // The only case where there is NO conflict is when:
+  const isOverlapping = !(newEnd <= existStart || newStart >= existEnd);
+
+  if (isOverlapping) {
+    throw new ConflictException(
+      "Schedule overlaps with an existing schedule",
+    );
+  }
+}
+
+
+

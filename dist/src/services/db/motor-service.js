@@ -1,4 +1,4 @@
-import { and, desc, isNotNull, ne, SQL, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { motors } from "../../database/schemas/motors.js";
@@ -7,6 +7,8 @@ import { getRecordsCount } from "./base-db-services.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { locations } from "../../database/schemas/locations.js";
+import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
+import { formatDuration } from "../../helpers/dns-helpers.js";
 export async function bulkMotorsUpdate(motorsToUpdate, trx) {
     if (!motorsToUpdate || motorsToUpdate.length === 0)
         return;
@@ -106,4 +108,52 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
         pagination_info: pagination,
         records: motorsList,
     };
+}
+export async function trackMotorRunTime(params) {
+    const { starter_id, motor_id, location_id, new_state, mode_description } = params;
+    if (!motor_id)
+        return;
+    const now = new Date();
+    return await db.transaction(async (trx) => {
+        const [openRecord] = await trx
+            .select()
+            .from(motorsRunTime)
+            .where(and(eq(motorsRunTime.motor_id, motor_id), eq(motorsRunTime.starter_box_id, starter_id), isNull(motorsRunTime.end_time)))
+            .orderBy(desc(motorsRunTime.start_time));
+        //  No open record → create fresh one
+        if (!openRecord) {
+            return await trx.insert(motorsRunTime).values({
+                motor_id,
+                starter_box_id: starter_id,
+                location_id,
+                start_time: now,
+                end_time: null,
+                duration: null,
+                motor_state: new_state,
+                motor_mode: mode_description
+            });
+        }
+        // Close open record 
+        const durationMs = now.getTime() - new Date(openRecord.start_time).getTime();
+        const durationFormatted = formatDuration(durationMs);
+        await trx.update(motorsRunTime)
+            .set({
+            end_time: now,
+            duration: durationFormatted,
+            motor_state: new_state,
+            motor_mode: mode_description,
+            updated_at: now
+        }).where(eq(motorsRunTime.id, openRecord.id));
+        // After Update → Insert New Fresh Row 
+        await trx.insert(motorsRunTime).values({
+            motor_id,
+            starter_box_id: starter_id,
+            location_id,
+            start_time: now,
+            end_time: null,
+            duration: null,
+            motor_state: new_state,
+            motor_mode: mode_description
+        });
+    });
 }

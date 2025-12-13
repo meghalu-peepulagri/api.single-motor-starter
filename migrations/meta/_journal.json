@@ -22,6 +22,27 @@
       "when": 1765444895287,
       "tag": "0002_awesome_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1765512107237,
+      "tag": "0003_secret_yellowjacket",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1765512332142,
+      "tag": "0004_modern_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1765609046192,
+      "tag": "0005_dark_zombie",
+      "breakpoints": true
     }
   ]
 }

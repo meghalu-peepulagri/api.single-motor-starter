@@ -88,8 +88,14 @@ export const signalQuality = (code: number) => {
 };
 
 export function getValidStrength(value: number) {
-  return value >= 2 && value <= 20 ? value : 0;
+  const isValid = value >= 2 && value <= 20;
+
+  return {
+    strength: isValid ? value : 0,
+    status: isValid ? "ACTIVE" : "INACTIVE",
+  };
 }
+
 
 export function getValidNetwork(value: number) {
   if (value === 2) return "2G";

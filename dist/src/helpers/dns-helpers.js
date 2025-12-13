@@ -21,3 +21,10 @@ export function getUTCFromDateAndToDate(fromDate, toDate) {
         endOfDayUTC,
     };
 }
+export const formatDuration = (ms) => {
+    const totalSec = Math.floor(ms / 1000);
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    return `${hrs} h ${mins} m ${secs} sec`;
+};

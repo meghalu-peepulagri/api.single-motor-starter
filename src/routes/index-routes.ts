@@ -7,7 +7,7 @@ import fieldRoutes from "./field-routes.js";
 import motorRoutes from "./motor-routes.js";
 import gatewayRoutes from "./gateway-routes.js";
 import starterRoutes from "./starter-routes.js";
-// import motorSchedulesRoutes from "./motor-schedules-routes.js";
+import motorSchedulesRoutes from "./motor-schedules-routes.js";
 
 
 const indexRoute = new Hono();
@@ -20,6 +20,6 @@ indexRoute.route("/fields", fieldRoutes);
 indexRoute.route("/motors", motorRoutes);
 indexRoute.route("/gateways", gatewayRoutes);
 indexRoute.route("/starters", starterRoutes);
-// indexRoute.route("Motor-schedules", motorSchedulesRoutes);
+indexRoute.route("Motor-schedules", motorSchedulesRoutes);
 
 export default indexRoute;

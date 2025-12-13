@@ -53,7 +53,9 @@ export async function getStarterByMacWithMotor(mac: string) {
           name: true,
           hp: true,
           state: true,
-          mode: true
+          mode: true,
+          location_id: true,
+          created_by: true
         },
       },
     },

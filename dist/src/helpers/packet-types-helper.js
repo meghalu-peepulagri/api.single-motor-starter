@@ -79,7 +79,11 @@ export const signalQuality = (code) => {
     return "Invalid signal code";
 };
 export function getValidStrength(value) {
-    return value >= 2 && value <= 20 ? value : 0;
+    const isValid = value >= 2 && value <= 20;
+    return {
+        strength: isValid ? value : 0,
+        status: isValid ? "ACTIVE" : "INACTIVE",
+    };
 }
 export function getValidNetwork(value) {
     if (value === 2)
