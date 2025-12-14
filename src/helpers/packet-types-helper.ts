@@ -9,6 +9,8 @@ export const REQUEST_TYPES = {
   SCHEDULING_DATA_REQUEST: 7,
   POWER_INFO_REQUEST: 8,
   DEVICE_INFO_REQUEST: 10,
+  QUECTEL_FILE_DELETE: 11,
+  QUECTEL_FILE_ADD: 12
 } as const;
 
 
@@ -23,7 +25,9 @@ export const ACK_TYPES = {
   POWER_INFO_REQUEST_ACK: 38,
   DEVICE_INFO_ACK: 39,
   HEART_BEAT: 40,
-  LIVE_DATA: 11,
+  LIVE_DATA: 41,
+  QUECTEL_FILE_DELETE_ACK: 42,
+  QUECTEL_FILE_ADD_ACK: 43
 } as const;
 
 
@@ -41,6 +45,8 @@ export function findTopicACKByType(payload: any) {
     case 38: return "POWER_INFO_REQUEST_ACK";
     case 39: return "DEVICE_INFO_ACK";
     case 40: return "HEART_BEAT";
+    case 42: return "QUECTEL_FILE_DELETE_ACK";
+    case 43: return "QUECTEL_FILE_ADD_ACK";
     default: return "UNKNOWN";
   }
 }

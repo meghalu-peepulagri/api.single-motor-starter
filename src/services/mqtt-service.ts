@@ -88,15 +88,7 @@ export class MqttService {
         case /^peepul\/[^/]+\/tele$/.test(topic):
           await liveDataHandler(topic, parsedMessage);
           break;
-
-        case /^peepul\/[^/]+\/motor_control\/ack$/.test(topic):
-          await motorControlAckHandler(parsedMessage, topic);
-          break;
-
-        case /^peepul\/[^/]+\/mode_change\/ack$/.test(topic):
-          await motorModeChangeAckHandler(parsedMessage, topic);
-          break;
-
+          
         case /^peepul\/[^/]+\/status$/.test(topic):
           const topicType = findTopicACKByType(parsedMessage);
           await selectTopicAck(topicType, message, topic);

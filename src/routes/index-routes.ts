@@ -20,6 +20,6 @@ indexRoute.route("/fields", fieldRoutes);
 indexRoute.route("/motors", motorRoutes);
 indexRoute.route("/gateways", gatewayRoutes);
 indexRoute.route("/starters", starterRoutes);
-indexRoute.route("Motor-schedules", motorSchedulesRoutes);
+indexRoute.route("/Motor-schedules", motorSchedulesRoutes);
 
 export default indexRoute;

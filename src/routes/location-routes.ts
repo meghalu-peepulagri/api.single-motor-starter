@@ -9,5 +9,7 @@ const locationRoutes = factory.createApp();
 locationRoutes.post("/", isAuthorized, locationHandlers.addLocation);
 locationRoutes.get("/", isAuthorized, locationHandlers.list);
 locationRoutes.get("/basic", isAuthorized, locationHandlers.listBasic);
+locationRoutes.patch("/:id/rename", isAuthorized, locationHandlers.renameLocation);
+locationRoutes.patch("/:id", isAuthorized, locationHandlers.deleteLocation);
 
 export default locationRoutes;
