@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
+import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
@@ -172,3 +173,30 @@ export async function getStarterAnalytics(motorId, starterId, fromDate, toDate, 
         .orderBy(asc(starterBoxParameters.time_stamp));
 }
 ;
+export async function getStarterRunTime(starterId, fromDate, toDate, motorId, powerState) {
+    const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
+    const filters = [
+        eq(deviceRunTime.starter_box_id, starterId),
+        gte(deviceRunTime.time_stamp, startOfDayUTC),
+        lte(deviceRunTime.time_stamp, endOfDayUTC),
+    ];
+    if (motorId) {
+        filters.push(eq(deviceRunTime.motor_id, motorId));
+    }
+    if (powerState) {
+        const powerStateNumber = powerState === "ON" ? 1 : 0;
+        filters.push(eq(deviceRunTime.power_state, powerStateNumber));
+    }
+    return await db.select({
+        id: deviceRunTime.id,
+        device_id: deviceRunTime.starter_box_id,
+        start_time: deviceRunTime.start_time,
+        end_time: deviceRunTime.end_time,
+        duration: deviceRunTime.duration,
+        power_state: deviceRunTime.power_state,
+        time_stamp: deviceRunTime.time_stamp,
+    })
+        .from(deviceRunTime)
+        .where(and(...filters))
+        .orderBy(asc(deviceRunTime.start_time));
+}
