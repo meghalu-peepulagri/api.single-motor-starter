@@ -11,9 +11,10 @@ import type { StarterBox, StarterBoxTable } from "../database/schemas/starter-bo
 import type { StarterBoxParameters, StarterBoxParametersTable } from "../database/schemas/starter-parameters.js";
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import type { User, UsersTable } from "../database/schemas/users.js";
+import type { DeviceRunTime, DeviceRunTimeTable } from "../database/schemas/device-runtime.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
-  MotorScheduleTable | AlertsFaultsTable;
+  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User : any |
@@ -27,7 +28,8 @@ export type DBRecord<T extends DBTable> =
   T extends GatewayTable ? Gateway : any |
   T extends StarterBoxParametersTable ? StarterBoxParameters : any |
   T extends MotorScheduleTable ? MotorSchedule : any |
-  T extends AlertsFaultsTable ? AlertsFaults : any;
+  T extends AlertsFaultsTable ? AlertsFaults : any |
+  T extends DeviceRunTimeTable ? DeviceRunTime : any;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 

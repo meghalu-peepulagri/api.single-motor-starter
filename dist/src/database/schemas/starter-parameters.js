@@ -19,7 +19,7 @@ export const starterBoxParameters = pgTable("starter_parameters", {
     current_b: real("current_b").notNull().default(0),
     avg_current: real("avg_current").notNull().default(0),
     // Power
-    power_present: integer("power_factor").notNull(),
+    power_present: integer("power_present").notNull(),
     // Motor values
     motor_mode: integer("motor_mode").notNull(),
     mode_description: varchar("mode_description").notNull(),

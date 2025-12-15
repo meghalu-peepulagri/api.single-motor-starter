@@ -44,8 +44,3 @@ export function starterFilters(query, user) {
     }
     return filters;
 }
-export function analyticsFilters() {
-    const filters = [];
-    filters.push();
-    return filters;
-}

@@ -59,12 +59,3 @@ export function starterFilters(query: any, user: any) {
 
   return filters;
 }
-
-export function analyticsFilters(){
-
-  const filters: any[] = [];
-
-  filters.push()
-
-  return filters;
-}

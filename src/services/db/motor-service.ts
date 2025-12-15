@@ -1,15 +1,16 @@
 import { and, desc, eq, isNotNull, isNull, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
-import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
-import { motors, type MotorsTable } from "../../database/schemas/motors.js";
-import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
-import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { getRecordsCount } from "./base-db-services.js";
-import { getPaginationData } from "../../helpers/pagination-helper.js";
-import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
+import { motors, type MotorsTable } from "../../database/schemas/motors.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { formatDuration } from "../../helpers/dns-helpers.js";
+import { getPaginationData } from "../../helpers/pagination-helper.js";
+import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
+import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
+import { getRecordsCount } from "./base-db-services.js";
 
 export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?: string | null; hp?: number | null }>, trx?: any): Promise<void> {
   if (!motorsToUpdate || motorsToUpdate.length === 0) return;
@@ -203,4 +204,73 @@ export async function trackMotorRunTime(params: {
     });
 
   });
+}
+
+export async function trackDeviceRunTime(params: {
+  starter_id: number; motor_id: number | null; location_id: number;
+  previous_power_state: number;
+  new_power_state: number;
+  motor_state: number;
+  mode_description: string;
+  time_stamp: string;
+}) {
+  const { starter_id, motor_id, location_id, new_power_state, motor_state, mode_description, time_stamp } = params;
+
+  if (!starter_id) return;
+  const now = new Date(time_stamp);
+  return await db.transaction(async (trx) => {
+    const [openRecord] = await trx
+      .select()
+      .from(deviceRunTime)
+      .where(
+        and(
+          eq(deviceRunTime.starter_box_id, starter_id),
+          isNull(deviceRunTime.end_time)
+        )
+      )
+      .orderBy(desc(deviceRunTime.start_time));
+
+    if (!openRecord) {
+      return await trx.insert(deviceRunTime).values({
+        motor_id,
+        starter_box_id: starter_id,
+        location_id,
+        start_time: now,
+        end_time: null,
+        duration: null,
+        motor_state,
+        motor_mode: mode_description,
+        power_state: new_power_state,
+        signal_strength: null,
+        time_stamp
+      });
+    }
+    const durationMs = now.getTime() - new Date(openRecord.start_time).getTime();
+    const durationFormatted = formatDuration(durationMs);
+
+    if (openRecord.power_state !== new_power_state) {
+
+      await trx.update(deviceRunTime).set({
+        end_time: now,
+        duration: durationFormatted,
+        updated_at: now
+      }).where(eq(deviceRunTime.id, openRecord.id));
+
+      // Insert new runtime session
+      return await trx.insert(deviceRunTime).values({
+        motor_id,
+        starter_box_id: starter_id,
+        location_id,
+        start_time: now,
+        end_time: null,
+        duration: null,
+        motor_state,
+        motor_mode: mode_description,
+        power_state: new_power_state,
+        signal_strength: null,
+        time_stamp
+      });
+    }
+  }
+  );
 }
