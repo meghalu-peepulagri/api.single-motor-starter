@@ -1,6 +1,8 @@
 import type { Context } from "hono";
 import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import db from "../database/configuration.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
+import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { motorFilters } from "../helpers/motor-helper.js";
@@ -92,7 +94,10 @@ export class MotorHandlers {
       paramsValidateException.validateId(motorId, "motor id");
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
-      await updateRecordById(motors, motorId, { status: "ARCHIVED" });
+      db.transaction(async trx => {
+        await updateRecordById<MotorsTable>(motors, motorId, { status: "ARCHIVED" });
+        await updateRecordById<StarterBoxTable>(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null });
+      })
       return sendResponse(c, 200, MOTOR_DELETED);
     } catch (error: any) {
       console.error("Error at delete motor :", error);

@@ -1,5 +1,6 @@
 import { USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
+import { userActivityLogs } from "../database/schemas/user-activity-logs.js";
 import { users } from "../database/schemas/users.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
@@ -11,7 +12,6 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { userActivityLogs } from "../database/schemas/user-activity-logs.js";
 const paramsValidateException = new ParamsValidateException();
 export class UserHandlers {
     list = async (c) => {

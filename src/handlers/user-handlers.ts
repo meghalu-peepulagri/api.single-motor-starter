@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
+import { userActivityLogs, type UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import { users, type UsersTable } from "../database/schemas/users.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
@@ -14,7 +15,6 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedSignUpUser } from "../validations/schema/user-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { userActivityLogs, type UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 
 const paramsValidateException = new ParamsValidateException();
 

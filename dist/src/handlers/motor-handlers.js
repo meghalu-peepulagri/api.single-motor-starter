@@ -1,5 +1,7 @@
 import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import db from "../database/configuration.js";
 import { motors } from "../database/schemas/motors.js";
+import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { motorFilters } from "../helpers/motor-helper.js";
@@ -85,7 +87,10 @@ export class MotorHandlers {
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
-            await updateRecordById(motors, motorId, { status: "ARCHIVED" });
+            db.transaction(async (trx) => {
+                await updateRecordById(motors, motorId, { status: "ARCHIVED" });
+                await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null });
+            });
             return sendResponse(c, 200, MOTOR_DELETED);
         }
         catch (error) {

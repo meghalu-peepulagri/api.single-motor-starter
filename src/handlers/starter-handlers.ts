@@ -119,7 +119,7 @@ export class StarterHandlers {
       if (starter.starter_type === "SINGLE_STARTER") {
         await db.transaction(async (trx) => {
           await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
-          await trx.update(motors).set({ starter_id: null, status: "ARCHIVED" }).where(eq(motors.starter_id, starterId));
+          await trx.update(motors).set({ status: "ARCHIVED" }).where(eq(motors.starter_id, starterId));
         });
       }
       if (userPayload.user_type === "USER") {
@@ -138,11 +138,10 @@ export class StarterHandlers {
 
   replaceStarterLocation = async (c: Context) => {
     try {
-      const starterId = +c.req.param("id");
       const starterPayload = await c.req.json();
       paramsValidateException.emptyBodyValidation(starterPayload);
       const validatedStarterReq = await validatedRequest<validatedReplaceStarter>("replace-starter", starterPayload, REPLACE_STARTER_BOX_VALIDATION_CRITERIA);
-      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [validatedStarterReq.starter_id, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [validatedStarterReq.motor_id, "ARCHIVED"]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);

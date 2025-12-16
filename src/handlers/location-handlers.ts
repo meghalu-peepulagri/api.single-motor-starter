@@ -1,19 +1,20 @@
+import { eq } from "drizzle-orm";
 import type { Context } from "hono";
-import { LOCATION_ADDED, LOCATION_DELETED, LOCATION_VALIDATION_CRITERIA, LOCATIONS_FETCHED } from "../constants/app-constants.js";
+import { LOCATION_ADDED, LOCATION_DELETED, LOCATION_NOT_FOUND, LOCATION_VALIDATION_CRITERIA, LOCATIONS_FETCHED } from "../constants/app-constants.js";
+import db from "../database/configuration.js";
 import { locations, type LocationsTable } from "../database/schemas/locations.js";
+import { motors } from "../database/schemas/motors.js";
+import { starterBoxes } from "../database/schemas/starter-boxes.js";
+import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { locationFilters } from "../helpers/location-helpers.js";
-import { saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getLocationsList, locationDropDown } from "../services/db/location-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { getLocationsList, locationDropDown } from "../services/db/location-services.js";
-import db from "../database/configuration.js";
-import { motors } from "../database/schemas/motors.js";
-import { eq } from "drizzle-orm";
-import { starterBoxes } from "../database/schemas/starter-boxes.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -100,7 +101,10 @@ export class LocationHandlers {
     try {
       const locationId = +c.req.param("id");
       paramsValidateException.validateId(locationId, "location id");
-      db.transaction(async (trx) => {
+      const foundedLocation = await getSingleRecordByMultipleColumnValues<LocationsTable>(locations, ["id", "status"], ["=", "!="], [locationId, "ARCHIVED"]);
+      if (!foundedLocation) throw new NotFoundException(LOCATION_NOT_FOUND);
+
+      await db.transaction(async (trx) => {
         await updateRecordByIdWithTrx<LocationsTable>(locations, locationId, { status: "ARCHIVED" });
         await trx.update(motors).set({ status: "ARCHIVED" }).where(eq(motors.location_id, locationId));
         await trx.update(starterBoxes).set({ location_id: null, device_status: "DEPLOYED", user_id: null }).where(eq(starterBoxes.location_id, locationId));

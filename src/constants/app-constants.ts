@@ -30,7 +30,7 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "unique_phone_idx": "Phone number already exist.",
   "unique_location_per_user": "Location name already exist.",
   "unique_field_per_user_location": "Field name already exist.",
-  "unique_motor_per_location": "Motor name already exist.",
+  "unique_motor_per_location": "Pump name already exist.",
 };
 
 export const FOREGIN_KEY_MESSAGES: Record<string, string> = {
