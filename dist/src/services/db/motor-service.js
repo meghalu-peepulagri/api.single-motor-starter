@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, ne, SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -6,7 +6,7 @@ import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { formatDuration } from "../../helpers/dns-helpers.js";
+import { formatDuration, getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
@@ -111,7 +111,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
     };
 }
 export async function trackMotorRunTime(params) {
-    const { starter_id, motor_id, location_id, new_state, mode_description } = params;
+    const { starter_id, motor_id, location_id, new_state, mode_description, time_stamp } = params;
     if (!motor_id)
         return;
     const now = new Date();
@@ -121,6 +121,7 @@ export async function trackMotorRunTime(params) {
             .from(motorsRunTime)
             .where(and(eq(motorsRunTime.motor_id, motor_id), eq(motorsRunTime.starter_box_id, starter_id), isNull(motorsRunTime.end_time)))
             .orderBy(desc(motorsRunTime.start_time));
+        const formattedDate = time_stamp ? new Date(time_stamp).toISOString() : now.toISOString();
         //  No open record → create fresh one
         if (!openRecord) {
             return await trx.insert(motorsRunTime).values({
@@ -131,6 +132,7 @@ export async function trackMotorRunTime(params) {
                 end_time: null,
                 duration: null,
                 motor_state: new_state,
+                time_stamp: formattedDate,
                 motor_mode: mode_description
             });
         }
@@ -143,7 +145,6 @@ export async function trackMotorRunTime(params) {
             duration: durationFormatted,
             motor_state: new_state,
             motor_mode: mode_description,
-            updated_at: now
         }).where(eq(motorsRunTime.id, openRecord.id));
         // After Update → Insert New Fresh Row 
         await trx.insert(motorsRunTime).values({
@@ -154,6 +155,7 @@ export async function trackMotorRunTime(params) {
             end_time: null,
             duration: null,
             motor_state: new_state,
+            time_stamp: formattedDate,
             motor_mode: mode_description
         });
     });
@@ -206,6 +208,33 @@ export async function trackDeviceRunTime(params) {
                 signal_strength: null,
                 time_stamp
             });
+        }
+    });
+}
+export async function getMotorRunTime(starterId, fromDate, toDate, motorId, motorState) {
+    // const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
+    const filters = [
+        eq(motorsRunTime.starter_box_id, starterId),
+        gte(motorsRunTime.time_stamp, fromDate),
+        lte(motorsRunTime.time_stamp, toDate),
+    ];
+    if (motorId) {
+        filters.push(eq(motorsRunTime.motor_id, motorId));
+    }
+    if (motorState) {
+        const motorStateNumber = motorState === "OFF" ? 0 : 1;
+        filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
+    }
+    return await db.query.motorsRunTime.findMany({
+        where: and(...filters),
+        orderBy: asc(motorsRunTime.time_stamp),
+        columns: {
+            id: true,
+            start_time: true,
+            end_time: true,
+            duration: true,
+            time_stamp: true,
+            motor_state: true,
         }
     });
 }

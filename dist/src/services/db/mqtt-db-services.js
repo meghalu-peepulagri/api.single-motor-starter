@@ -1,6 +1,5 @@
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
-import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
@@ -67,8 +66,7 @@ export async function updateStates(insertedData, previousData) {
         }
         if (motor_id && motor_state !== prevState) {
             await trackMotorRunTime({
-                starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state,
-                mode_description
+                starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp
             });
         }
         if (alert_code && fault)
@@ -78,7 +76,7 @@ export async function updateStates(insertedData, previousData) {
 export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, location_id, time_stamp } = insertedData;
     const { power, prevState, prevMode } = extractPreviousData(previousData, motor_id);
-    if (!starter_id || !motor_id || power_present !== power)
+    if (!starter_id || !motor_id)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
@@ -89,25 +87,25 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         if (motor_state !== prevState || mode_description !== prevMode)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
         if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description });
+            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
         }
     });
 }
 export async function updateDevicePowerONAndMotorStateOFF(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, location_id, time_stamp } = insertedData;
     const { power, prevState } = extractPreviousData(previousData, motor_id);
-    if (!starter_id || !motor_id || power_present !== power)
+    if (!starter_id || !motor_id)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
         if (power_present !== power) {
-            await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: 1 }, trx);
+            await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
             await trackDeviceRunTime({ starter_id, motor_id, location_id, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
         if (motor_state !== prevState)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
         if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description });
+            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
         }
     });
 }
@@ -124,7 +122,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         if (motor_state !== prevState || mode_description !== prevMode)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
         if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description });
+            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
         }
     });
 }

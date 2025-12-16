@@ -15,17 +15,21 @@ export const alertsFaults = pgTable("alerts_faults", {
     user_id: integer("user_id").references(() => users.id),
     created_at: timestamp("created_at").notNull().defaultNow(),
 }, table => [
-    index("alertsFaultsStarterMotorTimeDescIdx").on(table.starter_id, table.motor_id, desc(table.timestamp)),
-    index("alertsFaultsFaultFilterIdx").on(table.fault_code, table.fault_description).where(sql `${table.fault_code} IS NOT NULL 
-  AND ${table.fault_code} <> 0
-  AND ${table.fault_description} IS NOT NULL
-  AND ${table.fault_description} NOT IN ('Unknown Fault','No Fault')
-`),
-    index("alertsFaultsAlertFilterIdx").on(table.alert_code, table.alert_description).where(sql `${table.alert_code} IS NOT NULL 
-  AND ${table.alert_code} <> 0
-  AND ${table.alert_description} IS NOT NULL
-  AND ${table.alert_description} NOT IN ('Unknown Alert','No Alert')
-`),
+    index("alerts_faults_starter_motor_time_desc_idx").on(table.starter_id, table.motor_id, desc(table.timestamp)),
+    index("alerts_faults_fault_filter_idx").on(table.fault_code, table.fault_description)
+        .where(sql `
+      ${table.fault_code} IS NOT NULL
+      AND ${table.fault_code} <> 0
+      AND ${table.fault_description} IS NOT NULL
+      AND ${table.fault_description} NOT IN ('Unknown Fault', 'No Fault')
+    `),
+    index("alerts_faults_alert_filter_idx").on(table.alert_code, table.alert_description)
+        .where(sql `
+      ${table.alert_code} IS NOT NULL
+      AND ${table.alert_code} <> 0
+      AND ${table.alert_description} IS NOT NULL
+      AND ${table.alert_description} NOT IN ('Unknown Alert', 'No Alert')
+    `),
 ]);
 ;
 export const alertsFaultsRelations = relations(alertsFaults, ({ one }) => ({

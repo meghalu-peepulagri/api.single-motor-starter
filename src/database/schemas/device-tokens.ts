@@ -12,9 +12,10 @@ export const deviceTokens = pgTable("device_tokens", {
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
-  index("deviceTokenIdx").on(table.device_token),
-  uniqueIndex("validDeviceTokenIdx").on(table.device_token, table.user_id).where(sql`${table.status} != 'INACTIVE'`),
+  index("device_token_idx").on(table.device_token),
+  uniqueIndex("valid_device_token_idx").on(table.device_token, table.user_id).where(sql`${table.status} <> 'INACTIVE'`),
 ]);
+
 
 export type DeviceToken = typeof deviceTokens.$inferSelect;
 export type NewDeviceToken = typeof deviceTokens.$inferInsert;

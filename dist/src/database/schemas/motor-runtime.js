@@ -13,10 +13,10 @@ export const motorsRunTime = pgTable("motors_run_time", {
     duration: varchar("duration"),
     motor_state: integer("motor_state"),
     motor_mode: varchar("motor_mode"),
+    time_stamp: varchar("time_stamp"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [
-    index("motorIdxRunTime").on(table.motor_id),
-    index("starterBoxIdxRunTime").on(table.starter_box_id),
-    index("pondIdxRunTime").on(table.location_id),
+    index("motors_run_time_motor_id_idx").on(table.motor_id),
+    index("motors_run_time_starter_box_id_idx").on(table.starter_box_id),
 ]);

@@ -174,17 +174,17 @@ export async function getStarterAnalytics(motorId, starterId, fromDate, toDate, 
 }
 ;
 export async function getStarterRunTime(starterId, fromDate, toDate, motorId, powerState) {
-    const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
+    // const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
     const filters = [
         eq(deviceRunTime.starter_box_id, starterId),
-        gte(deviceRunTime.time_stamp, startOfDayUTC),
-        lte(deviceRunTime.time_stamp, endOfDayUTC),
+        gte(deviceRunTime.time_stamp, fromDate),
+        lte(deviceRunTime.time_stamp, toDate),
     ];
     if (motorId) {
         filters.push(eq(deviceRunTime.motor_id, motorId));
     }
     if (powerState) {
-        const powerStateNumber = powerState === "ON" ? 1 : 0;
+        const powerStateNumber = powerState === "OFF" ? 0 : 1;
         filters.push(eq(deviceRunTime.power_state, powerStateNumber));
     }
     return await db.select({

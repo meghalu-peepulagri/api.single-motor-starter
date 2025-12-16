@@ -18,10 +18,10 @@ export const motorSchedules = pgTable("motor_schedules", {
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, (table) => [
-    index("motorScheduleMotorIdx").on(table.motor_id),
-    uniqueIndex("uniqueMotorSchedule").on(table.motor_id, table.schedule_type, table.start_time, table.end_time),
+    index("motor_schedule_motor_id_idx").on(table.motor_id),
+    uniqueIndex("motor_schedule_unique_idx").on(table.motor_id, table.schedule_type, table.start_time, table.end_time),
 ]);
-export const motorScheduleRelations = relations(motorSchedules, ({ one, many }) => ({
+export const motorScheduleRelations = relations(motorSchedules, ({ one }) => ({
     schedule: one(motors, {
         fields: [motorSchedules.motor_id],
         references: [motors.id],

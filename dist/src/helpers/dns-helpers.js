@@ -9,16 +9,17 @@ export function parseTimestamp(ct) {
     }
     return new Date().toISOString();
 }
-export function getUTCFromDateAndToDate(fromDate, toDate) {
-    const istTimezone = "Asia/Kolkata";
-    const utcTimezone = "UTC";
-    const startOfDayIST = moment.tz(fromDate, istTimezone).startOf("day");
-    const endOfDayIST = moment.tz(toDate, istTimezone).endOf("day");
-    const startOfDayUTC = startOfDayIST.clone().tz(utcTimezone).format();
-    const endOfDayUTC = endOfDayIST.clone().tz(utcTimezone).format();
+export function getUTCFromDateAndToDate(fromDate, toDate, applyDayBoundary = true) {
+    const IST_TIMEZONE = "Asia/Kolkata";
+    let fromIST = moment.tz(fromDate, IST_TIMEZONE);
+    let toIST = moment.tz(toDate, IST_TIMEZONE);
+    if (applyDayBoundary) {
+        fromIST = fromIST.startOf("day");
+        toIST = toIST.endOf("day");
+    }
     return {
-        startOfDayUTC,
-        endOfDayUTC,
+        startOfDayUTC: fromIST.utc().toISOString(),
+        endOfDayUTC: toIST.utc().toISOString(),
     };
 }
 export const formatDuration = (ms) => {
@@ -28,3 +29,21 @@ export const formatDuration = (ms) => {
     const secs = totalSec % 60;
     return `${hrs} h ${mins} m ${secs} sec`;
 };
+export function parseQueryDates(query) {
+    console.log('query: ', query);
+    let fromDate = query.from_date;
+    let toDate = query.to_date;
+    const now = moment().tz("Asia/Kolkata");
+    if (!fromDate || !toDate) {
+        fromDate = now.clone().subtract(24, "hours").format();
+        toDate = now.format();
+    }
+    // Convert IST to UTC
+    const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate, false);
+    console.log('endUTC: ', startOfDayUTC);
+    console.log('startUTC: ', endOfDayUTC);
+    return {
+        fromDateUTC: startOfDayUTC,
+        toDateUTC: endOfDayUTC,
+    };
+}

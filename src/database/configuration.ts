@@ -15,6 +15,7 @@ import * as starterBoxSchema from "./schemas/starter-boxes.js";
 import * as starterBoxParameters from "./schemas/starter-parameters.js";
 import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
 import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
+import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
 
 
 const { Pool } = pg;
@@ -44,7 +45,8 @@ const db = drizzle(dbClient, {
     ...gatewaysSchema,
     ...starterBoxParameters,
     ...motorSchedulesSchema,
-    ...DeviceRunTimeSchema
+    ...DeviceRunTimeSchema,
+    ...MotorRunTimeSchema
   },
 });
 

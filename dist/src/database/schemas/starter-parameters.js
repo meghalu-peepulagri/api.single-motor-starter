@@ -48,6 +48,8 @@ export const starterBoxParameters = pgTable("starter_parameters", {
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [
     index("starter_params_starter_id_idx").on(table.starter_id),
+    index("starter_params_motor_id_idx").on(table.motor_id),
+    index("starter_params_starter_motor_idx").on(table.motor_id, table.starter_id),
 ]);
 export const starterBoxParametersRelations = relations(starterBoxParameters, ({ one }) => ({
     starter: one(starterBoxes, {

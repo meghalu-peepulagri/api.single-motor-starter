@@ -10,10 +10,11 @@ import type { User } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
-import { getUTCFromDateAndToDate } from "../helpers/dns-helpers.js";
+import { getUTCFromDateAndToDate, parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-hepler.js";
 import { getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getMotorRunTime } from "../services/db/motor-service.js";
 import { addStarterWithTransaction, assignStarterWithTransaction, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -204,20 +205,15 @@ export class StarterHandlers {
         if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
       }
 
-      let fromDate = query.from_date || "";
-      let toDate = query.to_date || "";
       let powerState = query.power || "";
+      let motorState = query.state || "";
 
-      if (!fromDate || !toDate) {
-        const today = moment().tz("Asia/Kolkata");
-        const startDay = today.clone().subtract(24, "hours").format();
-        const endDay = today.format();
-        const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(startDay, endDay);
-        fromDate = startOfDayUTC;
-        toDate = endOfDayUTC;
-      }
+      const { fromDateUTC, toDateUTC } = parseQueryDates(query);
+      console.log('toDateUTC: ', toDateUTC);
+      console.log('fromDateUTC: ', fromDateUTC);
+      const starterList = query.parameter === "power" ? await getStarterRunTime(starterId, fromDateUTC, toDateUTC, motorId, powerState) : await getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId, motorState);
+      console.log('starterList: ', starterList);
 
-      const starterList = await getStarterRunTime(starterId, fromDate, toDate, motorId, powerState);
       return sendResponse(c, 200, STARTER_RUNTIME_FETCHED, starterList);
     } catch (error: any) {
       console.error("Error at device run time :", error);

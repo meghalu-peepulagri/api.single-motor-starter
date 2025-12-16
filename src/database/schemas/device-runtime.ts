@@ -25,8 +25,8 @@ export const deviceRunTime = pgTable("device_run_time", {
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 
 }, table => [
-  index("deviceMotorIdxRunTime").on(table.motor_id),
-  index("deviceIdxRunTime").on(table.starter_box_id),
+  index("device_run_time_motor_id_idx").on(table.motor_id),
+  index("device_run_time_starter_box_id_idx").on(table.starter_box_id),
 ]);
 export type DeviceRunTime = typeof deviceRunTime.$inferSelect;
 export type NewDeviceRunTime = typeof deviceRunTime.$inferInsert;

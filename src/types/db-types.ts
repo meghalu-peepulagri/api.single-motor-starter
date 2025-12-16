@@ -12,9 +12,10 @@ import type { StarterBoxParameters, StarterBoxParametersTable } from "../databas
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import type { User, UsersTable } from "../database/schemas/users.js";
 import type { DeviceRunTime, DeviceRunTimeTable } from "../database/schemas/device-runtime.js";
+import type { MotorRunTimeTable } from "../database/schemas/motor-runtime.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
-  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable;
+  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User : any |

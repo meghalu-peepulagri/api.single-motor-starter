@@ -11,7 +11,7 @@ export const otps = pgTable("otps", {
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
-  index("otpPhoneIdx").on(table.phone),
+  index("otp_phone_idx").on(table.phone),
 ]);
 
 export type Otp = typeof otps.$inferSelect;
