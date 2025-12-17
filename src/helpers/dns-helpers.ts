@@ -44,23 +44,27 @@ export interface UTCDateRange {
 }
 
 export function parseQueryDates(query: any) {
-  console.log('query: ', query);
   let fromDate = query.from_date;
   let toDate = query.to_date;
 
-  const now = moment().tz("Asia/Kolkata");
+  const IST = "Asia/Kolkata";
+  const now = moment().tz(IST);
+
+  // Default → last 24 hours
   if (!fromDate || !toDate) {
-    fromDate = now.clone().subtract(24, "hours").format();
-    toDate = now.format();
+    return {
+      fromDateUTC: now.clone().subtract(24, "hours").utc().toISOString(),
+      toDateUTC: now.utc().toISOString(),
+    };
   }
 
+  // Date-only input → expand full IST day
+  const fromIST = moment.tz(fromDate, "YYYY-MM-DD", IST).startOf("day");
+  const toIST = moment.tz(toDate, "YYYY-MM-DD", IST).endOf("day");
 
-  // Convert IST to UTC
-  const { startOfDayUTC, endOfDayUTC }: any = getUTCFromDateAndToDate(fromDate, toDate, false);
-  console.log('endUTC: ', startOfDayUTC);
-  console.log('startUTC: ', endOfDayUTC);
   return {
-    fromDateUTC: startOfDayUTC,
-    toDateUTC: endOfDayUTC,
+    fromDateUTC: fromIST.utc().toISOString(),
+    toDateUTC: toIST.utc().toISOString(),
   };
 }
+

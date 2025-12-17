@@ -155,18 +155,9 @@ export class StarterHandlers {
             const motorId = +c.req.param("motor_id");
             paramsValidateException.validateId(starterId, "Device id");
             paramsValidateException.validateId(motorId, "Motor id");
-            let fromDate = query.from_date || "";
-            let toDate = query.to_date || "";
             const parameter = query.parameter;
-            if (!fromDate || !toDate) {
-                const today = moment().tz("Asia/Kolkata");
-                const startDay = today.clone().subtract(24, "hours").format();
-                const endDay = today.format();
-                const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(startDay, endDay);
-                fromDate = startOfDayUTC;
-                toDate = endOfDayUTC;
-            }
-            const starterList = await getStarterAnalytics(starterId, motorId, fromDate, toDate, parameter);
+            const { fromDateUTC, toDateUTC } = parseQueryDates(query);
+            const starterList = await getStarterAnalytics(starterId, motorId, fromDateUTC, toDateUTC, parameter);
             return sendResponse(c, 200, STARTER_LIST_FETCHED, starterList);
         }
         catch (error) {
@@ -193,10 +184,7 @@ export class StarterHandlers {
             let powerState = query.power || "";
             let motorState = query.state || "";
             const { fromDateUTC, toDateUTC } = parseQueryDates(query);
-            console.log('toDateUTC: ', toDateUTC);
-            console.log('fromDateUTC: ', fromDateUTC);
             const starterList = query.parameter === "power" ? await getStarterRunTime(starterId, fromDateUTC, toDateUTC, motorId, powerState) : await getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId, motorState);
-            console.log('starterList: ', starterList);
             return sendResponse(c, 200, STARTER_RUNTIME_FETCHED, starterList);
         }
         catch (error) {

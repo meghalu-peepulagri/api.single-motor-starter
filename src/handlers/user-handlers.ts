@@ -108,7 +108,7 @@ export class UserHandlers {
         if (logs.length) await saveRecords<UserActivityLogsTable>(userActivityLogs, logs, trx);
       })
 
-      return sendResponse(c, 200, USER_UPDATED);
+      return sendResponse(c, 201, USER_UPDATED);
     } catch (error: any) {
       console.error("Error at update user details :", error);
       handleJsonParseError(error);

@@ -212,11 +212,10 @@ export async function trackDeviceRunTime(params) {
     });
 }
 export async function getMotorRunTime(starterId, fromDate, toDate, motorId, motorState) {
-    // const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
     const filters = [
         eq(motorsRunTime.starter_box_id, starterId),
-        gte(motorsRunTime.time_stamp, fromDate),
-        lte(motorsRunTime.time_stamp, toDate),
+        gte(motorsRunTime.start_time, new Date(fromDate)),
+        lte(motorsRunTime.end_time, new Date(toDate)),
     ];
     if (motorId) {
         filters.push(eq(motorsRunTime.motor_id, motorId));

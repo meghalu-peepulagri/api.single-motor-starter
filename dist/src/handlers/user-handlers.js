@@ -97,7 +97,7 @@ export class UserHandlers {
                 if (logs.length)
                     await saveRecords(userActivityLogs, logs, trx);
             });
-            return sendResponse(c, 200, USER_UPDATED);
+            return sendResponse(c, 201, USER_UPDATED);
         }
         catch (error) {
             console.error("Error at update user details :", error);
