@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import moment from "moment";
-import { GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED } from "../constants/app-constants.js";
+import { DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
@@ -163,15 +163,15 @@ export class StarterHandlers {
     try {
       const query = c.req.query();
       const starterId = +c.req.param("id");
-      const motorId = +c.req.param("motor_id");
+      const motorId = +query.motor_id
       paramsValidateException.validateId(starterId, "Device id");
-      paramsValidateException.validateId(motorId, "Motor id");
+      if (motorId) paramsValidateException.validateId(motorId, "Motor id");
 
       const parameter = query.parameter;
       const { fromDateUTC, toDateUTC } = parseQueryDates(query);
 
-      const starterList = await getStarterAnalytics(starterId, motorId, fromDateUTC, toDateUTC, parameter);
-      return sendResponse(c, 200, STARTER_LIST_FETCHED, starterList);
+      const starterList = await getStarterAnalytics(starterId, fromDateUTC, toDateUTC, parameter, motorId);
+      return sendResponse(c, 200, DEVICE_ANALYTICS_FETCHED, starterList);
     } catch (error: any) {
       console.error("Error at starter analytics :", error);
       throw error;

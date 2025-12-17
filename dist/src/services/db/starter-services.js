@@ -161,15 +161,22 @@ export async function replaceStarterWithTransaction(motor, starter, locationId) 
         await updateRecordByIdWithTrx(starterBoxes, starter.id, { location_id: locationId }, trx);
     });
 }
-export async function getStarterAnalytics(motorId, starterId, fromDate, toDate, parameter) {
+export async function getStarterAnalytics(starterId, fromDate, toDate, parameter, motorId) {
     const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
     const { selectedFieldsMain } = buildAnalyticsFilter(parameter);
     const startOfDayDate = new Date(startOfDayUTC);
     const endOfDayDate = new Date(endOfDayUTC);
+    const filters = [
+        eq(starterBoxParameters.starter_id, starterId),
+        gte(starterBoxParameters.time_stamp, startOfDayDate.toISOString()),
+        lte(starterBoxParameters.time_stamp, endOfDayDate.toISOString()),
+    ];
+    if (motorId)
+        filters.push(eq(starterBoxParameters.motor_id, +motorId));
     return await db
         .select(selectedFieldsMain)
         .from(starterBoxParameters)
-        .where(and(eq(starterBoxParameters.motor_id, motorId), eq(starterBoxParameters.starter_id, starterId), gte(starterBoxParameters.time_stamp, startOfDayDate.toISOString()), lte(starterBoxParameters.time_stamp, endOfDayDate.toISOString())))
+        .where(and(...filters))
         .orderBy(asc(starterBoxParameters.time_stamp));
 }
 ;

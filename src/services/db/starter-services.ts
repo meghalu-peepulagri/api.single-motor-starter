@@ -187,24 +187,25 @@ export async function replaceStarterWithTransaction(motor: Motor, starter: Start
   })
 }
 
-export async function getStarterAnalytics(motorId: number, starterId: number, fromDate: string, toDate: string, parameter: string) {
+export async function getStarterAnalytics(starterId: number, fromDate: string, toDate: string, parameter: string, motorId?: number | undefined) {
   const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
   const { selectedFieldsMain } = buildAnalyticsFilter(parameter);
 
   const startOfDayDate = new Date(startOfDayUTC);
   const endOfDayDate = new Date(endOfDayUTC);
 
+  const filters = [
+    eq(starterBoxParameters.starter_id, starterId),
+    gte(starterBoxParameters.time_stamp, startOfDayDate.toISOString()),
+    lte(starterBoxParameters.time_stamp, endOfDayDate.toISOString()),
+  ]
+
+  if (motorId) filters.push(eq(starterBoxParameters.motor_id, +motorId))
+
   return await db
     .select(selectedFieldsMain)
     .from(starterBoxParameters)
-    .where(
-      and(
-        eq(starterBoxParameters.motor_id, motorId),
-        eq(starterBoxParameters.starter_id, starterId),
-        gte(starterBoxParameters.time_stamp, startOfDayDate.toISOString()),
-        lte(starterBoxParameters.time_stamp, endOfDayDate.toISOString()),
-      ),
-    )
+    .where(and(...filters))
     .orderBy(asc(starterBoxParameters.time_stamp));
 };
 

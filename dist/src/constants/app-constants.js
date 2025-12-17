@@ -217,7 +217,8 @@ export const STARTER_ALREADY_ASSIGNED = "Starter already assigned";
 export const STARER_NOT_DEPLOYED = "Device not deployed yet";
 export const STARTER_LIST_FETCHED = "Device fetches successfully";
 export const STARTER_REPLACED_SUCCESSFULLY = "Device location updated successfully";
-export const STARTER_RUNTIME_FETCHED = "Run time fetched successfully";
+export const STARTER_RUNTIME_FETCHED = "Run time fetches successfully";
+export const DEVICE_ANALYTICS_FETCHED = "Device analytics fetches successfully";
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
