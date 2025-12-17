@@ -91,7 +91,7 @@ export function buildAnalyticsFilter(parameter) {
 export function extractPreviousData(previousData, motorId) {
     const power = previousData?.power ?? null;
     const motor = previousData?.motors?.find((m) => m.id === motorId) || {};
-    const prevState = motor.state ?? 0;
+    const prevState = motor.state;
     const prevMode = motor.mode ?? null;
     const locationId = motor.location_id ?? null;
     const created_by = motor.created_by ?? null;

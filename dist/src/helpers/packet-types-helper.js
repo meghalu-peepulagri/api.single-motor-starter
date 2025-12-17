@@ -85,7 +85,7 @@ export const signalQuality = (code) => {
     return "Invalid signal code";
 };
 export function getValidStrength(value) {
-    const isValid = value >= 2 && value <= 20;
+    const isValid = value >= 2 && value <= 30;
     return {
         strength: isValid ? value : 0,
         status: isValid ? "ACTIVE" : "INACTIVE",

@@ -94,7 +94,7 @@ export const signalQuality = (code: number) => {
 };
 
 export function getValidStrength(value: number) {
-  const isValid = value >= 2 && value <= 20;
+  const isValid = value >= 2 && value <= 30;
 
   return {
     strength: isValid ? value : 0,

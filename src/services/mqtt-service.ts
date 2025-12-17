@@ -7,7 +7,7 @@ import type { MqttClient } from "mqtt";
 
 import mqtt from "mqtt";
 import { findTopicACKByType } from "../helpers/packet-types-helper.js";
-import { motorControlAckHandler, motorModeChangeAckHandler, selectTopicAck } from "./db/mqtt-db-services.js";
+import { selectTopicAck } from "./db/mqtt-db-services.js";
 
 export class MqttService {
   private client: MqttClient | null = null;

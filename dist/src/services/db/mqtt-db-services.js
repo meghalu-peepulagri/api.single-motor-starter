@@ -74,79 +74,87 @@ export async function updateStates(insertedData, previousData) {
     });
 }
 export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, location_id, time_stamp } = insertedData;
-    const { power, prevState, prevMode } = extractPreviousData(previousData, motor_id);
+    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp } = insertedData;
+    const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
         if (power_present !== power) {
             await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-            await trackDeviceRunTime({ starter_id, motor_id, location_id: location_id, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
+            await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
         if (motor_state !== prevState || mode_description !== prevMode)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
         if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
+            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
         }
     });
 }
 export async function updateDevicePowerONAndMotorStateOFF(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, location_id, time_stamp } = insertedData;
-    const { power, prevState } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, locationId } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
         if (power_present !== power) {
             await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-            await trackDeviceRunTime({ starter_id, motor_id, location_id, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
+            await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
         if (motor_state !== prevState)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
         if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
+            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
         }
     });
 }
 export async function updateDevicePowerAndMotorStateOFF(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, location_id, time_stamp } = insertedData;
-    const { power, prevState, prevMode } = extractPreviousData(previousData, motor_id);
+    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp } = insertedData;
+    const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     await db.transaction(async (trx) => {
         if (power_present !== power) {
             await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-            await trackDeviceRunTime({ starter_id, motor_id, location_id, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
+            await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
         if (motor_state !== prevState || mode_description !== prevMode)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
         if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
+            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
         }
     });
 }
 // Motor control ack
 export async function motorControlAckHandler(message, topic) {
     try {
-        const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-        const { starter_id, motor_id, motor_state, mode_description, location_id } = validMac;
-        const { prevState } = extractPreviousData(validMac, validMac.motors[0].id);
-        if (!validMac?.id || !validMac.motors.length) {
-            console.error(`Any starter found with given MAC [${topic}]`);
-            return null;
+        const macAddress = topic.split("/")[1];
+        if (!macAddress) {
+            console.error("Invalid topic format: MAC address not found");
+            return;
         }
-        ;
-        const motorChanged = motor_id && (message.D !== prevState);
-        if (motorChanged) {
-            db.transaction(async (trx) => {
+        const validMac = await getStarterByMacWithMotor(macAddress);
+        if (!validMac?.id || !validMac.motors || validMac.motors.length === 0) {
+            console.error(`No starter found with MAC address [${macAddress}] or no motors attached`);
+            return;
+        }
+        const motor = validMac.motors[0];
+        const starter_id = validMac.id;
+        const motor_id = motor.id;
+        const location_id = motor.location_id;
+        const mode_description = motor.mode;
+        const prevState = motor.state;
+        const stateChanged = message.D !== prevState;
+        if (stateChanged) {
+            await db.transaction(async (trx) => {
                 await updateRecordByIdWithTrx(motors, motor_id, { state: message.D }, trx);
-                await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: motor_state, mode_description });
+                await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: message.D, mode_description });
             });
         }
     }
     catch (error) {
-        console.error("Error at motor control ack topic handler:", error);
+        console.error("Error in motor control ack handler:", error);
         throw error;
     }
 }
