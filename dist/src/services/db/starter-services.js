@@ -5,6 +5,7 @@ import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { users } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
@@ -39,6 +40,7 @@ export async function getStarterByMacWithMotor(mac) {
         },
         with: {
             motors: {
+                where: ne(motors.status, 'ARCHIVED'),
                 columns: {
                     id: true,
                     name: true,
@@ -69,9 +71,12 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             power: true,
             signal_quality: true,
             network_type: true,
-            user_id: true,
         },
         with: {
+            user: {
+                where: ne(users.status, "ARCHIVED"),
+                columns: { id: true, name: true },
+            },
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
                 columns: {

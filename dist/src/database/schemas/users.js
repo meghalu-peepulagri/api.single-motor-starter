@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, index, integer, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
 import { userActivityLogs } from "./user-activity-logs.js";
 import { fields } from "./fields.js";
@@ -12,7 +12,9 @@ export const users = pgTable("users", {
     password: varchar("password"),
     address: varchar("address"),
     status: statusEnum().default("ACTIVE"),
-    created_by: integer("created_by"),
+    created_by: integer("created_by").references(() => users.id).default(sql `NULL`),
+    referred_by: integer("referred_by").references(() => users.id).default(sql `NULL`),
+    notifications_enabled: jsonb("notifications_enabled").$type().default(sql `'[]'::jsonb`),
     user_verified: boolean("user_verified").default(false),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").defaultNow().default(sql `CURRENT_TIMESTAMP`),

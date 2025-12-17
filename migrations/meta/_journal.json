@@ -43,6 +43,13 @@
       "when": 1765868135093,
       "tag": "0005_mature_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1765955009850,
+      "tag": "0006_busy_khan",
+      "breakpoints": true
     }
   ]
 }

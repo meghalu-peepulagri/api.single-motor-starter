@@ -92,6 +92,7 @@ export const USER_ACTIVITIES = "User activities fetched successfully";
 export const USER_NOT_EXIST_WITH_PHONE = "User not registered with this number";
 export const USER_LOGIN = "Login successfully";
 export const USER_LOGOUT = "Logout successfully";
+export const REFEREED_BY_REQUIRED = "Refereed by is invalid";
 // Token
 export const TOKEN_REQUIRED = "Access token is required";
 export const TOKEN_EXPIRED = "Session is expired";

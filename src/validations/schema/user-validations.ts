@@ -1,5 +1,5 @@
-import { ADDRESS_STRING } from "../../constants/app-constants.js";
-import { emailValidator, nameValidator, otpValidator, passwordValidator, phoneValidator, userTypeValidator } from "./common-validations.js";
+import { ADDRESS_STRING, REFEREED_BY_REQUIRED } from "../../constants/app-constants.js";
+import { emailValidator, nameValidator, otpValidator, passwordValidator, phoneValidator, requiredNumberOptional, userTypeValidator } from "./common-validations.js";
 import * as v from "valibot";
 
 export const vSignUp = v.object({
@@ -10,6 +10,7 @@ export const vSignUp = v.object({
     address: v.optional(v.string(ADDRESS_STRING)),
     user_type: userTypeValidator,
     created_by: v.optional(v.number()),
+    referred_by: requiredNumberOptional(REFEREED_BY_REQUIRED)
 });
 
 export const vSignInEmail = v.object({

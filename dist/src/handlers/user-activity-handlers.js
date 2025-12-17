@@ -1,9 +1,9 @@
+import { USER_ACTIVITIES } from "../constants/app-constants.js";
 import { userActivityLogs } from "../database/schemas/user-activity-logs.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { getRecordsConditionally } from "../services/db/base-db-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { sendResponse } from "../utils/send-response.js";
-import { USER_ACTIVITIES } from "../constants/app-constants.js";
 const paramsValidateException = new ParamsValidateException();
 export class UserActivityHandlers {
     getUserActivities = async (c) => {

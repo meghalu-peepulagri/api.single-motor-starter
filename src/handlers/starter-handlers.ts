@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import type { Context } from "hono";
-import moment from "moment";
 import { DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
@@ -10,7 +9,7 @@ import type { User } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
-import { getUTCFromDateAndToDate, parseQueryDates } from "../helpers/dns-helpers.js";
+import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-hepler.js";
 import { getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
@@ -21,7 +20,6 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignStarter, validatedReplaceStarter } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {

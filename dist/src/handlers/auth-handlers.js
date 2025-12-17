@@ -15,7 +15,7 @@ import { prepareOTPData } from "../helpers/otp-helper.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
 import { OtpService } from "../services/db/otp-service.js";
 import { genJWTTokensForUser } from "../utils/jwt-utils.js";
-import { handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
+import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
@@ -27,8 +27,12 @@ export class AuthHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
-            const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("123456");
-            const userData = { ...validUserReq, password: hashedPassword, created_by: userPayload ? userPayload.id : null };
+            const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
+            let user_verified = false;
+            if (userPayload?.user_type === "ADMIN") {
+                user_verified = true;
+            }
+            const userData = { ...validUserReq, user_verified, password: hashedPassword, created_by: userPayload ? userPayload.id : validUserReq.created_by, notifications_enabled: ["STATE", "MODE", "ALERTS-FAULTS"] };
             await db.transaction(async (trx) => {
                 const createdUser = await saveSingleRecord(users, userData, trx);
                 if (!createdUser)
@@ -48,6 +52,7 @@ export class AuthHandlers {
             console.error("Error at register user :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
             console.error("Error at register user :", error);
             throw error;
         }
