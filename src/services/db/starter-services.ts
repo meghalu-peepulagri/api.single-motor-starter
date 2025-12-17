@@ -84,13 +84,14 @@ export async function paginatedStarterList(
       pcb_number: true,
       starter_number: true,
       power: true,
+      device_status: true,
       signal_quality: true,
       network_type: true,
     },
     with: {
       user: {
         where: ne(users.status, "ARCHIVED"),
-        columns: { id: true, name: true },
+        columns: { id: true, full_name: true },
       },
       motors: {
         where: ne(motors.status, "ARCHIVED"),
