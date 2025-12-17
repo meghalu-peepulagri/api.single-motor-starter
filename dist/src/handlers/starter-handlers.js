@@ -156,6 +156,14 @@ export class StarterHandlers {
             paramsValidateException.validateId(starterId, "Device id");
             if (motorId)
                 paramsValidateException.validateId(motorId, "Motor id");
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            if (motorId) {
+                const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+                if (!motor)
+                    throw new NotFoundException(MOTOR_NOT_FOUND);
+            }
             const parameter = query.parameter;
             const { fromDateUTC, toDateUTC } = parseQueryDates(query);
             const starterList = await getStarterAnalytics(starterId, fromDateUTC, toDateUTC, parameter, motorId);
