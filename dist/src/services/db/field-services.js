@@ -6,7 +6,7 @@ import { motors } from "../../database/schemas/motors.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
 import { getRecordsCount, saveRecords, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { bulkMotorsUpdate } from "./motor-service.js";
+import { bulkMotorsUpdate } from "./motor-services.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 export async function addFieldWithMotorTransaction(validData, userPayload) {

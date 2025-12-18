@@ -8,7 +8,7 @@ import { extractPreviousData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { trackDeviceRunTime, trackMotorRunTime } from "./motor-service.js";
+import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {

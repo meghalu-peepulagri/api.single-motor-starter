@@ -8,12 +8,13 @@ import { ParamsValidateException } from "../exceptions/paramsValidateException.j
 import { motorFilters } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { paginatedMotorsList } from "../services/db/motor-service.js";
+import { paginatedMotorsList } from "../services/db/motor-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { getMotorWithStarterDetails } from "../services/db/motor-starter-services.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -81,7 +82,9 @@ export class MotorHandlers {
 
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"], [...motorColumns]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
-      return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motor);
+
+      const motorWithStarterDetails = await getMotorWithStarterDetails(motor.id);
+      return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motorWithStarterDetails);
     } catch (error: any) {
       console.error("Error at get single motor :", error);
       throw error;

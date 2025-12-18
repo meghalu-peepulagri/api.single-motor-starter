@@ -9,7 +9,7 @@ import type { fieldInputType } from "../../types/app-types.js";
 import type { OrderByQueryData, WhereQueryDataWithOr } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
 import { getRecordsCount, saveRecords, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { bulkMotorsUpdate } from "./motor-service.js";
+import { bulkMotorsUpdate } from "./motor-services.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 

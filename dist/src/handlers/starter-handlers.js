@@ -11,7 +11,7 @@ import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-hepler.js";
 import { getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
-import { getMotorRunTime } from "../services/db/motor-service.js";
+import { getMotorRunTime } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, assignStarterWithTransaction, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
