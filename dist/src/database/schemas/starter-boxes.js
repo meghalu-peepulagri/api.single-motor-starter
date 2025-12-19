@@ -48,4 +48,8 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => 
     }),
     motors: many(motors),
     starterParameters: many(starterBoxParameters),
+    location: one(locations, {
+        fields: [starterBoxes.location_id],
+        references: [locations.id],
+    })
 }));

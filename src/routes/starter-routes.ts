@@ -17,6 +17,8 @@ starterRoutes.patch("/replace", isAuthorized, motorHandlers.replaceStarterLocati
 
 starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.deviceRunTime);
 starterRoutes.get("/:id/analytics", isAuthorized, motorHandlers.starterAnalytics);
+starterRoutes.patch("/:id/deploy-status", isAuthorized, motorHandlers.updateDeployStatus);
+starterRoutes.get("/:id/motors", isAuthorized, motorHandlers.starterConnectedMotors);
 
 starterRoutes.patch("/:id", isAuthorized, motorHandlers.deleteStarterBox);
 

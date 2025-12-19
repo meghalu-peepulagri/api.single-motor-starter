@@ -1,6 +1,7 @@
 import * as v from "valibot";
-import { DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, USER_ID_REQUIRED } from "../../constants/app-constants.js";
+import { DEPLOYED_STATUS, DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, USER_ID_REQUIRED } from "../../constants/app-constants.js";
 import { hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, requiredNumber, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
+const deviceStatusValidator = v.picklist(DEPLOYED_STATUS, "Invalid device status");
 
 export const vAddStarter = v.object({
   name: starterBoxTitleValidator,
@@ -31,7 +32,12 @@ export const vAssignStarterWeb = v.object({
   user_id: requiredNumber(USER_ID_REQUIRED)
 })
 
+export const vUpdateDeployedStatus = v.object({
+  deploy_status: deviceStatusValidator,
+})
+
 export type validatedAddStarter = v.InferOutput<typeof vAddStarter>;
 export type validatedAssignStarter = v.InferOutput<typeof vAssignStarter>;
 export type validatedReplaceStarter = v.InferOutput<typeof vReplaceStarter>;
 export type validatedAssignStarterWeb = v.InferOutput<typeof vAssignStarterWeb>;
+export type validatedUpdateDeployedStatus = v.InferOutput<typeof vUpdateDeployedStatus>;

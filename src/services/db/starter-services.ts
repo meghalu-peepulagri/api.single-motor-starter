@@ -251,3 +251,40 @@ export async function assignStarterWebWithTransaction(starterDetails: StarterBox
   })
 
 }
+export async function starterConnectedMotors(starterId: number) {
+  return await db.query.starterBoxes.findFirst({
+    where: and(
+      eq(starterBoxes.id, starterId),
+      ne(starterBoxes.status, "ARCHIVED")
+    ),
+    columns: {
+      id: true,
+      name: true,
+      mac_address: true,
+      pcb_number: true,
+      starter_number: true,
+      power: true,
+      signal_quality: true,
+      network_type: true,
+    },
+    with: {
+      motors: {
+        where: ne(motors.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          name: true,
+          hp: true,
+          state: true,
+          mode: true,
+        },
+      },
+      location: {
+        where: ne(locations.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  } as any);
+}

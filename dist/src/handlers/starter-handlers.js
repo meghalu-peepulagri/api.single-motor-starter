@@ -1,5 +1,5 @@
 import { eq, ne } from "drizzle-orm";
-import { DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways } from "../database/schemas/gateways.js";
 import { motors } from "../database/schemas/motors.js";
@@ -11,9 +11,9 @@ import { ParamsValidateException } from "../exceptions/paramsValidateException.j
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-hepler.js";
-import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getRecordsCount, getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -227,6 +227,46 @@ export class StarterHandlers {
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
             console.error("Error at assign starter web :", error);
+            throw error;
+        }
+    };
+    updateDeployStatus = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const reqData = await c.req.json();
+            const starterId = +c.req.param("id");
+            paramsValidateException.validateId(starterId, "Device id");
+            paramsValidateException.emptyBodyValidation(reqData);
+            const validatedReqData = await validatedRequest("update-deployed-status", reqData, STARTER_BOX_VALIDATION_CRITERIA);
+            const starterBox = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "device_status", "status"]);
+            if (!starterBox)
+                throw new BadRequestException(STARTER_BOX_NOT_FOUND);
+            await db.transaction(async (trx) => {
+                updateRecordByIdWithTrx(starterBoxes, starterBox.id, { device_status: validatedReqData.deploy_status }, trx);
+            });
+            return sendResponse(c, 201, DEPLOYED_STATUS_UPDATED);
+        }
+        catch (error) {
+            console.error("Error at update device status :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            console.error("Error at update device status :", error);
+            throw error;
+        }
+    };
+    starterConnectedMotors = async (c) => {
+        try {
+            const starterId = +c.req.param("id");
+            paramsValidateException.validateId(starterId, "Device id");
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            const connectedMotors = await starterConnectedMotors(starterId);
+            return sendResponse(c, 200, "Starter connected motors", connectedMotors);
+        }
+        catch (error) {
+            console.error("Error at starter connected motors :", error);
             throw error;
         }
     };

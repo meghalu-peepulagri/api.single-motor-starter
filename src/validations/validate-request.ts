@@ -2,13 +2,13 @@ import UnprocessableEntityException from "../exceptions/unprocessable-entity-exc
 
 import { safeParseAsync, type BaseSchema } from "valibot";
 import type { AppActivity, ValidatedRequest } from "../types/app-types.js";
+import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
-import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
-import { validationErrors } from "../utils/on-error.js";
-import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
-import { vAddStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter } from "./schema/starter-validations.js";
 import { vAddMotorSchedule } from "./schema/motor-schedule-validators.js";
+import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
+import { vAddStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus } from "./schema/starter-validations.js";
+import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,
@@ -24,6 +24,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "assign-starter": vAssignStarter,
   "replace-starter": vReplaceStarter,
   "assign-starter-web": vAssignStarterWeb,
+  "update-deployed-status": vUpdateDeployedStatus
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(

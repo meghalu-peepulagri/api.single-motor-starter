@@ -113,5 +113,4 @@ export class LocationHandlers {
       throw error;
     }
   }
-
 }
