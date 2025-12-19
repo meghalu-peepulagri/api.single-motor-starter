@@ -281,6 +281,7 @@ export async function starterConnectedMotors(starterId: number) {
           hp: true,
           state: true,
           mode: true,
+          alias_name: true,
         },
       },
       location: {
