@@ -1,18 +1,19 @@
-import { eq } from "drizzle-orm";
-import { DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED } from "../constants/app-constants.js";
+import { eq, ne } from "drizzle-orm";
+import { DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways } from "../database/schemas/gateways.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
+import { users } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-hepler.js";
-import { getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, assignStarterWithTransaction, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -51,7 +52,8 @@ export class StarterHandlers {
             const starterBox = await getSingleRecordByMultipleColumnValues(starterBoxes, ["pcb_number", "status"], ["LOWER", "!="], [validatedReqData.pcb_number.toLowerCase(), "ARCHIVED"], ["id", "device_status", "status"]);
             if (!starterBox)
                 throw new BadRequestException(STARTER_BOX_NOT_FOUND);
-            if (starterBox.device_status === "ASSIGNED")
+            const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
+            if (starterBox.device_status === "ASSIGNED" && motorCount > 0)
                 throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
             if (starterBox.device_status !== "DEPLOYED")
                 throw new BadRequestException(STARER_NOT_DEPLOYED);
@@ -197,6 +199,34 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at device run time :", error);
+            throw error;
+        }
+    };
+    assignStarterWeb = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const reqData = await c.req.json();
+            paramsValidateException.emptyBodyValidation(reqData);
+            const validatedReqData = await validatedRequest("assign-starter-web", reqData, STARTER_BOX_VALIDATION_CRITERIA);
+            const starterBox = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"], ["id", "device_status", "status"]);
+            if (!starterBox)
+                throw new BadRequestException(STARTER_BOX_NOT_FOUND);
+            const user = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [userPayload.id, "ARCHIVED"]);
+            if (!user)
+                throw new BadRequestException(USER_NOT_FOUND);
+            if (starterBox.device_status === "ASSIGNED")
+                throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
+            if (starterBox.device_status !== "DEPLOYED")
+                throw new BadRequestException(STARER_NOT_DEPLOYED);
+            await assignStarterWebWithTransaction(starterBox, validatedReqData, userPayload);
+            return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
+        }
+        catch (error) {
+            console.error("Error at assign starter web :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            console.error("Error at assign starter web :", error);
             throw error;
         }
     };

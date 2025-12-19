@@ -212,3 +212,8 @@ export async function getStarterRunTime(starterId, fromDate, toDate, motorId, po
         .where(and(...filters))
         .orderBy(asc(deviceRunTime.start_time));
 }
+export async function assignStarterWebWithTransaction(starterDetails, requestBody, User) {
+    return await db.transaction(async (trx) => {
+        await updateRecordByIdWithTrx(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED" }, trx);
+    });
+}

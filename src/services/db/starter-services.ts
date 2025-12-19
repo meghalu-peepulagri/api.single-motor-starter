@@ -5,7 +5,7 @@ import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { users, type User } from "../../database/schemas/users.js";
+import { users, type User, type UsersTable } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
@@ -243,4 +243,11 @@ export async function getStarterRunTime(starterId: number, fromDate: string, toD
     .from(deviceRunTime)
     .where(and(...filters))
     .orderBy(asc(deviceRunTime.start_time));
+}
+
+export async function assignStarterWebWithTransaction(starterDetails: StarterBox, requestBody: { user_id: number }, User: User) {
+  return await db.transaction(async (trx) => {
+    await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED" }, trx);
+  })
+
 }

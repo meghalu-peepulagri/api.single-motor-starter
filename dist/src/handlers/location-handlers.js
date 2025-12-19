@@ -21,7 +21,7 @@ export class LocationHandlers {
             const locationPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(locationPayload);
             const validLocationReq = await validatedRequest("add-location", locationPayload, LOCATION_VALIDATION_CRITERIA);
-            const newLocation = { ...validLocationReq, user_id: validLocationReq.user_id ? validLocationReq.user_id : userPayload.id, created_by: validLocationReq.user_id ? validLocationReq.user_id : userPayload.id };
+            const newLocation = { ...validLocationReq, user_id: validLocationReq.user_id ? validLocationReq.user_id : userPayload.id, created_by: userPayload.id };
             await saveSingleRecord(locations, newLocation);
             return sendResponse(c, 201, LOCATION_ADDED);
         }

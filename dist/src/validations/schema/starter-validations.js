@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import { DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED } from "../../constants/app-constants.js";
+import { DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, USER_ID_REQUIRED } from "../../constants/app-constants.js";
 import { hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, requiredNumber, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
 export const vAddStarter = v.object({
     name: starterBoxTitleValidator,
@@ -19,4 +19,8 @@ export const vReplaceStarter = v.object({
     starter_id: requiredNumber(DEVICE_ID_REQUIRED),
     motor_id: requiredNumber(MOTOR_ID_REQUIRED),
     location_id: requiredNumber(LOCATION_REQUIRED),
+});
+export const vAssignStarterWeb = v.object({
+    starter_id: requiredNumber(DEVICE_ID_REQUIRED),
+    user_id: requiredNumber(USER_ID_REQUIRED)
 });

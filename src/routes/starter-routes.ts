@@ -12,6 +12,7 @@ starterRoutes.get("/mobile", isAuthorized, motorHandlers.starterListMobile);
 starterRoutes.get("/web/all", isAuthorized, isAdmin, motorHandlers.starterListWeb);
 
 starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);
+starterRoutes.patch("/assign-web", isAuthorized, motorHandlers.assignStarterWeb);
 starterRoutes.patch("/replace", isAuthorized, motorHandlers.replaceStarterLocation);
 
 starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.deviceRunTime);

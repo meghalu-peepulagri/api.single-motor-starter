@@ -18,7 +18,6 @@ import { validatedRequest } from "../validations/validate-request.js";
 
 const paramsValidateException = new ParamsValidateException();
 
-
 export class LocationHandlers {
 
   addLocation = async (c: Context) => {
@@ -28,8 +27,7 @@ export class LocationHandlers {
       paramsValidateException.emptyBodyValidation(locationPayload);
 
       const validLocationReq = await validatedRequest<ValidatedAddLocation>("add-location", locationPayload, LOCATION_VALIDATION_CRITERIA);
-
-      const newLocation = { ...validLocationReq, user_id: validLocationReq.user_id ? validLocationReq.user_id : userPayload.id, created_by: validLocationReq.user_id ? validLocationReq.user_id : userPayload.id };
+      const newLocation = { ...validLocationReq, user_id: validLocationReq.user_id ? validLocationReq.user_id : userPayload.id, created_by: userPayload.id };
       await saveSingleRecord<LocationsTable>(locations, newLocation);
       return sendResponse(c, 201, LOCATION_ADDED);
     } catch (error: any) {
@@ -115,4 +113,5 @@ export class LocationHandlers {
       throw error;
     }
   }
+
 }
