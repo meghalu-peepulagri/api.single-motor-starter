@@ -3,7 +3,11 @@ import { parseTimestamp } from "./dns-helpers.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 
 export function prepareLiveDataPayload(validatedData: any, starterData: any) {
-  if (!validatedData || !validatedData.data) return null;
+  if (!validatedData || !validatedData.data || !starterData.motors.length) {
+    console.error('Invalid validatedData or starterData found with no motors attached with mac: ', starterData.mac);
+    return null;
+  };
+
 
   const data = validatedData.data;
 

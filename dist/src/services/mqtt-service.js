@@ -66,9 +66,6 @@ export class MqttService {
             }
             const parsedMessage = message;
             switch (true) {
-                case /^peepul\/[^/]+\/tele$/.test(topic):
-                    await liveDataHandler(topic, parsedMessage);
-                    break;
                 case /^peepul\/[^/]+\/status$/.test(topic):
                     const topicType = findTopicACKByType(parsedMessage);
                     await selectTopicAck(topicType, message, topic);

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, isNotNull, lte, ne, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -254,6 +254,35 @@ export async function starterConnectedMotors(starterId) {
                     name: true,
                 },
             },
+        },
+    });
+}
+export async function getStarterByMac(mac) {
+    return await db.query.starterBoxes.findFirst({
+        where: and(eq(starterBoxes.mac_address, mac.trim().toUpperCase()), ne(starterBoxes.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            name: true,
+            mac_address: true,
+            pcb_number: true,
+            starter_number: true,
+            power: true,
+            signal_quality: true,
+            network_type: true,
+        },
+    });
+}
+export async function findStarterByPcbOrStarterNumber(key) {
+    if (!key || typeof key !== "string") {
+        return null;
+    }
+    const searchTerm = key.trim().toUpperCase();
+    return await db.query.starterBoxes.findFirst({
+        where: and(or(eq(starterBoxes.pcb_number, searchTerm), eq(starterBoxes.starter_number, searchTerm)), ne(starterBoxes.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            status: true,
+            device_status: true,
         },
     });
 }

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, isNotNull, lte, ne, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -14,6 +14,7 @@ import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-t
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
+import type { AnyAaaaRecord } from "node:dns";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
@@ -24,7 +25,7 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
   })
 }
 
-export async function assignStarterWithTransaction(payload: AssignStarterType, userPayload: User, starterBoxPayload: StarterBox) {
+export async function assignStarterWithTransaction(payload: AssignStarterType, userPayload: User, starterBoxPayload: any) {
   return await db.transaction(async (trx) => {
     await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBoxPayload.id, {
       user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
@@ -293,4 +294,45 @@ export async function starterConnectedMotors(starterId: number) {
       },
     },
   } as any);
+}
+
+export async function getStarterByMac(mac: string) {
+  return await db.query.starterBoxes.findFirst({
+    where: and(
+      eq(starterBoxes.mac_address, mac.trim().toUpperCase()),
+      ne(starterBoxes.status, "ARCHIVED")
+    ),
+    columns: {
+      id: true,
+      name: true,
+      mac_address: true,
+      pcb_number: true,
+      starter_number: true,
+      power: true,
+      signal_quality: true,
+      network_type: true,
+    },
+  });
+}
+
+export async function findStarterByPcbOrStarterNumber(key: string) {
+  if (!key || typeof key !== "string") {
+    return null;
+  }
+
+  const searchTerm = key.trim().toUpperCase();
+  return await db.query.starterBoxes.findFirst({
+    where: and(
+      or(
+        eq(starterBoxes.pcb_number, searchTerm),
+        eq(starterBoxes.starter_number, searchTerm),
+      ),
+      ne(starterBoxes.status, "ARCHIVED")
+    ),
+    columns: {
+      id: true,
+      status: true,
+      device_status: true,
+    },
+  });
 }

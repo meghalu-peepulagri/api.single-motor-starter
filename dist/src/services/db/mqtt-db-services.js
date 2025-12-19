@@ -67,9 +67,10 @@ export async function updateStates(insertedData, previousData) {
         if (motorChanged) {
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
         }
-        if (motor_id && motor_state !== prevState) {
+        if (motor_id && motor_state !== prevState || power_present !== power) {
             await trackMotorRunTime({
-                starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp
+                starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp,
+                previous_power_state: power, new_power_state: power_present
             });
         }
         if (alert_code && fault)
@@ -89,8 +90,8 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         }
         if (motor_state !== prevState || mode_description !== prevMode)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
-        if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
+        if (motor_state !== prevState || power_present !== power) {
+            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
         }
     });
 }
@@ -107,8 +108,8 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
         }
         if (motor_state !== prevState)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
-        if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
+        if (motor_state !== prevState || power_present !== power) {
+            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
         }
     });
 }
@@ -124,8 +125,8 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         }
         if (motor_state !== prevState || mode_description !== prevMode)
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
-        if (motor_state !== prevState) {
-            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp });
+        if (motor_state !== prevState || power_present !== power) {
+            await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
         }
     });
 }

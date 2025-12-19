@@ -14,7 +14,7 @@ import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-hepler.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -56,7 +56,7 @@ export class StarterHandlers {
       paramsValidateException.emptyBodyValidation(reqData);
 
       const validatedReqData = await validatedRequest<validatedAssignStarter>("assign-starter", reqData, STARTER_BOX_VALIDATION_CRITERIA);
-      const starterBox = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["pcb_number", "status"], ["LOWER", "!="], [validatedReqData.pcb_number.toLowerCase(), "ARCHIVED"], ["id", "device_status", "status"]);
+      const starterBox = await findStarterByPcbOrStarterNumber(validatedReqData.pcb_number);
       if (!starterBox) throw new BadRequestException(STARTER_BOX_NOT_FOUND);
       const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
       if (starterBox.device_status === "ASSIGNED" && motorCount > 0) throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
