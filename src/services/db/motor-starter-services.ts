@@ -14,6 +14,7 @@ export async function getMotorWithStarterDetails(motorId: number) {
       state: true,
       mode: true,
       created_by: true,
+      alias_name: true,
     },
     with: {
       location: {

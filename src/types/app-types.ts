@@ -68,4 +68,5 @@ export interface AssignStarterType {
   motor_name: string;
   location_id: number;
   hp: number;
+  motor_id: number
 }

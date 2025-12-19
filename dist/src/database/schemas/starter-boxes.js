@@ -2,10 +2,10 @@ import { relations, sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum } from "../../constants/enum-types.js";
 import { gateways } from "./gateways.js";
+import { locations } from "./locations.js";
+import { motors } from "./motors.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { users } from "./users.js";
-import { motors } from "./motors.js";
-import { locations } from "./locations.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY ", "TEST"]);
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
 export const starterBoxes = pgTable("starter_boxes", {

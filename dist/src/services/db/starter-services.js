@@ -14,15 +14,18 @@ import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
-    await saveSingleRecord(starterBoxes, preparedStarerData);
+    await db.transaction(async (trx) => {
+        const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
+        await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+    });
 }
 export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload) {
     return await db.transaction(async (trx) => {
         await updateRecordByIdWithTrx(starterBoxes, starterBoxPayload.id, {
             user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
         }, trx);
-        await saveSingleRecord(motors, {
-            name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
+        await updateRecordByIdWithTrx(motors, payload.motor_id, {
+            alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
             location_id: payload.location_id, created_by: userPayload.id,
         }, trx);
     });
@@ -86,6 +89,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     hp: true,
                     state: true,
                     mode: true,
+                    alias_name: true,
                 },
                 with: {
                     location: {
@@ -144,6 +148,7 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
                     hp: true,
                     state: true,
                     mode: true,
+                    alias_name: true,
                 },
                 with: {
                     location: {

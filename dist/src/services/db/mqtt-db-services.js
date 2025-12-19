@@ -42,6 +42,9 @@ export async function selectTopicAck(topicType, payload, topic) {
         case "MODE_CHANGE_ACK":
             await motorModeChangeAckHandler(payload, topic);
             break;
+        case "LIVE_DATA_REQUEST_ACK":
+            await liveDataHandler(payload, topic);
+            break;
         case "HEART_BEAT":
             await heartbeatHandler(payload, topic);
             break;

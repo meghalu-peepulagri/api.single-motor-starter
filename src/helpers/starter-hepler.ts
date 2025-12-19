@@ -2,12 +2,17 @@ import { eq, ilike, ne, sql } from "drizzle-orm";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import type { User } from "../database/schemas/users.js";
 import type { starterBoxPayloadType } from "../types/app-types.js";
-import { deviceRunTime } from "../database/schemas/device-runtime.js";
 
 
 export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
-  return { ...starterBoxPayload, created_by: userPayload.id };
-}
+
+  const motorDetails = {
+    name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
+    hp: 2,
+  };
+
+  return { ...starterBoxPayload, created_by: userPayload.id, motorDetails }
+};
 
 export function starterFilters(query: any, user: any) {
   const filters: any[] = [];

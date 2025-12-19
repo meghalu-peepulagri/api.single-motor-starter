@@ -55,7 +55,7 @@ export class MotorHandlers {
 
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
-      await updateRecordById(motors, motorId, { ...validMotorReq, hp: validMotorReq.hp.toString() });
+      await updateRecordById(motors, motorId, { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() });
       return sendResponse(c, 200, MOTOR_UPDATED);
     } catch (error: any) {
       console.error("Error at update motor :", error);

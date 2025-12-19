@@ -69,6 +69,7 @@ export async function getLocationsList(whereQueryData: any, orderQueryData: Orde
           hp: true,
           state: true,
           mode: true,
+          alias_name: true,
         },
       },
     },

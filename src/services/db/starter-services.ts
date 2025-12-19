@@ -5,7 +5,7 @@ import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { users, type User, type UsersTable } from "../../database/schemas/users.js";
+import { users, type User } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
@@ -18,7 +18,10 @@ import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./ba
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
   const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload);
-  await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData);
+  await db.transaction(async (trx) => {
+    const starter = await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData, trx);
+    await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+  })
 }
 
 export async function assignStarterWithTransaction(payload: AssignStarterType, userPayload: User, starterBoxPayload: StarterBox) {
@@ -26,8 +29,8 @@ export async function assignStarterWithTransaction(payload: AssignStarterType, u
     await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBoxPayload.id, {
       user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
     }, trx);
-    await saveSingleRecord<MotorsTable>(motors, {
-      name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
+    await updateRecordByIdWithTrx<MotorsTable>(motors, payload.motor_id, {
+      alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
       location_id: payload.location_id, created_by: userPayload.id,
     }, trx);
   });
@@ -101,6 +104,7 @@ export async function paginatedStarterList(
           hp: true,
           state: true,
           mode: true,
+          alias_name: true,
         },
         with: {
           location: {
@@ -165,6 +169,7 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
           hp: true,
           state: true,
           mode: true,
+          alias_name: true,
         },
         with: {
           location: {

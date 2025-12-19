@@ -23,7 +23,6 @@ import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {
-
   addStarterBox = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");

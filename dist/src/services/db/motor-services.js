@@ -63,6 +63,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
             hp: true,
             mode: true,
             state: true,
+            alias_name: true,
         },
         with: {
             location: {

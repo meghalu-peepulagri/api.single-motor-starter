@@ -1,9 +1,13 @@
 import { eq, ilike, ne, sql } from "drizzle-orm";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
-import { deviceRunTime } from "../database/schemas/device-runtime.js";
 export function prepareStarterData(starterBoxPayload, userPayload) {
-    return { ...starterBoxPayload, created_by: userPayload.id };
+    const motorDetails = {
+        name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
+        hp: 2,
+    };
+    return { ...starterBoxPayload, created_by: userPayload.id, motorDetails };
 }
+;
 export function starterFilters(query, user) {
     const filters = [];
     filters.push(ne(starterBoxes.status, "ARCHIVED"));
