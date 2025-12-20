@@ -41,9 +41,6 @@ export function starterFilters(query, user) {
     if (query.device_status) {
         filters.push(eq(starterBoxes.device_status, query.device_status));
     }
-    if (user.user_type === "ADMIN") {
-        filters.push(ne(starterBoxes.user_id, user.id));
-    }
     if (user.user_type !== "ADMIN") {
         filters.push(eq(starterBoxes.user_id, user.id));
     }

@@ -6,7 +6,7 @@ import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { formatDuration, getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
+import { formatDuration } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
@@ -118,7 +118,6 @@ export async function trackMotorRunTime(params) {
     const now = time_stamp ? new Date(time_stamp) : new Date();
     const formattedDate = now.toISOString();
     return await db.transaction(async (trx) => {
-        // Find current open session
         const [openRecord] = await trx
             .select()
             .from(motorsRunTime)
@@ -127,11 +126,8 @@ export async function trackMotorRunTime(params) {
             .limit(1);
         // Detect changes
         const motorStateChanged = previous_state !== new_state;
-        const powerStateChanged = previous_power_state !== undefined &&
-            new_power_state !== undefined &&
-            previous_power_state !== new_power_state;
+        const powerStateChanged = previous_power_state !== undefined && new_power_state !== undefined && previous_power_state !== new_power_state;
         const anyChange = motorStateChanged || powerStateChanged;
-        // CASE 1: No open session → start new
         if (!openRecord) {
             await trx.insert(motorsRunTime).values({
                 motor_id,
@@ -150,10 +146,8 @@ export async function trackMotorRunTime(params) {
             });
             return;
         }
-        // CASE 2: Open session exists
         const totalDurationMs = now.getTime() - new Date(openRecord.start_time).getTime();
         const motorDurationFormatted = formatDuration(totalDurationMs);
-        // Safely calculate power duration only if power_start exists
         let powerDurationFormatted = null;
         if (openRecord.power_start) {
             const powerStartTime = new Date(openRecord.power_start);
@@ -198,7 +192,6 @@ export async function trackMotorRunTime(params) {
                 motor_state: new_state,
                 motor_mode: mode_description,
                 time_stamp: formattedDate,
-                // Only set power fields in new row if power changed
                 power_start: powerStateChanged ? formattedDate : null,
                 power_end: null,
                 power_state: powerStateChanged ? new_power_state : null,

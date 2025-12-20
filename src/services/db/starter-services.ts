@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, isNotNull, lte, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, ne, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -14,7 +14,6 @@ import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-t
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
-import type { AnyAaaaRecord } from "node:dns";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
@@ -26,14 +25,16 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
 }
 
 export async function assignStarterWithTransaction(payload: AssignStarterType, userPayload: User, starterBoxPayload: any) {
+  const motorDetails = {
+    alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
+    location_id: payload.location_id, created_by: userPayload.id,
+  }
   return await db.transaction(async (trx) => {
     await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBoxPayload.id, {
       user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
     }, trx);
-    await updateRecordByIdWithTrx<MotorsTable>(motors, payload.motor_id, {
-      alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
-      location_id: payload.location_id, created_by: userPayload.id,
-    }, trx);
+
+    await trx.update(motors).set({ ...motorDetails }).where(eq(motors.starter_id, starterBoxPayload.id));
   });
 }
 

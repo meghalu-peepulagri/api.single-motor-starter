@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, isNotNull, lte, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lte, ne, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -20,14 +20,15 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload) 
     });
 }
 export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload) {
+    const motorDetails = {
+        alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
+        location_id: payload.location_id, created_by: userPayload.id,
+    };
     return await db.transaction(async (trx) => {
         await updateRecordByIdWithTrx(starterBoxes, starterBoxPayload.id, {
             user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
         }, trx);
-        await updateRecordByIdWithTrx(motors, payload.motor_id, {
-            alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
-            location_id: payload.location_id, created_by: userPayload.id,
-        }, trx);
+        await trx.update(motors).set({ ...motorDetails }).where(eq(motors.starter_id, starterBoxPayload.id));
     });
 }
 export async function getStarterByMacWithMotor(mac) {

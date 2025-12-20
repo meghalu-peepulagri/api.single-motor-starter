@@ -28,8 +28,12 @@ export const UNIQUE_INDEX_MESSAGES = {
     "unique_location_per_user": "Location name already exist.",
     "unique_field_per_user_location": "Field name already exist.",
     "unique_motor_per_location": "Pump name already exist.",
+    "validate_mac_address": "MAC address already exist.",
+    "validate_pcb_number": "PCB number already exist.",
+    "valid_starter_box_name": "Starter box name already exist.",
+    "validate_starter_number": "Serial number already exist.",
 };
-export const FOREGIN_KEY_MESSAGES = {
+export const FOREIGN_KEY_MESSAGES = {
     "locations_user_id_users_id_fk": "User not found.",
     "users_created_by_users_id_fk": "User not found.",
     "fields_location_id_locations_id_fk": "Location not found.",

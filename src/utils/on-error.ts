@@ -2,10 +2,10 @@ import type { Context, ErrorHandler } from "hono";
 import type { ContentfulStatusCode, StatusCode } from "hono/utils/http-status";
 
 import type { BaseIssue } from "valibot";
+import { FOREIGN_KEY_MESSAGES, UNIQUE_INDEX_MESSAGES } from "../constants/app-constants.js";
 import { INTERNAL_SERVER_ERROR, OK } from "../constants/http-status-codes.js";
-import ConflictException from "../exceptions/conflict-exception.js";
-import { FOREGIN_KEY_MESSAGES, UNIQUE_INDEX_MESSAGES } from "../constants/app-constants.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 
 export function getValidationErrors(issues: BaseIssue<unknown>[] = []) {
   const errors: Record<string, string> = {};
@@ -87,7 +87,7 @@ export function handleForeignKeyViolationError(error: any) {
 
   if (pgError?.code === "23503") {
     const constraint = pgError.constraint ?? "";
-    const mappedMessage = FOREGIN_KEY_MESSAGES[constraint];
+    const mappedMessage = FOREIGN_KEY_MESSAGES[constraint];
     const [, field, value] = pgError.detail?.match(/\((.*?)\)=\((.*?)\)/) || [];
     const message = mappedMessage ? mappedMessage : field && value ? `Invalid foreign key: ${field} '${value}' does not exist.` : "Invalid foreign key value: Referenced record not found.";
     throw new BadRequestException(message);
