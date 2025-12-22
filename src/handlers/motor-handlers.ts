@@ -27,8 +27,6 @@ export class MotorHandlers {
       paramsValidateException.emptyBodyValidation(motorPayload);
       const validMotorReq = await validatedRequest<validatedAddMotor>("add-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
 
-      // const field = await getSingleRecordByMultipleColumnValues<FieldsTable>(fields, ["id", "status"], ["=", "!="], [validMotorReq.field_id, "ARCHIVED"]);
-      // if (!field) throw new NotFoundException(FIELD_NOT_FOUND);
       const preparedMotorPayload: any = {
         name: validMotorReq.name, created_by: userPayload.id, location_id: validMotorReq.location_id,
         hp: validMotorReq.hp.toString(),

@@ -1,4 +1,4 @@
-import { eq, ne } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { Context } from "hono";
 import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
@@ -12,7 +12,7 @@ import { ParamsValidateException } from "../exceptions/paramsValidateException.j
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-helper.js";
-import { getRecordsCount, getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
@@ -34,8 +34,8 @@ export class StarterHandlers {
       if (validStarterBoxReq.gateway_id) {
         const existedGateway = await getSingleRecordByMultipleColumnValues<GatewayTable>(gateways, ["id", "status"], ["=", "!="], [validStarterBoxReq.gateway_id, "ARCHIVED"]);
         if (!existedGateway) throw new BadRequestException(GATEWAY_NOT_FOUND);
-
       }
+
       await addStarterWithTransaction(validStarterBoxReq, userPayload);
       return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY);
     } catch (error: any) {
@@ -58,6 +58,7 @@ export class StarterHandlers {
       const validatedReqData = await validatedRequest<validatedAssignStarter>("assign-starter", reqData, STARTER_BOX_VALIDATION_CRITERIA);
       const starterBox = await findStarterByPcbOrStarterNumber(validatedReqData.pcb_number);
       if (!starterBox) throw new BadRequestException(STARTER_BOX_NOT_FOUND);
+
       const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
       if (starterBox.device_status === "ASSIGNED" && motorCount > 0) throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
       if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARER_NOT_DEPLOYED);
@@ -113,13 +114,17 @@ export class StarterHandlers {
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+      const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       let message = "";
 
       if (starter.starter_type === "SINGLE_STARTER") {
         await db.transaction(async (trx) => {
-          if (userPayload.user_type === "USER") await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
+          if (userPayload.user_type === "USER") {
+            await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
+            saveSingleRecord<MotorsTable>(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
+          }
           if (userPayload.user_type === "ADMIN") await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", status: "ARCHIVED", location_id: null }, trx);
-          await trx.update(motors).set({ status: "ARCHIVED" }).where(eq(motors.starter_id, starterId));
+          await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
         });
       }
       if (userPayload.user_type === "USER") {
