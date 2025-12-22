@@ -1,1 +1,0 @@
-ALTER TABLE "starter_parameters" RENAME COLUMN "power_factor" TO "power_present";

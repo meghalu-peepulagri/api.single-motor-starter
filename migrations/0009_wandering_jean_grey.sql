@@ -1,1 +1,0 @@
-ALTER TABLE "motors" ADD COLUMN "alias_name" varchar;

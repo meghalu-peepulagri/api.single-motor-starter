@@ -1,5 +1,5 @@
 {
-  "id": "4a7aa166-ffe6-47ce-ab4d-0d429dee2ed9",
+  "id": "a62409ab-c738-4a24-9f92-9441d926b7c6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -71,8 +71,8 @@
         }
       },
       "indexes": {
-        "alertsFaultsStarterMotorTimeDescIdx": {
-          "name": "alertsFaultsStarterMotorTimeDescIdx",
+        "alerts_faults_starter_motor_time_desc_idx": {
+          "name": "alerts_faults_starter_motor_time_desc_idx",
           "columns": [
             {
               "expression": "starter_id",
@@ -98,8 +98,8 @@
           "method": "btree",
           "with": {}
         },
-        "alertsFaultsFaultFilterIdx": {
-          "name": "alertsFaultsFaultFilterIdx",
+        "alerts_faults_fault_filter_idx": {
+          "name": "alerts_faults_fault_filter_idx",
           "columns": [
             {
               "expression": "fault_code",
@@ -115,13 +115,13 @@
             }
           ],
           "isUnique": false,
-          "where": "\"alerts_faults\".\"fault_code\" IS NOT NULL \n  AND \"alerts_faults\".\"fault_code\" <> 0\n  AND \"alerts_faults\".\"fault_description\" IS NOT NULL\n  AND \"alerts_faults\".\"fault_description\" NOT IN ('Unknown Fault','No Fault')\n",
+          "where": "\n      \"alerts_faults\".\"fault_code\" IS NOT NULL\n      AND \"alerts_faults\".\"fault_code\" <> 0\n      AND \"alerts_faults\".\"fault_description\" IS NOT NULL\n      AND \"alerts_faults\".\"fault_description\" NOT IN ('Unknown Fault', 'No Fault')\n    ",
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "alertsFaultsAlertFilterIdx": {
-          "name": "alertsFaultsAlertFilterIdx",
+        "alerts_faults_alert_filter_idx": {
+          "name": "alerts_faults_alert_filter_idx",
           "columns": [
             {
               "expression": "alert_code",
@@ -137,7 +137,7 @@
             }
           ],
           "isUnique": false,
-          "where": "\"alerts_faults\".\"alert_code\" IS NOT NULL \n  AND \"alerts_faults\".\"alert_code\" <> 0\n  AND \"alerts_faults\".\"alert_description\" IS NOT NULL\n  AND \"alerts_faults\".\"alert_description\" NOT IN ('Unknown Alert','No Alert')\n",
+          "where": "\n      \"alerts_faults\".\"alert_code\" IS NOT NULL\n      AND \"alerts_faults\".\"alert_code\" <> 0\n      AND \"alerts_faults\".\"alert_description\" IS NOT NULL\n      AND \"alerts_faults\".\"alert_description\" NOT IN ('Unknown Alert', 'No Alert')\n    ",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -176,6 +176,176 @@
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.device_run_time": {
+      "name": "device_run_time",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "motor_id": {
+          "name": "motor_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "starter_box_id": {
+          "name": "starter_box_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "start_time": {
+          "name": "start_time",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_time": {
+          "name": "end_time",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration": {
+          "name": "duration",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motor_state": {
+          "name": "motor_state",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motor_mode": {
+          "name": "motor_mode",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power_state": {
+          "name": "power_state",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "signal_strength": {
+          "name": "signal_strength",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "time_stamp": {
+          "name": "time_stamp",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "device_run_time_motor_id_idx": {
+          "name": "device_run_time_motor_id_idx",
+          "columns": [
+            {
+              "expression": "motor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "device_run_time_starter_box_id_idx": {
+          "name": "device_run_time_starter_box_id_idx",
+          "columns": [
+            {
+              "expression": "starter_box_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "device_run_time_motor_id_motors_id_fk": {
+          "name": "device_run_time_motor_id_motors_id_fk",
+          "tableFrom": "device_run_time",
+          "tableTo": "motors",
+          "columnsFrom": [
+            "motor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "device_run_time_starter_box_id_starter_boxes_id_fk": {
+          "name": "device_run_time_starter_box_id_starter_boxes_id_fk",
+          "tableFrom": "device_run_time",
+          "tableTo": "starter_boxes",
+          "columnsFrom": [
+            "starter_box_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "device_run_time_location_id_locations_id_fk": {
+          "name": "device_run_time_location_id_locations_id_fk",
+          "tableFrom": "device_run_time",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "location_id"
           ],
           "columnsTo": [
             "id"
@@ -236,8 +406,8 @@
         }
       },
       "indexes": {
-        "deviceTokenIdx": {
-          "name": "deviceTokenIdx",
+        "device_token_idx": {
+          "name": "device_token_idx",
           "columns": [
             {
               "expression": "device_token",
@@ -251,8 +421,8 @@
           "method": "btree",
           "with": {}
         },
-        "validDeviceTokenIdx": {
-          "name": "validDeviceTokenIdx",
+        "valid_device_token_idx": {
+          "name": "valid_device_token_idx",
           "columns": [
             {
               "expression": "device_token",
@@ -268,7 +438,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"device_tokens\".\"status\" != 'INACTIVE'",
+          "where": "\"device_tokens\".\"status\" <> 'INACTIVE'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -852,6 +1022,36 @@
           "primaryKey": false,
           "notNull": false
         },
+        "time_stamp": {
+          "name": "time_stamp",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power_start": {
+          "name": "power_start",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power_end": {
+          "name": "power_end",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power_state": {
+          "name": "power_state",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "power_duration": {
+          "name": "power_duration",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -868,8 +1068,8 @@
         }
       },
       "indexes": {
-        "motorIdxRunTime": {
-          "name": "motorIdxRunTime",
+        "motors_run_time_motor_id_idx": {
+          "name": "motors_run_time_motor_id_idx",
           "columns": [
             {
               "expression": "motor_id",
@@ -883,26 +1083,11 @@
           "method": "btree",
           "with": {}
         },
-        "starterBoxIdxRunTime": {
-          "name": "starterBoxIdxRunTime",
+        "motors_run_time_starter_box_id_idx": {
+          "name": "motors_run_time_starter_box_id_idx",
           "columns": [
             {
               "expression": "starter_box_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "pondIdxRunTime": {
-          "name": "pondIdxRunTime",
-          "columns": [
-            {
-              "expression": "location_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1047,8 +1232,8 @@
         }
       },
       "indexes": {
-        "motorScheduleMotorIdx": {
-          "name": "motorScheduleMotorIdx",
+        "motor_schedule_motor_id_idx": {
+          "name": "motor_schedule_motor_id_idx",
           "columns": [
             {
               "expression": "motor_id",
@@ -1062,8 +1247,8 @@
           "method": "btree",
           "with": {}
         },
-        "uniqueMotorSchedule": {
-          "name": "uniqueMotorSchedule",
+        "motor_schedule_unique_idx": {
+          "name": "motor_schedule_unique_idx",
           "columns": [
             {
               "expression": "motor_id",
@@ -1146,6 +1331,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "alias_name": {
+          "name": "alias_name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "hp": {
           "name": "hp",
           "type": "numeric(10, 2)",
@@ -1156,7 +1347,7 @@
           "name": "location_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "state": {
           "name": "state",
@@ -1177,7 +1368,7 @@
           "name": "created_by",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "starter_id": {
           "name": "starter_id",
@@ -1366,8 +1557,8 @@
         }
       },
       "indexes": {
-        "otpPhoneIdx": {
-          "name": "otpPhoneIdx",
+        "otp_phone_idx": {
+          "name": "otp_phone_idx",
           "columns": [
             {
               "expression": "phone",
@@ -1564,6 +1755,51 @@
           "columns": [
             {
               "expression": "device_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "starter_box_pcb_number_idx": {
+          "name": "starter_box_pcb_number_idx",
+          "columns": [
+            {
+              "expression": "pcb_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "starter_box_mac_address_idx": {
+          "name": "starter_box_mac_address_idx",
+          "columns": [
+            {
+              "expression": "mac_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "starter_box_starter_number_idx": {
+          "name": "starter_box_starter_number_idx",
+          "columns": [
+            {
+              "expression": "starter_number",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1778,8 +2014,8 @@
           "notNull": true,
           "default": 0
         },
-        "power_factor": {
-          "name": "power_factor",
+        "power_present": {
+          "name": "power_present",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
@@ -1925,6 +2161,42 @@
         "starter_params_starter_id_idx": {
           "name": "starter_params_starter_id_idx",
           "columns": [
+            {
+              "expression": "starter_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "starter_params_motor_id_idx": {
+          "name": "starter_params_motor_id_idx",
+          "columns": [
+            {
+              "expression": "motor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "starter_params_starter_motor_idx": {
+          "name": "starter_params_starter_motor_idx",
+          "columns": [
+            {
+              "expression": "motor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
             {
               "expression": "starter_id",
               "isExpression": false,
@@ -2170,7 +2442,22 @@
           "name": "created_by",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "default": "NULL"
+        },
+        "referred_by": {
+          "name": "referred_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "NULL"
+        },
+        "notifications_enabled": {
+          "name": "notifications_enabled",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'[]'::jsonb"
         },
         "user_verified": {
           "name": "user_verified",
@@ -2293,7 +2580,34 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "users_created_by_users_id_fk": {
+          "name": "users_created_by_users_id_fk",
+          "tableFrom": "users",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "users_referred_by_users_id_fk": {
+          "name": "users_referred_by_users_id_fk",
+          "tableFrom": "users",
+          "tableTo": "users",
+          "columnsFrom": [
+            "referred_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
