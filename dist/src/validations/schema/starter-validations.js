@@ -28,3 +28,7 @@ export const vAssignStarterWeb = v.object({
 export const vUpdateDeployedStatus = v.object({
     deploy_status: deviceStatusValidator,
 });
+export const vAssignLocationToStarter = v.object({
+    location_id: requiredNumber(LOCATION_REQUIRED),
+    starter_id: requiredNumber(DEVICE_ID_REQUIRED),
+});

@@ -13,12 +13,15 @@ starterRoutes.get("/web/all", isAuthorized, isAdmin, motorHandlers.starterListWe
 
 starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);
 starterRoutes.patch("/assign-web", isAuthorized, motorHandlers.assignStarterWeb);
+starterRoutes.patch("/assign-location", isAuthorized, motorHandlers.assignLocationToStarter);
 starterRoutes.patch("/replace", isAuthorized, motorHandlers.replaceStarterLocation);
 
-starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.deviceRunTime);
+starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.starterRunTime);
 starterRoutes.get("/:id/analytics", isAuthorized, motorHandlers.starterAnalytics);
-starterRoutes.patch("/:id/deploy-status", isAuthorized, motorHandlers.updateDeployStatus);
 starterRoutes.get("/:id/motors", isAuthorized, motorHandlers.starterConnectedMotors);
+starterRoutes.patch("/:id/deploy-status", isAuthorized, motorHandlers.updateDeployStatus);
+starterRoutes.patch("/:id/details", isAuthorized, motorHandlers.updateStarterDetails);
+
 starterRoutes.patch("/:id", isAuthorized, motorHandlers.deleteStarterBox);
 
 

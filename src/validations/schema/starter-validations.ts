@@ -36,8 +36,14 @@ export const vUpdateDeployedStatus = v.object({
   deploy_status: deviceStatusValidator,
 })
 
+export const vAssignLocationToStarter = v.object({
+  location_id: requiredNumber(LOCATION_REQUIRED),
+  starter_id: requiredNumber(DEVICE_ID_REQUIRED),
+});
+
 export type validatedAddStarter = v.InferOutput<typeof vAddStarter>;
 export type validatedAssignStarter = v.InferOutput<typeof vAssignStarter>;
 export type validatedReplaceStarter = v.InferOutput<typeof vReplaceStarter>;
 export type validatedAssignStarterWeb = v.InferOutput<typeof vAssignStarterWeb>;
 export type validatedUpdateDeployedStatus = v.InferOutput<typeof vUpdateDeployedStatus>;
+export type validatedAssignLocationToStarter = v.InferOutput<typeof vAssignLocationToStarter>;

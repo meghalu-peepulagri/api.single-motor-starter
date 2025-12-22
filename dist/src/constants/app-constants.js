@@ -226,6 +226,10 @@ export const STARTER_RUNTIME_FETCHED = "Run time fetches successfully";
 export const DEVICE_ANALYTICS_FETCHED = "Device analytics fetches successfully";
 export const DEPLOYED_STATUS = ["READY", "DEPLOYED", "TEST", "ASSIGNED"];
 export const DEPLOYED_STATUS_UPDATED = "Deployed status updated successfully";
+export const STARTER_CONNECTED_MOTORS_FETCHED = "Device connected motors fetched successfully";
+export const LOCATION_ASSIGNED = "Location assigned successfully";
+export const LOCATION_ID_REQUIRED = "Location is required";
+export const STARTER_DETAILS_UPDATED = "Device details updated successfully";
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
