@@ -6,7 +6,7 @@ import { users } from "./users.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { locations } from "./locations.js";
 export const modeEnum = pgEnum("mode_enum", ["MANUAL", "AUTO"]);
-// 0 = AUTO, 1 = MANUAL
+// 1 = MANUAL, 0 = AUTO
 export const motors = pgTable("motors", {
     id: serial("id").primaryKey(),
     name: varchar("name").notNull(),

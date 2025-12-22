@@ -163,6 +163,6 @@ export {
   passwordValidator, phoneValidator,
   userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator,
   aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator,
-   starterNumberValidator
+  starterNumberValidator
 };
 

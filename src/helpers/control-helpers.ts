@@ -1,23 +1,25 @@
 export function lastOn(code: number) {
   switch (code) {
-    case 0: return "AUTO";
-    case 1: return "MANUAL";
+    case 0: return "MANUAL";
+    case 1: return "AUTO";
     default: return "Unknown";
   }
 }
 
 export function lastOff(code: number) {
   switch (code) {
-    case 0: return "AUTO";
-    case 1: return "MANUAL";
+    case 0: return "MANUAL";
+    case 1: return "AUTO";
+    case 2: return "Power Off";
+    case 3: return "Fault";
     default: return "Unknown";
   }
 }
 
 export function controlMode(code: number) {
   switch (code) {
-    case 0: return "AUTO";
-    case 1: return "MANUAL";
+    case 0: return "MANUAL";
+    case 1: return "AUTO";
     default: return "Unknown";
   }
 }
@@ -38,11 +40,11 @@ const faultCodes = {
   "0x10": "Frequent Start Fault",
   "0x20": "Phase Failure Fault",
   "0x40": "Low Voltage Fault",
-  "0x80": "Over Voltage Fault",
+  "0x80": "High Voltage Fault",
   "0x100": "Voltage Imbalance Fault",
   "0x200": "Phase Reversal Fault",
   "0x400": "Frequency deviation Fault",
-  "0x800": "Over Temperature Fault",
+  "0x1000": "Output phase Fault",
 };
 // 4095 get all codes
 const alertCodes = {
@@ -53,11 +55,11 @@ const alertCodes = {
   "0x10": "Frequent Start Alert",
   "0x20": "Phase Failure Alert",
   "0x40": "Low Voltage Alert",
-  "0x80": "Over Voltage Alert",
+  "0x80": "High Voltage Alert",
   "0x100": "Voltage Imbalance Alert",
   "0x200": "Phase Reversal Alert",
   "0x400": "Frequency deviation Alert",
-  "0x800": "Over Temperature Alert",
+  "0x1000": "Output phase Alert",
 };
 
 export function getFaultDescription(faultCode: number) {
