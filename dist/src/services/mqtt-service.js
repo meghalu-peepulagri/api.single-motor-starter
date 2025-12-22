@@ -1,5 +1,4 @@
 import mqttConfig from "../config/mqtt-config.js";
-import { liveDataHandler } from "../helpers/mqtt-helpers.js";
 const { clientId, brokerUrl, username, password } = mqttConfig;
 import mqtt from "mqtt";
 import { findTopicACKByType } from "../helpers/packet-types-helper.js";
@@ -38,7 +37,7 @@ export class MqttService {
         });
         this.client.on("connect", () => {
             this.subscribe([
-                "peepul/+/tele", "peepul/+/status"
+                "peepul/+/status"
             ]);
         });
         this.client.on("error", (error) => {

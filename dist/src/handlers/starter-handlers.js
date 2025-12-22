@@ -10,7 +10,7 @@ import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { starterFilters } from "../helpers/starter-hepler.js";
+import { starterFilters } from "../helpers/starter-helper.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
@@ -109,7 +109,10 @@ export class StarterHandlers {
             let message = "";
             if (starter.starter_type === "SINGLE_STARTER") {
                 await db.transaction(async (trx) => {
-                    await updateRecordByIdWithTrx(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
+                    if (userPayload.user_type === "USER")
+                        await updateRecordByIdWithTrx(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
+                    if (userPayload.user_type === "ADMIN")
+                        await updateRecordByIdWithTrx(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", status: "ARCHIVED", location_id: null }, trx);
                     await trx.update(motors).set({ status: "ARCHIVED" }).where(eq(motors.starter_id, starterId));
                 });
             }

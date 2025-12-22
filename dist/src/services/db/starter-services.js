@@ -9,7 +9,7 @@ import { users } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
-import { prepareStarterData } from "../../helpers/starter-hepler.js";
+import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {

@@ -9,7 +9,7 @@ import { users, type User } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
-import { prepareStarterData } from "../../helpers/starter-hepler.js";
+import { prepareStarterData } from "../../helpers/starter-helper.js";
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";

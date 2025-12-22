@@ -1,5 +1,4 @@
 import mqttConfig from "../config/mqtt-config.js";
-import { liveDataHandler } from "../helpers/mqtt-helpers.js";
 
 const { clientId, brokerUrl, username, password } = mqttConfig;
 
@@ -49,7 +48,7 @@ export class MqttService {
 
     this.client.on("connect", () => {
       this.subscribe([
-        "peepul/+/tele", "peepul/+/status"
+        "peepul/+/status"
       ]);
     });
 
