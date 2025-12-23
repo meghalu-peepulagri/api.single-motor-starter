@@ -68,3 +68,12 @@ export function parseQueryDates(query: any) {
   };
 }
 
+export const parseDurationToSeconds = (duration: string): number => {
+  if (!duration) return 0;
+
+  const match = duration.match(/(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*sec/);
+  if (!match) return 0;
+
+  const [, h, m, s] = match.map(Number);
+  return h * 3600 + m * 60 + s;
+};

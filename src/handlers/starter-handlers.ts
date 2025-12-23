@@ -1,6 +1,6 @@
 import { and, eq, ne } from "drizzle-orm";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LOCATION_ASSIGNED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LOCATION_ASSIGNED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
@@ -13,8 +13,8 @@ import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-helper.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
-import { getMotorRunTime } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { getMotorRunTime, updateMotorStateByStarterIds } from "../services/db/motor-services.js";
+import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors, updateStarterStatus } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -329,4 +329,19 @@ export class StarterHandlers {
       throw error;
     }
   }
+
+
+  markStarterStatus = async (c: Context) => {
+    try {
+      const timeStamp = new Date(new Date().getTime() - 5 * 60 * 1000); // 5 minutes below
+      const uniqueStarterData = await getUniqueStarterIdsWithInTime(timeStamp);
+      const updatedStarterStatus = await updateStarterStatus(uniqueStarterData);
+      updateMotorStateByStarterIds(updatedStarterStatus);
+      return sendResponse(c, 200, STARTER_BOX_STATUS_UPDATED);
+    }
+    catch (error: any) {
+      console.error("Error at mark starter inactive:", error.message);
+      throw error;
+    }
+  };
 }

@@ -230,6 +230,7 @@ export const STARTER_CONNECTED_MOTORS_FETCHED = "Device connected Pumps fetched 
 export const LOCATION_ASSIGNED = "Location assigned successfully";
 export const LOCATION_ID_REQUIRED = "Location is required";
 export const STARTER_DETAILS_UPDATED = "Device details updated successfully";
+export const STARTER_BOX_STATUS_UPDATED = "Device status updated successfully";
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";

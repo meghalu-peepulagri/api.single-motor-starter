@@ -1,9 +1,13 @@
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { ALREADY_SCHEDULED_EXISTS } from "../constants/app-constants.js";
+import { motorsRunTime } from "../database/schemas/motor-runtime.js";
 import type { MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import type { arrayOfMotorInputType } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
+import db from "../database/configuration.js";
+import { formatDuration } from "./dns-helpers.js";
 
 
 
@@ -146,6 +150,13 @@ export async function checkMotorScheduleConflict(validatedReqData: any, existing
   }
 }
 
+export const parseDurationToSeconds = (duration: string): number => {
+  if (!duration) return 0;
 
+  const match = duration.match(/(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*sec/);
+  if (!match) return 0;
 
+  const [, h, m, s] = match.map(Number);
+  return h * 3600 + m * 60 + s;
+};
 

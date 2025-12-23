@@ -15,6 +15,7 @@ starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);
 starterRoutes.patch("/assign-web", isAuthorized, motorHandlers.assignStarterWeb);
 starterRoutes.patch("/assign-location", isAuthorized, motorHandlers.assignLocationToStarter);
 starterRoutes.patch("/replace", isAuthorized, motorHandlers.replaceStarterLocation);
+starterRoutes.patch("/update-status", motorHandlers.markStarterStatus);
 
 starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.starterRunTime);
 starterRoutes.get("/:id/analytics", isAuthorized, motorHandlers.starterAnalytics);

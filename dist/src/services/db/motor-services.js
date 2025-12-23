@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, isNull, lte, ne, SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -293,3 +293,8 @@ export async function getMotorRunTime(starterId, fromDate, toDate, motorId, moto
         }
     });
 }
+export async function updateMotorStateByStarterIds(starterIds) {
+    await db.update(motors).set({ status: "INACTIVE" }).where(and(inArray(motors.starter_id, starterIds.inactiveStarterIds), (ne(motors.status, "ARCHIVED"))));
+    await db.update(motors).set({ status: "ACTIVE" }).where(and(inArray(motors.starter_id, starterIds.activeStarterIds), ne(motors.status, "ARCHIVED")));
+}
+;

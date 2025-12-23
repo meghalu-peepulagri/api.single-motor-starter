@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, isNull, lte, ne, SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -6,7 +6,7 @@ import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { formatDuration } from "../../helpers/dns-helpers.js";
+import { formatDuration, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
@@ -364,7 +364,7 @@ export async function getMotorRunTime(starterId: number, fromDate: string, toDat
     filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
   }
 
-  return await db.query.motorsRunTime.findMany({
+  const records = await db.query.motorsRunTime.findMany({
     where: and(...filters),
     orderBy: asc(motorsRunTime.time_stamp),
     columns: {
@@ -380,4 +380,42 @@ export async function getMotorRunTime(starterId: number, fromDate: string, toDat
       power_state: true,
     }
   });
+
+  const totalRunTime = await getMotorTotalRunOnTime(starterId, fromDate, toDate, motorId);
+  return {
+    total_run_on_time: totalRunTime.total_run_on_time,
+    records,
+  };
+}
+
+export async function updateMotorStateByStarterIds(starterIds: any) {
+  await db.update(motors).set({ status: "INACTIVE" }).where(and(inArray(motors.starter_id, starterIds.inactiveStarterIds), (ne(motors.status, "ARCHIVED"))));
+  await db.update(motors).set({ status: "ACTIVE" }).where(and(inArray(motors.starter_id, starterIds.activeStarterIds), ne(motors.status, "ARCHIVED")));
+};
+
+export async function getMotorTotalRunOnTime(starterId: number, fromDate: string, toDate: string, motorId?: number) {
+  const fromDateObj = new Date(fromDate);
+  const toDateObj = new Date(toDate).toISOString();
+
+  const records = await db.query.motorsRunTime.findMany({
+    where: and(
+      eq(motorsRunTime.starter_box_id, starterId),
+      gte(motorsRunTime.start_time, fromDateObj),
+      lte(motorsRunTime.time_stamp, toDateObj),
+      eq(motorsRunTime.motor_state, 1),
+      motorId ? eq(motorsRunTime.motor_id, motorId) : undefined
+    ),
+    columns: {
+      duration: true,
+    },
+  });
+
+  const totalSeconds = records.reduce(
+    (sum, record) => sum + (record.duration ? parseDurationToSeconds(record.duration) : 0),
+    0
+  );
+
+  return {
+    total_run_on_time: formatDuration(totalSeconds * 1000),
+  };
 }
