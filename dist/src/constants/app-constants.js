@@ -32,6 +32,7 @@ export const UNIQUE_INDEX_MESSAGES = {
     "validate_pcb_number": "PCB number already exist.",
     "valid_starter_box_name": "Name already exist.",
     "validate_starter_number": "Serial number already exist.",
+    "unique_motor_alias_name_per_location": "Pump name already exist.",
 };
 export const FOREIGN_KEY_MESSAGES = {
     "locations_user_id_users_id_fk": "User not found.",
