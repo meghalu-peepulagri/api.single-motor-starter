@@ -1,7 +1,10 @@
-import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { updateRecordByIdWithTrx } from "./base-db-services.js";
+import { locations, type LocationsTable } from "../../database/schemas/locations.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 
 export async function getMotorWithStarterDetails(motorId: number) {
   if (!motorId) return null;

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import type { Context } from "hono";
 import { LOCATION_ADDED, LOCATION_DELETED, LOCATION_NOT_FOUND, LOCATION_VALIDATION_CRITERIA, LOCATIONS_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
@@ -8,13 +8,14 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { locationFilters } from "../helpers/location-helpers.js";
-import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getLocationsList, locationDropDown } from "../services/db/location-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -102,13 +103,19 @@ export class LocationHandlers {
       const foundedLocation = await getSingleRecordByMultipleColumnValues<LocationsTable>(locations, ["id", "status"], ["=", "!="], [locationId, "ARCHIVED"]);
       if (!foundedLocation) throw new NotFoundException(LOCATION_NOT_FOUND);
 
+      const connectedStartersCount = await getRecordsCount(starterBoxes, [eq(starterBoxes.location_id, locationId), ne(starterBoxes.status, "ARCHIVED")]);
+      if (connectedStartersCount > 0) {
+        throw new BadRequestException("Location has connected pumps. Cannot delete.");
+      }
+
       await db.transaction(async (trx) => {
         await updateRecordByIdWithTrx<LocationsTable>(locations, locationId, { status: "ARCHIVED" });
-        await trx.update(motors).set({ status: "ARCHIVED" }).where(eq(motors.location_id, locationId));
-        await trx.update(starterBoxes).set({ location_id: null, device_status: "DEPLOYED", user_id: null }).where(eq(starterBoxes.location_id, locationId));
       })
       return sendResponse(c, 200, LOCATION_DELETED);
     } catch (error: any) {
+      console.error("Error at delete location :", error);
+      handleJsonParseError(error);
+      handleForeignKeyViolationError(error);
       console.error("Error at delete location :", error);
       throw error;
     }

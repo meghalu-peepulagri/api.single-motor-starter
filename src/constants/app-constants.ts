@@ -36,7 +36,6 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "valid_starter_box_name": "Name already exist.",
   "validate_starter_number": "Serial number already exist.",
   "unique_motor_alias_name_per_location": "Pump name already exist.",
-
 };
 
 export const FOREIGN_KEY_MESSAGES: Record<string, string> = {
