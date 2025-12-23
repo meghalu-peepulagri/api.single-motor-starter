@@ -30,7 +30,7 @@ export const UNIQUE_INDEX_MESSAGES = {
     "unique_motor_per_location": "Pump name already exist.",
     "validate_mac_address": "MAC address already exist.",
     "validate_pcb_number": "PCB number already exist.",
-    "valid_starter_box_name": "Starter box name already exist.",
+    "valid_starter_box_name": "Name already exist.",
     "validate_starter_number": "Serial number already exist.",
 };
 export const FOREIGN_KEY_MESSAGES = {
@@ -208,14 +208,14 @@ export const DEVICE_MIN_LEN = "Name has min 3 characters";
 export const SERIAL_NO_MIN_LEN = "MCU Serial Number has min 3 characters";
 export const MCU_MIN_LEN = "MCU Number has min 3 characters";
 export const PCB_MIN_LEN = "PCB Number has min 3 characters";
-export const STARTER_NUMBER_MIN_LEN = "SERIAL Number has min 3 characters";
+export const STARTER_NUMBER_MIN_LEN = "Serial Number has min 3 characters";
 export const DEVICE_NAME_STARTS_LETTER = "Name starts with Character";
 export const MAC_STRING = "MAC address must be a string";
 export const MAC_REQUIRED = "MAC Address is required";
 export const MAC_MIN_LEN = "MAC Address has min 3 characters";
 export const SERIAL_NO_REQUIRED = "MCU Serial Number is required";
 export const PCB_NUMBER_REQUIRED = "PCB Number is required";
-export const STARTER_NUMBER_REQUIRED = "SERIAL Number is required";
+export const STARTER_NUMBER_REQUIRED = "Serial Number is required";
 export const SMALL_LETTERS_NOT_ALLOWED = "Small characters not allowed";
 export const STARTER_ASSIGNED_SUCCESSFULLY = "Device assigned successfully";
 export const STARTER_ALREADY_ASSIGNED = "Device already assigned";

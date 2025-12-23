@@ -6,7 +6,7 @@ import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { formatDuration } from "../../helpers/dns-helpers.js";
+import { formatDuration, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
@@ -276,7 +276,7 @@ export async function getMotorRunTime(starterId, fromDate, toDate, motorId, moto
         const motorStateNumber = motorState === "OFF" ? 0 : 1;
         filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
     }
-    return await db.query.motorsRunTime.findMany({
+    const records = await db.query.motorsRunTime.findMany({
         where: and(...filters),
         orderBy: asc(motorsRunTime.time_stamp),
         columns: {
@@ -292,9 +292,28 @@ export async function getMotorRunTime(starterId, fromDate, toDate, motorId, moto
             power_state: true,
         }
     });
+    const totalRunTime = await getMotorTotalRunOnTime(starterId, fromDate, toDate, motorId);
+    return {
+        total_run_on_time: totalRunTime.total_run_on_time,
+        records,
+    };
 }
 export async function updateMotorStateByStarterIds(starterIds) {
     await db.update(motors).set({ status: "INACTIVE" }).where(and(inArray(motors.starter_id, starterIds.inactiveStarterIds), (ne(motors.status, "ARCHIVED"))));
     await db.update(motors).set({ status: "ACTIVE" }).where(and(inArray(motors.starter_id, starterIds.activeStarterIds), ne(motors.status, "ARCHIVED")));
 }
 ;
+export async function getMotorTotalRunOnTime(starterId, fromDate, toDate, motorId) {
+    const fromDateObj = new Date(fromDate);
+    const toDateObj = new Date(toDate).toISOString();
+    const records = await db.query.motorsRunTime.findMany({
+        where: and(eq(motorsRunTime.starter_box_id, starterId), gte(motorsRunTime.start_time, fromDateObj), lte(motorsRunTime.time_stamp, toDateObj), eq(motorsRunTime.motor_state, 1), motorId ? eq(motorsRunTime.motor_id, motorId) : undefined),
+        columns: {
+            duration: true,
+        },
+    });
+    const totalSeconds = records.reduce((sum, record) => sum + (record.duration ? parseDurationToSeconds(record.duration) : 0), 0);
+    return {
+        total_run_on_time: formatDuration(totalSeconds * 1000),
+    };
+}
