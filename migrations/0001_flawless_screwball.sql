@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "unique_motor_alias_name_per_location" ON "motors" USING btree (lower("alias_name"),"location_id") WHERE "motors"."status" != 'ARCHIVED';

@@ -24,8 +24,6 @@ export const motors = pgTable("motors", {
 }, (table: any) => [
   index("motor_user_id_idx").on(table.created_by),
   index("motor_idx").on(table.id),
-  uniqueIndex("unique_motor_per_location").on(sql`lower(${table.name})`, table.location_id).where(sql`${table.status} != 'ARCHIVED'`),
-  uniqueIndex("unique_motor_alias_name_per_location").on(sql`lower(${table.alias_name})`, table.location_id).where(sql`${table.status} != 'ARCHIVED'`),
 ]);
 
 export type Motor = typeof motors.$inferSelect;

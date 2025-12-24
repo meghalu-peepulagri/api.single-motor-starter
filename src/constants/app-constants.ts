@@ -30,7 +30,6 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "unique_phone_idx": "Phone number already exist.",
   "unique_location_per_user": "Location name already exist.",
   "unique_field_per_user_location": "Field name already exist.",
-  "unique_motor_per_location": "Pump name already exist.",
   "validate_mac_address": "MAC address already exist.",
   "validate_pcb_number": "PCB number already exist.",
   "valid_starter_box_name": "Name already exist.",
@@ -192,6 +191,7 @@ export const HP_MAX = "HP should be max 30";
 export const SIMILAR_MOTOR_TITLE_NOT_ALLOWED = "Duplicate pump titles are not allowed";
 export const MOTOR_ID_REQUIRED = "Pump is required";
 export const MOTOR_DETAILS_FETCHED = "Pump details fetched successfully";
+export const MOTOR_NAME_EXISTED = "Pump name already exist";
 
 
 // Starter Box

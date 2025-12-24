@@ -1,5 +1,5 @@
 {
-  "id": "a62409ab-c738-4a24-9f92-9441d926b7c6",
+  "id": "444b1afe-bd9c-4abc-ba94-949b34cee64f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1429,28 +1429,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "unique_motor_per_location": {
-          "name": "unique_motor_per_location",
-          "columns": [
-            {
-              "expression": "lower(\"name\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "location_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"motors\".\"status\" != 'ARCHIVED'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1653,7 +1631,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'TEST'"
+          "default": "'READY'"
         },
         "gateway_id": {
           "name": "gateway_id",
@@ -2661,7 +2639,7 @@
       "values": [
         "ASSIGNED",
         "DEPLOYED",
-        "READY ",
+        "READY",
         "TEST"
       ]
     },

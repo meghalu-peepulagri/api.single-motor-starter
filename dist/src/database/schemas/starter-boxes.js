@@ -6,7 +6,7 @@ import { locations } from "./locations.js";
 import { motors } from "./motors.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { users } from "./users.js";
-export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY ", "TEST"]);
+export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY", "TEST"]);
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
 export const starterBoxes = pgTable("starter_boxes", {
     id: serial("id").primaryKey(),
@@ -19,7 +19,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     power: integer("power").notNull().default(0),
     user_id: integer("user_id").references(() => users.id),
     created_by: integer("created_by").notNull().references(() => users.id),
-    device_status: deviceStatusEnum().notNull().default("TEST"),
+    device_status: deviceStatusEnum().notNull().default("READY"),
     gateway_id: integer("gateway_id").references(() => gateways.id),
     location_id: integer("location_id").references(() => locations.id),
     signal_quality: integer("signal_quality").notNull().default(0),
