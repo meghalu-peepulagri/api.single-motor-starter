@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lte, ne, notInArray, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -142,7 +142,7 @@ export async function paginatedStarterList(
   };
 }
 
-export async function paginatedStarterListForMobile(WhereQueryData: any, orderByQueryData: OrderByQueryData<StarterBoxTable>,
+export async function paginatedStarterListForMobile(WhereQueryData: any,orderByQueryData: OrderByQueryData<StarterBoxTable>,
   pageParams: { page: number; pageSize: number; offset: number }
 ) {
   const whereQuery = WhereQueryData?.length ? and(...WhereQueryData) : undefined;
@@ -164,7 +164,7 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
     },
     with: {
       motors: {
-        where: ne(motors.status, "ARCHIVED"),
+        where: ne(motors.status, "ARCHIVED"), 
         columns: {
           id: true,
           name: true,
@@ -191,6 +191,7 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
     records: starterList,
   };
 }
+
 
 export async function replaceStarterWithTransaction(motor: Motor, starter: StarterBox, locationId: number) {
   return await db.transaction(async (trx) => {
