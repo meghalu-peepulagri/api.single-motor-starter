@@ -16,6 +16,7 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -56,7 +57,7 @@ export class MotorHandlers {
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
 
       const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
-      if (existedMotor) throw new BadRequestException(MOTOR_NAME_EXISTED);
+      if (existedMotor) throw new ConflictException(MOTOR_NAME_EXISTED);
       await updateRecordById(motors, motorId, { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() });
       return sendResponse(c, 200, MOTOR_UPDATED);
     } catch (error: any) {

@@ -18,6 +18,7 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBox = async (c) => {
@@ -54,7 +55,7 @@ export class StarterHandlers {
                 throw new BadRequestException(STARTER_BOX_NOT_FOUND);
             const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["location_id", "alias_name", "status"], ["=", "=", "!="], [validatedReqData.location_id, validatedReqData.motor_name, "ARCHIVED"]);
             if (existedMotor)
-                throw new BadRequestException(MOTOR_NAME_EXISTED);
+                throw new ConflictException(MOTOR_NAME_EXISTED);
             const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
             if (starterBox.device_status === "ASSIGNED" && motorCount > 0)
                 throw new BadRequestException(STARTER_ALREADY_ASSIGNED);

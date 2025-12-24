@@ -14,6 +14,7 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorHandlers {
     addMotor = async (c) => {
@@ -49,7 +50,7 @@ export class MotorHandlers {
                 throw new NotFoundException(MOTOR_NOT_FOUND);
             const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
             if (existedMotor)
-                throw new BadRequestException(MOTOR_NAME_EXISTED);
+                throw new ConflictException(MOTOR_NAME_EXISTED);
             await updateRecordById(motors, motorId, { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() });
             return sendResponse(c, 200, MOTOR_UPDATED);
         }

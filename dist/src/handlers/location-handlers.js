@@ -95,7 +95,7 @@ export class LocationHandlers {
                 throw new NotFoundException(LOCATION_NOT_FOUND);
             const connectedStartersCount = await getRecordsCount(starterBoxes, [eq(starterBoxes.location_id, locationId), ne(starterBoxes.status, "ARCHIVED")]);
             if (connectedStartersCount > 0) {
-                throw new BadRequestException("Location has connected pumps. Cannot delete.");
+                throw new BadRequestException("Location has connected devices. Cannot delete.");
             }
             await db.transaction(async (trx) => {
                 await updateRecordByIdWithTrx(locations, locationId, { status: "ARCHIVED" });

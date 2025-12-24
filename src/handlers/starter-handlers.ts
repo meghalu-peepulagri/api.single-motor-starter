@@ -20,6 +20,7 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {
@@ -60,7 +61,7 @@ export class StarterHandlers {
       if (!starterBox) throw new BadRequestException(STARTER_BOX_NOT_FOUND);
 
       const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["location_id", "alias_name", "status"], ["=", "=", "!="], [validatedReqData.location_id, validatedReqData.motor_name, "ARCHIVED"]);
-      if (existedMotor) throw new BadRequestException(MOTOR_NAME_EXISTED);
+      if (existedMotor) throw new ConflictException(MOTOR_NAME_EXISTED);
 
       const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
       if (starterBox.device_status === "ASSIGNED" && motorCount > 0) throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
