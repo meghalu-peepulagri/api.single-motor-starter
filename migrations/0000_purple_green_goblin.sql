@@ -292,6 +292,7 @@ CREATE INDEX IF NOT EXISTS "motor_schedule_motor_id_idx" ON "motor_schedules" US
 CREATE UNIQUE INDEX IF NOT EXISTS "motor_schedule_unique_idx" ON "motor_schedules" USING btree ("motor_id","schedule_type","start_time","end_time");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "motor_user_id_idx" ON "motors" USING btree ("created_by");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "motor_idx" ON "motors" USING btree ("id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "motor_alias_name_idx" ON "motors" USING btree ("alias_name");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "otp_phone_idx" ON "otps" USING btree ("phone");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "starter_box_id_idx" ON "starter_boxes" USING btree ("id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "starter_box_user_id_idx" ON "starter_boxes" USING btree ("user_id");--> statement-breakpoint
@@ -300,6 +301,8 @@ CREATE INDEX IF NOT EXISTS "starter_box_device_status_idx" ON "starter_boxes" US
 CREATE INDEX IF NOT EXISTS "starter_box_pcb_number_idx" ON "starter_boxes" USING btree ("pcb_number");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "starter_box_mac_address_idx" ON "starter_boxes" USING btree ("mac_address");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "starter_box_starter_number_idx" ON "starter_boxes" USING btree ("starter_number");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "starter_box_location_id_idx" ON "starter_boxes" USING btree ("location_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "starter_box_power_idx" ON "starter_boxes" USING btree ("power");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "valid_starter_box_name" ON "starter_boxes" USING btree (lower("name")) WHERE "starter_boxes"."status" != 'ARCHIVED';--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "validate_mac_address" ON "starter_boxes" USING btree (lower("mac_address")) WHERE "starter_boxes"."status" != 'ARCHIVED';--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "validate_pcb_number" ON "starter_boxes" USING btree (lower("pcb_number")) WHERE "starter_boxes"."status" != 'ARCHIVED';--> statement-breakpoint

@@ -1,5 +1,5 @@
 {
-  "id": "444b1afe-bd9c-4abc-ba94-949b34cee64f",
+  "id": "7406d989-f0f7-4c15-b874-d7978346418f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1429,6 +1429,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "motor_alias_name_idx": {
+          "name": "motor_alias_name_idx",
+          "columns": [
+            {
+              "expression": "alias_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1778,6 +1793,36 @@
           "columns": [
             {
               "expression": "starter_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "starter_box_location_id_idx": {
+          "name": "starter_box_location_id_idx",
+          "columns": [
+            {
+              "expression": "location_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "starter_box_power_idx": {
+          "name": "starter_box_power_idx",
+          "columns": [
+            {
+              "expression": "power",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

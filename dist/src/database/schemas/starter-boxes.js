@@ -35,6 +35,8 @@ export const starterBoxes = pgTable("starter_boxes", {
     index("starter_box_pcb_number_idx").on(table.pcb_number),
     index("starter_box_mac_address_idx").on(table.mac_address),
     index("starter_box_starter_number_idx").on(table.starter_number),
+    index("starter_box_location_id_idx").on(table.location_id),
+    index("starter_box_power_idx").on(table.power),
     uniqueIndex("valid_starter_box_name").on(sql `lower(${table.name})`).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("validate_mac_address").on(sql `lower(${table.mac_address})`).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("validate_pcb_number").on(sql `lower(${table.pcb_number})`).where(sql `${table.status} != 'ARCHIVED'`),
