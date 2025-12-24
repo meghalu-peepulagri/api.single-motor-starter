@@ -15,7 +15,6 @@ export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, use
   return { ...starterBoxPayload, created_by: userPayload.id, motorDetails }
 };
 
-// starterFilters.ts
 export function starterFilters(query: any, user: any) {
   const filters: any[] = [];
 
@@ -52,8 +51,10 @@ export function starterFilters(query: any, user: any) {
   if (query.status) filters.push(eq(starterBoxes.status, query.status));
   if (query.location_id) filters.push(eq(starterBoxes.location_id, query.location_id));
   if (query.power) {
-    const power = query.power === "ON" ? 1 : 0;
-    filters.push(eq(starterBoxes.power, power));
+    const powerValue = query.power === "ON" ? 1 : query.power === "OFF" ? 0 : undefined;
+    if (powerValue !== undefined) {
+      filters.push(eq(starterBoxes.power, powerValue));
+    }
   }
   if (query.device_status) filters.push(eq(starterBoxes.device_status, query.device_status));
   if (query.user_id) filters.push(eq(starterBoxes.user_id, query.user_id));

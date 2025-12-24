@@ -15,6 +15,7 @@ import UnprocessableEntityException from "../exceptions/unprocessable-entity-exc
 import { prepareOTPData } from "../helpers/otp-helper.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
 import { OtpService } from "../services/db/otp-service.js";
+import { SmsService } from "../services/sms/sms-service.js";
 import { genJWTTokensForUser } from "../utils/jwt-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -23,23 +24,35 @@ import { validatedRequest } from "../validations/validate-request.js";
 
 const paramsValidateException = new ParamsValidateException();
 const otpService = new OtpService();
+const smsService = new SmsService();
 
 export class AuthHandlers {
     userRegisterHandlers = async (c: Context) => {
         try {
             const userPayload = c.get("user_payload");
             const reqBody = await c.req.json();
+
             paramsValidateException.emptyBodyValidation(reqBody);
+
             const validUserReq = await validatedRequest<ValidatedSignUpUser>("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
 
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
-            let user_verified = false;
-            if (userPayload?.user_type === "ADMIN") {
-                user_verified = true;
-            }
-            const userData: NewUser = { ...validUserReq, user_verified, password: hashedPassword, created_by: userPayload ? userPayload.id : validUserReq.created_by, notifications_enabled: ["STATE", "MODE", "ALERTS-FAULTS"] };
+
+            const isAdmin = userPayload?.user_type === "ADMIN";
+            const user_verified = isAdmin ? true : false;
+
+            const userData: NewUser = {
+                ...validUserReq,
+                password: hashedPassword,
+                user_verified,
+                created_by: userPayload ? userPayload.id : null,
+                notifications_enabled: ["STATE", "MODE", "ALERTS-FAULTS"],
+            };
+
+            let createdUser: any;
+
             await db.transaction(async (trx) => {
-                const createdUser = await saveSingleRecord<UsersTable>(users, userData, trx);
+                createdUser = await saveSingleRecord<UsersTable>(users, userData, trx);
                 if (!createdUser) return;
 
                 const logData: NewUserActivityLog = {
@@ -49,18 +62,26 @@ export class AuthHandlers {
                     old_data: null,
                     new_data: null,
                 };
+
                 await saveSingleRecord(userActivityLogs, logData, trx);
             });
+
+            if (!userPayload && createdUser) {
+                const phone = createdUser.phone;
+                const otpData = prepareOTPData(createdUser, phone, "REGISTERED");
+                await otpService.createOTP(otpData);
+                // await smsService.sendSms(phone, otpData.otp);
+            }
+
             return sendResponse(c, CREATED, USER_CREATED);
         } catch (error: any) {
             console.error("Error at register user :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
-            console.error("Error at register user :", error);
             throw error;
         }
-    }
+    };
 
     signInWithEmailHandlers = async (c: Context) => {
         try {
@@ -98,7 +119,7 @@ export class AuthHandlers {
 
             const otpData = prepareOTPData(loginUser, validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
-            // await smsSendingServiceProvider.sendSms(validReqData.output.phone, otpData.otp, validReqData.output.signature_id);
+            // await smsService.sendSms(validatedPhone.phone, otpData.otp);
             return sendResponse(c, CREATED, OTP_SENT);
         } catch (error: any) {
             console.error("Error at sign in with phone :", error);

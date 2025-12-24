@@ -9,7 +9,6 @@ export function prepareStarterData(starterBoxPayload, userPayload) {
     return { ...starterBoxPayload, created_by: userPayload.id, motorDetails };
 }
 ;
-// starterFilters.ts
 export function starterFilters(query, user) {
     const filters = [];
     filters.push(ne(starterBoxes.status, "ARCHIVED"));
@@ -41,8 +40,10 @@ export function starterFilters(query, user) {
     if (query.location_id)
         filters.push(eq(starterBoxes.location_id, query.location_id));
     if (query.power) {
-        const power = query.power === "ON" ? 1 : 0;
-        filters.push(eq(starterBoxes.power, power));
+        const powerValue = query.power === "ON" ? 1 : query.power === "OFF" ? 0 : undefined;
+        if (powerValue !== undefined) {
+            filters.push(eq(starterBoxes.power, powerValue));
+        }
     }
     if (query.device_status)
         filters.push(eq(starterBoxes.device_status, query.device_status));

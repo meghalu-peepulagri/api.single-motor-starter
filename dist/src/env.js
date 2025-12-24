@@ -14,6 +14,8 @@ const VEnvSchema = object({
     EMQX_USERNAME: string(),
     EMQX_PASSWORD: string(),
     EMQX_CLIENT_ID: string(),
+    MSG91_SMS_API_KEY: string(),
+    MSG91_SMS_TEMPLATE_ID: string(),
 });
 let envData;
 try {
