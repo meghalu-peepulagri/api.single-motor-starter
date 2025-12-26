@@ -24,7 +24,7 @@ export const SERVICE_UP = "Service is up and running";
 // Unique constraint messages
 export const UNIQUE_INDEX_MESSAGES = {
     "unique_mail_idx": "Email already exist.",
-    "unique_phone_idx": "Phone number already exist.",
+    "unique_phone_idx": "Mobile number already exist.",
     "unique_location_per_user": "Location name already exist.",
     "unique_field_per_user_location": "Field name already exist.",
     "validate_mac_address": "MAC address already exist.",
