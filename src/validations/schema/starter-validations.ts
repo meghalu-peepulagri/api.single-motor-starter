@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { DEPLOYED_STATUS, DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, USER_ID_REQUIRED } from "../../constants/app-constants.js";
-import { hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, requiredNumber, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
+import { hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, pcbOrSerialNumberValidator, requiredNumber, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
 const deviceStatusValidator = v.picklist(DEPLOYED_STATUS, "Invalid device status");
 
 export const vAddStarter = v.object({
@@ -15,7 +15,7 @@ export const vAddStarter = v.object({
 });
 
 export const vAssignStarter = v.object({
-  pcb_number: pcbNumberValidator,
+  pcb_number: pcbOrSerialNumberValidator,
   motor_name: motorNameValidator,
   location_id: requiredNumber(LOCATION_REQUIRED),
   hp: hpValidator,
