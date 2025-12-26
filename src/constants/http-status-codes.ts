@@ -58,4 +58,4 @@ export const UNAVAILABLE_FOR_LEGAL_REASONS = 451;
 export const UNPROCESSABLE_ENTITY = 422;
 export const UNSUPPORTED_MEDIA_TYPE = 415;
 export const USE_PROXY = 305;
-export const MISDIRECTED_REQUEST = 421;
+export const MISDIRECTED_REQUEST = 421

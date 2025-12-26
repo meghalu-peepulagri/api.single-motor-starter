@@ -1,0 +1,29 @@
+import factory from "../factory.js";
+import { StarterHandlers } from "../handlers/starter-handlers.js";
+import { isAdmin } from "../middlewares/guards/guardUser.js";
+import { isAuthorized } from "../middlewares/isAuthorized.js";
+
+const motorHandlers = new StarterHandlers();
+const starterRoutes = factory.createApp();
+
+starterRoutes.post("/", isAuthorized, motorHandlers.addStarterBox);
+
+starterRoutes.get("/mobile", isAuthorized, motorHandlers.starterListMobile);
+starterRoutes.get("/web/all", isAuthorized, isAdmin, motorHandlers.starterListWeb);
+
+starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);
+starterRoutes.patch("/assign-web", isAuthorized, motorHandlers.assignStarterWeb);
+starterRoutes.patch("/assign-location", isAuthorized, motorHandlers.assignLocationToStarter);
+starterRoutes.patch("/replace", isAuthorized, motorHandlers.replaceStarterLocation);
+starterRoutes.patch("/update-status", motorHandlers.markStarterStatus);
+
+starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.starterRunTime);
+starterRoutes.get("/:id/analytics", isAuthorized, motorHandlers.starterAnalytics);
+starterRoutes.get("/:id/motors", isAuthorized, motorHandlers.starterConnectedMotors);
+starterRoutes.patch("/:id/deploy-status", isAuthorized, motorHandlers.updateDeployStatus);
+starterRoutes.patch("/:id/details", isAuthorized, motorHandlers.updateStarterDetails);
+
+starterRoutes.patch("/:id", isAuthorized, motorHandlers.deleteStarterBox);
+
+
+export default starterRoutes;

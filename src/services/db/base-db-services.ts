@@ -1,10 +1,12 @@
 import type { SQL } from "drizzle-orm";
 import { and, asc, count, desc, eq, getTableName, inArray, sql } from "drizzle-orm";
-import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData } from "../../types/db-types.js";
+import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED } from "../../constants/app-constants.js";
+import db from "../../database/configuration.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
+import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData } from "../../types/db-types.js";
 import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
-import { db } from "../../database/configuration.js";
-import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED, EMPTY_DB_DATA } from "../../constants/app-constants.js";
+import type { PgTableWithColumns } from "drizzle-orm/pg-core";
+import BadRequestException from "../../exceptions/bad-request-exception.js";
 
 async function getRecordById<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, id: number, columnsToSelect?: any): Promise<DBRecord<T> | Pick<DBRecord<T>, C> | null> {
   const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
@@ -200,29 +202,17 @@ async function getSingleRecordByMultipleColumnValues<T extends DBTable, C extend
   return results[0] as DBRecord<T>;
 }
 
-async function saveRecord<T extends DBTable>( table: T,record: DBNewRecord<T>): Promise<DBRecord<T>> {
-  if (!record) {
-    throw new UnprocessableEntityException(EMPTY_DB_DATA);
-  }
 
-  const result = await db.insert(table).values(record).returning();
-
-  if (!Array.isArray(result) || result.length === 0) {
-    throw new UnprocessableEntityException(DB_SAVE_DATA_FAILED);
-  }
-
-  return result[0] as DBRecord<T>;
+async function saveSingleRecord<T extends DBTable>(table: T, record: DBNewRecord<T>, trx?: any) {
+  const query = trx ? trx.insert(table).values(record).returning() : db.insert(table).values(record as any).returning();
+  const recordSaved = await query;
+  return recordSaved[0] as T;
 }
 
-async function saveRecords<T extends DBTable>( table: T, records: DBNewRecord<T>[]): Promise<DBRecord<T>[]> {
-  if (!records) {
-    throw new UnprocessableEntityException(EMPTY_DB_DATA);
-  }
-  const result = await db.insert(table).values(records).returning();
-  if (!Array.isArray(result) || result.length === 0) {
-    throw new UnprocessableEntityException(DB_SAVE_DATA_FAILED);
-  }
-  return result as DBRecord<T>[];
+async function saveRecords<T extends DBTable>(table: T, records: DBNewRecord<T>[], trx?: any) {
+  const query = trx ? trx.insert(table).values(records).returning() : db.insert(table).values(records as any).returning();
+  const recordsSaved = await query;
+  return recordsSaved as T[];
 }
 
 async function updateRecordById<T extends DBTable>(table: T, id: number, record: UpdateRecordData<T>): Promise<DBRecord<T>> {
@@ -281,6 +271,22 @@ async function softDeleteRecordById<T extends DBTable>(table: T, id: number, rec
   return result;
 }
 
+
+
+async function updateRecordByIdWithTrx<T extends DBTable>(table: T, id: number, record: UpdateRecordData<T>, trx?: any) {
+  const dataWithTimeStamps = { ...record };
+
+  const queryBuilder = trx || db;
+
+  const [updatedRecord] = await queryBuilder
+    .update(table)
+    .set(dataWithTimeStamps)
+    .where(eq(table.id, id))
+    .returning();
+
+  return updatedRecord as T;
+}
+
 async function exportData(table: DBTable, projection?: any, filters?: any) {
   const initialQuery = db.select(projection).from(table);
   let finalQuery;
@@ -336,7 +342,7 @@ async function updateRecordByColumnValue<T extends DBTable>(table: T, column: st
   return await db.update(table).set(dataWithTimeStamps as any).where(eq(columnInfo, value));
 }
 
-async function updateRecordByMultipleColumnValues<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, columns: C[], relations: Relations [], values: any[], record: UpdateRecordData<T>, id?: number): Promise<DBRecord<T>> {
+async function updateRecordByMultipleColumnValues<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, columns: C[], relations: Relations[], values: any[], record: UpdateRecordData<T>, id?: number): Promise<DBRecord<T>> {
   const whereQueryData: WhereQueryData<T> = {
     columns,
     relations,
@@ -365,6 +371,27 @@ async function updateMultipleRecordsByIds<T extends DBTable>(table: DBTable, ids
   return updatedRecords.length;
 }
 
+export function getTableColumnsWithDefaults<T extends DBTable>(table: T, defaultCols: string[], extraCols: string[] = []): string[] {
+
+  const tableColumns = Object.keys(table).filter((key) => {
+    const col = (table as any)[key];
+    return col && typeof col === "object" && "name" in col && "columnType" in col;
+  });
+
+  const merged = Array.from(new Set([...defaultCols, ...extraCols]));
+  const invalid = merged.filter(col => !tableColumns.includes(col));
+
+  if (invalid.length) {
+    throw new BadRequestException(
+      `Invalid column(s): [${invalid.join(", ")}].` +
+      `Valid columns for table [${getTableName(table)}]: [${tableColumns.join(", ")}]`
+    );
+  }
+
+  return merged;
+}
+
+
 export {
   deleteRecordById,
   deleteRecordsByAColumnValue,
@@ -378,12 +405,9 @@ export {
   getRecordsConditionally,
   getRecordsCount,
   getSingleRecordByAColumnValue,
-  getSingleRecordByMultipleColumnValues,
-  saveRecord,
-  saveRecords,
-  softDeleteRecordById,
+  getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, softDeleteRecordById,
   updateMultipleRecordsByIds,
   updateRecordByColumnValue,
-  updateRecordById,
-  updateRecordByMultipleColumnValues,
+  updateRecordById, updateRecordByIdWithTrx, updateRecordByMultipleColumnValues
 };
+
