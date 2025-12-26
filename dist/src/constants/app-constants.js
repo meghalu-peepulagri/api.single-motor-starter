@@ -24,7 +24,7 @@ export const SERVICE_UP = "Service is up and running";
 // Unique constraint messages
 export const UNIQUE_INDEX_MESSAGES = {
     "unique_mail_idx": "Email already exist.",
-    "unique_phone_idx": "Phone number already exist.",
+    "unique_phone_idx": "Mobile number already exist.",
     "unique_location_per_user": "Location name already exist.",
     "unique_field_per_user_location": "Field name already exist.",
     "validate_mac_address": "MAC address already exist.",
@@ -71,16 +71,15 @@ export const EMAIL_ID_REQUIRED = "Email ID is required";
 export const INVALID_EMAIL_ID = "Invalid Email ID";
 export const USER_UPDATED = "User details updated successfully";
 export const USER_DELETED = "User deleted successfully";
-export const INVALID_PHONE = "Invalid phone number";
+export const INVALID_PHONE = "Invalid Mobile number";
 export const EMAIL_REQUIRED = "Email is required";
 export const PASSWORD_REQUIRED = "Password is required";
 export const INVALID_PASSWORD = "Invalid password";
-export const PHONE_INVALID_FORMAT = "Enter a valid phone number";
 export const VALID_MAIL = "Invalid email";
-export const PHONE_NUMBER_REQUIRED = "Phone number is required";
+export const PHONE_NUMBER_REQUIRED = "Mobile number is required";
 export const ALTERNATE_PHONE_NUMBER_REQUIRED = "Alternate phone number is required";
-export const INVALID_PHONE_NUMBER = "Invalid phone number(digits only)";
-export const INVALID_PHONE_NUMBER_VALID_LENGTH = "Invalid phone number (10 digits required)";
+export const INVALID_PHONE_NUMBER = "Invalid Mobile number(digits only)";
+export const INVALID_PHONE_NUMBER_VALID_LENGTH = "Invalid Mobile number (10 digits required)";
 export const PASSWORD_MIN_LENGTH = "Password should be min 6 characters";
 export const PASSWORD_SHOULD_CONTAIN = "Password must contain at least one letter and one number";
 export const NAME_MIN_LENGTH = "Full Name should be min 3 characters";
