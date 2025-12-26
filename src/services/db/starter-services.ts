@@ -256,10 +256,11 @@ export async function getStarterRunTime(starterId: number, fromDate: string, toD
 }
 
 export async function assignStarterWebWithTransaction(starterDetails: StarterBox, requestBody: { user_id: number }, User: User) {
+  const existingMotor = await getSingleRecordByAColumnValue<MotorsTable>(motors, "starter_id", "=", starterDetails.id);
   return await db.transaction(async (trx) => {
     await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED" }, trx);
+    await updateRecordByIdWithTrx<MotorsTable>(motors, existingMotor.id, { created_by: requestBody.user_id }, trx);
   })
-
 }
 export async function starterConnectedMotors(starterId: number) {
   return await db.query.starterBoxes.findFirst({

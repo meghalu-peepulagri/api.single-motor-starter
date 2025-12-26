@@ -220,8 +220,10 @@ export async function getStarterRunTime(starterId, fromDate, toDate, motorId, po
         .orderBy(asc(deviceRunTime.start_time));
 }
 export async function assignStarterWebWithTransaction(starterDetails, requestBody, User) {
+    const existingMotor = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterDetails.id);
     return await db.transaction(async (trx) => {
         await updateRecordByIdWithTrx(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED" }, trx);
+        await updateRecordByIdWithTrx(motors, existingMotor.id, { created_by: requestBody.user_id }, trx);
     });
 }
 export async function starterConnectedMotors(starterId) {
