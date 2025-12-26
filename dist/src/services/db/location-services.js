@@ -6,7 +6,7 @@ import { motors } from "../../database/schemas/motors.js";
 export async function getLocationsList(whereQueryData, orderQueryData) {
     const whereQuery = whereQueryData && whereQueryData.length > 0 ? and(...whereQueryData) : undefined;
     const orderQuery = prepareOrderByQueryConditions(locations, orderQueryData);
-    return await db.query.locations.findMany({
+    const records = await db.query.locations.findMany({
         where: whereQuery,
         orderBy: orderQuery,
         columns: {
@@ -15,38 +15,41 @@ export async function getLocationsList(whereQueryData, orderQueryData) {
             status: true,
         },
         extras: {
-            locations_count: sql `(
-    SELECT CAST(count(*) AS INTEGER)
-    FROM locations
-    WHERE locations.status != 'ARCHIVED'
-  )`.as("locations_count"),
-            total_motors: sql `(
-    SELECT CAST(count(*) AS INTEGER)
-    FROM motors
-    WHERE motors.location_id = ${locations.id}
-    AND motors.status != 'ARCHIVED'
-  )`.as("total_motors"),
-            on_state_count: sql `(
-    SELECT CAST(count(*) AS INTEGER)
-    FROM motors
-    WHERE motors.location_id = ${locations.id}
-    AND motors.state = 1
-    AND motors.status != 'ARCHIVED'
-  )`.as("on_state_count"),
-            auto_mode_count: sql `(
-    SELECT CAST(count(*) AS INTEGER)
-    FROM motors
-    WHERE motors.location_id = ${locations.id}
-    AND motors.mode = 'AUTO'
-    AND motors.status != 'ARCHIVED'
-  )`.as("auto_mode_count"),
-            manual_mode_count: sql `(
-    SELECT CAST(count(*) AS INTEGER)
-    FROM motors
-    WHERE motors.location_id = ${locations.id}
-    AND motors.mode = 'MANUAL'
-    AND motors.status != 'ARCHIVED'
-  )`.as("manual_mode_count"),
+            total_motors: sql `
+        (
+          SELECT CAST(count(*) AS INTEGER)
+          FROM motors
+          WHERE motors.location_id = ${locations.id}
+          AND motors.status <> 'ARCHIVED'
+        )
+      `.as("total_motors"),
+            on_state_count: sql `
+        (
+          SELECT CAST(count(*) AS INTEGER)
+          FROM motors
+          WHERE motors.location_id = ${locations.id}
+          AND motors.state = 1
+          AND motors.status <> 'ARCHIVED'
+        )
+      `.as("on_state_count"),
+            auto_mode_count: sql `
+        (
+          SELECT CAST(count(*) AS INTEGER)
+          FROM motors
+          WHERE motors.location_id = ${locations.id}
+          AND motors.mode = 'AUTO'
+          AND motors.status <> 'ARCHIVED'
+        )
+      `.as("auto_mode_count"),
+            manual_mode_count: sql `
+        (
+          SELECT CAST(count(*) AS INTEGER)
+          FROM motors
+          WHERE motors.location_id = ${locations.id}
+          AND motors.mode = 'MANUAL'
+          AND motors.status <> 'ARCHIVED'
+        )
+      `.as("manual_mode_count"),
         },
         with: {
             motors: {
@@ -63,6 +66,14 @@ export async function getLocationsList(whereQueryData, orderQueryData) {
             },
         },
     });
+    const [locationsCount] = await db.select({
+        locations_count: sql `
+        CAST(count(*) AS INTEGER) `,
+    }).from(locations).where(whereQuery);
+    return {
+        locations_count: locationsCount.locations_count,
+        records,
+    };
 }
 export async function locationDropDown(orderByQueries, whereQueries) {
     const orderBy = prepareOrderByQueryConditions(locations, orderByQueries);

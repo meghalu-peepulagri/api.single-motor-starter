@@ -13,7 +13,7 @@ import { prepareStarterData } from "../../helpers/starter-helper.js";
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
@@ -29,12 +29,14 @@ export async function assignStarterWithTransaction(payload: AssignStarterType, u
     alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
     location_id: payload.location_id, created_by: userPayload.id,
   }
+
+  const existedMotorData = await getSingleRecordByAColumnValue<MotorsTable>(motors, "starter_id", "=", starterBoxPayload.id);
   return await db.transaction(async (trx) => {
     await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBoxPayload.id, {
       user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
     }, trx);
 
-    await trx.update(motors).set({ ...motorDetails }).where(eq(motors.starter_id, starterBoxPayload.id));
+    await trx.update(motors).set({ ...motorDetails }).where(eq(motors.id, existedMotorData.id));
   });
 }
 
@@ -142,7 +144,7 @@ export async function paginatedStarterList(
   };
 }
 
-export async function paginatedStarterListForMobile(WhereQueryData: any,orderByQueryData: OrderByQueryData<StarterBoxTable>,
+export async function paginatedStarterListForMobile(WhereQueryData: any, orderByQueryData: OrderByQueryData<StarterBoxTable>,
   pageParams: { page: number; pageSize: number; offset: number }
 ) {
   const whereQuery = WhereQueryData?.length ? and(...WhereQueryData) : undefined;
@@ -164,7 +166,7 @@ export async function paginatedStarterListForMobile(WhereQueryData: any,orderByQ
     },
     with: {
       motors: {
-        where: ne(motors.status, "ARCHIVED"), 
+        where: ne(motors.status, "ARCHIVED"),
         columns: {
           id: true,
           name: true,

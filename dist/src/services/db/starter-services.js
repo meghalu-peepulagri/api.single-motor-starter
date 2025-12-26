@@ -11,7 +11,7 @@ import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { getRecordsCount, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     await db.transaction(async (trx) => {
@@ -24,11 +24,12 @@ export async function assignStarterWithTransaction(payload, userPayload, starter
         alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
         location_id: payload.location_id, created_by: userPayload.id,
     };
+    const existedMotorData = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterBoxPayload.id);
     return await db.transaction(async (trx) => {
         await updateRecordByIdWithTrx(starterBoxes, starterBoxPayload.id, {
             user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
         }, trx);
-        await trx.update(motors).set({ ...motorDetails }).where(eq(motors.starter_id, starterBoxPayload.id));
+        await trx.update(motors).set({ ...motorDetails }).where(eq(motors.id, existedMotorData.id));
     });
 }
 export async function getStarterByMacWithMotor(mac) {
