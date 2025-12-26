@@ -6,7 +6,7 @@ export function prepareStarterData(starterBoxPayload, userPayload) {
         name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
         hp: 2,
     };
-    return { ...starterBoxPayload, created_by: userPayload.id, motorDetails };
+    return { ...starterBoxPayload, status: "INACTIVE", created_by: userPayload.id, motorDetails };
 }
 ;
 export function starterFilters(query, user) {
