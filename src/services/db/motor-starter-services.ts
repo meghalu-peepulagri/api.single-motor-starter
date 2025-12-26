@@ -34,6 +34,7 @@ export async function getMotorWithStarterDetails(motorId: number) {
           id: true,
           name: true,
           status: true,
+          pcb_number: true,
           mac_address: true,
           signal_quality: true,
           power: true,
