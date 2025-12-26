@@ -1,8 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import fs from "node:fs";
 import pg from "pg";
 
-import env from "../env.js";
 import * as deviceTokensSchema from "./schemas/device-tokens.js";
 import * as fieldsSchema from "./schemas/fields.js";
 import * as locationsSchema from "./schemas/locations.js";
@@ -15,20 +13,22 @@ import * as starterBoxParameters from "./schemas/starter-parameters.js";
 import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
 import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
 import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
+import { dbConfig } from "../config/db-config.js";
 
 
 const { Pool } = pg;
 
 const dbClient = new Pool({
-  host: env.DB_HOST,
-  port: Number(env.DB_PORT),
-  user: env.DB_USER,
-  password: env.DB_PASSWORD,
-  database: env.DB_NAME,
-  ssl: {
-    rejectUnauthorized: true,
-    ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
-  },
+  // host: env.DB_HOST,
+  // port: Number(env.DB_PORT),
+  // user: env.DB_USER,
+  // password: env.DB_PASSWORD,
+  // database: env.DB_NAME,
+  // ssl: {
+  //   rejectUnauthorized: true,
+  //   ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
+  // },
+  connectionString: dbConfig.connectionString,
 });
 
 const db = drizzle(dbClient, {
