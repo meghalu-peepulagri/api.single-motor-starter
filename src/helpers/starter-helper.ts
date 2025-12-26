@@ -12,7 +12,7 @@ export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, use
     hp: 2,
   };
 
-  return { ...starterBoxPayload, created_by: userPayload.id, motorDetails }
+  return { ...starterBoxPayload, status: "INACTIVE", created_by: userPayload.id, motorDetails }
 };
 
 export function starterFilters(query: any, user: any) {
