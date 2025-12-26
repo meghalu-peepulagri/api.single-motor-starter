@@ -70,7 +70,7 @@ export class AuthHandlers {
                 const phone = createdUser.phone;
                 const otpData = prepareOTPData(createdUser, phone, "REGISTERED");
                 await otpService.createOTP(otpData);
-                // await smsService.sendSms(phone, otpData.otp);
+                await smsService.sendSms(phone, otpData.otp);
             }
 
             return sendResponse(c, CREATED, USER_CREATED);
@@ -119,7 +119,7 @@ export class AuthHandlers {
 
             const otpData = prepareOTPData(loginUser, validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
-            // await smsService.sendSms(validatedPhone.phone, otpData.otp);
+            await smsService.sendSms(validatedPhone.phone, otpData.otp);
             return sendResponse(c, CREATED, OTP_SENT);
         } catch (error: any) {
             console.error("Error at sign in with phone :", error);
