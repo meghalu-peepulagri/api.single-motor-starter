@@ -74,7 +74,7 @@ export class AuthHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signin-email", reqBody, LOGIN_VALIDATION_CRITERIA);
-            const loginUser = await getSingleRecordByMultipleColumnValues(users, ["email", "status"], ["=", "!="], [validUserReq.email, "ARCHIVED"]);
+            const loginUser = await getSingleRecordByMultipleColumnValues(users, ["email", "status"], ["LOWER", "!="], [validUserReq.email.toLowerCase(), "ARCHIVED"]);
             if (!loginUser || !loginUser.password)
                 throw new UnauthorizedException(INVALID_CREDENTIALS);
             const isPasswordMatched = await argon2.verify(loginUser.password, validUserReq.password);
