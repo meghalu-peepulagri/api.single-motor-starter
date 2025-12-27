@@ -6,6 +6,7 @@ export const dbConfig = {
   user: envData.DB_USER!,
   password: envData.DB_PASSWORD!,
   name: envData.DB_NAME!,
+  // connectionString: envData.DATABASE_URL,
 };
 
 

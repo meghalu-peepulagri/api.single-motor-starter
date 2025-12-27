@@ -46,10 +46,10 @@ export interface arrayOfMotorInputType {
 }[];
 
 export interface starterBoxPayloadType {
-  name: string;
-  pcb_number: string;
+  name?: string | null | undefined;
+  pcb_number?: string | null | undefined;
   starter_number: string;
-  mac_address: string;
+  mac_address?: string | null | undefined;
   gateway_id?: number | null | undefined;
 }
 

@@ -1,6 +1,6 @@
 {
-  "id": "80664a28-8115-4865-bed8-3e04d196b14c",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "ae3d4ea5-f5ff-408a-90ef-6d617ade9097",
+  "prevId": "03744129-97c3-4def-9c5a-1efd65e2a653",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1391,12 +1391,6 @@
           "notNull": true,
           "default": "now()"
         },
-        "assigned_at": {
-          "name": "assigned_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
@@ -1593,7 +1587,7 @@
           "name": "name",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "alias_name": {
           "name": "alias_name",
@@ -1605,13 +1599,13 @@
           "name": "mac_address",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "pcb_number": {
           "name": "pcb_number",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "starter_number": {
           "name": "starter_number",
@@ -1694,12 +1688,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "assigned_at": {
-          "name": "assigned_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -2437,7 +2425,7 @@
           "name": "email",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "phone": {
           "name": "phone",

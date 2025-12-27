@@ -2,7 +2,7 @@ import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, 
 import db from "../database/configuration.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
-import BadRequestException from "../exceptions/bad-request-exception.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { motorFilters } from "../helpers/motor-helper.js";
@@ -14,7 +14,6 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import ConflictException from "../exceptions/conflict-exception.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorHandlers {
     addMotor = async (c) => {

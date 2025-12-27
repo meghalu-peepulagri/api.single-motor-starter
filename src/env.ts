@@ -4,7 +4,7 @@ import { flatten, object, parse, string } from "valibot";
 
 const VEnvSchema = object({
   API_VERSION: string(),
-  DATABASE_URL: string(),
+  // DATABASE_URL: string(),
   PORT: string(),
   DB_HOST: string(),
   DB_USER: string(),

@@ -1,5 +1,5 @@
 {
-  "id": "80664a28-8115-4865-bed8-3e04d196b14c",
+  "id": "f309157e-a341-4a9c-8d4e-658eea59d32a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1391,12 +1391,6 @@
           "notNull": true,
           "default": "now()"
         },
-        "assigned_at": {
-          "name": "assigned_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
@@ -1694,12 +1688,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "assigned_at": {
-          "name": "assigned_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",

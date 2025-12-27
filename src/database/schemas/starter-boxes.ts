@@ -11,10 +11,10 @@ export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STAR
 
 export const starterBoxes = pgTable("starter_boxes", {
   id: serial("id").primaryKey(),
-  name: varchar("name").notNull(),
+  name: varchar("name"),
   alias_name: varchar("alias_name"),
-  mac_address: varchar("mac_address").notNull(),
-  pcb_number: varchar("pcb_number").notNull(),
+  mac_address: varchar("mac_address"),
+  pcb_number: varchar("pcb_number"),
   starter_number: varchar("starter_number").notNull(),
   status: statusEnum().notNull().default("ACTIVE"),
   power: integer("power").notNull().default(0),

@@ -3,7 +3,7 @@ import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, 
 import db from "../database/configuration.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
-import BadRequestException from "../exceptions/bad-request-exception.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { motorFilters } from "../helpers/motor-helper.js";
@@ -16,7 +16,6 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import ConflictException from "../exceptions/conflict-exception.js";
 
 const paramsValidateException = new ParamsValidateException();
 

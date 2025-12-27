@@ -1,5 +1,6 @@
 import { defineConfig } from "drizzle-kit";
-import fs from "node:fs";
+import fs from "fs";
+// aiven
 export default defineConfig({
     dialect: "postgresql",
     schema: "./dist/src/database/schemas/*",
@@ -16,3 +17,12 @@ export default defineConfig({
         },
     },
 });
+// railway
+// export default defineConfig({
+//   schema: "./dist/src/database/schemas/*",
+//   dialect: "postgresql",
+//   out: "./drizzle",
+//   dbCredentials: {
+//     url: process.env.DATABASE_URL!,
+//   },
+// });

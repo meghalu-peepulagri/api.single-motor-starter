@@ -8,9 +8,10 @@ export function prepareLiveDataPayload(validatedData, starterData) {
     }
     ;
     const data = validatedData.data;
-    // Clean arrays (llv, amp) and scalars
-    const llv = cleanThreeNumberArray(data.llv || []);
+    const llvSource = data.llv || data.ll_v || [];
+    const llv = cleanThreeNumberArray(llvSource);
     const amp = cleanThreeNumberArray(data.amp || []);
+    const motorStateValue = cleanScalar(data.m_s ?? data.mtr_sts) || 0;
     return {
         payload_version: cleanScalar(data.p_v) || 0,
         packet_number: validatedData.T,
@@ -27,9 +28,9 @@ export function prepareLiveDataPayload(validatedData, starterData) {
         // Power & motor
         power_present: cleanScalar(data.pwr) || 0,
         motor_mode: cleanScalar(data.mode) || 0,
-        motor_state: cleanScalar(data.m_s) || 0,
+        motor_state: cleanScalar(motorStateValue) || 0,
         mode_description: controlMode(data.mode) || "Unknown",
-        motor_description: motorState(data.m_s) || "Unknown",
+        motor_description: motorState(motorStateValue) || "Unknown",
         // Faults & alerts
         alert_code: cleanScalar(data.alt) || 0,
         alert_description: getAlertDescription(data.alt) || "Unknown alert",

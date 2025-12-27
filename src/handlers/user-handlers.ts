@@ -71,9 +71,19 @@ export class UserHandlers {
       const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
 
       const searchString = query.search_string?.trim() || "";
-      const userWhereQueryData: WhereQueryData<UsersTable> = { columns: ["full_name"], relations: ["contains"], values: [searchString] };
+      const whereQueryData: WhereQueryData<UsersTable> = {
+        columns: ["status", "user_type"],
+        relations: ["!=", "!="],
+        values: ["ARCHIVED", "ADMIN"],
+      }
 
-      const usersList = await getRecordsConditionally<UsersTable>(users, userWhereQueryData, ["id", "full_name"], orderQueryData);
+      if (searchString) {
+        whereQueryData.columns.push("full_name");
+        whereQueryData.relations.push("contains");
+        whereQueryData.values.push(searchString);
+      }
+
+      const usersList = await getRecordsConditionally<UsersTable>(users, whereQueryData, ["id", "full_name"], orderQueryData);
       return sendResponse(c, 200, USERS_LIST, usersList);
     } catch (error: any) {
       console.error("Error at users basic list:", error);
