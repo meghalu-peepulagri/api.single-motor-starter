@@ -27,13 +27,13 @@ export const SERVICE_UP = "Service is up and running";
 // Unique constraint messages
 export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "unique_mail_idx": "Email already exist.",
-  "unique_phone_idx": "Mobile number already exist.",
+  "unique_phone_idx": "Mobile Number already exist.",
   "unique_location_per_user": "Location name already exist.",
   "unique_field_per_user_location": "Field name already exist.",
   "validate_mac_address": "MAC address already exist.",
   "validate_pcb_number": "PCB number already exist.",
   "valid_starter_box_name": "Name already exist.",
-  "validate_starter_number": "Serial number already exist.",
+  "validate_starter_number": "Starter Number already exist.",
   "unique_motor_alias_name_per_location": "Pump name already exist.",
 };
 
@@ -79,16 +79,16 @@ export const EMAIL_ID_REQUIRED = "Email ID is required";
 export const INVALID_EMAIL_ID = "Invalid Email ID";
 export const USER_UPDATED = "User details updated successfully";
 export const USER_DELETED = "User deleted successfully";
-export const INVALID_PHONE = "Invalid Mobile number";
+export const INVALID_PHONE = "Invalid Mobile Number";
 export const EMAIL_REQUIRED = "Email is required";
 export const PASSWORD_REQUIRED = "Password is required";
 export const INVALID_PASSWORD = "Invalid password";
 export const PHONE_INVALID_FORMAT = "Enter a valid phone number";
 export const VALID_MAIL = "Invalid email";
-export const PHONE_NUMBER_REQUIRED = "Mobile number is required";
+export const PHONE_NUMBER_REQUIRED = "Mobile Number is required";
 export const ALTERNATE_PHONE_NUMBER_REQUIRED = "Alternate phone number is required";
-export const INVALID_PHONE_NUMBER = "Invalid Mobile number(digits only)";
-export const INVALID_PHONE_NUMBER_VALID_LENGTH = "Invalid Mobile number (10 digits required)";
+export const INVALID_PHONE_NUMBER = "Invalid Mobile Number(digits only)";
+export const INVALID_PHONE_NUMBER_VALID_LENGTH = "Invalid Mobile Number (10 digits required)";
 export const PASSWORD_MIN_LENGTH = "Password should be min 6 characters";
 export const PASSWORD_SHOULD_CONTAIN = "Password must contain at least one letter and one number";
 export const NAME_MIN_LENGTH = "Full Name should be min 3 characters";
@@ -232,16 +232,16 @@ export const DEVICE_MIN_LEN = "Name has min 3 characters";
 export const SERIAL_NO_MIN_LEN = "MCU Serial Number has min 3 characters";
 export const MCU_MIN_LEN = "MCU Number has min 3 characters";
 export const PCB_MIN_LEN = "PCB Number has min 3 characters";
-export const STARTER_NUMBER_MIN_LEN = "Serial Number has min 3 characters";
+export const STARTER_NUMBER_MIN_LEN = "Starter Number has min 3 characters";
 
 export const DEVICE_NAME_STARTS_LETTER = "Name starts with Character";
 
-export const MAC_STRING = "MAC address must be a string";
-export const MAC_REQUIRED = "MAC Address is required";
-export const MAC_MIN_LEN = "MAC Address has min 3 characters";
+export const MAC_STRING = "Unique Id must be a string";
+export const MAC_REQUIRED = "Unique Id is required";
+export const MAC_MIN_LEN = "Unique Id has min 3 characters";
 export const SERIAL_NO_REQUIRED = "MCU Serial Number is required";
 export const PCB_NUMBER_REQUIRED = "PCB Number is required";
-export const STARTER_NUMBER_REQUIRED = "Serial Number is required";
+export const STARTER_NUMBER_REQUIRED = "Starter Number is required";
 export const SMALL_LETTERS_NOT_ALLOWED = "Small characters not allowed";
 export const STARTER_ASSIGNED_SUCCESSFULLY = "Device assigned successfully";
 export const STARTER_ALREADY_ASSIGNED = "Device already assigned";

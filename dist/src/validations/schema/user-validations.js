@@ -6,10 +6,11 @@ export const vSignUp = v.object({
     email: emailValidator,
     phone: phoneValidator,
     password: passwordValidator,
-    address: v.optional(v.string(ADDRESS_STRING)),
+    address: v.nullish(v.optional(v.string(ADDRESS_STRING))),
     user_type: userTypeValidator,
     created_by: v.optional(v.number()),
-    referred_by: requiredNumberOptional(REFEREED_BY_REQUIRED)
+    referred_by: requiredNumberOptional(REFEREED_BY_REQUIRED),
+    signature_id: v.optional(v.string()),
 });
 export const vSignInEmail = v.object({
     email: emailValidator,

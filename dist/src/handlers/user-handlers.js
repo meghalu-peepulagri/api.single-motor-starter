@@ -63,8 +63,17 @@ export class UserHandlers {
             const query = c.req.query();
             const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
             const searchString = query.search_string?.trim() || "";
-            const userWhereQueryData = { columns: ["full_name"], relations: ["contains"], values: [searchString] };
-            const usersList = await getRecordsConditionally(users, userWhereQueryData, ["id", "full_name"], orderQueryData);
+            const whereQueryData = {
+                columns: ["status", "user_type"],
+                relations: ["!=", "!="],
+                values: ["ARCHIVED", "ADMIN"],
+            };
+            if (searchString) {
+                whereQueryData.columns.push("full_name");
+                whereQueryData.relations.push("contains");
+                whereQueryData.values.push(searchString);
+            }
+            const usersList = await getRecordsConditionally(users, whereQueryData, ["id", "full_name"], orderQueryData);
             return sendResponse(c, 200, USERS_LIST, usersList);
         }
         catch (error) {

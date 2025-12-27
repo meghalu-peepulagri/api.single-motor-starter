@@ -16,10 +16,8 @@ export function starterFilters(query, user) {
         const s = `%${query.search_string.trim()}%`;
         if (user.user_type === "ADMIN") {
             filters.push(sql `(
-          ${starterBoxes.name} ILIKE ${s}
           OR ${starterBoxes.pcb_number} ILIKE ${s}
           OR ${starterBoxes.starter_number} ILIKE ${s}
-          OR ${starterBoxes.mac_address} ILIKE ${s}
         )`);
         }
         else {
