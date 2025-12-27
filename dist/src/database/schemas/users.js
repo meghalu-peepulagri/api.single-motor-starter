@@ -22,8 +22,8 @@ export const users = pgTable("users", {
     index("full_name_idx").on(table.full_name),
     index("user_type_idx").on(table.user_type),
     index("user_status_idx").on(table.status),
-    uniqueIndex("unique_mail_idx").on(table.email),
-    uniqueIndex("unique_phone_idx").on(table.phone),
+    uniqueIndex("unique_mail_idx").on(table.email).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("unique_phone_idx").on(table.phone).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("valid_user").on(table.email, table.phone).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
 import { locations } from "./locations.js";
