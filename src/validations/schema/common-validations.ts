@@ -14,12 +14,12 @@ const phoneValidator = v.pipe(
 );
 
 
-const emailValidator = v.optional(v.pipe(
+const emailValidator = v.nullish(v.optional(v.pipe(
   v.string(EMAIL_REQUIRED),
   v.transform(value => value.trim()),
   v.nonEmpty(EMAIL_REQUIRED),
   v.email(VALID_MAIL),
-));
+)));
 
 const passwordValidator = v.optional(
   v.pipe(
@@ -117,22 +117,22 @@ const aliasStarterNameValidator = v.optional(v.pipe(
   v.minLength(3, DEVICE_MIN_LEN),
 ));
 
-const starterBoxTitleValidator = v.optional(v.pipe(
+const starterBoxTitleValidator = v.nullish(v.optional(v.pipe(
   v.string(DEVICE_NAME_REQUIRED),
   v.transform(value => value.trim()),
   v.nonEmpty(DEVICE_NAME_REQUIRED),
   v.regex(/^[A-Z].*$/i, DEVICE_NAME_STARTS_LETTER),
   v.minLength(3, DEVICE_MIN_LEN),
-));
+)));
 
 
-const macAddressValidator = v.optional(v.pipe(
+const macAddressValidator = v.nullish(v.optional(v.pipe(
   v.string(MAC_REQUIRED),
   v.transform(value => value.trim()),
   v.nonEmpty(MAC_REQUIRED),
   v.regex(/^([0-9A-Z:]+)$/, "Small letters or spaces are not allowed"),
   v.minLength(3, MAC_MIN_LEN),
-));
+)));
 
 const serialNoValidator = v.pipe(
   v.string(SERIAL_NO_REQUIRED),
@@ -142,13 +142,13 @@ const serialNoValidator = v.pipe(
   v.minLength(3, SERIAL_NO_MIN_LEN),
 );
 
-const pcbNumberValidator = v.optional(v.pipe(
+const pcbNumberValidator = v.nullish(v.optional(v.pipe(
   v.string(PCB_NUMBER_REQUIRED),
   v.transform(value => value.trim()),
   v.nonEmpty(PCB_NUMBER_REQUIRED),
   v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED),
   v.minLength(3, PCB_MIN_LEN),
-));
+)));
 
 const starterNumberValidator = v.pipe(
   v.string(STARTER_NUMBER_REQUIRED),
