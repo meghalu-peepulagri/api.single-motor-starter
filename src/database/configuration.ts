@@ -13,22 +13,23 @@ import * as starterBoxParameters from "./schemas/starter-parameters.js";
 import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
 import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
 import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
-import { dbConfig } from "../config/db-config.js";
+import env from "../env.js";
+import fs from "fs";
 
 
 const { Pool } = pg;
 
 const dbClient = new Pool({
-  // host: env.DB_HOST,
-  // port: Number(env.DB_PORT),
-  // user: env.DB_USER,
-  // password: env.DB_PASSWORD,
-  // database: env.DB_NAME,
-  // ssl: {
-  //   rejectUnauthorized: true,
-  //   ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
-  // },
-  connectionString: dbConfig.connectionString,
+  host: env.DB_HOST,
+  port: Number(env.DB_PORT),
+  user: env.DB_USER,
+  password: env.DB_PASSWORD,
+  database: env.DB_NAME,
+  ssl: {
+    rejectUnauthorized: true,
+    ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
+  },
+  // connectionString: dbConfig.connectionString,
 });
 
 const db = drizzle(dbClient, {

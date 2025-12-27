@@ -119,7 +119,7 @@ export class AuthHandlers {
 
             const otpData = prepareOTPData(loginUser, validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
-            await smsService.sendSms(validatedPhone.phone, otpData.otp);
+            await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
             return sendResponse(c, CREATED, OTP_SENT);
         } catch (error: any) {
             console.error("Error at sign in with phone :", error);
