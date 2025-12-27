@@ -74,7 +74,7 @@ export class AuthHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signin-email", reqBody, LOGIN_VALIDATION_CRITERIA);
-            const loginUser = await getSingleRecordByMultipleColumnValues(users, ["email", "status"], ["LOWER", "!="], [validUserReq.email.toLowerCase(), "ARCHIVED"]);
+            const loginUser = validUserReq.email && await getSingleRecordByMultipleColumnValues(users, ["email", "status"], ["LOWER", "!="], [validUserReq.email.toLowerCase(), "ARCHIVED"]);
             if (!loginUser || !loginUser.password)
                 throw new UnauthorizedException(INVALID_CREDENTIALS);
             const isPasswordMatched = await argon2.verify(loginUser.password, validUserReq.password);
@@ -102,7 +102,7 @@ export class AuthHandlers {
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = prepareOTPData(loginUser, validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
-            await smsService.sendSms(validatedPhone.phone, otpData.otp);
+            await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
             return sendResponse(c, CREATED, OTP_SENT);
         }
         catch (error) {

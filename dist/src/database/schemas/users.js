@@ -6,7 +6,7 @@ import { fields } from "./fields.js";
 export const users = pgTable("users", {
     id: serial("id").primaryKey().notNull(),
     full_name: varchar("full_name").notNull(),
-    email: varchar("email").notNull(),
+    email: varchar("email"),
     phone: varchar("phone").notNull(),
     user_type: userTypeEnum().default("USER"),
     password: varchar("password"),

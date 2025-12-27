@@ -10,10 +10,10 @@ export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED",
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
 export const starterBoxes = pgTable("starter_boxes", {
     id: serial("id").primaryKey(),
-    name: varchar("name").notNull(),
+    name: varchar("name"),
     alias_name: varchar("alias_name"),
-    mac_address: varchar("mac_address").notNull(),
-    pcb_number: varchar("pcb_number").notNull(),
+    mac_address: varchar("mac_address"),
+    pcb_number: varchar("pcb_number"),
     starter_number: varchar("starter_number").notNull(),
     status: statusEnum().notNull().default("ACTIVE"),
     power: integer("power").notNull().default(0),
@@ -26,7 +26,6 @@ export const starterBoxes = pgTable("starter_boxes", {
     network_type: varchar("network_type").notNull().default("NUll"),
     starter_type: starterType().notNull().default("SINGLE_STARTER"),
     created_at: timestamp("created_at").notNull().defaultNow(),
-    assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [
     index("starter_box_id_idx").on(table.id),
