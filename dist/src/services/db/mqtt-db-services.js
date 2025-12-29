@@ -139,6 +139,7 @@ export async function motorControlAckHandler(message, topic) {
             return;
         }
         const validMac = await getStarterByMacWithMotor(macAddress);
+        console.log('validMac: ', validMac);
         if (!validMac?.id || !validMac.motors || validMac.motors.length === 0) {
             console.error(`No starter found with MAC address [${macAddress}] or no motors attached`);
             return;

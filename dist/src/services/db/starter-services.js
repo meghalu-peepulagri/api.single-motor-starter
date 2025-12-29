@@ -33,8 +33,9 @@ export async function assignStarterWithTransaction(payload, userPayload, starter
     });
 }
 export async function getStarterByMacWithMotor(mac) {
+    const upperMac = mac.trim().toUpperCase();
     return await db.query.starterBoxes.findFirst({
-        where: and(eq(starterBoxes.mac_address, mac.trim().toUpperCase()), ne(starterBoxes.status, 'ARCHIVED')),
+        where: and(or(eq(starterBoxes.mac_address, upperMac), eq(starterBoxes.pcb_number, upperMac)), ne(starterBoxes.status, 'ARCHIVED')),
         columns: {
             id: true,
             created_by: true,
