@@ -6,6 +6,7 @@ import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { users } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
@@ -18,7 +19,6 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import ConflictException from "../exceptions/conflict-exception.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBox = async (c) => {
@@ -93,7 +93,7 @@ export class StarterHandlers {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
             const paginationParams = getPaginationOffParams(query);
-            const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
+            const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type, "assigned_at", "desc");
             const whereQueryData = starterFilters(query, userPayload);
             const starterList = await paginatedStarterListForMobile(whereQueryData, orderQueryData, paginationParams);
             return sendResponse(c, 200, STARTER_LIST_FETCHED, starterList);

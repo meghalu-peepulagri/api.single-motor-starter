@@ -1,19 +1,20 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
+import dbConfig from "../config/db-config.js";
+import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
 import * as deviceTokensSchema from "./schemas/device-tokens.js";
 import * as fieldsSchema from "./schemas/fields.js";
 import * as locationsSchema from "./schemas/locations.js";
+import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
+import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
 import * as motorsSchema from "./schemas/motors.js";
 import * as otpSchema from "./schemas/otp.js";
-import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
-import * as usersSchema from "./schemas/users.js";
 import * as starterBoxSchema from "./schemas/starter-boxes.js";
 import * as starterBoxParameters from "./schemas/starter-parameters.js";
-import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
-import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
-import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
-import env from "../env.js";
+import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
+import * as usersSchema from "./schemas/users.js";
 import fs from "fs";
+import env from "../env.js";
 const { Pool } = pg;
 const dbClient = new Pool({
     host: env.DB_HOST,

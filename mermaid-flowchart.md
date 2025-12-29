@@ -1,13 +1,13 @@
-```mermaid
-
 ---
 config:
   layout: elk
+  theme: forest
+  look: classic
 ---
 graph TB
 
     %% TITLE
-    Title[iDhara]
+  Title>"<b><span style='font-size:24px;'>iDhara</span></b>"]
 
     %% CORE ENTITIES
     Admin[Admin]
@@ -26,11 +26,13 @@ graph TB
     Mobile_Login["Login<br/>(Mobile No & OTP)"]
 
     %% DEVICE CREATION (ADMIN)
-    Device_Fields["Required Device Fields<br/>
-    • Device Name<br/>
-    • MAC Address<br/>
-    • PCB Number<br/>
-    • Serial Number"]
+    Device_Fields["Device Fields
+    <b>Required
+    • Serial Number
+      Optional
+    • Device Name
+    • MAC Address
+    • PCB Number"]
 
     %% DEVICE ASSIGNING (USER)
     Assign_Request["Assigning Device In Mobile<br/>

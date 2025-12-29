@@ -107,7 +107,7 @@ export class MotorHandlers {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
             const paginationParams = getPaginationOffParams(query);
-            const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
+            const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type, "assigned_at", "desc");
             const whereQueryData = motorFilters(query, userPayload);
             const motors = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
             return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motors);
