@@ -57,7 +57,6 @@ export function motorFilters(query: any, user: any) {
     whereQueryData.values.push(query.location_id);
   }
 
-
   return whereQueryData;
 }
 

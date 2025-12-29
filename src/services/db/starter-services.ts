@@ -25,15 +25,16 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
 }
 
 export async function assignStarterWithTransaction(payload: AssignStarterType, userPayload: User, starterBoxPayload: any) {
+  const assignedAt = new Date();
   const motorDetails = {
     alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
-    location_id: payload.location_id, created_by: userPayload.id,
+    location_id: payload.location_id, created_by: userPayload.id, assigned_at: assignedAt,
   }
 
   const existedMotorData = await getSingleRecordByAColumnValue<MotorsTable>(motors, "starter_id", "=", starterBoxPayload.id);
   return await db.transaction(async (trx) => {
     await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBoxPayload.id, {
-      user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
+      user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt
     }, trx);
 
     await trx.update(motors).set({ ...motorDetails }).where(eq(motors.id, existedMotorData.id));
@@ -258,9 +259,10 @@ export async function getStarterRunTime(starterId: number, fromDate: string, toD
 
 export async function assignStarterWebWithTransaction(starterDetails: StarterBox, requestBody: { user_id: number }, User: User) {
   const existingMotor = await getSingleRecordByAColumnValue<MotorsTable>(motors, "starter_id", "=", starterDetails.id);
+  const assignedAt = new Date();
   return await db.transaction(async (trx) => {
-    await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED" }, trx);
-    await updateRecordByIdWithTrx<MotorsTable>(motors, existingMotor.id, { created_by: requestBody.user_id }, trx);
+    await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED", assigned_at: assignedAt }, trx);
+    await updateRecordByIdWithTrx<MotorsTable>(motors, existingMotor.id, { created_by: requestBody.user_id, assigned_at: assignedAt }, trx);
   })
 }
 export async function starterConnectedMotors(starterId: number) {
