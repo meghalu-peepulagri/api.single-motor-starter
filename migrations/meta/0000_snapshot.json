@@ -1,5 +1,5 @@
 {
-  "id": "80664a28-8115-4865-bed8-3e04d196b14c",
+  "id": "d7b80c6c-08cc-47cc-99c9-35dc77fc96fa",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1593,7 +1593,7 @@
           "name": "name",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "alias_name": {
           "name": "alias_name",
@@ -1605,13 +1605,13 @@
           "name": "mac_address",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "pcb_number": {
           "name": "pcb_number",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "starter_number": {
           "name": "starter_number",
@@ -2437,7 +2437,7 @@
           "name": "email",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "phone": {
           "name": "phone",
@@ -2573,6 +2573,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2588,6 +2589,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
           "concurrently": false,
           "method": "btree",
           "with": {}

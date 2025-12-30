@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS "motors" (
 	"starter_id" integer,
 	"status" "status_enum" DEFAULT 'ACTIVE',
 	"created_at" timestamp DEFAULT now() NOT NULL,
+	"assigned_at" timestamp,
 	"updated_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 --> statement-breakpoint
@@ -138,10 +139,10 @@ CREATE TABLE IF NOT EXISTS "otps" (
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "starter_boxes" (
 	"id" serial PRIMARY KEY NOT NULL,
-	"name" varchar NOT NULL,
+	"name" varchar,
 	"alias_name" varchar,
-	"mac_address" varchar NOT NULL,
-	"pcb_number" varchar NOT NULL,
+	"mac_address" varchar,
+	"pcb_number" varchar,
 	"starter_number" varchar NOT NULL,
 	"status" "status_enum" DEFAULT 'ACTIVE' NOT NULL,
 	"power" integer DEFAULT 0 NOT NULL,
@@ -154,6 +155,7 @@ CREATE TABLE IF NOT EXISTS "starter_boxes" (
 	"network_type" varchar DEFAULT 'NUll' NOT NULL,
 	"starter_type" "starter_type" DEFAULT 'SINGLE_STARTER' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
+	"assigned_at" timestamp,
 	"updated_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 --> statement-breakpoint
@@ -209,7 +211,7 @@ CREATE TABLE IF NOT EXISTS "user_activity_logs" (
 CREATE TABLE IF NOT EXISTS "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"full_name" varchar NOT NULL,
-	"email" varchar NOT NULL,
+	"email" varchar,
 	"phone" varchar NOT NULL,
 	"user_type" "user_type" DEFAULT 'USER',
 	"password" varchar,
@@ -314,6 +316,6 @@ CREATE INDEX IF NOT EXISTS "user_id_logs_idx" ON "user_activity_logs" USING btre
 CREATE INDEX IF NOT EXISTS "full_name_idx" ON "users" USING btree ("full_name");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "user_type_idx" ON "users" USING btree ("user_type");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "user_status_idx" ON "users" USING btree ("status");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "unique_mail_idx" ON "users" USING btree ("email");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "unique_phone_idx" ON "users" USING btree ("phone");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_mail_idx" ON "users" USING btree ("email") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_phone_idx" ON "users" USING btree ("phone") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "valid_user" ON "users" USING btree ("email","phone") WHERE "users"."status" != 'ARCHIVED';
