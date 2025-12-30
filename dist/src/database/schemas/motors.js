@@ -19,6 +19,7 @@ export const motors = pgTable("motors", {
     starter_id: integer("starter_id").references(() => starterBoxes.id),
     status: statusEnum().default("ACTIVE"),
     created_at: timestamp("created_at").notNull().defaultNow(),
+    assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, (table) => [
     index("motor_user_id_idx").on(table.created_by),

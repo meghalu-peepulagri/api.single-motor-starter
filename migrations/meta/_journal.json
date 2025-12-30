@@ -29,6 +29,20 @@
       "when": 1766828472378,
       "tag": "0003_perpetual_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1766997364548,
+      "tag": "0004_superb_lizard",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1766997499601,
+      "tag": "0005_acoustic_the_professor",
+      "breakpoints": true
     }
   ]
 }

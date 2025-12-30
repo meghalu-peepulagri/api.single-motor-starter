@@ -1,10 +1,9 @@
-import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
-import { motors } from "../../database/schemas/motors.js";
-import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { updateRecordByIdWithTrx } from "./base-db-services.js";
 import { locations } from "../../database/schemas/locations.js";
+import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 export async function getMotorWithStarterDetails(motorId) {
     if (!motorId)
         return null;
@@ -21,20 +20,21 @@ export async function getMotorWithStarterDetails(motorId) {
         },
         with: {
             location: {
-                where: ne(motors.status, 'ARCHIVED'),
+                where: ne(locations.status, 'ARCHIVED'),
                 columns: {
                     id: true,
                     name: true,
                 },
             },
             starter: {
-                where: ne(motors.status, 'ARCHIVED'),
+                where: ne(starterBoxes.status, 'ARCHIVED'),
                 columns: {
                     id: true,
                     name: true,
                     status: true,
                     pcb_number: true,
                     mac_address: true,
+                    starter_number: true,
                     signal_quality: true,
                     power: true,
                     network_type: true,

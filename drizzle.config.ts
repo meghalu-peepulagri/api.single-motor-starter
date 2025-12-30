@@ -1,7 +1,6 @@
 import { defineConfig } from "drizzle-kit";
-import fs from "fs";
 
-// aiven
+// // aiven
 // export default defineConfig({
 //   dialect: "postgresql",
 //   schema: "./dist/src/database/schemas/*",

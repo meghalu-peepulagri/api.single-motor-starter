@@ -20,21 +20,23 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload) 
     });
 }
 export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload) {
+    const assignedAt = new Date();
     const motorDetails = {
         alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
-        location_id: payload.location_id, created_by: userPayload.id,
+        location_id: payload.location_id, created_by: userPayload.id, assigned_at: assignedAt,
     };
     const existedMotorData = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterBoxPayload.id);
     return await db.transaction(async (trx) => {
         await updateRecordByIdWithTrx(starterBoxes, starterBoxPayload.id, {
-            user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id
+            user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt
         }, trx);
         await trx.update(motors).set({ ...motorDetails }).where(eq(motors.id, existedMotorData.id));
     });
 }
 export async function getStarterByMacWithMotor(mac) {
+    const upperMac = mac.trim().toUpperCase();
     return await db.query.starterBoxes.findFirst({
-        where: and(eq(starterBoxes.mac_address, mac.trim().toUpperCase()), ne(starterBoxes.status, 'ARCHIVED')),
+        where: and(or(eq(starterBoxes.mac_address, upperMac), eq(starterBoxes.pcb_number, upperMac)), ne(starterBoxes.status, 'ARCHIVED')),
         columns: {
             id: true,
             created_by: true,
@@ -221,9 +223,10 @@ export async function getStarterRunTime(starterId, fromDate, toDate, motorId, po
 }
 export async function assignStarterWebWithTransaction(starterDetails, requestBody, User) {
     const existingMotor = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterDetails.id);
+    const assignedAt = new Date();
     return await db.transaction(async (trx) => {
-        await updateRecordByIdWithTrx(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED" }, trx);
-        await updateRecordByIdWithTrx(motors, existingMotor.id, { created_by: requestBody.user_id }, trx);
+        await updateRecordByIdWithTrx(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED", assigned_at: assignedAt }, trx);
+        await updateRecordByIdWithTrx(motors, existingMotor.id, { created_by: requestBody.user_id, assigned_at: assignedAt }, trx);
     });
 }
 export async function starterConnectedMotors(starterId) {

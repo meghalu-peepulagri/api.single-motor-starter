@@ -26,6 +26,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     network_type: varchar("network_type").notNull().default("NUll"),
     starter_type: starterType().notNull().default("SINGLE_STARTER"),
     created_at: timestamp("created_at").notNull().defaultNow(),
+    assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [
     index("starter_box_id_idx").on(table.id),

@@ -98,6 +98,7 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
           name: true,
           status: true,
           mac_address: true,
+          pcb_number: true,
           signal_quality: true,
           power: true,
           network_type: true,
@@ -113,8 +114,6 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
               id: true,
               time_stamp: true,
               fault: true,
-              fault_description: true,
-
               line_voltage_r: true,
               line_voltage_y: true,
               line_voltage_b: true,
