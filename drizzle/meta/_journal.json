@@ -15,6 +15,13 @@
       "when": 1766830162134,
       "tag": "0001_wet_bucky",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1767068982076,
+      "tag": "0002_wise_mantis",
+      "breakpoints": true
     }
   ]
 }
