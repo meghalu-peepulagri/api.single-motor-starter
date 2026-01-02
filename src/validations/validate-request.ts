@@ -52,4 +52,3 @@ export async function validatedRequest<R extends ValidatedRequest>(
 
   return validation.output as R;
 }
-
