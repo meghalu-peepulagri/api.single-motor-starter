@@ -1,5 +1,5 @@
-import { and, eq, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LOCATION_ASSIGNED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { and, eq, isNotNull, ne, desc } from "drizzle-orm";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways } from "../database/schemas/gateways.js";
 import { motors } from "../database/schemas/motors.js";
@@ -331,6 +331,19 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at mark starter inactive:", error.message);
+            throw error;
+        }
+    };
+    getLatestPcbNumber = async (c) => {
+        try {
+            const latestStarter = await db.select({
+                id: starterBoxes.id,
+                pcbNumber: starterBoxes.pcb_number,
+            }).from(starterBoxes).where(and(ne(starterBoxes.status, "ARCHIVED"), isNotNull(starterBoxes.pcb_number))).orderBy(desc(starterBoxes.created_at)).limit(1);
+            return sendResponse(c, 200, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, latestStarter);
+        }
+        catch (error) {
+            console.error("Error at get latest PCB number :", error);
             throw error;
         }
     };

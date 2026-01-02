@@ -258,6 +258,7 @@ export const STARTER_DETAILS_UPDATED = "Device details updated successfully";
 export const STARTER_BOX_STATUS_UPDATED = "Device status updated successfully";
 export const PCB_SERIAL_NUMBER_REQUIRED = "PCB/Serial Number is required";
 export const MIN_3_CHARACTERS_REQUIRED = "Min has 3 characters";
+export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched successfully";
 
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
