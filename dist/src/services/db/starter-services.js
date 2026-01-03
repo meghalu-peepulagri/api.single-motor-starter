@@ -5,6 +5,7 @@ import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { starterSettings } from "../../database/schemas/starter-settings.js";
 import { users } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
@@ -12,11 +13,24 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getStarterDefaultSettings } from "./settings-services.js";
+import { prepareSettingsData } from "../../helpers/settings-helpers.js";
+import { publishStarterSettings } from "./mqtt-db-services.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
+    const defaultSettings = await getStarterDefaultSettings();
+    const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
     await db.transaction(async (trx) => {
         const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
         await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+        const settings = starter.pcb_number && await saveSingleRecord(starterSettings, {
+            starter_id: Number(starter.id), created_by: userPayload.id, pcb_number: String(starter.pcb_number),
+            ...defaultSettingsData
+        }, trx) || null;
+        const preparedSettingsData = prepareSettingsData(starter, settings);
+        if (!preparedSettingsData || !starter.pcb_number)
+            return null;
+        preparedSettingsData && starter.pcb_number && await publishStarterSettings(preparedSettingsData, String(starter.pcb_number));
     });
 }
 export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload) {

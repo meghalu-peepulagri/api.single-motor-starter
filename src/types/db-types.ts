@@ -14,9 +14,10 @@ import type { StarterDefaultSettings, StarterDefaultSettingsTable } from "../dat
 import type { StarterBoxParameters, StarterBoxParametersTable } from "../database/schemas/starter-parameters.js";
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import type { User, UsersTable } from "../database/schemas/users.js";
+import type { StarterSettings, StarterSettingsTable } from "../database/schemas/starter-settings.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
-  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable;
+  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User : any |
@@ -33,7 +34,8 @@ export type DBRecord<T extends DBTable> =
   T extends AlertsFaultsTable ? AlertsFaults : any |
   T extends DeviceRunTimeTable ? DeviceRunTime : any |
   T extends MotorRunTimeTable ? MotorRunTime : any |
-  T extends StarterDefaultSettingsTable ? StarterDefaultSettings : any;
+  T extends StarterDefaultSettingsTable ? StarterDefaultSettings : any |
+  T extends StarterSettingsTable ? StarterSettings : any;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 

@@ -7,6 +7,7 @@ import { controlMode } from "../../helpers/control-helpers.js";
 import { extractPreviousData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
+import { mqttServiceInstance } from "../mqtt-service.js";
 import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
@@ -197,4 +198,8 @@ export async function heartbeatHandler(message, topic) {
         console.error("Error at heartbeat topic handler:", error);
         throw error;
     }
+}
+export function publishStarterSettings(preparedData, pcbNumber) {
+    const topic = `peepul/${pcbNumber}/cmd`;
+    mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
 }

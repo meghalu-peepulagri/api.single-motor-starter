@@ -14,6 +14,7 @@ import * as starterBoxParameters from "./schemas/starter-parameters.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
 import * as starterDefaultSettingsSchema from "./schemas/starter-default-settings.js";
+import * as starterSettingsSchema from "./schemas/starter-settings.js";
 import env from "../env.js";
 import fs from "fs";
 const { Pool } = pg;
@@ -44,6 +45,7 @@ const db = drizzle(dbClient, {
         ...DeviceRunTimeSchema,
         ...MotorRunTimeSchema,
         ...starterDefaultSettingsSchema,
+        ...starterSettingsSchema,
     },
 });
 export default db;
