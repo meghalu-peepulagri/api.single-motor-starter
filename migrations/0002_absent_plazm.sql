@@ -1,0 +1,1 @@
+ALTER TABLE "starter_default_settings" DROP COLUMN "atml_sn";

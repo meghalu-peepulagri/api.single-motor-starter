@@ -1,21 +1,22 @@
 import type { PgInsertValue } from "drizzle-orm/pg-core";
 import type { AlertsFaults, AlertsFaultsTable } from "../database/schemas/alerts-faults.js";
+import type { DeviceRunTime, DeviceRunTimeTable } from "../database/schemas/device-runtime.js";
 import type { DeviceToken, DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import type { Field, FieldsTable } from "../database/schemas/fields.js";
 import type { Gateway, GatewayTable } from "../database/schemas/gateways.js";
 import type { LocationsTable } from "../database/schemas/locations.js";
+import type { MotorRunTime, MotorRunTimeTable } from "../database/schemas/motor-runtime.js";
 import type { MotorSchedule, MotorScheduleTable } from "../database/schemas/motor-schedules.js";
 import type { Motor, MotorsTable } from "../database/schemas/motors.js";
 import type { Otp, OtpTable } from "../database/schemas/otp.js";
 import type { StarterBox, StarterBoxTable } from "../database/schemas/starter-boxes.js";
+import type { StarterDefaultSettings, StarterDefaultSettingsTable } from "../database/schemas/starter-default-settings.js";
 import type { StarterBoxParameters, StarterBoxParametersTable } from "../database/schemas/starter-parameters.js";
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import type { User, UsersTable } from "../database/schemas/users.js";
-import type { DeviceRunTime, DeviceRunTimeTable } from "../database/schemas/device-runtime.js";
-import type { MotorRunTimeTable } from "../database/schemas/motor-runtime.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
-  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable;
+  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User : any |
@@ -30,7 +31,9 @@ export type DBRecord<T extends DBTable> =
   T extends StarterBoxParametersTable ? StarterBoxParameters : any |
   T extends MotorScheduleTable ? MotorSchedule : any |
   T extends AlertsFaultsTable ? AlertsFaults : any |
-  T extends DeviceRunTimeTable ? DeviceRunTime : any;
+  T extends DeviceRunTimeTable ? DeviceRunTime : any |
+  T extends MotorRunTimeTable ? MotorRunTime : any |
+  T extends StarterDefaultSettingsTable ? StarterDefaultSettings : any;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 

@@ -339,7 +339,7 @@ export class StarterHandlers {
             const latestStarter = await db.select({
                 id: starterBoxes.id,
                 pcbNumber: starterBoxes.pcb_number,
-            }).from(starterBoxes).where(and(ne(starterBoxes.status, "ARCHIVED"), isNotNull(starterBoxes.pcb_number))).orderBy(desc(starterBoxes.created_at)).limit(1);
+            }).from(starterBoxes).where(and(isNotNull(starterBoxes.pcb_number))).orderBy(desc(starterBoxes.created_at)).limit(1);
             return sendResponse(c, 200, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, latestStarter);
         }
         catch (error) {

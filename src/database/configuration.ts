@@ -14,6 +14,7 @@ import * as starterBoxSchema from "./schemas/starter-boxes.js";
 import * as starterBoxParameters from "./schemas/starter-parameters.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
+import * as starterDefaultSettingsSchema from "./schemas/starter-default-settings.js";
 import env from "../env.js";
 import fs from "fs";
 
@@ -46,7 +47,8 @@ const db = drizzle(dbClient, {
     ...starterBoxParameters,
     ...motorSchedulesSchema,
     ...DeviceRunTimeSchema,
-    ...MotorRunTimeSchema
+    ...MotorRunTimeSchema,
+    ...starterDefaultSettingsSchema,
   },
 });
 

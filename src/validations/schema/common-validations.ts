@@ -166,6 +166,21 @@ const pcbOrSerialNumberValidator = v.pipe(
   v.minLength(3, MIN_3_CHARACTERS_REQUIRED),
 );
 
+export const requiredNonNegativeInt = (REQ: string, NON_NEG: string) =>
+  v.pipe(v.number(REQ), v.integer(), v.minValue(0, NON_NEG));
+
+export const requiredNonNegativeNumber = (REQ: string, NON_NEG: string) =>
+  v.pipe(v.number(REQ), v.minValue(0, NON_NEG));
+
+export const requiredString = (REQ: string) =>
+  v.pipe(v.string(REQ), v.trim(), v.minLength(1, REQ));
+
+export const optionalNonNegativeInt = (REQ: string, NON_NEG: string) =>
+  v.optional(requiredNonNegativeInt(REQ, NON_NEG));
+
+export const optionalNonNegativeNumber = (REQ: string, NON_NEG: string) =>
+  v.optional(requiredNonNegativeNumber(REQ, NON_NEG));
+
 export {
   emailValidator, locationTitleValidator, nameValidator,
   passwordValidator, phoneValidator,

@@ -54,7 +54,7 @@ export const MOTOR_VALIDATION_CRITERIA = "Motor details provided do not meet the
 export const STARTER_BOX_VALIDATION_CRITERIA = "Starter Box details provided do not meet the required validation criteria";
 export const CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Create motor schedule details provided do not meet the required validation criteria";
 export const REPLACE_STARTER_BOX_VALIDATION_CRITERIA = "Replace starter box details provided do not meet the required validation criteria";
-
+export const UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA = "Update default settings details provided do not meet the required validation criteria";
 // Database
 
 export const DB_RECORD_NOT_FOUND = "Database record not found";
@@ -292,6 +292,105 @@ export const ALL_WRITE_READ_TYPES = ["OWNER", "MANAGER", "SUPERVISOR", "USER"];
 export const MOTORS_ARRAY_REQUIRED = "Motors must be a non-empty array of motors with starter IDs.";
 
 
+// Settings
+export const DEFAULT_SETTINGS_FETCHED = "Default settings fetched successfully";
+export const DEFAULT_SETTINGS_UPDATED = "Default settings updated successfully";
+
+export const SETTINGS_FIELD_NAMES = {
+  /* ================= dvc_cnfg ================= */
+
+  dvc_flt_en: "Faults enable",
+  dvc_flc: "Full load current",
+  dvc_st: "Seed time",
+
+  dvc_flt_ipf: "Input phase failure fault threshold",
+  dvc_flt_lvf: "Low voltage fault threshold",
+  dvc_flt_hvf: "High voltage fault threshold",
+  dvc_flt_vif: "Voltage imbalance fault threshold",
+  dvc_flt_paminf: "Minimum phase angle for fault",
+  dvc_flt_pamaxf: "Maximum phase angle for fault",
+
+  dvc_alt_pfa: "Phase failure alert value",
+  dvc_alt_lva: "Low voltage alert value",
+  dvc_alt_hva: "High voltage alert value",
+  dvc_alt_via: "Voltage imbalance alert value",
+  dvc_alt_pamina: "Minimum phase angle alert value",
+  dvc_alt_pamaxa: "Maximum phase angle alert value",
+
+  dvc_rec_lvr: "Low voltage recovery threshold",
+  dvc_rec_hvr: "High voltage recovery threshold",
+
+  /* ================= mtr_cnfg ================= */
+
+  mtr_flt_dr: "Dry run protection fault threshold",
+  mtr_flt_ol: "Overload fault threshold",
+  mtr_flt_lr: "Locked rotor fault threshold",
+  mtr_flt_opf: "Output phase failure",
+  mtr_flt_ci: "Current imbalance fault ratio",
+
+  mtr_alt_dr: "Dry run protection alert threshold",
+  mtr_alt_ol: "Overload alert threshold",
+  mtr_alt_lr: "Locked rotor alert threshold",
+  mtr_alt_ci: "Current imbalance alert ratio",
+
+  mtr_rec_ol: "Overload recovery threshold",
+  mtr_rec_lr: "Locked rotor recovery threshold",
+  mtr_rec_ci: "Current imbalance recovery ratio",
+
+  /* ================= atml_cnfg ================= */
+
+  atml_ug_r: "U gain R for Atmel calibration",
+  atml_ug_y: "U gain Y for Atmel calibration",
+  atml_ug_b: "U gain B for Atmel calibration",
+
+  atml_ig_r: "I gain R for Atmel calibration",
+  atml_ig_y: "I gain Y for Atmel calibration",
+  atml_ig_b: "I gain B for Atmel calibration",
+
+  /* ================= mqt_cnfg ================= */
+
+  mqt_ca_fn: "CA certificate filename",
+  mqt_bkr_adrs: "MQTT broker address",
+  mqt_c_id: "MQTT client ID",
+  mqt_emqx_usrn: "EMQX server username",
+  mqt_emqx_pswd: "EMQX server password",
+  mqt_prod_http: "Production server HTTP URL",
+  mqt_bkp_http: "Backup server HTTP URL",
+  mqt_bkr_port: "MQTT broker port",
+  mqt_ce_len: "CA certificate length",
+
+  /* ================= ivrs_cnfg ================= */
+
+  ivrs_sms_pswd: "SMS password",
+  ivrs_c_lang: "Current language",
+  ivrs_auth_num: "Authorized numbers list",
+
+  /* ================= frq_cnfg ================= */
+
+  frq_dft_liv_f: "Default live data frequency",
+  frq_h_liv_f: "High priority payload frequency",
+  frq_m_liv_f: "Medium priority payload frequency",
+  frq_l_liv_f: "Low priority payload frequency",
+  frq_pwr_info_f: "Power info payload frequency",
+
+  /* ================= feats_en ================= */
+
+  feats_ivrs_en: "IVRS feature enable",
+  feats_sms_en: "SMS feature enable",
+  feats_rmt_en: "Remote feature enable",
+
+  /* ================= flt_en ================= */
+
+  flt_en_ipf: "Input phase failure fault enable",
+  flt_en_lvf: "Low voltage fault enable",
+  flt_en_hvf: "High voltage fault enable",
+  flt_en_vif: "Voltage imbalance fault enable",
+  flt_en_dr: "Dry run protection fault enable",
+  flt_en_ol: "Overload fault enable",
+  flt_en_lr: "Locked rotor fault enable",
+  flt_en_opf: "Output phase failure fault enable",
+  flt_en_ci: "Current imbalance fault enable",
+};
 
 
 

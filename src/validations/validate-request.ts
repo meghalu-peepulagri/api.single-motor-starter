@@ -9,6 +9,7 @@ import { vAddMotorSchedule } from "./schema/motor-schedule-validators.js";
 import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
 import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
+import { vUpdateDefaultSettings } from "./schema/deafult-settings.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,
@@ -26,6 +27,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "assign-starter-web": vAssignStarterWeb,
   "update-deployed-status": vUpdateDeployedStatus,
   "assign-location-to-starter": vAssignLocationToStarter,
+  "update-default-settings": vUpdateDefaultSettings,
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(

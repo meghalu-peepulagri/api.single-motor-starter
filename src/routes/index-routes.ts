@@ -7,6 +7,7 @@ import motorSchedulesRoutes from "./motor-schedules-routes.js";
 import starterRoutes from "./starter-routes.js";
 import userActivitiesRoutes from "./user-activities.js";
 import userRoutes from "./user-routes.js";
+import settingsRoutes from "./settings-routes.js";
 
 
 const indexRoute = new Hono();
@@ -18,6 +19,7 @@ indexRoute.route("/users-activities", userActivitiesRoutes);
 indexRoute.route("/fields", fieldRoutes);
 indexRoute.route("/motors", motorRoutes);
 indexRoute.route("/starters", starterRoutes);
-indexRoute.route("/Motor-schedules", motorSchedulesRoutes);
+indexRoute.route("/motor-schedules", motorSchedulesRoutes);
+indexRoute.route("/settings", settingsRoutes);
 
 export default indexRoute;

@@ -357,7 +357,6 @@ export class StarterHandlers {
         pcbNumber: starterBoxes.pcb_number,
       }).from(starterBoxes).where(
         and(
-          ne(starterBoxes.status, "ARCHIVED"),
           isNotNull(starterBoxes.pcb_number)
         )
       ).orderBy(desc(starterBoxes.created_at)).limit(1);
