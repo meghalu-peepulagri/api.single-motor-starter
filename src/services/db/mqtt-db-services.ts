@@ -145,7 +145,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: any, previ
       await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
       await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
     }
-    if (motor_state !== prevState || mode_description !== prevMode) await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
+    if (motor_state !== prevState || mode_description !== prevMode) await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description }, trx);
     if (motor_state !== prevState || power_present !== power) {
       await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
     }
@@ -231,19 +231,14 @@ export function publishStarterSettings(preparedData: any, pcbNumber: string) {
 }
 
 export async function adminConfigDataRequestAckHandler(message: any, topic: string) {
-  console.log('topic: ', topic);
-  console.log('message: ', message);
   try {
     const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-    console.log('validMac: ', validMac);
     if (!validMac?.id) {
       console.error(`Any starter found with given MAC [${topic}]`)
       return null;
     };
 
     if (message.D === undefined || message.D === null || !validMac.id || (message.D !== 0 && message.D !== 1)) {
-      console.log('validMac.id: ', validMac.id);
-      console.log('message.D: ', message.D);
       console.error(`Invalid message data in admin config ack [${message.D}]`);
       return null;
     }

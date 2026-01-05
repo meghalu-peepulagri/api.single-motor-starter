@@ -22,11 +22,13 @@ export async function starterAcknowledgedSettings(starterId) {
     });
 }
 export async function updateLatestStarterSettings(starterId, isNewConfigurationSaved) {
+    if (!starterId)
+        return null;
     return db
         .update(starterSettings)
         .set({
         is_new_configuration_saved: isNewConfigurationSaved,
-        acknowledgement: true,
+        acknowledgement: "TRUE",
         updated_at: sql `CURRENT_TIMESTAMP`,
     })
         .where(sql `
