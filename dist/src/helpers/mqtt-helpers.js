@@ -37,3 +37,12 @@ export async function liveDataHandler(parsedMessage, topic) {
         return null;
     }
 }
+export const randomSequenceNumber = () => {
+    let lastNumber = null;
+    let random = 0;
+    do {
+        random = Math.floor(Math.random() * 255) + 1; // 1 to 255
+    } while (random === lastNumber);
+    lastNumber = random;
+    return random;
+};

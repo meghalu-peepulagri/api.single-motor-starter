@@ -1,5 +1,6 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
+import { randomSequenceNumber } from "./mqtt-helpers.js";
 // Integer only helper
 export const integerOnly = (field) => v.pipe(v.number(`${SETTINGS_FIELD_NAMES[field]} must be a number`), v.check((val) => Number.isInteger(val), `${SETTINGS_FIELD_NAMES[field]} expects an integer but received a decimal`));
 // Real (number) helper
@@ -13,7 +14,7 @@ export const prepareSettingsData = (starter, settings) => {
         return null;
     return {
         T: 4,
-        S: 5,
+        S: randomSequenceNumber(),
         D: {
             /* ================= dvc_cnfg ================= */
             dvc_cnfg: {

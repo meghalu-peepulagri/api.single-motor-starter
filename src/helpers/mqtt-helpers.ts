@@ -3,6 +3,7 @@ import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 
+
 export async function liveDataHandler(parsedMessage: any, topic: string) {
   try {
     if (!parsedMessage) return;
@@ -39,3 +40,18 @@ export async function liveDataHandler(parsedMessage: any, topic: string) {
     return null;
   }
 }
+
+
+export const randomSequenceNumber = () => {
+  let lastNumber: number | null = null;
+
+  let random: number = 0;
+
+  do {
+    random = Math.floor(Math.random() * 255) + 1; // 1 to 255
+  } while (random === lastNumber);
+
+  lastNumber = random;
+  return random;
+};
+

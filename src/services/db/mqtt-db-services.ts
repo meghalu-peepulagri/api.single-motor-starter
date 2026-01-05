@@ -220,6 +220,7 @@ export async function heartbeatHandler(message: any, topic: string) {
 }
 
 export function publishStarterSettings(preparedData: any, pcbNumber: string) {
+  if (!pcbNumber) return null;
   const topic = `peepul/${pcbNumber}/cmd`;
   mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
 }
