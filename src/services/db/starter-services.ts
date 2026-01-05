@@ -28,8 +28,9 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
   await db.transaction(async (trx) => {
     const starter = await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData, trx);
     await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+
     const settings = starter.pcb_number && await saveSingleRecord<StarterSettingsTable>(starterSettings, {
-      starter_id: Number(starter.id), created_by: userPayload.id, pcb_number: String(starter.pcb_number),
+      starter_id: Number(starter.id), created_by: userPayload.id, pcb_number: String(starter.pcb_number), acknowledgement: "TRUE",
       ...defaultSettingsData
     }, trx) || null;
 

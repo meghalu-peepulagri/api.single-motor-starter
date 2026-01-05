@@ -47,6 +47,11 @@ export function findTopicACKByType(payload: any) {
     case 40: return "HEART_BEAT";
     case 42: return "QUECTEL_FILE_DELETE_ACK";
     case 43: return "QUECTEL_FILE_ADD_ACK";
+    case 44: return "ADMIN_CONFIG_DATA_REQUEST_ACK"
+    case 45: return "FOTA_REQUEST_ACK"
+    case 46: return "FOTA_FILE_INFO_ACK"
+    case 47: return "FOTA_INITIALIZATION_REQUEST_ACK"
+
     default: return "UNKNOWN";
   }
 }

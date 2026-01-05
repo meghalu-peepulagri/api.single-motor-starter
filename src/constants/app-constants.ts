@@ -55,6 +55,7 @@ export const STARTER_BOX_VALIDATION_CRITERIA = "Starter Box details provided do 
 export const CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Create motor schedule details provided do not meet the required validation criteria";
 export const REPLACE_STARTER_BOX_VALIDATION_CRITERIA = "Replace starter box details provided do not meet the required validation criteria";
 export const UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA = "Update default settings details provided do not meet the required validation criteria";
+export const INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA = "Insert starter settings details provided do not meet the required validation criteria";
 // Database
 
 export const DB_RECORD_NOT_FOUND = "Database record not found";
@@ -295,6 +296,9 @@ export const MOTORS_ARRAY_REQUIRED = "Motors must be a non-empty array of motors
 // Settings
 export const DEFAULT_SETTINGS_FETCHED = "Default settings fetched successfully";
 export const DEFAULT_SETTINGS_UPDATED = "Default settings updated successfully";
+export const DEFAULT_SETTINGS_NOT_FOUND = "Default settings not found";
+export const SETTINGS_FETCHED = "Settings details fetched successfully";
+export const ADDED_STARTER_SETTINGS = "Starter settings updated successfully";
 
 export const SETTINGS_FIELD_NAMES = {
   /* ================= dvc_cnfg ================= */

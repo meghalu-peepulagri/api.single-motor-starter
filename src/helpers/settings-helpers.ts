@@ -41,7 +41,7 @@ export const prepareSettingsData = (starter: StarterBoxTable, settings: StarterS
   if (!starter?.pcb_number || !settings) return null;
 
   return {
-    T: 4,
+    T: 13,
     S: randomSequenceNumber(),
 
     D: {
