@@ -13,7 +13,7 @@ export const prepareSettingsData = (starter, settings) => {
     if (!starter?.pcb_number || !settings)
         return null;
     return {
-        T: 4,
+        T: 13,
         S: randomSequenceNumber(),
         D: {
             /* ================= dvc_cnfg ================= */

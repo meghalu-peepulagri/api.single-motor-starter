@@ -10,6 +10,7 @@ import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-he
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
+import { updateLatestStarterSettings } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {
@@ -48,6 +49,9 @@ export async function selectTopicAck(topicType, payload, topic) {
             break;
         case "HEART_BEAT":
             await heartbeatHandler(payload, topic);
+            break;
+        case "ADMIN_CONFIG_DATA_REQUEST_ACK":
+            await adminConfigDataRequestAckHandler(payload, topic);
             break;
         default:
             return null;
@@ -97,7 +101,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
     });
 }
 export async function updateDevicePowerONAndMotorStateOFF(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, location_id, time_stamp } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp } = insertedData;
     const { power, prevState, locationId } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
@@ -204,4 +208,28 @@ export function publishStarterSettings(preparedData, pcbNumber) {
         return null;
     const topic = `peepul/${pcbNumber}/cmd`;
     mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
+}
+export async function adminConfigDataRequestAckHandler(message, topic) {
+    console.log('topic: ', topic);
+    console.log('message: ', message);
+    try {
+        const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+        console.log('validMac: ', validMac);
+        if (!validMac?.id) {
+            console.error(`Any starter found with given MAC [${topic}]`);
+            return null;
+        }
+        ;
+        if (message.D === undefined || message.D === null || !validMac.id || (message.D !== 0 && message.D !== 1)) {
+            console.log('validMac.id: ', validMac.id);
+            console.log('message.D: ', message.D);
+            console.error(`Invalid message data in admin config ack [${message.D}]`);
+            return null;
+        }
+        await updateLatestStarterSettings(validMac.id, message.D);
+    }
+    catch (error) {
+        console.error("Error at heartbeat topic handler:", error);
+        throw error;
+    }
 }
