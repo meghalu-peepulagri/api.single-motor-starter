@@ -124,7 +124,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
             await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
         if (motor_state !== prevState || mode_description !== prevMode)
-            await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
+            await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description }, trx);
         if (motor_state !== prevState || power_present !== power) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
         }
