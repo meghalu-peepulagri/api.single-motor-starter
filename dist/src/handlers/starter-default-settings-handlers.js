@@ -9,6 +9,9 @@ import { getStarterDefaultSettings, starterAcknowledgedSettings } from "../servi
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { prepareSettingsData } from "../helpers/settings-helpers.js";
+import { publishStarterSettings } from "../services/db/mqtt-db-services.js";
+import { buildCategoryPayload, randomSequenceNumber } from "../helpers/mqtt-helpers.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettings = async (c) => {
@@ -66,7 +69,19 @@ export class StarterDefaultSettingsHandlers {
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             const validatedBody = await validatedRequest("update-default-settings", reqBody, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
-            await saveSingleRecord(starterSettings, { starter_id: Number(starterData.id), created_by: userPayload.id, pcb_number: String(starterData.pcb_number), ...validatedBody });
+            const updatedSettings = await saveSingleRecord(starterSettings, {
+                starter_id: Number(starterData.id),
+                created_by: userPayload.id,
+                pcb_number: String(starterData.pcb_number),
+                ...validatedBody,
+            });
+            const oldSettings = starterData || {};
+            const newSettings = updatedSettings || validatedBody;
+            const dynamicPayload = { T: 13, S: randomSequenceNumber(), D: buildCategoryPayload(oldSettings, newSettings) };
+            if (!dynamicPayload.D || Object.keys(dynamicPayload.D).length === 0 || !starterData.pcb_number) {
+                throw new BadRequestException("Failed to add starter settings");
+            }
+            await publishStarterSettings(dynamicPayload, String(starterData.pcb_number));
             return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
         }
         catch (error) {

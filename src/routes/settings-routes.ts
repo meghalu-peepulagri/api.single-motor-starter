@@ -11,4 +11,5 @@ settingsRoutes.get("/default", isAuthorized, isAdmin, settingsHandlers.getStarte
 settingsRoutes.patch("/default/:id", isAuthorized, isAdmin, settingsHandlers.updateStarterDefaultSettings);
 settingsRoutes.get("/starter/:starter_id", isAuthorized, settingsHandlers.getAcknowledgedStarterSettings);
 settingsRoutes.post("/starter/:starter_id", isAuthorized, settingsHandlers.insertStarterSetting);
+
 export default settingsRoutes;

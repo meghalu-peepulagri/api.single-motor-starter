@@ -46,3 +46,36 @@ export const randomSequenceNumber = () => {
     lastNumber = random;
     return random;
 };
+export function buildCategoryPayload(oldData, newData) {
+    const payload = {};
+    for (const category in newData) {
+        if (!(category in oldData) || hasAnyChange(oldData[category], newData[category])) {
+            payload[category] = newData[category];
+        }
+    }
+    return payload;
+}
+export function hasAnyChange(a, b) {
+    if (a === b)
+        return false;
+    if (typeof a !== "object" || typeof b !== "object" || a === null || b === null)
+        return true;
+    if (Array.isArray(a) || Array.isArray(b))
+        return JSON.stringify(a) !== JSON.stringify(b);
+    for (const key in b) {
+        if (!(key in a))
+            return true;
+        const av = a[key];
+        const bv = b[key];
+        if (av === bv)
+            continue;
+        if (typeof av === "object" && typeof bv === "object") {
+            if (hasAnyChange(av, bv))
+                return true;
+        }
+        else {
+            return true;
+        }
+    }
+    return false;
+}

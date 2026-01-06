@@ -55,3 +55,32 @@ export const randomSequenceNumber = () => {
   return random;
 };
 
+export function buildCategoryPayload(oldData: Record<string, any>, newData: Record<string, any>): Record<string, any> {
+  const payload: Record<string, any> = {};
+  for (const category in newData) {
+    if (!(category in oldData) || hasAnyChange(oldData[category], newData[category])) {
+      payload[category] = newData[category];
+    }
+  }
+  return payload;
+}
+
+export function hasAnyChange(a: any, b: any): boolean {
+  if (a === b) return false;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return true;
+  if (Array.isArray(a) || Array.isArray(b)) return JSON.stringify(a) !== JSON.stringify(b);
+
+  for (const key in b) {
+    if (!(key in a)) return true;
+    const av = a[key];
+    const bv = b[key];
+    if (av === bv) continue;
+    if (typeof av === "object" && typeof bv === "object") {
+      if (hasAnyChange(av, bv)) return true;
+    } else {
+      return true;
+    }
+  }
+
+  return false;
+}
