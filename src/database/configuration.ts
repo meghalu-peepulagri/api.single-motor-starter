@@ -16,6 +16,7 @@ import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
 import * as starterDefaultSettingsSchema from "./schemas/starter-default-settings.js";
 import * as starterSettingsSchema from "./schemas/starter-settings.js";
+import * as starterSettingsLimitsSchema from "./schemas/starter-settings-limits.js";
 import env from "../env.js";
 import fs from "fs";
 
@@ -51,6 +52,7 @@ const db = drizzle(dbClient, {
     ...MotorRunTimeSchema,
     ...starterDefaultSettingsSchema,
     ...starterSettingsSchema,
+    ...starterSettingsLimitsSchema
   },
 });
 

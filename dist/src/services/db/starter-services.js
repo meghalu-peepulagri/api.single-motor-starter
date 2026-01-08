@@ -16,6 +16,7 @@ import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updat
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { publishStarterSettings } from "./mqtt-db-services.js";
+import { starterSettingsLimits } from "../../database/schemas/starter-settings-limits.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     const defaultSettings = await getStarterDefaultSettings();
@@ -31,6 +32,8 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload) 
         if (!preparedSettingsData || !starter.pcb_number)
             return null;
         preparedSettingsData && starter.pcb_number && await publishStarterSettings(preparedSettingsData, String(starter.pcb_number));
+        if (starter)
+            saveSingleRecord(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
     });
 }
 export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload) {

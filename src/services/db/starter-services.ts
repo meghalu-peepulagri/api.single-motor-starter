@@ -19,6 +19,7 @@ import { getStarterDefaultSettings } from "./settings-services.js";
 import type { StarterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { publishStarterSettings } from "./mqtt-db-services.js";
+import { starterSettingsLimits, type StarterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
@@ -37,6 +38,7 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
     const preparedSettingsData = prepareSettingsData(starter, settings);
     if (!preparedSettingsData || !starter.pcb_number) return null;
     preparedSettingsData && starter.pcb_number && await publishStarterSettings(preparedSettingsData, String(starter.pcb_number));
+    if (starter) saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
   })
 }
 
