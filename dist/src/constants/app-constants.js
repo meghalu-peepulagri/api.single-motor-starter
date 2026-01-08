@@ -51,6 +51,7 @@ export const CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Create motor schedule 
 export const REPLACE_STARTER_BOX_VALIDATION_CRITERIA = "Replace starter box details provided do not meet the required validation criteria";
 export const UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA = "Update default settings details provided do not meet the required validation criteria";
 export const INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA = "Insert starter settings details provided do not meet the required validation criteria";
+export const UPDATE_STARTER_SETTINGS_LIMITS_VALIDATION_CRITERIA = "Update starter settings limits details provided do not meet the required validation criteria";
 // Database
 export const DB_RECORD_NOT_FOUND = "Database record not found";
 export const DB_SAVE_DATA_FAILED = "Failed to save data in database";
@@ -270,6 +271,9 @@ export const DEFAULT_SETTINGS_UPDATED = "Default settings updated successfully";
 export const DEFAULT_SETTINGS_NOT_FOUND = "Default settings not found";
 export const SETTINGS_FETCHED = "Settings details fetched successfully";
 export const ADDED_STARTER_SETTINGS = "Starter settings updated successfully";
+export const SETTINGS_LIMITS_FETCHED = "Settings limits fetched successfully";
+export const SETTINGS_LIMITS_UPDATED = "Settings limits updated successfully";
+export const SETTINGS_LIMITS_NOT_FOUND = "Settings limits id not found";
 export const SETTINGS_FIELD_NAMES = {
     /* ================= dvc_cnfg ================= */
     dvc_flt_en: "Faults enable",

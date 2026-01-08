@@ -28,6 +28,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "update-deployed-status": vUpdateDeployedStatus,
   "assign-location-to-starter": vAssignLocationToStarter,
   "update-default-settings": vUpdateDefaultSettings,
+  "update-settings-limits": vUpdateDefaultSettings
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(

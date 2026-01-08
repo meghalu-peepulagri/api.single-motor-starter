@@ -11,7 +11,7 @@ export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | Vali
   | ValidatedMotorScheduleArray | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings;
 
 export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "add-starter" | "create-motor-schedule" | "assign-starter" | "replace-starter" |
-  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings";
+  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-settings-limits";
 
 export interface IResp {
   status: ContentfulStatusCode;

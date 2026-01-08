@@ -25,6 +25,7 @@ const schemaMap = {
     "update-deployed-status": vUpdateDeployedStatus,
     "assign-location-to-starter": vAssignLocationToStarter,
     "update-default-settings": vUpdateDefaultSettings,
+    "update-settings-limits": vUpdateDefaultSettings
 };
 export async function validatedRequest(actionType, reqData, errorMessage) {
     const schema = schemaMap[actionType];

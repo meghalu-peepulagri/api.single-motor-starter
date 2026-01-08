@@ -1,7 +1,6 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import type { StarterBoxTable } from "../database/schemas/starter-boxes.js";
-import type { StarterSettingsTable } from "../database/schemas/starter-settings.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 // Integer only helper
 export const integerOnly = (field: keyof typeof SETTINGS_FIELD_NAMES) =>

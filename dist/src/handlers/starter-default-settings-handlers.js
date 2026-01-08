@@ -1,11 +1,12 @@
-import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, DEVICE_SCHEMA, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, DEVICE_SCHEMA, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA, UPDATE_STARTER_SETTINGS_LIMITS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { starterDefaultSettings } from "../database/schemas/starter-default-settings.js";
+import { starterSettingsLimits } from "../database/schemas/starter-settings-limits.js";
 import { starterSettings } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { buildCategoryPayloadFromFlat, publishWithRetry, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
-import { getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
+import { getRecordById, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
 import { publishStarterSettings } from "../services/db/mqtt-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
 import { handleJsonParseError } from "../utils/on-error.js";
@@ -99,6 +100,35 @@ export class StarterDefaultSettingsHandlers {
         }
         catch (error) {
             console.error("Error at insertStarterSetting:", error);
+            throw error;
+        }
+    };
+    getStarterSettingsLimits = async (c) => {
+        try {
+            const starterId = +c.req.param("starter_id");
+            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starterData)
+                throw new BadRequestException(DEVICE_NOT_FOUND);
+            const limits = await getSingleRecordByAColumnValue(starterSettingsLimits, "starter_id", "=", starterData.id);
+            return sendResponse(c, 200, SETTINGS_LIMITS_FETCHED, limits);
+        }
+        catch (error) {
+            console.error("Error at getStarterSettingsLimits:", error);
+            throw error;
+        }
+    };
+    updateStarterSettingsLimits = async (c) => {
+        try {
+            const settingId = +c.req.param("id");
+            const body = await c.req.json();
+            const foundedSettingId = await getRecordById(starterSettingsLimits, settingId);
+            if (!foundedSettingId)
+                throw new BadRequestException(SETTINGS_LIMITS_NOT_FOUND);
+            await updateRecordById(starterSettingsLimits, settingId, body);
+            return sendResponse(c, 200, SETTINGS_LIMITS_UPDATED);
+        }
+        catch (error) {
+            console.error("Error at updateStarterSettingsLimits:", error);
             throw error;
         }
     };
