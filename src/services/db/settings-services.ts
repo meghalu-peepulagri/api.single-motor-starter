@@ -1,7 +1,8 @@
+import { and, desc, eq, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { starterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { DEVICE_SCHEMA } from "../../constants/app-constants.js";
 
 export async function getStarterDefaultSettings() {
   return await db.select().from(starterDefaultSettings).limit(1);
@@ -44,3 +45,38 @@ export async function updateLatestStarterSettings(starterId: number, isNewConfig
       `
     );
 }
+
+type DeviceCategory = keyof typeof DEVICE_SCHEMA;
+
+
+export const prepareStarterSettingsData = (
+  dynamicPayload: { T: number; S: number; D: Partial<Record<DeviceCategory, any>> }
+) => {
+  if (!dynamicPayload?.D || Object.keys(dynamicPayload.D).length === 0) {
+    return null;
+  }
+
+  const filteredD: Partial<Record<DeviceCategory, any>> = {};
+
+  (Object.keys(dynamicPayload.D) as DeviceCategory[]).forEach((category) => {
+    const value = dynamicPayload.D?.[category];
+
+    if (
+      value &&
+      typeof value === "object" &&
+      Object.keys(value).length > 0
+    ) {
+      filteredD[category] = value;
+    }
+  });
+
+  if (Object.keys(filteredD).length === 0) {
+    return null;
+  }
+
+  return {
+    T: dynamicPayload.T,
+    S: dynamicPayload.S,
+    D: filteredD,
+  };
+};

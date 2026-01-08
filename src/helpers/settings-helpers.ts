@@ -37,7 +37,7 @@ export const requiredText = (field: keyof typeof SETTINGS_FIELD_NAMES) =>
   v.string(`${SETTINGS_FIELD_NAMES[field]} is required`);
 
 
-export const prepareSettingsData = (starter: StarterBoxTable, settings: StarterSettingsTable | null) => {
+export const prepareSettingsData = (starter: StarterBoxTable, settings: any) => {
   if (!starter?.pcb_number || !settings) return null;
 
   return {
