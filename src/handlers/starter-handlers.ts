@@ -155,6 +155,9 @@ export class StarterHandlers {
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [validatedStarterReq.motor_id, "ARCHIVED"]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
 
+      const foundMotorName = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [motor.alias_name, validatedStarterReq.location_id, "ARCHIVED"]);
+      if (foundMotorName) throw new ConflictException("Pump name already exists in this location.");
+
       await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id);
       return sendResponse(c, 201, STARTER_REPLACED_SUCCESSFULLY);
     } catch (error: any) {
