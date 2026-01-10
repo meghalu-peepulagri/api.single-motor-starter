@@ -20,6 +20,15 @@ export async function starterAcknowledgedSettings(starterId: number) {
           pcb_number: true,
           mac_address: true,
         },
+        with: {
+          motors: {
+            columns: {
+              id: true,
+              name: true,
+              hp: true,
+            },
+          },
+        },
       },
     },
   });
