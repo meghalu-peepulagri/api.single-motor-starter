@@ -134,6 +134,9 @@ export class MqttService {
             throw error;
         }
     };
+    getClient() {
+        return this.client;
+    }
 }
 // Create a single instance
 export const mqttServiceInstance = new MqttService();

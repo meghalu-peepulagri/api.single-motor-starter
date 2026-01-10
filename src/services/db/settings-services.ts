@@ -25,6 +25,8 @@ export async function starterAcknowledgedSettings(starterId: number) {
   });
 }
 
+
+
 export async function updateLatestStarterSettings(starterId: number, isNewConfigurationSaved: number) {
   if (!starterId) return null;
   return db

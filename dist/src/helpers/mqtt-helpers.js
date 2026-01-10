@@ -42,7 +42,7 @@ export function randomSequenceNumber() {
     let lastNumber = null;
     let random = 0;
     do {
-        random = Math.floor(Math.random() * 255) + 1; // 1 to 255
+        random = Math.floor(Math.random() * 256) + 1; // 1 to 255
     } while (random === lastNumber);
     lastNumber = random;
     return random;
@@ -172,31 +172,37 @@ export function buildCategoryPayloadFromFlat(oldData, newData, DEVICE_SCHEMA) {
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 export const publishWithRetry = async (publishFn, options) => {
     const { attempts, delaysBeforeSendMs, ackTimeoutsMs } = options;
+    // Validate retry options
     if (delaysBeforeSendMs.length !== attempts ||
         ackTimeoutsMs.length !== attempts) {
         throw new Error("Retry options arrays must match the number of attempts");
     }
+    let lastError = null;
     for (let i = 0; i < attempts; i++) {
-        const attemptNum = i + 1;
-        // Delay before sending
-        if (delaysBeforeSendMs[i] > 0) {
-            await sleep(delaysBeforeSendMs[i]);
-        }
+        const attemptNumber = i + 1;
         try {
+            // Delay before publish (skip if 0)
+            if (delaysBeforeSendMs[i] > 0) {
+                console.log(`Waiting ${delaysBeforeSendMs[i]}ms before attempt ${attemptNumber}`);
+                await sleep(delaysBeforeSendMs[i]);
+            }
+            console.log(`Publishing attempt ${attemptNumber}/${attempts}`);
             // Publish message
             await publishFn();
-            // Wait for ACK (implementation can be plugged in here)
-            // const ackReceived = await waitForAck(ackTimeoutsMs[i]);
-            // if (ackReceived) {
-            //   return { success: true, attempts: attemptNum };
-            // }
+            // If we reach here, publish succeeded
+            console.log(`Publish attempt ${attemptNumber} succeeded`);
+            return { success: true, attempts: attemptNumber };
         }
-        catch {
-            // Swallow error and continue retrying
-        }
-        if (i === attempts - 1) {
-            return { success: false, attempts };
+        catch (error) {
+            lastError = error;
+            console.error(`Publish attempt ${attemptNumber}/${attempts} failed:`, error);
+            // If this is not the last attempt, continue to retry
+            if (i < attempts - 1) {
+                console.log(`Will retry... (${attempts - attemptNumber} attempts remaining)`);
+            }
         }
     }
+    // All retries exhausted
+    console.error(`All ${attempts} publish attempts failed. Last error:`, lastError);
     return { success: false, attempts };
 };

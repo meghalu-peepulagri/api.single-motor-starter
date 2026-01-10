@@ -69,3 +69,9 @@ export interface AssignStarterType {
   location_id: number;
   hp: number;
 }
+
+export interface RetryOptions {
+  attempts: number;
+  delaysBeforeSendMs: number[]; // delays before each attempt
+  ackTimeoutsMs: number[];      // time to wait for ACK per attempt
+}

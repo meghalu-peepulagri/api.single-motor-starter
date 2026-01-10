@@ -1,7 +1,9 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import type { StarterBoxTable } from "../database/schemas/starter-boxes.js";
+import { publishStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
+
 // Integer only helper
 export const integerOnly = (field: keyof typeof SETTINGS_FIELD_NAMES) =>
   v.pipe(
@@ -159,4 +161,49 @@ export const prepareSettingsData = (starter: StarterBoxTable, settings: any) => 
       },
     },
   };
+};
+
+
+
+import { ACK_TYPES } from "./packet-types-helper.js";
+
+const validateSettingsAck = (payload: any, expectedSequence: number) => {
+  return (
+    payload &&
+    payload.T === ACK_TYPES.ADMIN_CONFIG_DATA_REQUEST_ACK &&
+    payload.S === expectedSequence &&
+    (payload.D === 0 || payload.D === 1)
+  );
+};
+
+export const publishMultipleTimesInBackground = async (
+  devicePayload: any,
+  pcbNumber: string,
+  starterId: number
+): Promise<void> => {
+  const totalAttempts = 3;
+  const ackWaitTimes = [3000, 5000, 5000];
+
+  const isAckValid = (payload: any) => validateSettingsAck(payload, devicePayload.S);
+
+  for (let i = 0; i < totalAttempts; i++) {
+    try {
+      publishStarterSettings(devicePayload, pcbNumber);
+
+      const ackReceived = await waitForAck(
+        pcbNumber,
+        ackWaitTimes[i],
+        isAckValid
+      );
+
+      if (ackReceived) {
+        return; // stop retries on ACK
+      }
+
+    } catch (error) {
+      console.error(`Attempt ${i + 1} failed for starter ${starterId}:`, error);
+    }
+  }
+
+  console.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterId}.`);
 };

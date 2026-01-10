@@ -1,5 +1,6 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
+import { publishStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 // Integer only helper
 export const integerOnly = (field) => v.pipe(v.number(`${SETTINGS_FIELD_NAMES[field]} must be a number`), v.check((val) => Number.isInteger(val), `${SETTINGS_FIELD_NAMES[field]} expects an integer but received a decimal`));
@@ -119,4 +120,29 @@ export const prepareSettingsData = (starter, settings) => {
             },
         },
     };
+};
+import { ACK_TYPES } from "./packet-types-helper.js";
+const validateSettingsAck = (payload, expectedSequence) => {
+    return (payload &&
+        payload.T === ACK_TYPES.ADMIN_CONFIG_DATA_REQUEST_ACK &&
+        payload.S === expectedSequence &&
+        (payload.D === 0 || payload.D === 1));
+};
+export const publishMultipleTimesInBackground = async (devicePayload, pcbNumber, starterId) => {
+    const totalAttempts = 3;
+    const ackWaitTimes = [3000, 5000, 5000];
+    const isAckValid = (payload) => validateSettingsAck(payload, devicePayload.S);
+    for (let i = 0; i < totalAttempts; i++) {
+        try {
+            publishStarterSettings(devicePayload, pcbNumber);
+            const ackReceived = await waitForAck(pcbNumber, ackWaitTimes[i], isAckValid);
+            if (ackReceived) {
+                return; // stop retries on ACK
+            }
+        }
+        catch (error) {
+            console.error(`Attempt ${i + 1} failed for starter ${starterId}:`, error);
+        }
+    }
+    console.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterId}.`);
 };

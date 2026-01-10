@@ -249,3 +249,68 @@ export async function adminConfigDataRequestAckHandler(message: any, topic: stri
     throw error;
   }
 }
+
+export const waitForAck = (
+  pcbNumber: string,
+  timeoutMs: number,
+  validator?: (message: any) => boolean
+): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const mqttClient = mqttServiceInstance.getClient();
+
+    if (!mqttClient || !mqttClient.connected) {
+      console.error("MQTT client not connected");
+      resolve(false);
+      return;
+    }
+
+    let settled = false;
+    const topic = `peepul/${pcbNumber}/status`;
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        mqttClient.removeListener("message", onMessage);
+        resolve(false);
+      }
+    }, timeoutMs);
+
+    const onMessage = (receivedTopic: string, message: Buffer | string) => {
+      if (receivedTopic !== topic) return;
+
+      try {
+        const payloadStr = message.toString();
+        const payload = JSON.parse(payloadStr);
+
+        // If a validator is provided, use it
+        if (validator) {
+          if (validator(payload)) {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timeout);
+              mqttClient.removeListener("message", onMessage);
+              resolve(true);
+            }
+          }
+          return;
+        }
+
+        // Default behavior (legacy): just check if it's a valid JSON with T
+        if (payload && payload.T) {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timeout);
+            mqttClient.removeListener("message", onMessage);
+            resolve(true);
+          }
+        }
+
+      } catch (e) {
+        // failed to parse, ignore
+      }
+    };
+
+    mqttClient.subscribe(topic);
+    mqttClient.on("message", onMessage);
+  });
+};

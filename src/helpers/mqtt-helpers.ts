@@ -1,6 +1,7 @@
 import { DEVICE_SCHEMA } from "../constants/app-constants.js";
 import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
+import type { RetryOptions } from "../types/app-types.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 
@@ -49,7 +50,7 @@ export function randomSequenceNumber() {
   let random: number = 0;
 
   do {
-    random = Math.floor(Math.random() * 255) + 1; // 1 to 255
+    random = Math.floor(Math.random() * 256) + 1; // 1 to 255
   } while (random === lastNumber);
 
   lastNumber = random;
@@ -206,50 +207,55 @@ export function buildCategoryPayloadFromFlat(
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-interface RetryOptions {
-  attempts: number;
-  delaysBeforeSendMs: number[]; // delays before each attempt
-  ackTimeoutsMs: number[];      // time to wait for ACK per attempt
-}
-
 export const publishWithRetry = async (
   publishFn: () => Promise<void>,
   options: RetryOptions
 ): Promise<{ success: boolean; attempts: number }> => {
   const { attempts, delaysBeforeSendMs, ackTimeoutsMs } = options;
-
+  
+  // Validate retry options
   if (
     delaysBeforeSendMs.length !== attempts ||
     ackTimeoutsMs.length !== attempts
   ) {
-    throw new Error("Retry options arrays must match the number of attempts");
+    throw new Error(
+      "Retry options arrays must match the number of attempts"
+    );
   }
+
+  let lastError: any = null;
 
   for (let i = 0; i < attempts; i++) {
-    const attemptNum = i + 1;
-
-    // Delay before sending
-    if (delaysBeforeSendMs[i] > 0) {
-      await sleep(delaysBeforeSendMs[i]);
-    }
-
+    const attemptNumber = i + 1;
+    
     try {
+      // Delay before publish (skip if 0)
+      if (delaysBeforeSendMs[i] > 0) {
+        console.log(`Waiting ${delaysBeforeSendMs[i]}ms before attempt ${attemptNumber}`);
+        await sleep(delaysBeforeSendMs[i]);
+      }
+      
+      console.log(`Publishing attempt ${attemptNumber}/${attempts}`);
+      
       // Publish message
       await publishFn();
-
-      // Wait for ACK (implementation can be plugged in here)
-      // const ackReceived = await waitForAck(ackTimeoutsMs[i]);
-      // if (ackReceived) {
-      //   return { success: true, attempts: attemptNum };
-      // }
-    } catch {
-      // Swallow error and continue retrying
-    }
-
-    if (i === attempts - 1) {
-      return { success: false, attempts };
+      
+      // If we reach here, publish succeeded
+      console.log(`Publish attempt ${attemptNumber} succeeded`);
+      return { success: true, attempts: attemptNumber };
+      
+    } catch (error) {
+      lastError = error;
+      console.error(`Publish attempt ${attemptNumber}/${attempts} failed:`, error);
+      
+      // If this is not the last attempt, continue to retry
+      if (i < attempts - 1) {
+        console.log(`Will retry... (${attempts - attemptNumber} attempts remaining)`);
+      }
     }
   }
-
+  
+  // All retries exhausted
+  console.error(`All ${attempts} publish attempts failed. Last error:`, lastError);
   return { success: false, attempts };
 };

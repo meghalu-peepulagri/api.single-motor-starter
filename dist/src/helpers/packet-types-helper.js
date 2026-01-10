@@ -9,7 +9,8 @@ export const REQUEST_TYPES = {
     POWER_INFO_REQUEST: 8,
     DEVICE_INFO_REQUEST: 10,
     QUECTEL_FILE_DELETE: 11,
-    QUECTEL_FILE_ADD: 12
+    QUECTEL_FILE_ADD: 12,
+    UPDATE_STARTER_SETTINGS: 13
 };
 export const ACK_TYPES = {
     LIVE_DATA: 41,
@@ -24,7 +25,8 @@ export const ACK_TYPES = {
     DEVICE_INFO_ACK: 39,
     HEART_BEAT: 40,
     QUECTEL_FILE_DELETE_ACK: 42,
-    QUECTEL_FILE_ADD_ACK: 43
+    QUECTEL_FILE_ADD_ACK: 43,
+    ADMIN_CONFIG_DATA_REQUEST_ACK: 44
 };
 export function findTopicACKByType(payload) {
     const type = payload.T;

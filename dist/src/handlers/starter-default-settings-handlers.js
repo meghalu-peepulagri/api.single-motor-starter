@@ -1,17 +1,17 @@
-import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, DEVICE_SCHEMA, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA, UPDATE_STARTER_SETTINGS_LIMITS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, DEVICE_SCHEMA, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { starterDefaultSettings } from "../database/schemas/starter-default-settings.js";
 import { starterSettingsLimits } from "../database/schemas/starter-settings-limits.js";
 import { starterSettings } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
-import { buildCategoryPayloadFromFlat, publishWithRetry, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
-import { getRecordById, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
-import { publishStarterSettings } from "../services/db/mqtt-db-services.js";
+import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
+import { getRecordById, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettings = async (c) => {
@@ -74,28 +74,24 @@ export class StarterDefaultSettingsHandlers {
             if (!Object.keys(cleanedBody).length) {
                 throw new BadRequestException("No valid settings provided");
             }
-            const oldSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "pcb_number", "is_new_configuration_saved", "acknowledgement"], ["=", "=", "=", "="], [starterId, starter.pcb_number, 1, "TRUE"]) || {};
+            const oldSettings = (await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "pcb_number", "is_new_configuration_saved", "acknowledgement"], ["=", "=", "=", "="], [starterId, starter.pcb_number, 1, "TRUE"])) || {};
             const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
             if (!Object.keys(delta).length) {
                 return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
             }
             const devicePayload = prepareStarterSettingsData({ T: 13, S: randomSequenceNumber(), D: delta });
-            if (!devicePayload?.D) {
-                return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
-            }
-            const retryOptions = {
-                attempts: 3,
-                delaysBeforeSendMs: [5000, 5000, 3000],
-                ackTimeoutsMs: [0, 0, 0],
-            };
             if (devicePayload?.D) {
-                const result = await publishWithRetry(async () => {
-                    await publishStarterSettings(devicePayload, String(starter.pcb_number));
-                }, retryOptions);
-                if (!result.success) {
-                    throw new BadRequestException("Failed to publish settings");
-                }
+                setImmediate(async () => {
+                    try {
+                        await publishMultipleTimesInBackground(devicePayload, String(starter.pcb_number), starter.id);
+                    }
+                    catch (error) {
+                        // TODO: Remove catch only for logging
+                        console.error("Background publish failed:", error);
+                    }
+                });
             }
+            await saveSingleRecord(starterSettings, { ...cleanedBody, starter_id: starter.id, pcb_number: String(starter.pcb_number), created_by: user.id });
             return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
         }
         catch (error) {

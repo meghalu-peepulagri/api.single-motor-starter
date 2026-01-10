@@ -164,6 +164,11 @@ export class MqttService {
       throw error;
     }
   };
+
+  public getClient(): MqttClient | null {
+    return this.client;
+  }
+
 }
 
 // Create a single instance
