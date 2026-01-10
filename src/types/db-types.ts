@@ -12,10 +12,10 @@ import type { Otp, OtpTable } from "../database/schemas/otp.js";
 import type { StarterBox, StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import type { StarterDefaultSettings, StarterDefaultSettingsTable } from "../database/schemas/starter-default-settings.js";
 import type { StarterBoxParameters, StarterBoxParametersTable } from "../database/schemas/starter-parameters.js";
+import type { StarterSettingsLimits, StarterSettingsLimitsTable } from "../database/schemas/starter-settings-limits.js";
+import type { StarterSettings, StarterSettingsTable } from "../database/schemas/starter-settings.js";
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import type { User, UsersTable } from "../database/schemas/users.js";
-import type { StarterSettings, StarterSettingsTable } from "../database/schemas/starter-settings.js";
-import type { StarterSettingsLimits, StarterSettingsLimitsTable } from "../database/schemas/starter-settings-limits.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
   MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable;

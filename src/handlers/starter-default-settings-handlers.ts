@@ -7,13 +7,14 @@ import { starterSettings, type StarterSettingsTable } from "../database/schemas/
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
-import { getRecordById, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
+import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/deafult-settings.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
+import type { WhereQueryData } from "../types/db-types.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -146,6 +147,26 @@ export class StarterDefaultSettingsHandlers {
       return sendResponse(c, 200, SETTINGS_LIMITS_UPDATED);
     } catch (error) {
       console.error("Error at updateStarterSettingsLimits:", error);
+      throw error;
+    }
+  };
+
+  getStarterAckHistory = async (c: Context) => {
+    try {
+      const starterId = +c.req.param("starter_id");
+      const starterData: StarterBoxTable = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
+
+      const whereQuery: WhereQueryData<StarterSettingsTable> = {
+        columns: ["starter_id"],
+        relations: ["="],
+        values: [starterData.id],
+      }
+
+      const ackHistory = await getRecordsConditionally<StarterSettingsTable>(starterSettings, whereQuery, ["id", "acknowledgement", "time_stamp", "created_at", "updated_at"]);
+      return sendResponse(c, 200, SETTINGS_FETCHED, ackHistory);
+    } catch (error) {
+      console.error("Error at getStarterAckHistory:", error);
       throw error;
     }
   };

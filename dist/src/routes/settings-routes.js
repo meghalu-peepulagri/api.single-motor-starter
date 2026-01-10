@@ -10,4 +10,5 @@ settingsRoutes.get("/starter/:starter_id", isAuthorized, settingsHandlers.getAck
 settingsRoutes.post("/starter/:starter_id", isAuthorized, settingsHandlers.insertStarterSetting);
 settingsRoutes.get("/limits/:starter_id", isAuthorized, settingsHandlers.getStarterSettingsLimits);
 settingsRoutes.patch("/limits/:id", isAuthorized, settingsHandlers.updateStarterSettingsLimits);
+settingsRoutes.get("/ack-history/:starter_id", isAuthorized, settingsHandlers.getStarterAckHistory);
 export default settingsRoutes;

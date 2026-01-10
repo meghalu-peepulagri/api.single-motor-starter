@@ -6,7 +6,7 @@ import { starterSettings } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
-import { getRecordById, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
+import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -125,6 +125,25 @@ export class StarterDefaultSettingsHandlers {
         }
         catch (error) {
             console.error("Error at updateStarterSettingsLimits:", error);
+            throw error;
+        }
+    };
+    getStarterAckHistory = async (c) => {
+        try {
+            const starterId = +c.req.param("starter_id");
+            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starterData)
+                throw new BadRequestException(DEVICE_NOT_FOUND);
+            const whereQuery = {
+                columns: ["starter_id"],
+                relations: ["="],
+                values: [starterData.id],
+            };
+            const ackHistory = await getRecordsConditionally(starterSettings, whereQuery, ["id", "acknowledgement", "time_stamp", "created_at", "updated_at"]);
+            return sendResponse(c, 200, SETTINGS_FETCHED, ackHistory);
+        }
+        catch (error) {
+            console.error("Error at getStarterAckHistory:", error);
             throw error;
         }
     };
