@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { flatten, object, parse, string } from "valibot";
+import { logger } from "./utils/logger.js";
 const VEnvSchema = object({
     API_VERSION: string(),
     // DATABASE_URL: string(),
@@ -23,8 +24,7 @@ try {
 }
 catch (err) {
     const error = err;
-    console.error("\n Invalid or Missing Environment Variables:\n");
-    console.error(flatten(error.issues));
+    logger.error("Invalid or Missing Environment Variables", error, flatten(error.issues));
     process.exit(1);
 }
 export default envData;

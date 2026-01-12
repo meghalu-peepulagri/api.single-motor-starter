@@ -1,6 +1,7 @@
 import "dotenv/config";
 import type { InferOutput, ValiError } from "valibot";
 import { flatten, object, parse, string } from "valibot";
+import { logger } from "./utils/logger.js";
 
 const VEnvSchema = object({
   API_VERSION: string(),
@@ -29,8 +30,7 @@ try {
   envData = parse(VEnvSchema, process.env);
 } catch (err) {
   const error = err as ValiError<typeof VEnvSchema>;
-  console.error("\n Invalid or Missing Environment Variables:\n");
-  console.error(flatten(error.issues));
+  logger.error("Invalid or Missing Environment Variables", error, flatten(error.issues));
   process.exit(1);
 }
 

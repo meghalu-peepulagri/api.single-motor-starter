@@ -1,15 +1,16 @@
 import type { ValidationOutput } from "../types/app-types.js";
 import { validateAndExtractLiveData } from "./payload-validate-helpers.js";
+import { logger } from "../utils/logger.js";
 
 export function validateLiveDataFormat(payload: any, topic: string) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    console.error(`Invalid payload [${topic}]`);
+    logger.error("Invalid payload", undefined, { topic });
     return null;
   }
 
   const d = payload.D;
   if (!d || typeof d !== "object" || Array.isArray(d)) {
-    console.error(`Invalid or missing 'D' field [${topic}]`);
+    logger.error("Invalid or missing 'D' field", undefined, { topic });
     return null;
   }
 
@@ -23,7 +24,7 @@ export function validateLiveDataFormat(payload: any, topic: string) {
   }
 
   if (Object.keys(matched).length === 0) {
-    console.error(`No valid group found in payload [${topic}]`);
+    logger.error("No valid group found in payload", undefined, { topic });
     return null;
   }
 
@@ -69,7 +70,7 @@ export function validateLiveDataContent(input: any): ValidationOutput | null {
     if (!result) return null;
 
     if (!result.group) {
-      console.error("[validateLiveDataContent] Missing group after validation");
+      logger.error("[validateLiveDataContent] Missing group after validation");
       return null;
     }
 

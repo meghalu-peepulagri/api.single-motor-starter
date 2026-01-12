@@ -2,6 +2,7 @@ import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { publishStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
+import { logger } from "../utils/logger.js";
 // Integer only helper
 export const integerOnly = (field) => v.pipe(v.number(`${SETTINGS_FIELD_NAMES[field]} must be a number`), v.check((val) => Number.isInteger(val), `${SETTINGS_FIELD_NAMES[field]} expects an integer but received a decimal`));
 // Real (number) helper
@@ -141,8 +142,8 @@ export const publishMultipleTimesInBackground = async (devicePayload, pcbNumber,
             }
         }
         catch (error) {
-            console.error(`Attempt ${i + 1} failed for starter ${starterId}:`, error);
+            logger.error(`Attempt ${i + 1} failed for starter ${starterId}`, error);
         }
     }
-    console.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterId}.`);
+    logger.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterId}.`);
 };

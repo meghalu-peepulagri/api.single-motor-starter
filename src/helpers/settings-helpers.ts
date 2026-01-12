@@ -3,6 +3,7 @@ import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import type { StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { publishStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
+import { logger } from "../utils/logger.js";
 
 // Integer only helper
 export const integerOnly = (field: keyof typeof SETTINGS_FIELD_NAMES) =>
@@ -201,9 +202,9 @@ export const publishMultipleTimesInBackground = async (
       }
 
     } catch (error) {
-      console.error(`Attempt ${i + 1} failed for starter ${starterId}:`, error);
+      logger.error(`Attempt ${i + 1} failed for starter ${starterId}`, error);
     }
   }
 
-  console.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterId}.`);
+  logger.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterId}.`);
 };

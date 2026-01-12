@@ -3,6 +3,7 @@ import "dotenv/config";
 import app from "./app.js";
 import appData from "./config/app-config.js";
 import { mqttServiceInstance } from "./services/mqtt-service.js";
+import { logger } from "./utils/logger.js";
 
 
 const port = Number(appData.port) || 3000;
@@ -12,5 +13,5 @@ serve({
   port,
 });
 
-console.log(`Server is running on port ${port}`);
+logger.info(`Server is running on port ${port}`);
 mqttServiceInstance.connect();

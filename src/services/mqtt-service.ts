@@ -7,6 +7,7 @@ import type { MqttClient } from "mqtt";
 import mqtt from "mqtt";
 import { findTopicACKByType } from "../helpers/packet-types-helper.js";
 import { selectTopicAck } from "./db/mqtt-db-services.js";
+import { logger } from "../utils/logger.js";
 
 export class MqttService {
   private client: MqttClient | null = null;
@@ -31,7 +32,7 @@ export class MqttService {
 
     if (missing.length > 0) {
       const message = `${missing.join(", ")} is missing in configuration`;
-      console.error(message);
+      logger.error(message);
     }
   }
 
@@ -53,11 +54,11 @@ export class MqttService {
     });
 
     this.client.on("error", (error) => {
-      console.error("MQTT connection error:", error.message);
+      logger.error("MQTT connection error", error);
     });
 
     this.client.on("reconnect", () => {
-      console.warn("MQTT reconnecting...");
+      logger.warn("MQTT reconnecting...");
     });
 
     this.client.on("message", (topic, message) => {
@@ -75,7 +76,7 @@ export class MqttService {
 
       if (typeof message === "string") {
         if (message.length === 0 || !message.trim().startsWith("{")) {
-          console.warn({ topic }, "Empty or invalid string message received. Skipping processing.");
+          logger.warn("Empty or invalid string message received. Skipping processing.", { topic });
           return;
         }
         message = JSON.parse(message);
@@ -90,11 +91,11 @@ export class MqttService {
           break;
 
         default:
-          console.warn({ topic }, "No matching topic handler found.");
+          logger.warn("No matching topic handler found.", { topic });
       }
     }
     catch (error: any) {
-      console.error("Error while processing MQTT message:", error.message);
+      logger.error("Error while processing MQTT message", error);
       throw error;
     }
   };
@@ -102,18 +103,18 @@ export class MqttService {
   publish = async (topic: string, message: string) => {
     try {
       if (!this.client?.connected) {
-        console.error({ topic, message }, "MQTT client is not connected. Cannot publish.");
+        logger.error("MQTT client is not connected. Cannot publish.", undefined, { topic, message });
         return;
       }
 
       this.client.publish(topic, message, { qos: 1 }, (error) => {
         if (error) {
-          console.error(400, { topic, message }, `Error publishing message: ${error.message}`);
+          logger.error("Error publishing message", error, { topic, message });
         }
       });
     }
     catch (error: any) {
-      console.error(500, { topic, message, error: error.message, stack: error.stack }, "Error at publishing MQTT message", error.message);
+      logger.error("Error at publishing MQTT message", error, { topic, message });
       throw error;
     }
   };
@@ -121,7 +122,7 @@ export class MqttService {
   subscribe = async (topics: string | string[]) => {
     try {
       if (!this.client?.connected) {
-        console.error(400, { topics }, "Cannot subscribe, MQTT client is not connected.");
+        logger.error("Cannot subscribe, MQTT client is not connected.", undefined, { topics });
         return;
       }
 
@@ -129,21 +130,21 @@ export class MqttService {
 
       this.client.subscribe(topicArray, { qos: 1 }, (error, granted) => {
         if (error) {
-          console.error(400, { topics, error: error.message }, "Subscription error");
+          logger.error("Subscription error", error, { topics });
         }
         else if (granted?.length) {
           granted.forEach(sub =>
-            console.log(`Subscribed to topic: ${sub.topic}`),
+            logger.mqtt(`Subscribed to topic: ${sub.topic}`),
 
           );
         }
         else {
-          console.error(400, { topics }, "No topics were granted during subscription");
+          logger.error("No topics were granted during subscription", undefined, { topics });
         }
       });
     }
     catch (error: any) {
-      console.error(500, { topics, error: error.message, stack: error.stack }, "Exception at subscribe mqtt", error.message);
+      logger.error("Exception at subscribe mqtt", error, { topics });
       throw error;
     }
   };
@@ -151,16 +152,16 @@ export class MqttService {
   disconnect = async (): Promise<void> => {
     try {
       if (!this.client?.connected) {
-        console.error(400, {}, "MQTT client is not connected.");
+        logger.error("MQTT client is not connected.");
         return;
       }
 
       this.client.end(() => {
-        console.error(200, {}, "MQTT client disconnected");
+        logger.mqtt("MQTT client disconnected");
       });
     }
     catch (error: any) {
-      console.error(500, { error: error.message, stack: error.stack }, "Error at disconnecting MQTT client:", error.message);
+      logger.error("Error at disconnecting MQTT client", error);
       throw error;
     }
   };

@@ -3,19 +3,20 @@ import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
+import { logger } from "../utils/logger.js";
 export async function liveDataHandler(parsedMessage, topic) {
     try {
         if (!parsedMessage)
             return;
         const mac = typeof topic === "string" && topic.includes("/") ? topic.split("/")[1] : null;
         if (!mac) {
-            console.error(`Invalid MQTT topic or missing MAC [${mac}]:`, topic);
+            logger.error("Invalid MQTT topic or missing MAC", undefined, { mac, topic });
             return null;
         }
         // Validate MAC in DB
         const validMac = await getStarterByMacWithMotor(mac);
         if (!validMac) {
-            console.error(`Starter not found for MAC: ${mac}`, topic);
+            logger.error("Starter not found for MAC", undefined, { mac, topic });
             return null;
         }
         // Format raw payload 
@@ -34,7 +35,7 @@ export async function liveDataHandler(parsedMessage, topic) {
         await saveLiveDataTopic(prepared, prepared.group_id, validMac);
     }
     catch (err) {
-        console.error("Error at live data topic handler:", err);
+        logger.error("Error at live data topic handler", err);
         return null;
     }
 }
@@ -183,26 +184,26 @@ export const publishWithRetry = async (publishFn, options) => {
         try {
             // Delay before publish (skip if 0)
             if (delaysBeforeSendMs[i] > 0) {
-                console.log(`Waiting ${delaysBeforeSendMs[i]}ms before attempt ${attemptNumber}`);
+                logger.mqtt(`Waiting ${delaysBeforeSendMs[i]}ms before attempt ${attemptNumber}`);
                 await sleep(delaysBeforeSendMs[i]);
             }
-            console.log(`Publishing attempt ${attemptNumber}/${attempts}`);
+            logger.mqtt(`Publishing attempt ${attemptNumber}/${attempts}`);
             // Publish message
             await publishFn();
             // If we reach here, publish succeeded
-            console.log(`Publish attempt ${attemptNumber} succeeded`);
+            logger.mqtt(`Publish attempt ${attemptNumber} succeeded`);
             return { success: true, attempts: attemptNumber };
         }
         catch (error) {
             lastError = error;
-            console.error(`Publish attempt ${attemptNumber}/${attempts} failed:`, error);
+            logger.error(`Publish attempt ${attemptNumber}/${attempts} failed`, error);
             // If this is not the last attempt, continue to retry
             if (i < attempts - 1) {
-                console.log(`Will retry... (${attempts - attemptNumber} attempts remaining)`);
+                logger.mqtt(`Will retry... (${attempts - attemptNumber} attempts remaining)`);
             }
         }
     }
     // All retries exhausted
-    console.error(`All ${attempts} publish attempts failed. Last error:`, lastError);
+    logger.error(`All ${attempts} publish attempts failed`, lastError);
     return { success: false, attempts };
 };

@@ -1,9 +1,10 @@
 import { controlMode, getAlertDescription, getFaultDescription, lastOff, lastOn, motorState } from "./control-helpers.js";
 import { parseTimestamp } from "./dns-helpers.js";
+import { logger } from "../utils/logger.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 export function prepareLiveDataPayload(validatedData, starterData) {
-    if (!validatedData || !validatedData.data || !starterData.motors.length) {
-        console.error('Invalid validatedData or starterData found with no motors attached with mac: ', starterData.mac);
+    if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
+        logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
         return null;
     }
     ;
