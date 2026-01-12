@@ -21,23 +21,24 @@ export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpT
   MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable;
 
 export type DBRecord<T extends DBTable> =
-  T extends UsersTable ? User : any |
-  T extends LocationsTable ? Location : any |
-  T extends UserActivityLogsTable ? UserActivityLog : any |
-  T extends OtpTable ? Otp : any |
-  T extends DeviceTokensTable ? DeviceToken : any |
-  T extends FieldsTable ? Field : any |
-  T extends MotorsTable ? Motor : any |
-  T extends StarterBoxTable ? StarterBox : any |
-  T extends GatewayTable ? Gateway : any |
-  T extends StarterBoxParametersTable ? StarterBoxParameters : any |
-  T extends MotorScheduleTable ? MotorSchedule : any |
-  T extends AlertsFaultsTable ? AlertsFaults : any |
-  T extends DeviceRunTimeTable ? DeviceRunTime : any |
-  T extends MotorRunTimeTable ? MotorRunTime : any |
-  T extends StarterDefaultSettingsTable ? StarterDefaultSettings : any |
-  T extends StarterSettingsTable ? StarterSettings : any |
-  T extends StarterSettingsLimitsTable ? StarterSettingsLimits : any;
+  T extends UsersTable ? User :
+  T extends LocationsTable ? Location :
+  T extends UserActivityLogsTable ? UserActivityLog :
+  T extends OtpTable ? Otp :
+  T extends DeviceTokensTable ? DeviceToken :
+  T extends FieldsTable ? Field :
+  T extends MotorsTable ? Motor :
+  T extends StarterBoxTable ? StarterBox :
+  T extends GatewayTable ? Gateway :
+  T extends StarterBoxParametersTable ? StarterBoxParameters :
+  T extends MotorScheduleTable ? MotorSchedule :
+  T extends AlertsFaultsTable ? AlertsFaults :
+  T extends DeviceRunTimeTable ? DeviceRunTime :
+  T extends MotorRunTimeTable ? MotorRunTime :
+  T extends StarterDefaultSettingsTable ? StarterDefaultSettings :
+  T extends StarterSettingsTable ? StarterSettings :
+  T extends StarterSettingsLimitsTable ? StarterSettingsLimits :
+  never;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 
@@ -50,28 +51,28 @@ export type Relations = "=" | "!=" | "<" | "<=" | ">" | ">=" | "ILIKE" | "BETWEE
 export interface WhereQueryData<T extends DBTable> {
   columns: Array<keyof DBRecord<T>>;
   relations: Array<Relations>;
-  values: any[];
+  values: unknown[];
 }
 
 export type WhereQueryDataWithOr<T extends DBTable> = {
   columns: Array<keyof DBRecord<T>>;
   relations: Array<Relations>;
-  values: any[];
+  values: unknown[];
   or?: {
     columns: Array<keyof DBRecord<T>>;
     relations: Array<Relations>;
-    values: any[];
+    values: unknown[];
   }[];
 };
 
 export type WhereQueryDataWithAnd<T extends DBTable> = {
   columns: Array<keyof DBRecord<T>>;
   relations: Array<Relations>;
-  values: any[];
+  values: unknown[];
   or?: {
     columns: Array<keyof DBRecord<T>>;
     relations: Array<Relations>;
-    values: any[];
+    values: unknown[];
   }[];
 };
 
@@ -83,7 +84,7 @@ export interface OrderByQueryData<T extends DBTable> {
 
 export interface InQueryData<T extends DBTable> {
   key: keyof DBRecord<T>;
-  values: any[];
+  values: unknown[];
 }
 
 export type UpdateRecordData<T extends DBTable> = Partial<Omit<DBRecord<T>, "id" | "created_at" | "updated_at">>;

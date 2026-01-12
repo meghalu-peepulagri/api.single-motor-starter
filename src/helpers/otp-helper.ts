@@ -1,6 +1,6 @@
 import moment from "moment";
 
-function prepareOTPData(user: any, inputPhone: string, action: any, expireInMin = 15) {
+function prepareOTPData(inputPhone: string, action: any, expireInMin = 15) {
   // const OTP = randomOTP();
   const OTP = "1234";
   const expires_at = moment().utc().add(expireInMin, "minutes");

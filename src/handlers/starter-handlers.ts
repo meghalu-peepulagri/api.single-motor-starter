@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARTER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
@@ -9,7 +9,7 @@ import { users, type User, type UsersTable } from "../database/schemas/users.js"
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-helper.js";
@@ -24,7 +24,7 @@ import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {
-  addStarterBox = async (c: Context) => {
+  addStarterBoxHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const starterBoxPayload = await c.req.json();
@@ -50,7 +50,7 @@ export class StarterHandlers {
   }
 
 
-  assignStarterMobile = async (c: Context) => {
+  assignStarterMobileHandler = async (c: Context) => {
     try {
       const userPayload: User = c.get("user_payload");
       const reqData = await c.req.json();
@@ -65,7 +65,7 @@ export class StarterHandlers {
 
       const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
       if (starterBox.device_status === "ASSIGNED" && motorCount > 0) throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
-      if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARER_NOT_DEPLOYED);
+      if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARTER_NOT_DEPLOYED);
 
       await assignStarterWithTransaction(validatedReqData, userPayload, starterBox);
       return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
@@ -79,7 +79,7 @@ export class StarterHandlers {
     }
   }
 
-  starterListWeb = async (c: Context) => {
+  starterListWebHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const query = c.req.query();
@@ -95,7 +95,7 @@ export class StarterHandlers {
   }
 
 
-  starterListMobile = async (c: Context) => {
+  starterListMobileHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const query = c.req.query();
@@ -111,7 +111,7 @@ export class StarterHandlers {
   }
 
 
-  deleteStarterBox = async (c: Context) => {
+  deleteStarterBoxHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const starterId = +c.req.param("id");
@@ -145,7 +145,7 @@ export class StarterHandlers {
   }
 
 
-  replaceStarterLocation = async (c: Context) => {
+  replaceStarterLocationHandler = async (c: Context) => {
     try {
       const starterPayload = await c.req.json();
       paramsValidateException.emptyBodyValidation(starterPayload);
@@ -170,7 +170,7 @@ export class StarterHandlers {
     }
   }
 
-  starterAnalytics = async (c: Context) => {
+  starterAnalyticsHandler = async (c: Context) => {
     try {
       const query = c.req.query();
       const starterId = +c.req.param("id");
@@ -197,7 +197,7 @@ export class StarterHandlers {
     }
   }
 
-  starterRunTime = async (c: Context) => {
+  starterRunTimeHandler = async (c: Context) => {
     try {
       const query = c.req.query();
       const starterId = +c.req.param("id");
@@ -226,7 +226,7 @@ export class StarterHandlers {
     }
   }
 
-  assignStarterWeb = async (c: Context) => {
+  assignStarterWebHandler = async (c: Context) => {
     try {
 
       const userPayload: User = c.get("user_payload");
@@ -239,9 +239,9 @@ export class StarterHandlers {
       const user = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["id", "status"], ["=", "!="], [userPayload.id, "ARCHIVED"]);
       if (!user) throw new BadRequestException(USER_NOT_FOUND);
 
-      if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARER_NOT_DEPLOYED);
+      if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARTER_NOT_DEPLOYED);
 
-      await assignStarterWebWithTransaction(starterBox, validatedReqData, userPayload);
+      await assignStarterWebWithTransaction(starterBox, validatedReqData);
       return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at assign starter web :", error);
@@ -254,9 +254,9 @@ export class StarterHandlers {
   }
 
 
-  updateDeployStatus = async (c: Context) => {
+  updateDeployStatusHandler = async (c: Context) => {
     try {
-      const userPayload: User = c.get("user_payload");
+
       const reqData = await c.req.json();
       const starterId = +c.req.param("id");
       paramsValidateException.validateId(starterId, "Device id");
@@ -280,7 +280,7 @@ export class StarterHandlers {
     }
   }
 
-  starterConnectedMotors = async (c: Context) => {
+  starterConnectedMotorsHandler = async (c: Context) => {
     try {
       const starterId = +c.req.param("id");
       paramsValidateException.validateId(starterId, "Device id");
@@ -294,7 +294,7 @@ export class StarterHandlers {
     }
   }
 
-  assignLocationToStarter = async (c: Context) => {
+  assignLocationToStarterHandler = async (c: Context) => {
     try {
       const userPayload: User = c.get("user_payload");
       const reqData = await c.req.json();
@@ -315,7 +315,7 @@ export class StarterHandlers {
     }
   }
 
-  updateStarterDetails = async (c: Context) => {
+  updateStarterDetailsHandler = async (c: Context) => {
     try {
       const starterId = +c.req.param("id");
       const reqData = await c.req.json();
@@ -338,7 +338,7 @@ export class StarterHandlers {
   }
 
 
-  markStarterStatus = async (c: Context) => {
+  markStarterStatusHandler = async (c: Context) => {
     try {
       const timeStamp = new Date(new Date().getTime() - 5 * 60 * 1000); // 5 minutes below
       const uniqueStarterData = await getUniqueStarterIdsWithInTime(timeStamp);
@@ -352,7 +352,7 @@ export class StarterHandlers {
     }
   };
 
-  getLatestPcbNumber = async (c: Context) => {
+  getLatestPcbNumberHandler = async (c: Context) => {
     try {
 
       const latestStarter = await db.select({

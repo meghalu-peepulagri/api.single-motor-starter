@@ -4,31 +4,31 @@ import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
+import type { StarterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
 import { starterSettings, type StarterSettingsTable } from "../../database/schemas/starter-settings.js";
 import { users, type User } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
+import { prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { getStarterDefaultSettings } from "./settings-services.js";
-import type { StarterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
-import { prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { publishStarterSettings } from "./mqtt-db-services.js";
-import { starterSettingsLimits, type StarterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
+import { getStarterDefaultSettings } from "./settings-services.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
-  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload);
+  const preparedStarterData: any = prepareStarterData(starterBoxPayload, userPayload);
   const defaultSettings: StarterDefaultSettings[] = await getStarterDefaultSettings();
   const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
   await db.transaction(async (trx) => {
-    const starter = await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData, trx);
-    await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+    const starter = await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarterData, trx);
+    await saveSingleRecord<MotorsTable>(motors, { ...preparedStarterData.motorDetails, starter_id: starter.id }, trx);
 
     const settings = starter.pcb_number && await saveSingleRecord<StarterSettingsTable>(starterSettings, {
       starter_id: Number(starter.id), created_by: userPayload.id, pcb_number: String(starter.pcb_number), acknowledgement: "TRUE",
@@ -275,7 +275,7 @@ export async function getStarterRunTime(starterId: number, fromDate: string, toD
     .orderBy(asc(deviceRunTime.start_time));
 }
 
-export async function assignStarterWebWithTransaction(starterDetails: StarterBox, requestBody: { user_id: number }, User: User) {
+export async function assignStarterWebWithTransaction(starterDetails: StarterBox, requestBody: { user_id: number }) {
   const existingMotor = await getSingleRecordByAColumnValue<MotorsTable>(motors, "starter_id", "=", starterDetails.id);
   const assignedAt = new Date();
   return await db.transaction(async (trx) => {

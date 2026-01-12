@@ -1,4 +1,4 @@
-import { eq, ilike, ne, sql } from "drizzle-orm";
+import { eq, ne, sql } from "drizzle-orm";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { motors } from "../database/schemas/motors.js";
 export function prepareStarterData(starterBoxPayload, userPayload) {

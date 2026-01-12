@@ -9,7 +9,7 @@ import { vAddMotorSchedule } from "./schema/motor-schedule-validators.js";
 import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
 import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
-import { vUpdateDefaultSettings } from "./schema/deafult-settings.js";
+import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,

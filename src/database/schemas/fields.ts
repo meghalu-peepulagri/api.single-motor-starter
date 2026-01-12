@@ -15,7 +15,7 @@ export const fields = pgTable("fields", {
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
-  index("filed_user_id_idx").on(table.created_by),
+  index("field_user_id_idx").on(table.created_by),
   index("location_id_idx").on(table.location_id),
   index("field_status_idx").on(table.status),
   uniqueIndex("unique_field_per_user").on(table.created_by, table.id).where(sql`${table.status} != 'ARCHIVED'`),

@@ -3,18 +3,18 @@ import db from "../database/configuration.js";
 import { userActivityLogs } from "../database/schemas/user-activity-logs.js";
 import { users } from "../database/schemas/users.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { userFilters } from "../helpers/user-helper.js";
 import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, saveRecords, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
-import { paginatedUsersList } from "../services/db/user-service.js";
+import { paginatedUsersList } from "../services/db/user-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 export class UserHandlers {
-    list = async (c) => {
+    listUsersHandler = async (c) => {
         try {
             const query = c.req.query();
             const paginationParams = getPaginationOffParams(query);
@@ -28,7 +28,7 @@ export class UserHandlers {
             throw error;
         }
     };
-    userProfile = async (c) => {
+    userProfileHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             let user = null;
@@ -58,7 +58,7 @@ export class UserHandlers {
             throw error;
         }
     };
-    usersBasicList = async (c) => {
+    usersBasicListHandler = async (c) => {
         try {
             const query = c.req.query();
             const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
@@ -81,7 +81,7 @@ export class UserHandlers {
             throw error;
         }
     };
-    updateUserDetails = async (c) => {
+    updateUserDetailsHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const userId = +c.req.param("id");

@@ -1,7 +1,7 @@
 import { FIELD_ADDED, FIELD_UPDATED, FIELD_VALIDATION_CRITERIA, FIELDS_FETCHED, SIMILAR_MOTOR_TITLE_NOT_ALLOWED } from "../constants/app-constants.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
-import { fieldFilters } from "../helpers/filed-helpers.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
+import { fieldFilters } from "../helpers/field-helpers.js";
 import { checkDuplicateMotorTitles } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { addFieldWithMotorTransaction, paginatedFieldsList, updateFieldWithMotorTransaction } from "../services/db/field-services.js";
@@ -11,7 +11,7 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 export class FieldHandlers {
-    addField = async (c) => {
+    addFieldHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const fieldPayload = await c.req.json();
@@ -32,7 +32,7 @@ export class FieldHandlers {
             throw error;
         }
     };
-    listFields = async (c) => {
+    listFieldsHandler = async (c) => {
         try {
             const query = c.req.query();
             const paginationParams = getPaginationOffParams(query);
@@ -46,7 +46,7 @@ export class FieldHandlers {
             throw error;
         }
     };
-    updateField = async (c) => {
+    updateFieldHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const fieldId = +c.req.param("id");

@@ -5,25 +5,25 @@ import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { starterSettingsLimits } from "../../database/schemas/starter-settings-limits.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
 import { users } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
+import { prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { getStarterDefaultSettings } from "./settings-services.js";
-import { prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { publishStarterSettings } from "./mqtt-db-services.js";
-import { starterSettingsLimits } from "../../database/schemas/starter-settings-limits.js";
+import { getStarterDefaultSettings } from "./settings-services.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
-    const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
+    const preparedStarterData = prepareStarterData(starterBoxPayload, userPayload);
     const defaultSettings = await getStarterDefaultSettings();
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
     await db.transaction(async (trx) => {
-        const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
-        await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+        const starter = await saveSingleRecord(starterBoxes, preparedStarterData, trx);
+        await saveSingleRecord(motors, { ...preparedStarterData.motorDetails, starter_id: starter.id }, trx);
         const settings = starter.pcb_number && await saveSingleRecord(starterSettings, {
             starter_id: Number(starter.id), created_by: userPayload.id, pcb_number: String(starter.pcb_number), acknowledgement: "TRUE",
             ...defaultSettingsData
@@ -238,7 +238,7 @@ export async function getStarterRunTime(starterId, fromDate, toDate, motorId, po
         .where(and(...filters))
         .orderBy(asc(deviceRunTime.start_time));
 }
-export async function assignStarterWebWithTransaction(starterDetails, requestBody, User) {
+export async function assignStarterWebWithTransaction(starterDetails, requestBody) {
     const existingMotor = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterDetails.id);
     const assignedAt = new Date();
     return await db.transaction(async (trx) => {

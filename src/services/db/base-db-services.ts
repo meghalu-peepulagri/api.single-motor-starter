@@ -5,7 +5,7 @@ import db from "../../database/configuration.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
 import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData } from "../../types/db-types.js";
 import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
-import type { PgTableWithColumns } from "drizzle-orm/pg-core";
+
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
 async function getRecordById<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, id: number, columnsToSelect?: any): Promise<DBRecord<T> | Pick<DBRecord<T>, C> | null> {

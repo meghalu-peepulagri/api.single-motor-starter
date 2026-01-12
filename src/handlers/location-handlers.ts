@@ -3,10 +3,9 @@ import type { Context } from "hono";
 import { LOCATION_ADDED, LOCATION_DELETED, LOCATION_NOT_FOUND, LOCATION_VALIDATION_CRITERIA, LOCATIONS_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { locations, type LocationsTable } from "../database/schemas/locations.js";
-import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { locationFilters } from "../helpers/location-helpers.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getLocationsList, locationDropDown } from "../services/db/location-services.js";
@@ -21,7 +20,7 @@ const paramsValidateException = new ParamsValidateException();
 
 export class LocationHandlers {
 
-  addLocation = async (c: Context) => {
+  addLocationHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const locationPayload = await c.req.json();
@@ -41,7 +40,7 @@ export class LocationHandlers {
     }
   }
 
-  list = async (c: Context) => {
+  listLocationHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const query = c.req.query();
@@ -58,7 +57,7 @@ export class LocationHandlers {
     }
   }
 
-  listBasic = async (c: Context) => {
+  listBasicLocationHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const query = c.req.query();
@@ -74,7 +73,7 @@ export class LocationHandlers {
     }
   }
 
-  renameLocation = async (c: Context) => {
+  renameLocationHandler = async (c: Context) => {
     try {
       const locationId = +c.req.param("id");
       const reqData = await c.req.json();
@@ -82,7 +81,7 @@ export class LocationHandlers {
       paramsValidateException.validateId(locationId, "location id");
       const validLocationReq = await validatedRequest<ValidatedAddLocation>("add-location", reqData, LOCATION_VALIDATION_CRITERIA);
 
-      await db.transaction(async (trx) => {
+      await db.transaction(async () => {
         await updateRecordByIdWithTrx<LocationsTable>(locations, locationId, validLocationReq);
       })
       return sendResponse(c, 200, LOCATION_ADDED);
@@ -96,7 +95,7 @@ export class LocationHandlers {
     }
   }
 
-  deleteLocation = async (c: Context) => {
+  deleteLocationHandler = async (c: Context) => {
     try {
       const locationId = +c.req.param("id");
       paramsValidateException.validateId(locationId, "location id");
@@ -108,7 +107,7 @@ export class LocationHandlers {
         throw new BadRequestException("Location has connected devices. Cannot delete.");
       }
 
-      await db.transaction(async (trx) => {
+      await db.transaction(async () => {
         await updateRecordByIdWithTrx<LocationsTable>(locations, locationId, { status: "ARCHIVED" });
       })
       return sendResponse(c, 200, LOCATION_DELETED);

@@ -4,7 +4,7 @@ import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { motorFilters } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
@@ -16,7 +16,7 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorHandlers {
-    addMotor = async (c) => {
+    addMotorHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const motorPayload = await c.req.json();
@@ -38,7 +38,7 @@ export class MotorHandlers {
             throw error;
         }
     };
-    updateMotor = async (c) => {
+    updateMotorHandler = async (c) => {
         try {
             const motorId = +c.req.param("id");
             const motorPayload = await c.req.json();
@@ -62,7 +62,7 @@ export class MotorHandlers {
             throw error;
         }
     };
-    getSingleMotor = async (c) => {
+    getSingleMotorHandler = async (c) => {
         try {
             const motorId = +c.req.param("id");
             const query = c.req.query();
@@ -84,14 +84,14 @@ export class MotorHandlers {
             throw error;
         }
     };
-    deleteMotor = async (c) => {
+    deleteMotorHandler = async (c) => {
         try {
             const motorId = +c.req.param("id");
             paramsValidateException.validateId(motorId, "motor id");
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
-            db.transaction(async (trx) => {
+            db.transaction(async () => {
                 await updateRecordById(motors, motorId, { status: "ARCHIVED" });
                 await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null });
             });
@@ -102,7 +102,7 @@ export class MotorHandlers {
             throw error;
         }
     };
-    getAllMotors = async (c) => {
+    getAllMotorsHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
