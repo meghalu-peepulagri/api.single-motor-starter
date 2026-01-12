@@ -14,6 +14,7 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { ActivityService } from "../services/db/activity-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorHandlers {
     addMotor = async (c) => {
@@ -23,10 +24,17 @@ export class MotorHandlers {
             paramsValidateException.emptyBodyValidation(motorPayload);
             const validMotorReq = await validatedRequest("add-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
             const preparedMotorPayload = {
-                name: validMotorReq.name, created_by: userPayload.id, location_id: validMotorReq.location_id,
+                alias_name: validMotorReq.name, created_by: userPayload.id, location_id: validMotorReq.location_id,
                 hp: validMotorReq.hp.toString(),
             };
-            await saveSingleRecord(motors, preparedMotorPayload);
+            const motor = await saveSingleRecord(motors, preparedMotorPayload);
+            if (motor) {
+                await ActivityService.writeMotorAddedLog(userPayload.id, motor.id, {
+                    name: validMotorReq.name,
+                    hp: validMotorReq.hp,
+                    location_id: validMotorReq.location_id
+                });
+            }
             return sendResponse(c, 201, MOTOR_ADDED);
         }
         catch (error) {
@@ -40,6 +48,7 @@ export class MotorHandlers {
     };
     updateMotor = async (c) => {
         try {
+            const userPayload = c.get("user_payload");
             const motorId = +c.req.param("id");
             const motorPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(motorPayload);
@@ -50,7 +59,8 @@ export class MotorHandlers {
             const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
             if (existedMotor)
                 throw new ConflictException(MOTOR_NAME_EXISTED);
-            await updateRecordById(motors, motorId, { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() });
+            const updatedMotor = await updateRecordById(motors, motorId, { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() });
+            await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId, { name: motor.alias_name, hp: motor.hp }, { name: validMotorReq.name, hp: validMotorReq.hp.toString() });
             return sendResponse(c, 200, MOTOR_UPDATED);
         }
         catch (error) {
@@ -91,9 +101,11 @@ export class MotorHandlers {
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
-            db.transaction(async (trx) => {
+            const userPayload = c.get("user_payload");
+            await db.transaction(async (trx) => {
                 await updateRecordById(motors, motorId, { status: "ARCHIVED" });
                 await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null });
+                await ActivityService.writeMotorDeletedLog(userPayload.id, motorId, trx);
             });
             return sendResponse(c, 200, MOTOR_DELETED);
         }

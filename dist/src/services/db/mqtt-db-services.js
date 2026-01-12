@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
 import { motors } from "../../database/schemas/motors.js";
@@ -7,11 +8,13 @@ import { controlMode } from "../../helpers/control-helpers.js";
 import { extractPreviousData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
+import { logger } from "../../utils/logger.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
-import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { updateLatestStarterSettings } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
+import { ActivityService } from "./activity-service.js";
+import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {
     switch (groupId) {
@@ -68,10 +71,7 @@ export async function updateStates(insertedData, previousData) {
             await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
             await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
-        const motorChanged = motor_id && (motor_state !== prevState || mode_description !== prevMode);
-        if (motorChanged) {
-            await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
-        }
+        await ActivityService.writeMotorSyncLogs(created_by || 0, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx);
         if (motor_id && motor_state !== prevState || power_present !== power) {
             await trackMotorRunTime({
                 starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp,
@@ -93,8 +93,10 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
             await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
             await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
-        if (motor_state !== prevState || mode_description !== prevMode)
+        if (motor_state !== prevState || mode_description !== prevMode) {
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
+            await ActivityService.writeMotorSyncLogs(0, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx);
+        }
         if (motor_state !== prevState || power_present !== power) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
         }
@@ -111,8 +113,10 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
             await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
             await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
-        if (motor_state !== prevState)
+        if (motor_state !== prevState) {
             await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
+            await ActivityService.writeMotorSyncLogs(0, motor_id, { state: prevState }, { state: motor_state }, trx);
+        }
         if (motor_state !== prevState || power_present !== power) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
         }
@@ -128,8 +132,10 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
             await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
             await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
         }
-        if (motor_state !== prevState || mode_description !== prevMode)
+        if (motor_state !== prevState || mode_description !== prevMode) {
             await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description }, trx);
+            await ActivityService.writeMotorSyncLogs(0, motor_id, { mode: prevMode }, { mode: mode_description }, trx);
+        }
         if (motor_state !== prevState || power_present !== power) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
         }
@@ -155,15 +161,17 @@ export async function motorControlAckHandler(message, topic) {
         const mode_description = motor.mode;
         const prevState = motor.state;
         const stateChanged = message.D !== prevState;
+        const state = message.D;
         if (stateChanged) {
             await db.transaction(async (trx) => {
-                await updateRecordByIdWithTrx(motors, motor_id, { state: message.D }, trx);
-                await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: message.D, mode_description });
+                await trx.update(motors).set({ state, updated_at: new Date() }).where(eq(motors.id, motor.id));
+                await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: state, mode_description });
+                await ActivityService.writeMotorAckLogs(motor.created_by || 0, motor.id, { state: prevState }, { state: state }, "MOTOR_CONTROL_ACK", trx);
             });
         }
     }
     catch (error) {
-        console.error("Error in motor control ack handler:", error);
+        logger.error("Error at motor control ack handler", error);
         throw error;
     }
 }
@@ -172,16 +180,21 @@ export async function motorModeChangeAckHandler(message, topic) {
     try {
         const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
         if (!validMac?.id || !validMac.motors.length) {
-            console.error(`Any starter found with given MAC [${topic}]`);
+            logger.error(`Any starter found with given MAC [${topic}]`);
             return null;
         }
         ;
         const mode = controlMode(message.D);
-        if (mode !== validMac.motors[0].mode)
-            await updateRecordById(motors, validMac.motors[0].id, { mode });
+        const motor = validMac.motors[0];
+        if (mode !== motor.mode) {
+            await db.transaction(async (trx) => {
+                await trx.update(motors).set({ mode: mode, updated_at: new Date() }).where(eq(motors.id, motor.id));
+                await ActivityService.writeMotorAckLogs(motor.created_by || 0, motor.id, { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx);
+            });
+        }
     }
     catch (error) {
-        console.error("Error at motor control ack topic handler:", error);
+        logger.error("Error at motor mode change ack handler", error);
         throw error;
     }
 }

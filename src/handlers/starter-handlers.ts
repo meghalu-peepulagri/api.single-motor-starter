@@ -6,13 +6,15 @@ import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { users, type User, type UsersTable } from "../database/schemas/users.js";
+import { type NewUserActivityLog } from "../database/schemas/user-activity-logs.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { starterFilters } from "../helpers/starter-helper.js";
+import { ActivityService } from "../services/db/activity-service.js";
+import { prepareDeletionLog } from "../helpers/activity-helper.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime, updateMotorStateByStarterIds } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors, updateStarterStatus } from "../services/db/starter-services.js";
@@ -21,6 +23,7 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { starterFilters } from "../helpers/starter-helper.js";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {
@@ -68,6 +71,13 @@ export class StarterHandlers {
       if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARER_NOT_DEPLOYED);
 
       await assignStarterWithTransaction(validatedReqData, userPayload, starterBox);
+
+      await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
+        user_id: userPayload.id,
+        location_id: validatedReqData.location_id,
+        motor_name: validatedReqData.motor_name
+      });
+
       return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at assign starter :", error);
@@ -121,15 +131,27 @@ export class StarterHandlers {
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       let message = "";
 
+      const activityLogs: NewUserActivityLog[] = [];
       if (starter.starter_type === "SINGLE_STARTER") {
         await db.transaction(async (trx) => {
           if (userPayload.user_type === "USER") {
             await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
             saveSingleRecord<MotorsTable>(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
+            activityLogs.push(prepareDeletionLog({ userId: userPayload.id, entityType: "STARTER", entityId: starterId, action: "STARTER_REMOVED" }));
           }
-          if (userPayload.user_type === "ADMIN") await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
-          if (motor) await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
+          if (userPayload.user_type === "ADMIN") {
+            await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
+            activityLogs.push(prepareDeletionLog({ userId: userPayload.id, entityType: "STARTER", entityId: starterId, action: "DEVICE_DELETED" }));
+          }
+          if (motor) {
+            await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
+            activityLogs.push(prepareDeletionLog({ userId: userPayload.id, entityType: "MOTOR", entityId: motor.id, action: "MOTOR_DELETED" }));
+          }
         });
+
+        if (activityLogs.length > 0) {
+          await ActivityService.writeBatchDeletionLogs(activityLogs);
+        }
       }
       if (userPayload.user_type === "USER") {
         message = STARTER_REMOVED_SUCCESS;
@@ -147,6 +169,7 @@ export class StarterHandlers {
 
   replaceStarterLocation = async (c: Context) => {
     try {
+      const userPayload: User = c.get("user_payload");
       const starterPayload = await c.req.json();
       paramsValidateException.emptyBodyValidation(starterPayload);
       const validatedStarterReq = await validatedRequest<validatedReplaceStarter>("replace-starter", starterPayload, REPLACE_STARTER_BOX_VALIDATION_CRITERIA);
@@ -159,6 +182,12 @@ export class StarterHandlers {
       if (foundMotorName) throw new ConflictException("Pump name already exists in this location.");
 
       await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id);
+
+      await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id,
+        { location_id: starter.location_id },
+        { location_id: validatedStarterReq.location_id, motor_id: motor.id }
+      );
+
       return sendResponse(c, 201, STARTER_REPLACED_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at replace starter :", error);
@@ -242,6 +271,11 @@ export class StarterHandlers {
       if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARER_NOT_DEPLOYED);
 
       await assignStarterWebWithTransaction(starterBox, validatedReqData, userPayload);
+
+      await ActivityService.writeStarterAssignedLog(userPayload.id, (starterBox as any).id, {
+        user_id: validatedReqData.user_id
+      });
+
       return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at assign starter web :", error);
@@ -268,7 +302,16 @@ export class StarterHandlers {
 
       await db.transaction(async (trx) => {
         updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBox.id, { device_status: validatedReqData.deploy_status }, trx);
-      })
+
+        await ActivityService.logActivity({
+          performedBy: userPayload.id,
+          action: "DEPLOY_STATUS_UPDATE",
+          entityType: "STARTER",
+          entityId: starterBox.id,
+          oldData: { status: starterBox.device_status },
+          newData: { status: validatedReqData.deploy_status }
+        }, trx);
+      });
       return sendResponse(c, 201, DEPLOYED_STATUS_UPDATED);
     } catch (error: any) {
       console.error("Error at update device status :", error);
@@ -325,7 +368,27 @@ export class StarterHandlers {
       const validatedReqData = await validatedRequest<validatedAddStarter>("add-starter", reqData, STARTER_BOX_VALIDATION_CRITERIA);
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      const userId = (c.get("user_payload") as User).id;
       await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, validatedReqData);
+
+      await ActivityService.writeStarterUpdatedLog(userId, starterId,
+        {
+          name: starter.name,
+          pcb_number: starter.pcb_number,
+          starter_number: starter.starter_number,
+          mac_address: starter.mac_address,
+          gateway_id: starter.gateway_id
+        },
+        {
+          name: validatedReqData.name ?? undefined,
+          pcb_number: validatedReqData.pcb_number,
+          starter_number: validatedReqData.starter_number,
+          mac_address: validatedReqData.mac_address,
+          gateway_id: validatedReqData.gateway_id
+        }
+      );
+
       return sendResponse(c, 201, STARTER_DETAILS_UPDATED);
     } catch (error: any) {
       console.error("Error at update starter details :", error);

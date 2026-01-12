@@ -11,6 +11,7 @@ import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, saveRec
 import { paginatedUsersList } from "../services/db/user-service.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedSignUpUser } from "../validations/schema/user-validations.js";
@@ -103,19 +104,9 @@ export class UserHandlers {
       const verifiedUser = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["id", "status"], ["=", "!="], [userId, "ARCHIVED"]);
       if (!verifiedUser) throw new NotFoundException(USER_NOT_FOUND);
 
-      const fieldsToTrack = ["full_name", "phone", "email"] as const;
-      const logs = fieldsToTrack.filter((field) => validUserReq[field] !== verifiedUser[field]).map((field) => ({
-        field_name: field,
-        user_id: userId,
-        action: "UPDATED",
-        performed_by: userPayload.id,
-        old_data: String(verifiedUser[field] ?? ""),
-        new_data: String(validUserReq[field] ?? ""),
-      }));
-
       await db.transaction(async (trx) => {
         await updateRecordByIdWithTrx<UsersTable>(users, userId, { ...validUserReq }, trx);
-        if (logs.length) await saveRecords<UserActivityLogsTable>(userActivityLogs, logs, trx);
+        await ActivityService.writeUserUpdatedLog(userId, userPayload.id, verifiedUser, validUserReq, trx);
       })
 
       return sendResponse(c, 201, USER_UPDATED);

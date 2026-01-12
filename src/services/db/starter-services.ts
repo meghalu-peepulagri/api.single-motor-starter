@@ -68,6 +68,7 @@ export async function getStarterByMacWithMotor(mac: string) {
     ),
     columns: {
       id: true,
+      user_id: true,
       created_by: true,
       gateway_id: true,
       power: true,

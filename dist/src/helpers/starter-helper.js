@@ -1,6 +1,6 @@
-import { eq, ilike, ne, sql } from "drizzle-orm";
-import { starterBoxes } from "../database/schemas/starter-boxes.js";
+import { eq, ne, sql } from "drizzle-orm";
 import { motors } from "../database/schemas/motors.js";
+import { starterBoxes } from "../database/schemas/starter-boxes.js";
 export function prepareStarterData(starterBoxPayload, userPayload) {
     const motorDetails = {
         name: `Pump 1 - ${starterBoxPayload.pcb_number}`,

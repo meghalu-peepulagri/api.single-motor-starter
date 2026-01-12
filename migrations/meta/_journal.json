@@ -43,6 +43,13 @@
       "when": 1767855838423,
       "tag": "0005_gigantic_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1768237642476,
+      "tag": "0006_sharp_mordo",
+      "breakpoints": true
     }
   ]
 }
