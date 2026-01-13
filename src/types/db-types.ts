@@ -4,7 +4,7 @@ import type { DeviceRunTime, DeviceRunTimeTable } from "../database/schemas/devi
 import type { DeviceToken, DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import type { Field, FieldsTable } from "../database/schemas/fields.js";
 import type { Gateway, GatewayTable } from "../database/schemas/gateways.js";
-import type { LocationsTable } from "../database/schemas/locations.js";
+import type { Location, LocationsTable } from "../database/schemas/locations.js";
 import type { MotorRunTime, MotorRunTimeTable } from "../database/schemas/motor-runtime.js";
 import type { MotorSchedule, MotorScheduleTable } from "../database/schemas/motor-schedules.js";
 import type { Motor, MotorsTable } from "../database/schemas/motors.js";
@@ -21,23 +21,24 @@ export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpT
   MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable;
 
 export type DBRecord<T extends DBTable> =
-  T extends UsersTable ? User : any |
-  T extends LocationsTable ? Location : any |
-  T extends UserActivityLogsTable ? UserActivityLog : any |
-  T extends OtpTable ? Otp : any |
-  T extends DeviceTokensTable ? DeviceToken : any |
-  T extends FieldsTable ? Field : any |
-  T extends MotorsTable ? Motor : any |
-  T extends StarterBoxTable ? StarterBox : any |
-  T extends GatewayTable ? Gateway : any |
-  T extends StarterBoxParametersTable ? StarterBoxParameters : any |
-  T extends MotorScheduleTable ? MotorSchedule : any |
-  T extends AlertsFaultsTable ? AlertsFaults : any |
-  T extends DeviceRunTimeTable ? DeviceRunTime : any |
-  T extends MotorRunTimeTable ? MotorRunTime : any |
-  T extends StarterDefaultSettingsTable ? StarterDefaultSettings : any |
-  T extends StarterSettingsTable ? StarterSettings : any |
-  T extends StarterSettingsLimitsTable ? StarterSettingsLimits : any;
+  T extends UsersTable ? User :
+  T extends LocationsTable ? Location :
+  T extends UserActivityLogsTable ? UserActivityLog :
+  T extends OtpTable ? Otp :
+  T extends DeviceTokensTable ? DeviceToken :
+  T extends FieldsTable ? Field :
+  T extends MotorsTable ? Motor :
+  T extends StarterBoxTable ? StarterBox :
+  T extends GatewayTable ? Gateway :
+  T extends StarterBoxParametersTable ? StarterBoxParameters :
+  T extends MotorScheduleTable ? MotorSchedule :
+  T extends AlertsFaultsTable ? AlertsFaults :
+  T extends DeviceRunTimeTable ? DeviceRunTime :
+  T extends MotorRunTimeTable ? MotorRunTime :
+  T extends StarterDefaultSettingsTable ? StarterDefaultSettings :
+  T extends StarterSettingsTable ? StarterSettings :
+  T extends StarterSettingsLimitsTable ? StarterSettingsLimits :
+  any;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 

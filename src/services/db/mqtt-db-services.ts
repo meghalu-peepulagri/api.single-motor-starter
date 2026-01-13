@@ -78,7 +78,7 @@ export async function updateStates(insertedData: any, previousData: any) {
 
     if (power_present !== power) {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter_id, { power: power_present }, trx);
-      await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
+      await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
     }
 
     await ActivityService.writeMotorSyncLogs(created_by || 0, motor_id,
@@ -91,7 +91,7 @@ export async function updateStates(insertedData: any, previousData: any) {
       await trackMotorRunTime({
         starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp,
         previous_power_state: power, new_power_state: power_present
-      });
+      }, trx);
     }
 
     if (alert_code && fault) await saveSingleRecord<AlertsFaultsTable>(alertsFaults, { starter_id, motor_id, user_id: created_by, alert_code, alert_description, fault_code: fault, fault_description, timestamp: new Date(time_stamp) }, trx);
@@ -108,7 +108,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: any, prev
 
     if (power_present !== power) {
       await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-      await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
+      await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
     }
     if (motor_state !== prevState || mode_description !== prevMode) {
       await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
@@ -121,7 +121,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: any, prev
     }
 
     if (motor_state !== prevState || power_present !== power) {
-      await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
+      await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
     }
   });
 }
@@ -129,22 +129,21 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: any, prev
 
 export async function updateDevicePowerONAndMotorStateOFF(insertedData: any, previousData: any) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp } = insertedData;
-  const { power, prevState, locationId } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
   await db.transaction(async (trx) => {
     await saveSingleRecord(starterBoxParameters, insertedData, trx);
     if (power_present !== power) {
       await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-      await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
+      await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
     }
     if (motor_state !== prevState) {
       await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
-
-      await ActivityService.writeMotorSyncLogs(0, motor_id, { state: prevState }, { state: motor_state }, trx);
+      await ActivityService.writeMotorSyncLogs(0, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: prevMode }, trx);
     }
     if (motor_state !== prevState || power_present !== power) {
-      await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
+      await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
     }
   });
 }
@@ -158,7 +157,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: any, previ
   await db.transaction(async (trx) => {
     if (power_present !== power) {
       await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-      await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp });
+      await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
     }
     if (motor_state !== prevState || mode_description !== prevMode) {
       await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description }, trx);
@@ -166,7 +165,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: any, previ
       await ActivityService.writeMotorSyncLogs(0, motor_id, { mode: prevMode }, { mode: mode_description }, trx);
     }
     if (motor_state !== prevState || power_present !== power) {
-      await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present });
+      await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
     }
   });
 }
@@ -199,11 +198,11 @@ export async function motorControlAckHandler(message: any, topic: string) {
     if (stateChanged) {
       await db.transaction(async (trx) => {
         await trx.update(motors).set({ state, updated_at: new Date() }).where(eq(motors.id, motor.id));
-        await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: state, mode_description });
+        await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: state, mode_description }, trx);
 
         await ActivityService.writeMotorAckLogs(motor.created_by || 0, motor.id,
-          { state: prevState },
-          { state: state },
+          { state: prevState, mode: mode_description },
+          { state: state, mode: mode_description },
           "MOTOR_CONTROL_ACK",
           trx
         );

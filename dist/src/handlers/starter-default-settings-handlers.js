@@ -1,4 +1,5 @@
 import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, DEVICE_SCHEMA, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import db from "../database/configuration.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { starterDefaultSettings } from "../database/schemas/starter-default-settings.js";
 import { starterSettingsLimits } from "../database/schemas/starter-settings-limits.js";
@@ -12,6 +13,7 @@ import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
+import { ActivityService } from "../services/db/activity-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettings = async (c) => {
@@ -28,6 +30,7 @@ export class StarterDefaultSettingsHandlers {
     };
     updateStarterDefaultSettings = async (c) => {
         try {
+            const userPayload = c.get("user_payload");
             const defaultSettingId = +c.req.param("id");
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
@@ -35,7 +38,18 @@ export class StarterDefaultSettingsHandlers {
             const defaultSettingData = await getSingleRecordByAColumnValue(starterDefaultSettings, "id", "=", defaultSettingId, ["id"]);
             if (!defaultSettingData)
                 throw new BadRequestException(DEFAULT_SETTINGS_NOT_FOUND);
-            await updateRecordById(starterDefaultSettings, Number(defaultSettingData.id), validatedBody);
+            await db.transaction(async (trx) => {
+                await updateRecordById(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
+                // Add activity log if needed (currently not in service, but let's be consistent)
+                await ActivityService.logActivity({
+                    performedBy: userPayload.id, // System or current user if available
+                    action: "DEFAULT_SETTINGS_UPDATED",
+                    entityType: "SETTING",
+                    entityId: Number(defaultSettingData.id),
+                    oldData: defaultSettingData,
+                    newData: validatedBody
+                }, trx);
+            });
             return sendResponse(c, 200, DEFAULT_SETTINGS_UPDATED);
         }
         catch (error) {
@@ -91,7 +105,11 @@ export class StarterDefaultSettingsHandlers {
                     }
                 });
             }
-            await saveSingleRecord(starterSettings, { ...cleanedBody, starter_id: starter.id, pcb_number: String(starter.pcb_number), created_by: user.id });
+            await db.transaction(async (trx) => {
+                await saveSingleRecord(starterSettings, { ...cleanedBody, starter_id: starter.id, pcb_number: String(starter.pcb_number), created_by: user.id }, trx);
+                // Handle activity logging for settings update
+                await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, { ...oldSettings, ...cleanedBody }, trx);
+            });
             return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
         }
         catch (error) {

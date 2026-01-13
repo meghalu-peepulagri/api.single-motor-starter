@@ -151,7 +151,7 @@ export async function trackMotorRunTime(params: {
   time_stamp?: string;
   previous_power_state?: number;
   new_power_state?: number;
-}) {
+}, externalTrx?: any) {
   const {
     starter_id,
     motor_id,
@@ -169,7 +169,7 @@ export async function trackMotorRunTime(params: {
   const now = time_stamp ? new Date(time_stamp) : new Date();
   const formattedDate = now.toISOString();
 
-  return await db.transaction(async (trx) => {
+  const action = async (trx: any) => {
     const [openRecord] = await trx
       .select()
       .from(motorsRunTime)
@@ -275,7 +275,13 @@ export async function trackMotorRunTime(params: {
         })
         .where(eq(motorsRunTime.id, openRecord.id));
     }
-  });
+  };
+
+  if (externalTrx) {
+    return await action(externalTrx);
+  } else {
+    return await db.transaction(action);
+  }
 }
 
 export async function trackDeviceRunTime(params: {
@@ -285,12 +291,13 @@ export async function trackDeviceRunTime(params: {
   motor_state: number;
   mode_description: string;
   time_stamp: string;
-}) {
+}, externalTrx?: any) {
   const { starter_id, motor_id, location_id, new_power_state, motor_state, mode_description, time_stamp } = params;
 
   if (!starter_id) return;
   const now = new Date(time_stamp);
-  return await db.transaction(async (trx) => {
+
+  const action = async (trx: any) => {
     const [openRecord] = await trx
       .select()
       .from(deviceRunTime)
@@ -343,8 +350,13 @@ export async function trackDeviceRunTime(params: {
         time_stamp
       });
     }
+  };
+
+  if (externalTrx) {
+    return await action(externalTrx);
+  } else {
+    return await db.transaction(action);
   }
-  );
 }
 
 export async function getMotorRunTime(starterId: number, fromDate: string, toDate: string, motorId?: number, motorState?: string) {

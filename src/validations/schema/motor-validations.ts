@@ -11,6 +11,8 @@ export const vAddMotor = v.object({
 export const vUpdateMotor = v.object({
   name: motorNameValidator,
   hp: hpValidator,
+  state: v.optional(v.number()),
+  mode: v.optional(v.picklist(["MANUAL", "AUTO"])),
 });
 
 

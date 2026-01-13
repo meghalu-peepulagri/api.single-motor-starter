@@ -29,7 +29,6 @@ export class MotorScheduleHandler {
                 await checkMotorScheduleConflict(validatedReqData, existingMotorSchedule);
             }
             const preparedScheduledData = {
-                pond_id: existedMotor.pond_id,
                 motor_id: validatedReqData.motor_id,
                 schedule_type: validatedReqData.schedule_type,
                 schedule_date: validatedReqData.schedule_date || null,

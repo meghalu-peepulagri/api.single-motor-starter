@@ -6,7 +6,6 @@ export const motorScheduleTypeEnum = pgEnum("schedule_type", ["ONE_TIME", "DAILY
 export const scheduleStatusEnum = pgEnum("schedule_status", ["PENDING", "RUNNING", "SCHEDULED", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "RESCHEDULED"]);
 export const motorSchedules = pgTable("motor_schedules", {
     id: serial("id").primaryKey().notNull(),
-    pond_id: integer("pond_id").notNull().references(() => fields.id),
     motor_id: integer("motor_id").notNull().references(() => motors.id),
     schedule_type: motorScheduleTypeEnum().default("ONE_TIME").notNull(), // One Time,  Daily, Weekly
     schedule_date: varchar("schedule_date"), // specific date for one-time schedule

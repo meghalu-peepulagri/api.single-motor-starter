@@ -3,19 +3,19 @@ import type { Context } from "hono";
 import { LOCATION_ADDED, LOCATION_DELETED, LOCATION_NOT_FOUND, LOCATION_VALIDATION_CRITERIA, LOCATIONS_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { locations, type LocationsTable } from "../database/schemas/locations.js";
-import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { locationFilters } from "../helpers/location-helpers.js";
-import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { ActivityService } from "../services/db/activity-service.js";
+import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getLocationsList, locationDropDown } from "../services/db/location-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import BadRequestException from "../exceptions/bad-request-exception.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -29,7 +29,12 @@ export class LocationHandlers {
 
       const validLocationReq = await validatedRequest<ValidatedAddLocation>("add-location", locationPayload, LOCATION_VALIDATION_CRITERIA);
       const newLocation = { ...validLocationReq, user_id: validLocationReq.user_id ? validLocationReq.user_id : userPayload.id, created_by: userPayload.id };
-      await saveSingleRecord<LocationsTable>(locations, newLocation);
+
+      await db.transaction(async (trx) => {
+        const location = await saveSingleRecord<LocationsTable>(locations, newLocation, trx);
+        await ActivityService.writeLocationAddedLog(userPayload.id, location.id, { name: location.name }, trx);
+      });
+
       return sendResponse(c, 201, LOCATION_ADDED);
     } catch (error: any) {
       console.error("Error at add location :", error);
@@ -82,8 +87,12 @@ export class LocationHandlers {
       paramsValidateException.validateId(locationId, "location id");
       const validLocationReq = await validatedRequest<ValidatedAddLocation>("add-location", reqData, LOCATION_VALIDATION_CRITERIA);
 
+      const foundedLocation = await getSingleRecordByMultipleColumnValues<LocationsTable>(locations, ["id", "status"], ["=", "!="], [locationId, "ARCHIVED"]);
+      if (!foundedLocation) throw new NotFoundException(LOCATION_NOT_FOUND);
+
       await db.transaction(async (trx) => {
-        await updateRecordByIdWithTrx<LocationsTable>(locations, locationId, validLocationReq);
+        const updatedLocation = await updateRecordById<LocationsTable>(locations, locationId, validLocationReq, trx);
+        await ActivityService.writeLocationRenamedLog((c.get("user_payload")).id, locationId, { name: foundedLocation.name }, { name: updatedLocation.name }, trx);
       })
       return sendResponse(c, 200, LOCATION_ADDED);
     } catch (error: any) {
@@ -109,7 +118,8 @@ export class LocationHandlers {
       }
 
       await db.transaction(async (trx) => {
-        await updateRecordByIdWithTrx<LocationsTable>(locations, locationId, { status: "ARCHIVED" });
+        await updateRecordById<LocationsTable>(locations, locationId, { status: "ARCHIVED" }, trx);
+        await ActivityService.writeLocationDeletedLog((c.get("user_payload")).id, locationId, trx);
       })
       return sendResponse(c, 200, LOCATION_DELETED);
     } catch (error: any) {

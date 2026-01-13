@@ -64,11 +64,13 @@ export class StarterHandlers {
                 throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
             if (starterBox.device_status !== "DEPLOYED")
                 throw new BadRequestException(STARER_NOT_DEPLOYED);
-            await assignStarterWithTransaction(validatedReqData, userPayload, starterBox);
-            await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
-                user_id: userPayload.id,
-                location_id: validatedReqData.location_id,
-                motor_name: validatedReqData.motor_name
+            await db.transaction(async (trx) => {
+                const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
+                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
+                    user_id: userPayload.id,
+                    location_id: updatedStarter.location_id,
+                    motor_name: updatedMotor.alias_name
+                }, trx);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
         }
@@ -121,25 +123,20 @@ export class StarterHandlers {
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             let message = "";
             const activityLogs = [];
-            if (starter.starter_type === "SINGLE_STARTER") {
+            if (activityLogs.length > 0) {
                 await db.transaction(async (trx) => {
                     if (userPayload.user_type === "USER") {
-                        await updateRecordByIdWithTrx(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
-                        saveSingleRecord(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
-                        activityLogs.push(prepareDeletionLog({ userId: userPayload.id, entityType: "STARTER", entityId: starterId, action: "STARTER_REMOVED" }));
+                        await updateRecordById(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
+                        await saveSingleRecord(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
                     }
                     if (userPayload.user_type === "ADMIN") {
-                        await updateRecordByIdWithTrx(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
-                        activityLogs.push(prepareDeletionLog({ userId: userPayload.id, entityType: "STARTER", entityId: starterId, action: "DEVICE_DELETED" }));
+                        await updateRecordById(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
                     }
                     if (motor) {
                         await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
-                        activityLogs.push(prepareDeletionLog({ userId: userPayload.id, entityType: "MOTOR", entityId: motor.id, action: "MOTOR_DELETED" }));
                     }
+                    await ActivityService.writeBatchDeletionLogs(activityLogs, trx);
                 });
-                if (activityLogs.length > 0) {
-                    await ActivityService.writeBatchDeletionLogs(activityLogs);
-                }
             }
             if (userPayload.user_type === "USER") {
                 message = STARTER_REMOVED_SUCCESS;
@@ -169,8 +166,10 @@ export class StarterHandlers {
             const foundMotorName = await getSingleRecordByMultipleColumnValues(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [motor.alias_name, validatedStarterReq.location_id, "ARCHIVED"]);
             if (foundMotorName)
                 throw new ConflictException("Pump name already exists in this location.");
-            await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id);
-            await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id, { location_id: starter.location_id }, { location_id: validatedStarterReq.location_id, motor_id: motor.id });
+            await db.transaction(async (trx) => {
+                const { updatedMotor, updatedStarter } = await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id, trx);
+                await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx);
+            });
             return sendResponse(c, 201, STARTER_REPLACED_SUCCESSFULLY);
         }
         catch (error) {
@@ -241,7 +240,7 @@ export class StarterHandlers {
             const reqData = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqData);
             const validatedReqData = await validatedRequest("assign-starter-web", reqData, STARTER_BOX_VALIDATION_CRITERIA);
-            const starterBox = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"], ["id", "device_status", "status"]);
+            const starterBox = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"]);
             if (!starterBox)
                 throw new BadRequestException(STARTER_BOX_NOT_FOUND);
             const user = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [userPayload.id, "ARCHIVED"]);
@@ -249,9 +248,11 @@ export class StarterHandlers {
                 throw new BadRequestException(USER_NOT_FOUND);
             if (starterBox.device_status !== "DEPLOYED")
                 throw new BadRequestException(STARER_NOT_DEPLOYED);
-            await assignStarterWebWithTransaction(starterBox, validatedReqData, userPayload);
-            await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
-                user_id: validatedReqData.user_id
+            await db.transaction(async (trx) => {
+                const { updatedStarter, updatedMotor } = await assignStarterWebWithTransaction(starterBox, validatedReqData, userPayload, trx);
+                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
+                    user_id: updatedStarter.user_id
+                }, trx);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
         }
@@ -321,7 +322,16 @@ export class StarterHandlers {
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"]);
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
-            await updateRecordById(starterBoxes, starter.id, { location_id: validatedReqData.location_id, user_id: userPayload.id });
+            await db.transaction(async (trx) => {
+                const updatedStarter = await updateRecordById(starterBoxes, starter.id, { location_id: validatedReqData.location_id, user_id: userPayload.id }, trx);
+                await ActivityService.logActivity({
+                    performedBy: userPayload.id,
+                    action: "LOCATION_ASSIGNED",
+                    entityType: "STARTER",
+                    entityId: starter.id,
+                    newData: { location_id: updatedStarter.location_id }
+                }, trx);
+            });
             return sendResponse(c, 201, LOCATION_ASSIGNED);
         }
         catch (error) {
@@ -343,19 +353,21 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             const userId = c.get("user_payload").id;
-            await updateRecordById(starterBoxes, starter.id, validatedReqData);
-            await ActivityService.writeStarterUpdatedLog(userId, starterId, {
-                name: starter.name,
-                pcb_number: starter.pcb_number,
-                starter_number: starter.starter_number,
-                mac_address: starter.mac_address,
-                gateway_id: starter.gateway_id
-            }, {
-                name: validatedReqData.name ?? undefined,
-                pcb_number: validatedReqData.pcb_number,
-                starter_number: validatedReqData.starter_number,
-                mac_address: validatedReqData.mac_address,
-                gateway_id: validatedReqData.gateway_id
+            await db.transaction(async (trx) => {
+                const updatedStarter = await updateRecordById(starterBoxes, starter.id, validatedReqData, trx);
+                await ActivityService.writeStarterUpdatedLog(userId, starterId, {
+                    name: starter.name,
+                    pcb_number: starter.pcb_number,
+                    starter_number: starter.starter_number,
+                    mac_address: starter.mac_address,
+                    gateway_id: starter.gateway_id
+                }, {
+                    name: updatedStarter.name,
+                    pcb_number: updatedStarter.pcb_number,
+                    starter_number: updatedStarter.starter_number,
+                    mac_address: updatedStarter.mac_address,
+                    gateway_id: updatedStarter.gateway_id
+                }, trx);
             });
             return sendResponse(c, 201, STARTER_DETAILS_UPDATED);
         }

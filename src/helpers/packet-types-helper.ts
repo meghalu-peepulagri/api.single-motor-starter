@@ -105,7 +105,7 @@ export function getValidStrength(value: number) {
 
   return {
     strength: isValid ? value : 0,
-    status: isValid ? "ACTIVE" : "INACTIVE",
+    status: (isValid ? "ACTIVE" : "INACTIVE") as "ACTIVE" | "INACTIVE",
   };
 }
 

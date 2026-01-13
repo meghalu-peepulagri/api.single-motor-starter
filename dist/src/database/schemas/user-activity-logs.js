@@ -10,6 +10,7 @@ export const userActivityLogs = pgTable("user_activity_logs", {
     entity_id: integer("entity_id"), // ID of the starter or motor
     old_data: text("old_data"),
     new_data: text("new_data"),
+    message: text("message"), // description
     created_at: timestamp("created_at").defaultNow(),
     updated_at: timestamp("updated_at").defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [

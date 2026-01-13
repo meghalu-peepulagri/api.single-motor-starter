@@ -7,7 +7,7 @@ import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { userFilters } from "../helpers/user-helper.js";
-import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, saveRecords, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, saveRecords, updateRecordById } from "../services/db/base-db-services.js";
 import { paginatedUsersList } from "../services/db/user-service.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
@@ -105,8 +105,8 @@ export class UserHandlers {
       if (!verifiedUser) throw new NotFoundException(USER_NOT_FOUND);
 
       await db.transaction(async (trx) => {
-        await updateRecordByIdWithTrx<UsersTable>(users, userId, { ...validUserReq }, trx);
-        await ActivityService.writeUserUpdatedLog(userId, userPayload.id, verifiedUser, validUserReq, trx);
+        const updatedUser = await updateRecordById<UsersTable>(users, userId, validUserReq, trx);
+        await ActivityService.writeUserUpdatedLog(userId, userPayload.id, verifiedUser, updatedUser, trx);
       })
 
       return sendResponse(c, 201, USER_UPDATED);

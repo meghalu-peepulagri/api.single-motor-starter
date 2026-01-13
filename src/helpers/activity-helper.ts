@@ -1,5 +1,6 @@
-import { ActivityService } from "../services/db/activity-service.js";
 import type { NewUserActivityLog } from "../database/schemas/user-activity-logs.js";
+import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
+import { ActivityService } from "../services/db/activity-service.js";
 
 /**
  * Helper to prepare granular activity logs for device updates
@@ -15,10 +16,10 @@ export function prepareDeviceUpdateLogs(data: {
     gateway_id: number | null
   };
   newData: {
-    name?: string;
-    pcb_number?: string;
-    starter_number?: string;
-    mac_address?: string;
+    name?: string | null;
+    pcb_number?: string | null;
+    starter_number?: string | null;
+    mac_address?: string | null;
     gateway_id?: number | null
   };
 }): NewUserActivityLog[] {
@@ -88,8 +89,8 @@ export function prepareDeviceUpdateLogs(data: {
 export function prepareMotorUpdateLogs(data: {
   userId: number;
   entityId: number;
-  oldData: { name: string | null; hp: string | null };
-  newData: { name?: string; hp?: string };
+  oldData: { name: string | null; hp: string | null; state?: number | null; mode?: string | null };
+  newData: { name?: string | null; hp?: string | null; state?: number | null; mode?: string | null };
 }): NewUserActivityLog[] {
   const logs: NewUserActivityLog[] = [];
 
@@ -100,7 +101,8 @@ export function prepareMotorUpdateLogs(data: {
       entityType: "MOTOR",
       entityId: data.entityId,
       oldData: { name: data.oldData.name },
-      newData: { name: data.newData.name }
+      newData: { name: data.newData.name },
+      message: `Name updated from '${data.oldData.name}' to '${data.newData.name}'`
     }));
   }
 
@@ -111,7 +113,33 @@ export function prepareMotorUpdateLogs(data: {
       entityType: "MOTOR",
       entityId: data.entityId,
       oldData: { hp: data.oldData.hp },
-      newData: { hp: data.newData.hp }
+      newData: { hp: data.newData.hp },
+      message: `Hp updated from '${data.oldData.hp}' to '${data.newData.hp}'`
+    }));
+  }
+
+  if (data.newData.state !== undefined && data.newData.state !== null && data.newData.state !== data.oldData.state) {
+    const mode = data.newData.mode ?? data.oldData.mode;
+    logs.push(ActivityService.prepareActivityLog({
+      performedBy: data.userId,
+      action: "MOTOR_STATE_UPDATED",
+      entityType: "MOTOR",
+      entityId: data.entityId,
+      oldData: { state: data.oldData.state },
+      newData: { state: data.newData.state },
+      message: `State updated from '${data.oldData.state}' to '${data.newData.state}' with mode '${mode}'`
+    }));
+  }
+
+  if (data.newData.mode !== undefined && data.newData.mode !== null && data.newData.mode !== data.oldData.mode) {
+    logs.push(ActivityService.prepareActivityLog({
+      performedBy: data.userId,
+      action: "MOTOR_MODE_UPDATED",
+      entityType: "MOTOR",
+      entityId: data.entityId,
+      oldData: { mode: data.oldData.mode },
+      newData: { mode: data.newData.mode },
+      message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`
     }));
   }
 
@@ -123,9 +151,9 @@ export function prepareMotorUpdateLogs(data: {
  */
 export function prepareDeletionLog(data: {
   userId: number;
-  entityType: "STARTER" | "MOTOR";
+  entityType: "STARTER" | "MOTOR" | "LOCATION";
   entityId: number;
-  action: "DEVICE_DELETED" | "MOTOR_DELETED" | "STARTER_REMOVED";
+  action: "DEVICE_DELETED" | "MOTOR_DELETED" | "STARTER_REMOVED" | "LOCATION_DELETED";
   entityName?: string;
 }): NewUserActivityLog {
   return ActivityService.prepareActivityLog({
@@ -142,8 +170,8 @@ export function prepareDeletionLog(data: {
  */
 export function prepareActionLog(data: {
   userId: number;
-  action: "MOTOR_ADDED" | "STARTER_ASSIGNED" | "LOCATION_REPLACED";
-  entityType: "MOTOR" | "STARTER";
+  action: "MOTOR_ADDED" | "STARTER_ASSIGNED" | "LOCATION_REPLACED" | "LOCATION_ADDED" | "LOCATION_RENAMED";
+  entityType: "MOTOR" | "STARTER" | "LOCATION";
   entityId: number;
   oldData?: any;
   newData?: any;
@@ -170,13 +198,15 @@ export function prepareMotorSyncLogs(data: {
   const logs: NewUserActivityLog[] = [];
 
   if (data.newData.state !== undefined && data.newData.state !== data.oldData.state) {
+    const mode = data.newData.mode ?? data.oldData.mode;
     logs.push(ActivityService.prepareActivityLog({
       performedBy: data.userId,
       action: "MOTOR_STATE_SYNC",
       entityType: "MOTOR",
       entityId: data.entityId,
       oldData: { state: data.oldData.state },
-      newData: { state: data.newData.state }
+      newData: { state: data.newData.state },
+      message: `State updated from '${data.oldData.state}' to '${data.newData.state}' with mode '${mode}'`
     }));
   }
 
@@ -187,7 +217,8 @@ export function prepareMotorSyncLogs(data: {
       entityType: "MOTOR",
       entityId: data.entityId,
       oldData: { mode: data.oldData.mode },
-      newData: { mode: data.newData.mode }
+      newData: { mode: data.newData.mode },
+      message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`
     }));
   }
 
@@ -207,13 +238,15 @@ export function prepareMotorAckLogs(data: {
   const logs: NewUserActivityLog[] = [];
 
   if (data.newData.state !== undefined && data.newData.state !== data.oldData.state) {
+    const mode = data.newData.mode ?? data.oldData.mode;
     logs.push(ActivityService.prepareActivityLog({
       performedBy: data.userId,
       action: data.action,
       entityType: "MOTOR",
       entityId: data.entityId,
       oldData: { state: data.oldData.state },
-      newData: { state: data.newData.state }
+      newData: { state: data.newData.state },
+      message: `State updated from '${data.oldData.state}' to '${data.newData.state}' with mode '${mode}'`
     }));
   }
 
@@ -224,7 +257,8 @@ export function prepareMotorAckLogs(data: {
       entityType: "MOTOR",
       entityId: data.entityId,
       oldData: { mode: data.oldData.mode },
-      newData: { mode: data.newData.mode }
+      newData: { mode: data.newData.mode },
+      message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`
     }));
   }
 
@@ -253,6 +287,38 @@ export function prepareUserUpdateLogs(data: {
         action: `USER_${field.toUpperCase()}_UPDATED`,
         entityType: "USER",
         entityId: data.userId,
+        oldData: { [field]: data.oldData[field] },
+        newData: { [field]: data.newData[field] }
+      }));
+    }
+  });
+
+  return logs;
+}
+/**
+ * Helper to prepare granular activity logs for starter settings updates
+ */
+export function prepareSettingsUpdateLogs(data: {
+  userId: number;
+  starterId: number;
+  oldData: any;
+  newData: any;
+}): NewUserActivityLog[] {
+  const logs: NewUserActivityLog[] = [];
+
+  Object.keys(data.newData).forEach((field) => {
+    // Only track if the field exists in SETTINGS_FIELD_NAMES and has changed
+    if (
+      SETTINGS_FIELD_NAMES[field as keyof typeof SETTINGS_FIELD_NAMES] &&
+      data.newData[field] !== undefined &&
+      data.newData[field] !== null &&
+      String(data.newData[field]) !== String(data.oldData[field])
+    ) {
+      logs.push(ActivityService.prepareActivityLog({
+        performedBy: data.userId,
+        action: `SETTING_${field.toUpperCase()}_UPDATED`,
+        entityType: "SETTING",
+        entityId: data.starterId,
         oldData: { [field]: data.oldData[field] },
         newData: { [field]: data.newData[field] }
       }));

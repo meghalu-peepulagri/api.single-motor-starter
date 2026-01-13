@@ -1,9 +1,9 @@
 import { and, asc, count, desc, eq, getTableName, inArray, sql } from "drizzle-orm";
 import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED } from "../../constants/app-constants.js";
 import db from "../../database/configuration.js";
+import BadRequestException from "../../exceptions/bad-request-exception.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
 import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
-import BadRequestException from "../../exceptions/bad-request-exception.js";
 async function getRecordById(table, id, columnsToSelect) {
     const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
     const columnInfo = sql.raw(`${getTableName(table)}.id`);
@@ -155,9 +155,10 @@ async function saveRecords(table, records, trx) {
     const recordsSaved = await query;
     return recordsSaved;
 }
-async function updateRecordById(table, id, record) {
+async function updateRecordById(table, id, record, trx) {
     const dataWithTimeStamps = { ...record, updated_at: new Date() };
-    const recordUpdated = await db
+    const queryBuilder = trx || db;
+    const recordUpdated = await queryBuilder
         .update(table)
         .set(dataWithTimeStamps)
         .where(eq(table.id, id))
@@ -167,9 +168,10 @@ async function updateRecordById(table, id, record) {
     }
     return recordUpdated[0];
 }
-async function deleteRecordById(table, id) {
+async function deleteRecordById(table, id, trx) {
     const columnInfo = sql.raw(`${getTableName(table)}.id`);
-    const deletedRecord = await db.delete(table).where(eq(columnInfo, id)).returning();
+    const queryBuilder = trx || db;
+    const deletedRecord = await queryBuilder.delete(table).where(eq(columnInfo, id)).returning();
     return deletedRecord[0];
 }
 async function deleteRecordsByAColumnValue(table, column, value) {
@@ -259,7 +261,7 @@ async function updateRecordByColumnValue(table, column, value, record, id) {
     const columnInfo = sql.raw(`${getTableName(table)}.${column}`);
     return await db.update(table).set(dataWithTimeStamps).where(eq(columnInfo, value));
 }
-async function updateRecordByMultipleColumnValues(table, columns, relations, values, record, id) {
+async function updateRecordByMultipleColumnValues(table, columns, relations, values, record, id, trx) {
     const whereQueryData = {
         columns,
         relations,
@@ -267,7 +269,8 @@ async function updateRecordByMultipleColumnValues(table, columns, relations, val
     };
     const dataWithTimeStamps = { id, ...record, updated_at: new Date() };
     const whereConditions = whereQueryData.columns.map((column, index) => eq(sql.raw(`${getTableName(table)}.${String(column)}`), whereQueryData.values[index]));
-    const result = await db.update(table).set(dataWithTimeStamps).where(and(...whereConditions)).returning();
+    const queryBuilder = trx || db;
+    const result = await queryBuilder.update(table).set(dataWithTimeStamps).where(and(...whereConditions)).returning();
     if (!Array.isArray(result)) {
         throw new UnprocessableEntityException(DB_UPDATE_DATA_FAILED);
     }

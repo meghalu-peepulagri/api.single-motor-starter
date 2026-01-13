@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
-import type { StarterBoxTable } from "../database/schemas/starter-boxes.js";
+import type { StarterBox } from "../database/schemas/starter-boxes.js";
 import { publishStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 import { logger } from "../utils/logger.js";
@@ -39,7 +39,7 @@ export const requiredText = (field: keyof typeof SETTINGS_FIELD_NAMES) =>
   v.string(`${SETTINGS_FIELD_NAMES[field]} is required`);
 
 
-export const prepareSettingsData = (starter: StarterBoxTable, settings: any) => {
+export const prepareSettingsData = (starter: StarterBox, settings: any) => {
   if (!starter?.pcb_number || !settings) return null;
 
   return {

@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
-import { motors, type MotorsTable } from "../database/schemas/motors.js";
+import { motors, type MotorsTable, type NewMotor } from "../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
@@ -29,20 +29,25 @@ export class MotorHandlers {
       paramsValidateException.emptyBodyValidation(motorPayload);
       const validMotorReq = await validatedRequest<validatedAddMotor>("add-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
 
-      const preparedMotorPayload: any = {
-        alias_name: validMotorReq.name, created_by: userPayload.id, location_id: validMotorReq.location_id,
+      const preparedMotorPayload: NewMotor = {
+        name: validMotorReq.name,
+        alias_name: validMotorReq.name,
+        created_by: userPayload.id,
+        location_id: validMotorReq.location_id,
         hp: validMotorReq.hp.toString(),
       }
 
-      const motor = await saveSingleRecord<MotorsTable>(motors, preparedMotorPayload) as any;
+      await db.transaction(async (trx) => {
+        const motor = await saveSingleRecord<MotorsTable>(motors, preparedMotorPayload, trx);
 
-      if (motor) {
-        await ActivityService.writeMotorAddedLog(userPayload.id, motor.id, {
-          name: validMotorReq.name,
-          hp: validMotorReq.hp,
-          location_id: validMotorReq.location_id
-        });
-      }
+        if (motor) {
+          await ActivityService.writeMotorAddedLog(userPayload.id, motor.id, {
+            name: motor.alias_name,
+            hp: motor.hp,
+            location_id: motor.location_id
+          }, trx);
+        }
+      });
 
       return sendResponse(c, 201, MOTOR_ADDED);
     } catch (error: any) {
@@ -69,11 +74,18 @@ export class MotorHandlers {
       const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
       if (existedMotor) throw new ConflictException(MOTOR_NAME_EXISTED);
 
-      const updatedMotor = await updateRecordById(motors, motorId, { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() });
-      await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId,
-        { name: motor.alias_name, hp: motor.hp },
-        { name: validMotorReq.name, hp: validMotorReq.hp.toString() }
-      );
+      await db.transaction(async (trx) => {
+        const updatePayload: any = { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() };
+        if (validMotorReq.state !== undefined) updatePayload.state = validMotorReq.state;
+        if (validMotorReq.mode !== undefined) updatePayload.mode = validMotorReq.mode;
+
+        const updatedMotor = await updateRecordById(motors, motorId, updatePayload, trx);
+        await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId,
+          { name: motor.alias_name, hp: motor.hp, state: motor.state, mode: motor.mode },
+          { name: updatedMotor.alias_name, hp: updatedMotor.hp, state: updatedMotor.state, mode: updatedMotor.mode },
+          trx
+        );
+      })
 
       return sendResponse(c, 200, MOTOR_UPDATED);
     } catch (error: any) {
@@ -118,10 +130,12 @@ export class MotorHandlers {
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
       const userPayload = c.get("user_payload");
       await db.transaction(async trx => {
-        await updateRecordById<MotorsTable>(motors, motorId, { status: "ARCHIVED" });
-        await updateRecordById<StarterBoxTable>(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null });
+        await updateRecordById<MotorsTable>(motors, motor.id, { status: "ARCHIVED" }, trx);
+        if (motor.starter_id) {
+          await updateRecordById<StarterBoxTable>(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null }, trx);
+        }
 
-        await ActivityService.writeMotorDeletedLog(userPayload.id, motorId, trx);
+        await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx);
       })
       return sendResponse(c, 200, MOTOR_DELETED);
     } catch (error: any) {
@@ -136,7 +150,7 @@ export class MotorHandlers {
       const userPayload = c.get("user_payload");
       const query = c.req.query();
       const paginationParams = getPaginationOffParams(query);
-      const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type, "assigned_at", "desc");
+      const orderQueryData = parseOrderByQueryCondition<MotorsTable>(query.order_by, query.order_type, "assigned_at", "desc");
       const whereQueryData = motorFilters(query, userPayload);
       const motors = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
       return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motors);

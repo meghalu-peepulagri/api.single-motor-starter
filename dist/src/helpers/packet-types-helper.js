@@ -94,7 +94,7 @@ export function getValidStrength(value) {
     const isValid = value >= 2 && value <= 30;
     return {
         strength: isValid ? value : 0,
-        status: isValid ? "ACTIVE" : "INACTIVE",
+        status: (isValid ? "ACTIVE" : "INACTIVE"),
     };
 }
 export function getValidNetwork(value) {

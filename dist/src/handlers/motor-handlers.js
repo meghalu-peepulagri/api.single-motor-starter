@@ -24,17 +24,22 @@ export class MotorHandlers {
             paramsValidateException.emptyBodyValidation(motorPayload);
             const validMotorReq = await validatedRequest("add-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
             const preparedMotorPayload = {
-                alias_name: validMotorReq.name, created_by: userPayload.id, location_id: validMotorReq.location_id,
+                name: validMotorReq.name,
+                alias_name: validMotorReq.name,
+                created_by: userPayload.id,
+                location_id: validMotorReq.location_id,
                 hp: validMotorReq.hp.toString(),
             };
-            const motor = await saveSingleRecord(motors, preparedMotorPayload);
-            if (motor) {
-                await ActivityService.writeMotorAddedLog(userPayload.id, motor.id, {
-                    name: validMotorReq.name,
-                    hp: validMotorReq.hp,
-                    location_id: validMotorReq.location_id
-                });
-            }
+            await db.transaction(async (trx) => {
+                const motor = await saveSingleRecord(motors, preparedMotorPayload, trx);
+                if (motor) {
+                    await ActivityService.writeMotorAddedLog(userPayload.id, motor.id, {
+                        name: motor.alias_name,
+                        hp: motor.hp,
+                        location_id: motor.location_id
+                    }, trx);
+                }
+            });
             return sendResponse(c, 201, MOTOR_ADDED);
         }
         catch (error) {
@@ -59,8 +64,15 @@ export class MotorHandlers {
             const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
             if (existedMotor)
                 throw new ConflictException(MOTOR_NAME_EXISTED);
-            const updatedMotor = await updateRecordById(motors, motorId, { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() });
-            await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId, { name: motor.alias_name, hp: motor.hp }, { name: validMotorReq.name, hp: validMotorReq.hp.toString() });
+            await db.transaction(async (trx) => {
+                const updatePayload = { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() };
+                if (validMotorReq.state !== undefined)
+                    updatePayload.state = validMotorReq.state;
+                if (validMotorReq.mode !== undefined)
+                    updatePayload.mode = validMotorReq.mode;
+                const updatedMotor = await updateRecordById(motors, motorId, updatePayload, trx);
+                await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId, { name: motor.alias_name, hp: motor.hp, state: motor.state, mode: motor.mode }, { name: updatedMotor.alias_name, hp: updatedMotor.hp, state: updatedMotor.state, mode: updatedMotor.mode }, trx);
+            });
             return sendResponse(c, 200, MOTOR_UPDATED);
         }
         catch (error) {
@@ -103,9 +115,11 @@ export class MotorHandlers {
                 throw new NotFoundException(MOTOR_NOT_FOUND);
             const userPayload = c.get("user_payload");
             await db.transaction(async (trx) => {
-                await updateRecordById(motors, motorId, { status: "ARCHIVED" });
-                await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null });
-                await ActivityService.writeMotorDeletedLog(userPayload.id, motorId, trx);
+                await updateRecordById(motors, motor.id, { status: "ARCHIVED" }, trx);
+                if (motor.starter_id) {
+                    await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null }, trx);
+                }
+                await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx);
             });
             return sendResponse(c, 200, MOTOR_DELETED);
         }

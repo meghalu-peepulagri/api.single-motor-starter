@@ -1,8 +1,8 @@
-import { logger } from "../../utils/logger.js";
 import { userActivityLogs } from "../../database/schemas/user-activity-logs.js";
+import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
+import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
-import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
-import { log } from "console";
+import { log } from "node:console";
 /**
  * Service to handle Database Level Activity Logs (Audit Trail)
  */
@@ -19,6 +19,7 @@ export class ActivityService {
             entity_id: data.entityId || null,
             old_data: data.oldData ? JSON.stringify(data.oldData) : null,
             new_data: data.newData ? JSON.stringify(data.newData) : null,
+            message: data.message || null,
         };
     }
     /**
@@ -50,7 +51,7 @@ export class ActivityService {
     /**
      * Logs a motor addition event
      */
-    static async writeMotorAddedLog(userId, motorId, data) {
+    static async writeMotorAddedLog(userId, motorId, data, trx) {
         const log = prepareActionLog({
             userId,
             action: "MOTOR_ADDED",
@@ -58,14 +59,12 @@ export class ActivityService {
             entityId: motorId,
             newData: data
         });
-        await this.saveActivityLogs([log]);
+        await this.saveActivityLogs([log], trx);
     }
     /**
      * Logs motor update events (renaming, HP updates)
      */
-    static async writeMotorUpdatedLog(userId, motorId, oldData, newData) {
-        console.log("oldData", oldData);
-        console.log("newData", newData);
+    static async writeMotorUpdatedLog(userId, motorId, oldData, newData, trx) {
         const logs = prepareMotorUpdateLogs({
             userId,
             entityId: motorId,
@@ -73,7 +72,7 @@ export class ActivityService {
             newData
         });
         if (logs.length > 0) {
-            await this.saveActivityLogs(logs);
+            await this.saveActivityLogs(logs, trx);
         }
     }
     /**
@@ -120,7 +119,7 @@ export class ActivityService {
     /**
      * Logs a starter assignment event
      */
-    static async writeStarterAssignedLog(userId, starterId, data) {
+    static async writeStarterAssignedLog(userId, starterId, data, trx) {
         const log = prepareActionLog({
             userId,
             action: "STARTER_ASSIGNED",
@@ -128,12 +127,12 @@ export class ActivityService {
             entityId: starterId,
             newData: data
         });
-        await this.saveActivityLogs([log]);
+        await this.saveActivityLogs([log], trx);
     }
     /**
      * Logs a starter update event (Name, PCB number)
      */
-    static async writeStarterUpdatedLog(userId, starterId, oldData, newData) {
+    static async writeStarterUpdatedLog(userId, starterId, oldData, newData, trx) {
         const logs = prepareDeviceUpdateLogs({
             userId,
             entityId: starterId,
@@ -141,7 +140,7 @@ export class ActivityService {
             newData
         });
         if (logs.length > 0) {
-            await this.saveActivityLogs(logs);
+            await this.saveActivityLogs(logs, trx);
         }
     }
     /**
@@ -167,7 +166,7 @@ export class ActivityService {
     /**
      * Logs a location replacement event
      */
-    static async writeLocationReplacedLog(userId, starterId, oldData, newData) {
+    static async writeLocationReplacedLog(userId, starterId, oldData, newData, trx) {
         const log = prepareActionLog({
             userId,
             action: "LOCATION_REPLACED",
@@ -176,7 +175,7 @@ export class ActivityService {
             oldData,
             newData
         });
-        await this.saveActivityLogs([log]);
+        await this.saveActivityLogs([log], trx);
     }
     /**
      * Logs user profile update events
@@ -191,5 +190,58 @@ export class ActivityService {
         if (logs.length > 0) {
             await this.saveActivityLogs(logs, trx);
         }
+    }
+    /**
+     * Logs starter settings update events
+     */
+    static async writeStarterSettingsUpdatedLog(userId, starterId, oldData, newData, trx) {
+        const logs = prepareSettingsUpdateLogs({
+            userId,
+            starterId,
+            oldData,
+            newData
+        });
+        if (logs.length > 0) {
+            await this.saveActivityLogs(logs, trx);
+        }
+    }
+    /**
+     * Logs a location addition event
+     */
+    static async writeLocationAddedLog(userId, locationId, data, trx) {
+        const log = prepareActionLog({
+            userId,
+            action: "LOCATION_ADDED",
+            entityType: "LOCATION",
+            entityId: locationId,
+            newData: data
+        });
+        await this.saveActivityLogs([log], trx);
+    }
+    /**
+     * Logs a location rename event
+     */
+    static async writeLocationRenamedLog(userId, locationId, oldData, newData, trx) {
+        const log = prepareActionLog({
+            userId,
+            action: "LOCATION_RENAMED",
+            entityType: "LOCATION",
+            entityId: locationId,
+            oldData,
+            newData
+        });
+        await this.saveActivityLogs([log], trx);
+    }
+    /**
+     * Logs a location deletion event
+     */
+    static async writeLocationDeletedLog(userId, locationId, trx) {
+        const log = prepareDeletionLog({
+            userId,
+            entityType: "LOCATION",
+            entityId: locationId,
+            action: "LOCATION_DELETED"
+        });
+        await this.saveActivityLogs([log], trx);
     }
 }
