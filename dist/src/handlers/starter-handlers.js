@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARTER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways } from "../database/schemas/gateways.js";
 import { motors } from "../database/schemas/motors.js";
@@ -9,7 +9,7 @@ import {} from "../database/schemas/user-activity-logs.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
@@ -24,7 +24,7 @@ import { validatedRequest } from "../validations/validate-request.js";
 import { starterFilters } from "../helpers/starter-helper.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
-    addStarterBox = async (c) => {
+    addStarterBoxHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const starterBoxPayload = await c.req.json();
@@ -47,7 +47,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    assignStarterMobile = async (c) => {
+    assignStarterMobileHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const reqData = await c.req.json();
@@ -63,7 +63,7 @@ export class StarterHandlers {
             if (starterBox.device_status === "ASSIGNED" && motorCount > 0)
                 throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
             if (starterBox.device_status !== "DEPLOYED")
-                throw new BadRequestException(STARER_NOT_DEPLOYED);
+                throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
                 const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
                 await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
@@ -83,7 +83,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    starterListWeb = async (c) => {
+    starterListWebHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
@@ -98,7 +98,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    starterListMobile = async (c) => {
+    starterListMobileHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
@@ -113,7 +113,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    deleteStarterBox = async (c) => {
+    deleteStarterBoxHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const starterId = +c.req.param("id");
@@ -151,7 +151,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    replaceStarterLocation = async (c) => {
+    replaceStarterLocationHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const starterPayload = await c.req.json();
@@ -181,7 +181,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    starterAnalytics = async (c) => {
+    starterAnalyticsHandler = async (c) => {
         try {
             const query = c.req.query();
             const starterId = +c.req.param("id");
@@ -207,7 +207,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    starterRunTime = async (c) => {
+    starterRunTimeHandler = async (c) => {
         try {
             const query = c.req.query();
             const starterId = +c.req.param("id");
@@ -234,7 +234,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    assignStarterWeb = async (c) => {
+    assignStarterWebHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const reqData = await c.req.json();
@@ -247,7 +247,7 @@ export class StarterHandlers {
             if (!user)
                 throw new BadRequestException(USER_NOT_FOUND);
             if (starterBox.device_status !== "DEPLOYED")
-                throw new BadRequestException(STARER_NOT_DEPLOYED);
+                throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
                 const { updatedStarter, updatedMotor } = await assignStarterWebWithTransaction(starterBox, validatedReqData, userPayload, trx);
                 await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
@@ -265,7 +265,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    updateDeployStatus = async (c) => {
+    updateDeployStatusHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const reqData = await c.req.json();
@@ -298,7 +298,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    starterConnectedMotors = async (c) => {
+    starterConnectedMotorsHandler = async (c) => {
         try {
             const starterId = +c.req.param("id");
             paramsValidateException.validateId(starterId, "Device id");
@@ -313,7 +313,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    assignLocationToStarter = async (c) => {
+    assignLocationToStarterHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const reqData = await c.req.json();
@@ -342,7 +342,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    updateStarterDetails = async (c) => {
+    updateStarterDetailsHandler = async (c) => {
         try {
             const starterId = +c.req.param("id");
             const reqData = await c.req.json();
@@ -380,7 +380,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    markStarterStatus = async (c) => {
+    markStarterStatusHandler = async (c) => {
         try {
             const timeStamp = new Date(new Date().getTime() - 5 * 60 * 1000); // 5 minutes below
             const uniqueStarterData = await getUniqueStarterIdsWithInTime(timeStamp);
@@ -393,7 +393,7 @@ export class StarterHandlers {
             throw error;
         }
     };
-    getLatestPcbNumber = async (c) => {
+    getLatestPcbNumberHandler = async (c) => {
         try {
             const latestStarter = await db.select({
                 id: starterBoxes.id,

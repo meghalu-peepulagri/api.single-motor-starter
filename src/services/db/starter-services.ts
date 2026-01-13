@@ -4,7 +4,9 @@ import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
+import type { StarterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
 import { starterSettings, type StarterSettingsTable } from "../../database/schemas/starter-settings.js";
 import { users, type User } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
@@ -16,10 +18,8 @@ import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
-import type { StarterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { publishStarterSettings } from "./mqtt-db-services.js";
-import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User, externalTrx?: any) {

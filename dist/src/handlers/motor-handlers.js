@@ -4,7 +4,7 @@ import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { motorFilters } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
@@ -17,7 +17,7 @@ import { validatedRequest } from "../validations/validate-request.js";
 import { ActivityService } from "../services/db/activity-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorHandlers {
-    addMotor = async (c) => {
+    addMotorHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const motorPayload = await c.req.json();
@@ -51,7 +51,7 @@ export class MotorHandlers {
             throw error;
         }
     };
-    updateMotor = async (c) => {
+    updateMotorHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const motorId = +c.req.param("id");
@@ -84,7 +84,7 @@ export class MotorHandlers {
             throw error;
         }
     };
-    getSingleMotor = async (c) => {
+    getSingleMotorHandler = async (c) => {
         try {
             const motorId = +c.req.param("id");
             const query = c.req.query();
@@ -106,7 +106,7 @@ export class MotorHandlers {
             throw error;
         }
     };
-    deleteMotor = async (c) => {
+    deleteMotorHandler = async (c) => {
         try {
             const motorId = +c.req.param("id");
             paramsValidateException.validateId(motorId, "motor id");
@@ -128,7 +128,7 @@ export class MotorHandlers {
             throw error;
         }
     };
-    getAllMotors = async (c) => {
+    getAllMotorsHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const query = c.req.query();

@@ -5,7 +5,7 @@ import { motors, type MotorsTable, type NewMotor } from "../database/schemas/mot
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { motorFilters } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
@@ -22,7 +22,7 @@ const paramsValidateException = new ParamsValidateException();
 
 export class MotorHandlers {
 
-  addMotor = async (c: Context) => {
+  addMotorHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const motorPayload = await c.req.json();
@@ -60,7 +60,7 @@ export class MotorHandlers {
     }
   };
 
-  updateMotor = async (c: Context) => {
+  updateMotorHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const motorId = +c.req.param("id");
@@ -99,7 +99,7 @@ export class MotorHandlers {
     }
   };
 
-  getSingleMotor = async (c: Context) => {
+  getSingleMotorHandler = async (c: Context) => {
     try {
       const motorId = +c.req.param("id");
       const query = c.req.query();
@@ -123,7 +123,7 @@ export class MotorHandlers {
     }
   };
 
-  deleteMotor = async (c: Context) => {
+  deleteMotorHandler = async (c: Context) => {
     try {
       const motorId = +c.req.param("id");
       paramsValidateException.validateId(motorId, "motor id");
@@ -146,7 +146,7 @@ export class MotorHandlers {
   }
 
 
-  getAllMotors = async (c: Context) => {
+  getAllMotorsHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const query = c.req.query();

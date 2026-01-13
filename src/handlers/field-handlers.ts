@@ -1,8 +1,8 @@
 import type { Context } from "hono";
 import { FIELD_ADDED, FIELD_UPDATED, FIELD_VALIDATION_CRITERIA, FIELDS_FETCHED, SIMILAR_MOTOR_TITLE_NOT_ALLOWED } from "../constants/app-constants.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
-import { fieldFilters } from "../helpers/filed-helpers.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
+import { fieldFilters } from "../helpers/field-helpers.js";
 import { checkDuplicateMotorTitles } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { addFieldWithMotorTransaction, paginatedFieldsList, updateFieldWithMotorTransaction } from "../services/db/field-services.js";
@@ -16,7 +16,7 @@ import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 export class FieldHandlers {
 
-  addField = async (c: Context) => {
+  addFieldHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const fieldPayload = await c.req.json();
@@ -37,7 +37,7 @@ export class FieldHandlers {
     }
   }
 
-  listFields = async (c: Context) => {
+  listFieldsHandler = async (c: Context) => {
     try {
       const query = c.req.query();
       const paginationParams = getPaginationOffParams(query);
@@ -52,7 +52,7 @@ export class FieldHandlers {
   }
 
 
-  updateField = async (c: Context) => {
+  updateFieldHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const fieldId = +c.req.param("id");

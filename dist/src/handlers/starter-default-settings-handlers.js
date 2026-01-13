@@ -5,7 +5,7 @@ import { starterDefaultSettings } from "../database/schemas/starter-default-sett
 import { starterSettingsLimits } from "../database/schemas/starter-settings-limits.js";
 import { starterSettings } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
 import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
@@ -16,7 +16,7 @@ import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js
 import { ActivityService } from "../services/db/activity-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
-    getStarterDefaultSettings = async (c) => {
+    getStarterDefaultSettingsHandler = async (c) => {
         try {
             const defaultSettings = await getStarterDefaultSettings();
             return sendResponse(c, 200, DEFAULT_SETTINGS_FETCHED, defaultSettings[0]);
@@ -28,7 +28,7 @@ export class StarterDefaultSettingsHandlers {
             throw error;
         }
     };
-    updateStarterDefaultSettings = async (c) => {
+    updateStarterDefaultSettingsHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const defaultSettingId = +c.req.param("id");
@@ -59,9 +59,8 @@ export class StarterDefaultSettingsHandlers {
             throw error;
         }
     };
-    getAcknowledgedStarterSettings = async (c) => {
+    getAcknowledgedStarterSettingsHandler = async (c) => {
         try {
-            const userPayload = c.get("user_payload");
             const starterId = +c.req.param("starter_id");
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starterData)
@@ -74,7 +73,7 @@ export class StarterDefaultSettingsHandlers {
             throw error;
         }
     };
-    insertStarterSetting = async (c) => {
+    insertStarterSettingHandler = async (c) => {
         try {
             const user = c.get("user_payload");
             const starterId = Number(c.req.param("starter_id"));
@@ -117,7 +116,7 @@ export class StarterDefaultSettingsHandlers {
             throw error;
         }
     };
-    getStarterSettingsLimits = async (c) => {
+    getStarterSettingsLimitsHandler = async (c) => {
         try {
             const starterId = +c.req.param("starter_id");
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
@@ -131,7 +130,7 @@ export class StarterDefaultSettingsHandlers {
             throw error;
         }
     };
-    updateStarterSettingsLimits = async (c) => {
+    updateStarterSettingsLimitsHandler = async (c) => {
         try {
             const settingId = +c.req.param("id");
             const body = await c.req.json();
@@ -146,7 +145,7 @@ export class StarterDefaultSettingsHandlers {
             throw error;
         }
     };
-    getStarterAckHistory = async (c) => {
+    getStarterAckHistoryHandler = async (c) => {
         try {
             const starterId = +c.req.param("starter_id");
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);

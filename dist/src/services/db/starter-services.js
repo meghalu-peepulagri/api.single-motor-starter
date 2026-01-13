@@ -5,6 +5,7 @@ import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { starterSettingsLimits } from "../../database/schemas/starter-settings-limits.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
 import { users } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
@@ -16,7 +17,6 @@ import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updat
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { publishStarterSettings } from "./mqtt-db-services.js";
-import { starterSettingsLimits } from "../../database/schemas/starter-settings-limits.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload, externalTrx) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     const defaultSettings = await getStarterDefaultSettings();

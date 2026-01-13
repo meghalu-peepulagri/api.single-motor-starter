@@ -38,7 +38,7 @@ export type DBRecord<T extends DBTable> =
   T extends StarterDefaultSettingsTable ? StarterDefaultSettings :
   T extends StarterSettingsTable ? StarterSettings :
   T extends StarterSettingsLimitsTable ? StarterSettingsLimits :
-  any;
+  never;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;
 
@@ -51,28 +51,28 @@ export type Relations = "=" | "!=" | "<" | "<=" | ">" | ">=" | "ILIKE" | "BETWEE
 export interface WhereQueryData<T extends DBTable> {
   columns: Array<keyof DBRecord<T>>;
   relations: Array<Relations>;
-  values: any[];
+  values: unknown[];
 }
 
 export type WhereQueryDataWithOr<T extends DBTable> = {
   columns: Array<keyof DBRecord<T>>;
   relations: Array<Relations>;
-  values: any[];
+  values: unknown[];
   or?: {
     columns: Array<keyof DBRecord<T>>;
     relations: Array<Relations>;
-    values: any[];
+    values: unknown[];
   }[];
 };
 
 export type WhereQueryDataWithAnd<T extends DBTable> = {
   columns: Array<keyof DBRecord<T>>;
   relations: Array<Relations>;
-  values: any[];
+  values: unknown[];
   or?: {
     columns: Array<keyof DBRecord<T>>;
     relations: Array<Relations>;
-    values: any[];
+    values: unknown[];
   }[];
 };
 
@@ -84,7 +84,7 @@ export interface OrderByQueryData<T extends DBTable> {
 
 export interface InQueryData<T extends DBTable> {
   key: keyof DBRecord<T>;
-  values: any[];
+  values: unknown[];
 }
 
 export type UpdateRecordData<T extends DBTable> = Partial<Omit<DBRecord<T>, "id" | "created_at" | "updated_at">>;

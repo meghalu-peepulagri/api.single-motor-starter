@@ -6,7 +6,7 @@ import { locations, type LocationsTable } from "../database/schemas/locations.js
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { locationFilters } from "../helpers/location-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
@@ -21,7 +21,7 @@ const paramsValidateException = new ParamsValidateException();
 
 export class LocationHandlers {
 
-  addLocation = async (c: Context) => {
+  addLocationHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const locationPayload = await c.req.json();
@@ -46,7 +46,7 @@ export class LocationHandlers {
     }
   }
 
-  list = async (c: Context) => {
+  listLocationHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const query = c.req.query();
@@ -63,7 +63,7 @@ export class LocationHandlers {
     }
   }
 
-  listBasic = async (c: Context) => {
+  listBasicLocationHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const query = c.req.query();
@@ -79,7 +79,7 @@ export class LocationHandlers {
     }
   }
 
-  renameLocation = async (c: Context) => {
+  renameLocationHandler = async (c: Context) => {
     try {
       const locationId = +c.req.param("id");
       const reqData = await c.req.json();
@@ -105,7 +105,7 @@ export class LocationHandlers {
     }
   }
 
-  deleteLocation = async (c: Context) => {
+  deleteLocationHandler = async (c: Context) => {
     try {
       const locationId = +c.req.param("id");
       paramsValidateException.validateId(locationId, "location id");

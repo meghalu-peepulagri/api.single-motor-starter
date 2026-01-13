@@ -11,7 +11,7 @@ const otpValidator = v.pipe(v.string(OTP_REQUIRED), v.transform(value => value.t
 export const idValidator = v.pipe(v.number(ID_NUMBER), v.minValue(1, ID_INVALID));
 const motorNameValidator = v.pipe(v.string(MOTOR_NAME), v.transform(value => value.trim()), v.nonEmpty(MOTOR_REQUIRED), v.regex(/^[A-Z].*$/i, MOTOR_NAME_STARTS_LETTER), v.minLength(3, MOTOR_MIN_LENGTH));
 const hpValidator = v.pipe(v.number(HP_REQUIRED), v.minValue(1, HP_MIN), v.maxValue(30, HP_MAX));
-export const filedNameValidator = v.pipe(v.string(FIELD_NAME_MUST_STRING), v.transform(value => value.trim()), v.nonEmpty(FIELD_NAME_REQUIRED), v.regex(/^[A-Z ]+$/i, FIELD_NAME_INVALID), v.minLength(3, FIELD_NAME_MIN_LEN));
+export const fieldNameValidator = v.pipe(v.string(FIELD_NAME_MUST_STRING), v.transform(value => value.trim()), v.nonEmpty(FIELD_NAME_REQUIRED), v.regex(/^[A-Z ]+$/i, FIELD_NAME_INVALID), v.minLength(3, FIELD_NAME_MIN_LEN));
 function requiredNumber(errorMessage) {
     return v.pipe(v.number(errorMessage), v.custom(val => typeof val === "number" && val !== 0, errorMessage));
 }

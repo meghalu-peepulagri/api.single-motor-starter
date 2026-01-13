@@ -4,7 +4,7 @@ import { motorSchedules, type MotorScheduleTable } from "../database/schemas/mot
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict } from "../helpers/motor-helper.js";
 import { deleteRecordById, getPaginatedRecordsConditionally, getRecordById, getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getMotorSchedulesWeekly, getMotorSchedulesWeeklyUpdate, getOneTimeMotorSchedules, getOneTimeMotorSchedulesUpdate } from "../services/db/motor-schedules-services.js";
@@ -57,7 +57,7 @@ export class MotorScheduleHandler {
     }
   }
 
-  motorScheduleList = async (c: Context) => {
+  motorScheduleListHandler = async (c: Context) => {
     try {
       const motorId = +c.req.param("motor_id");
       const query = c.req.query();
@@ -92,7 +92,7 @@ export class MotorScheduleHandler {
     }
   };
 
-  editMotorSchedule = async (c: Context) => {
+  editMotorScheduleHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
@@ -137,7 +137,7 @@ export class MotorScheduleHandler {
   };
 
 
-  deleteMotorSchedule = async (c: Context) => {
+  deleteMotorScheduleHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
@@ -154,7 +154,7 @@ export class MotorScheduleHandler {
     }
   };
 
-  createMotorScheduleForPond = async (c: Context) => {
+  createMotorScheduleForPondHandler = async (c: Context) => {
     try {
       const reqData = await c.req.json();
       const validatedReqData = await validatedRequest<ValidatedMotorScheduleArray>("create-motor-schedule", reqData, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA);

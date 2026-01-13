@@ -86,7 +86,7 @@ const hpValidator = v.pipe(
   v.maxValue(30, HP_MAX),
 )
 
-export const filedNameValidator = v.pipe(
+export const fieldNameValidator = v.pipe(
   v.string(FIELD_NAME_MUST_STRING),
   v.transform(value => value.trim()),
   v.nonEmpty(FIELD_NAME_REQUIRED),

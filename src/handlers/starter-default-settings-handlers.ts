@@ -6,13 +6,13 @@ import { starterDefaultSettings, type StarterDefaultSettings, type StarterDefaul
 import { starterSettingsLimits, type StarterSettingsLimits, type StarterSettingsLimitsTable } from "../database/schemas/starter-settings-limits.js";
 import { starterSettings, type StarterSettings, type StarterSettingsTable } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
 import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
-import type { ValidatedUpdateDefaultSettings } from "../validations/schema/deafult-settings.js";
+import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import type { WhereQueryData } from "../types/db-types.js";
@@ -22,7 +22,7 @@ const paramsValidateException = new ParamsValidateException();
 
 export class StarterDefaultSettingsHandlers {
 
-  getStarterDefaultSettings = async (c: Context) => {
+  getStarterDefaultSettingsHandler = async (c: Context) => {
     try {
       const defaultSettings = await getStarterDefaultSettings();
       return sendResponse(c, 200, DEFAULT_SETTINGS_FETCHED, defaultSettings[0]);
@@ -34,7 +34,7 @@ export class StarterDefaultSettingsHandlers {
     }
   };
 
-  updateStarterDefaultSettings = async (c: Context) => {
+  updateStarterDefaultSettingsHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
       const defaultSettingId = +c.req.param("id");
@@ -65,9 +65,9 @@ export class StarterDefaultSettingsHandlers {
     }
   };
 
-  getAcknowledgedStarterSettings = async (c: Context) => {
+  getAcknowledgedStarterSettingsHandler = async (c: Context) => {
     try {
-      const userPayload = c.get("user_payload");
+
       const starterId = +c.req.param("starter_id");
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
@@ -80,7 +80,7 @@ export class StarterDefaultSettingsHandlers {
     }
   };
 
-  insertStarterSetting = async (c: Context) => {
+  insertStarterSettingHandler = async (c: Context) => {
     try {
       const user = c.get("user_payload");
       const starterId = Number(c.req.param("starter_id"));
@@ -139,7 +139,7 @@ export class StarterDefaultSettingsHandlers {
     }
   };
 
-  getStarterSettingsLimits = async (c: Context) => {
+  getStarterSettingsLimitsHandler = async (c: Context) => {
     try {
       const starterId = +c.req.param("starter_id");
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
@@ -153,7 +153,7 @@ export class StarterDefaultSettingsHandlers {
     }
   };
 
-  updateStarterSettingsLimits = async (c: Context) => {
+  updateStarterSettingsLimitsHandler = async (c: Context) => {
     try {
       const settingId = +c.req.param("id");
       const body = await c.req.json();
@@ -169,7 +169,7 @@ export class StarterDefaultSettingsHandlers {
     }
   };
 
-  getStarterAckHistory = async (c: Context) => {
+  getStarterAckHistoryHandler = async (c: Context) => {
     try {
       const starterId = +c.req.param("starter_id");
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);

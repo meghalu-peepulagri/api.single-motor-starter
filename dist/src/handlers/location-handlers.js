@@ -5,7 +5,7 @@ import { locations } from "../database/schemas/locations.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { locationFilters } from "../helpers/location-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
@@ -16,7 +16,7 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 export class LocationHandlers {
-    addLocation = async (c) => {
+    addLocationHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const locationPayload = await c.req.json();
@@ -38,7 +38,7 @@ export class LocationHandlers {
             throw error;
         }
     };
-    list = async (c) => {
+    listLocationHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
@@ -53,7 +53,7 @@ export class LocationHandlers {
             throw error;
         }
     };
-    listBasic = async (c) => {
+    listBasicLocationHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
@@ -68,7 +68,7 @@ export class LocationHandlers {
             throw error;
         }
     };
-    renameLocation = async (c) => {
+    renameLocationHandler = async (c) => {
         try {
             const locationId = +c.req.param("id");
             const reqData = await c.req.json();
@@ -93,7 +93,7 @@ export class LocationHandlers {
             throw error;
         }
     };
-    deleteLocation = async (c) => {
+    deleteLocationHandler = async (c) => {
         try {
             const locationId = +c.req.param("id");
             paramsValidateException.validateId(locationId, "location id");
