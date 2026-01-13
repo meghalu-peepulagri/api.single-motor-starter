@@ -23,6 +23,7 @@ export class ActivityService {
     action: string;
     entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION';
     entityId?: number;
+    deviceId?: number;
     oldData?: Record<string, unknown> | null;
     newData?: Record<string, unknown> | null;
     message?: string;
@@ -33,6 +34,7 @@ export class ActivityService {
       action: data.action,
       entity_type: data.entityType,
       entity_id: data.entityId || null,
+      device_id: data.deviceId || null,
       old_data: data.oldData ? JSON.stringify(data.oldData) : null,
       new_data: data.newData ? JSON.stringify(data.newData) : null,
       message: data.message || null,
@@ -83,6 +85,7 @@ export class ActivityService {
       action: "MOTOR_ADDED",
       entityType: "MOTOR",
       entityId: motorId,
+      deviceId: data.location_id ? undefined : undefined, // Caller needs to provide deviceId if known, or we need to look it up. For now leaving undefined to avoid breaking signature
       newData: data
     });
     await this.saveActivityLogs([log], trx);
@@ -91,11 +94,12 @@ export class ActivityService {
   /**
    * Logs motor update events (renaming, HP updates)
    */
-  static async writeMotorUpdatedLog(userId: number, motorId: number, oldData: { name: string | null; hp: string | null; state?: number | null; mode?: string | null }, newData: { name?: string | null; hp?: string | null; state?: number | null; mode?: string | null }, trx?: any) {
+  static async writeMotorUpdatedLog(userId: number, motorId: number, oldData: { name: string | null; hp: string | null; state?: number | null; mode?: string | null }, newData: { name?: string | null; hp?: string | null; state?: number | null; mode?: string | null }, trx?: any, deviceId?: number) {
 
     const logs = prepareMotorUpdateLogs({
       userId,
       entityId: motorId,
+      deviceId,
       oldData,
       newData
     });
@@ -108,11 +112,12 @@ export class ActivityService {
   /**
    * Logs a motor deletion event
    */
-  static async writeMotorDeletedLog(userId: number, motorId: number, trx?: any) {
+  static async writeMotorDeletedLog(userId: number, motorId: number, trx?: any, deviceId?: number) {
     const log = prepareDeletionLog({
       userId,
       entityType: "MOTOR",
       entityId: motorId,
+      deviceId,
       action: "MOTOR_DELETED"
     });
     await this.saveActivityLogs([log], trx);
@@ -121,10 +126,11 @@ export class ActivityService {
   /**
    * Logs motor state/mode sync from MQTT
    */
-  static async writeMotorSyncLogs(userId: number, motorId: number, oldData: { state?: number; mode?: string }, newData: { state?: number; mode?: string }, trx?: any) {
+  static async writeMotorSyncLogs(userId: number, motorId: number, oldData: { state?: number; mode?: string }, newData: { state?: number; mode?: string }, trx?: any, deviceId?: number) {
     const logs = prepareMotorSyncLogs({
       userId,
       entityId: motorId,
+      deviceId,
       oldData,
       newData
     });
@@ -137,10 +143,11 @@ export class ActivityService {
   /**
    * Logs motor control/mode ACKs from MQTT
    */
-  static async writeMotorAckLogs(userId: number, motorId: number, oldData: { state?: number; mode?: string }, newData: { state?: number; mode?: string }, action: "MOTOR_CONTROL_ACK" | "MOTOR_MODE_ACK", trx?: any) {
+  static async writeMotorAckLogs(userId: number, motorId: number, oldData: { state?: number; mode?: string }, newData: { state?: number; mode?: string }, action: "MOTOR_CONTROL_ACK" | "MOTOR_MODE_ACK", trx?: any, deviceId?: number) {
     const logs = prepareMotorAckLogs({
       userId,
       entityId: motorId,
+      deviceId,
       oldData,
       newData,
       action
@@ -160,6 +167,7 @@ export class ActivityService {
       action: "STARTER_ASSIGNED",
       entityType: "STARTER",
       entityId: starterId,
+      deviceId: starterId,
       newData: data
     });
     await this.saveActivityLogs([log], trx);
@@ -207,6 +215,7 @@ export class ActivityService {
       userId,
       entityType: "STARTER",
       entityId: starterId,
+      deviceId: starterId,
       action
     });
     await this.saveActivityLogs([log], trx);
@@ -230,6 +239,7 @@ export class ActivityService {
       action: "LOCATION_REPLACED",
       entityType: "STARTER",
       entityId: starterId,
+      deviceId: starterId,
       oldData,
       newData
     });

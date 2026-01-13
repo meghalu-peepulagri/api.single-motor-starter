@@ -71,7 +71,7 @@ export class MotorHandlers {
                 if (validMotorReq.mode !== undefined)
                     updatePayload.mode = validMotorReq.mode;
                 const updatedMotor = await updateRecordById(motors, motorId, updatePayload, trx);
-                await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId, { name: motor.alias_name, hp: motor.hp, state: motor.state, mode: motor.mode }, { name: updatedMotor.alias_name, hp: updatedMotor.hp, state: updatedMotor.state, mode: updatedMotor.mode }, trx);
+                await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId, { name: motor.alias_name, hp: motor.hp, state: motor.state, mode: motor.mode }, { name: updatedMotor.alias_name, hp: updatedMotor.hp, state: updatedMotor.state, mode: updatedMotor.mode }, trx, motor.starter_id || undefined);
             });
             return sendResponse(c, 200, MOTOR_UPDATED);
         }
@@ -119,7 +119,7 @@ export class MotorHandlers {
                 if (motor.starter_id) {
                     await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null }, trx);
                 }
-                await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx);
+                await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx, motor.starter_id || undefined);
             });
             return sendResponse(c, 200, MOTOR_DELETED);
         }

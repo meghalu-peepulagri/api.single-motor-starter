@@ -83,7 +83,8 @@ export class MotorHandlers {
         await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId,
           { name: motor.alias_name, hp: motor.hp, state: motor.state, mode: motor.mode },
           { name: updatedMotor.alias_name, hp: updatedMotor.hp, state: updatedMotor.state, mode: updatedMotor.mode },
-          trx
+          trx,
+          motor.starter_id || undefined
         );
       })
 
@@ -135,7 +136,7 @@ export class MotorHandlers {
           await updateRecordById<StarterBoxTable>(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null }, trx);
         }
 
-        await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx);
+        await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx, motor.starter_id || undefined);
       })
       return sendResponse(c, 200, MOTOR_DELETED);
     } catch (error: any) {

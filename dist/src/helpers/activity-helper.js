@@ -1,5 +1,6 @@
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { ActivityService } from "../services/db/activity-service.js";
+import { motorState } from "./control-helpers.js";
 /**
  * Helper to filter activity logs
  */
@@ -24,16 +25,34 @@ export function activityFilters(query, user) {
         whereQueryData.relations.push("=");
         whereQueryData.values.push(query.entity_id);
     }
-    if (query.action) {
+    if (query.device_id) {
+        whereQueryData.columns.push("device_id");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push(query.device_id);
+    }
+    if (query.performed_by) {
+        whereQueryData.columns.push("performed_by");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push(query.performed_by);
+    }
+    if (query.action === "ON" || query.action === "OFF") {
+        whereQueryData.columns.push("message");
+        whereQueryData.relations.push("contains");
+        whereQueryData.values.push(query.action);
+        whereQueryData.columns.push("action");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push("MOTOR_STATE_SYNC");
+    }
+    else if (query.action) {
         whereQueryData.columns.push("action");
         whereQueryData.relations.push("contains");
         whereQueryData.values.push(query.action);
     }
-    if (user.user_type !== "ADMIN") {
-        whereQueryData.columns.push("performed_by");
-        whereQueryData.relations.push("=");
-        whereQueryData.values.push(user.id);
-    }
+    // if (user.user_type !== "ADMIN") {
+    //   whereQueryData.columns.push("performed_by");
+    //   whereQueryData.relations.push("=");
+    //   whereQueryData.values.push(user.id);
+    // }
     return whereQueryData;
 }
 /**
@@ -47,6 +66,7 @@ export function prepareDeviceUpdateLogs(data) {
             action: "DEVICE_RENAMED",
             entityType: "STARTER",
             entityId: data.entityId,
+            deviceId: data.entityId,
             oldData: { name: data.oldData.name },
             newData: { name: data.newData.name }
         }));
@@ -57,6 +77,7 @@ export function prepareDeviceUpdateLogs(data) {
             action: "DEVICE_PCB_UPDATED",
             entityType: "STARTER",
             entityId: data.entityId,
+            deviceId: data.entityId,
             oldData: { pcb_number: data.oldData.pcb_number },
             newData: { pcb_number: data.newData.pcb_number }
         }));
@@ -67,6 +88,7 @@ export function prepareDeviceUpdateLogs(data) {
             action: "DEVICE_NUMBER_UPDATED",
             entityType: "STARTER",
             entityId: data.entityId,
+            deviceId: data.entityId,
             oldData: { starter_number: data.oldData.starter_number },
             newData: { starter_number: data.newData.starter_number }
         }));
@@ -77,6 +99,7 @@ export function prepareDeviceUpdateLogs(data) {
             action: "DEVICE_MAC_UPDATED",
             entityType: "STARTER",
             entityId: data.entityId,
+            deviceId: data.entityId,
             oldData: { mac_address: data.oldData.mac_address },
             newData: { mac_address: data.newData.mac_address }
         }));
@@ -87,6 +110,7 @@ export function prepareDeviceUpdateLogs(data) {
             action: "DEVICE_GATEWAY_UPDATED",
             entityType: "STARTER",
             entityId: data.entityId,
+            deviceId: data.entityId,
             oldData: { gateway_id: data.oldData.gateway_id },
             newData: { gateway_id: data.newData.gateway_id }
         }));
@@ -104,6 +128,7 @@ export function prepareMotorUpdateLogs(data) {
             action: "MOTOR_RENAMED",
             entityType: "MOTOR",
             entityId: data.entityId,
+            deviceId: data.deviceId,
             oldData: { name: data.oldData.name },
             newData: { name: data.newData.name },
             message: `Name updated from '${data.oldData.name}' to '${data.newData.name}'`
@@ -115,6 +140,7 @@ export function prepareMotorUpdateLogs(data) {
             action: "MOTOR_HP_UPDATED",
             entityType: "MOTOR",
             entityId: data.entityId,
+            deviceId: data.deviceId,
             oldData: { hp: data.oldData.hp },
             newData: { hp: data.newData.hp },
             message: `Hp updated from '${data.oldData.hp}' to '${data.newData.hp}'`
@@ -127,9 +153,10 @@ export function prepareMotorUpdateLogs(data) {
             action: "MOTOR_STATE_UPDATED",
             entityType: "MOTOR",
             entityId: data.entityId,
+            deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: `State updated from '${data.oldData.state}' to '${data.newData.state}' with mode '${mode}'`
+            message: `State updated to'${motorState(Number(data.newData.state))}' with mode '${mode}'`
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== null && data.newData.mode !== data.oldData.mode) {
@@ -138,6 +165,7 @@ export function prepareMotorUpdateLogs(data) {
             action: "MOTOR_MODE_UPDATED",
             entityType: "MOTOR",
             entityId: data.entityId,
+            deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
             message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`
@@ -154,6 +182,7 @@ export function prepareDeletionLog(data) {
         action: data.action,
         entityType: data.entityType,
         entityId: data.entityId,
+        deviceId: data.deviceId,
         oldData: data.entityName ? { name: data.entityName } : null
     });
 }
@@ -166,6 +195,7 @@ export function prepareActionLog(data) {
         action: data.action,
         entityType: data.entityType,
         entityId: data.entityId,
+        deviceId: data.deviceId,
         oldData: data.oldData,
         newData: data.newData
     });
@@ -182,9 +212,10 @@ export function prepareMotorSyncLogs(data) {
             action: "MOTOR_STATE_SYNC",
             entityType: "MOTOR",
             entityId: data.entityId,
+            deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: `State updated from '${data.oldData.state}' to '${data.newData.state}' with mode '${mode}'`
+            message: `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'`
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
@@ -193,6 +224,7 @@ export function prepareMotorSyncLogs(data) {
             action: "MOTOR_MODE_SYNC",
             entityType: "MOTOR",
             entityId: data.entityId,
+            deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
             message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`
@@ -212,9 +244,10 @@ export function prepareMotorAckLogs(data) {
             action: data.action,
             entityType: "MOTOR",
             entityId: data.entityId,
+            deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: `State updated from '${data.oldData.state}' to '${data.newData.state}' with mode '${mode}'`
+            message: `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'`
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
@@ -223,6 +256,7 @@ export function prepareMotorAckLogs(data) {
             action: data.action,
             entityType: "MOTOR",
             entityId: data.entityId,
+            deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
             message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`

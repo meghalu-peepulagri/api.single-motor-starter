@@ -2,6 +2,7 @@
 
 import { relations, sql } from "drizzle-orm";
 import { index, integer, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { starterBoxes } from "./starter-boxes.js";
 import { users } from "./users.js";
 
 export const userActivityLogs = pgTable("user_activity_logs", {
@@ -13,6 +14,7 @@ export const userActivityLogs = pgTable("user_activity_logs", {
   action: varchar("action").notNull(), // e.g., 'EDITED', 'RENAMED', 'STATUS_CHANGE'
   entity_type: varchar("entity_type").notNull(), // e.g., 'STARTER', 'MOTOR', 'SETTING'
   entity_id: integer("entity_id"), // ID of the starter or motor
+  device_id: integer("device_id").references(() => starterBoxes.id), // ID of the device
 
   old_data: text("old_data"),
   new_data: text("new_data"),

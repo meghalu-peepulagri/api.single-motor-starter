@@ -81,13 +81,9 @@ export async function updateStates(insertedData: any, previousData: any) {
       await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
     }
 
-    await ActivityService.writeMotorSyncLogs(created_by || 0, motor_id,
-      { state: prevState, mode: prevMode },
-      { state: motor_state, mode: mode_description },
-      trx
-    );
-
     if (motor_id && motor_state !== prevState || power_present !== power) {
+      await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state, mode: mode_description }, trx);
+      await ActivityService.writeMotorSyncLogs(created_by || 0, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx, starter_id);
       await trackMotorRunTime({
         starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp,
         previous_power_state: power, new_power_state: power_present
@@ -204,7 +200,8 @@ export async function motorControlAckHandler(message: any, topic: string) {
           { state: prevState, mode: mode_description },
           { state: state, mode: mode_description },
           "MOTOR_CONTROL_ACK",
-          trx
+          trx,
+          starter_id
         );
       });
     }
@@ -235,7 +232,8 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
           { mode: motor.mode },
           { mode: mode },
           "MOTOR_MODE_ACK",
-          trx
+          trx,
+          validMac.id
         );
       });
     }
