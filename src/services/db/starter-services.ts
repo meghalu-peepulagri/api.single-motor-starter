@@ -18,8 +18,8 @@ import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
-import { prepareSettingsData } from "../../helpers/settings-helpers.js";
-import { publishStarterSettings } from "./mqtt-db-services.js";
+import { prepareHardWareVersion, prepareSettingsData } from "../../helpers/settings-helpers.js";
+import { publishHardwareData, publishStarterSettings } from "./mqtt-db-services.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User, externalTrx?: any) {
@@ -37,7 +37,9 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
     }, trx) || null;
 
     const preparedSettingsData = prepareSettingsData(starter, settings);
+    const preparedHardWarePublishData = prepareHardWareVersion(starter)
     if (!preparedSettingsData || !starter.pcb_number) return null;
+    if (preparedHardWarePublishData) publishHardwareData(preparedHardWarePublishData, starter.pcb_number);
     preparedSettingsData && starter.pcb_number && await publishStarterSettings(preparedSettingsData, String(starter.pcb_number));
     if (starter) saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
     return starter;

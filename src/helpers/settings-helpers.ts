@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
-import type { StarterBox } from "../database/schemas/starter-boxes.js";
+import type { StarterBox, StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { publishStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 import { logger } from "../utils/logger.js";
@@ -164,6 +164,17 @@ export const prepareSettingsData = (starter: StarterBox, settings: any) => {
   };
 };
 
+export const prepareHardWareVersion = (starterDetails: StarterBox) => {
+  if (!starterDetails.hardware_version) return;
+  return {
+    "T": 17,
+    "S": randomSequenceNumber(),
+    "D": {
+      "sn": starterDetails.pcb_number,
+      "hw": starterDetails.hardware_version,
+    }
+  };
+};
 
 
 import { ACK_TYPES } from "./packet-types-helper.js";

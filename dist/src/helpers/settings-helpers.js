@@ -122,6 +122,18 @@ export const prepareSettingsData = (starter, settings) => {
         },
     };
 };
+export const prepareHardWareVersion = (starterDetails) => {
+    if (!starterDetails.hardware_version)
+        return;
+    return {
+        "T": 17,
+        "S": randomSequenceNumber(),
+        "D": {
+            "sn": starterDetails.pcb_number,
+            "hw": starterDetails.hardware_version,
+        }
+    };
+};
 import { ACK_TYPES } from "./packet-types-helper.js";
 const validateSettingsAck = (payload, expectedSequence) => {
     return (payload &&

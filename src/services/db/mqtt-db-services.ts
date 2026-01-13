@@ -275,6 +275,12 @@ export function publishStarterSettings(preparedData: any, pcbNumber: string) {
   mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
 }
 
+export function publishHardwareData(preparedData: any, pcbNumber: string) {
+  if (!preparedData) return null;
+  const topic = `peepul/${pcbNumber}/cmd`;
+  mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
+}
+
 export async function adminConfigDataRequestAckHandler(message: any, topic: string) {
   try {
     const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);

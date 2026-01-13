@@ -274,7 +274,7 @@ async function softDeleteRecordById<T extends DBTable>(table: T, id: number, rec
 
 
 
-async function updateRecordByIdWithTrx<T extends DBTable>(table: T, id: number, record: UpdateRecordData<T>, trx?: any) {
+async function updateRecordByIdWithTrx<T extends DBTable>(table: T, id: number, record: UpdateRecordData<T>, trx?: any): Promise<DBRecord<T>> {
   const dataWithTimeStamps = { ...record };
 
   const queryBuilder = trx || db;
@@ -285,7 +285,7 @@ async function updateRecordByIdWithTrx<T extends DBTable>(table: T, id: number, 
     .where(eq(table.id, id))
     .returning();
 
-  return updatedRecord as T;
+  return updatedRecord as DBRecord<T>;
 }
 
 async function exportData(table: DBTable, projection?: any, filters?: any) {
