@@ -43,7 +43,7 @@ export function prepareLiveDataPayload(validatedData, starterData) {
         last_off_description: lastOff(data.l_of) || "Unknown",
         group_id: validatedData.group || null,
         // Timestamp
-        time_stamp: parseTimestamp(data.ct),
+        time_stamp: parseTimestamp(validatedData.ct),
         payload_valid: validatedData.validated_payload,
         payload_errors: validatedData.errors,
         starter_id: starterData.id || null,

@@ -51,7 +51,7 @@ export function randomSequenceNumber() {
   let random: number = 0;
 
   do {
-    random = Math.floor(Math.random() * 256) + 1; // 1 to 255
+    random = Math.floor(Math.random() * 256) + 1; // 1 to 256
   } while (random === lastNumber);
 
   lastNumber = random;
