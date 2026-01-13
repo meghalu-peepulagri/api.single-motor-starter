@@ -304,6 +304,8 @@ export const SETTINGS_LIMITS_FETCHED = "Settings limits fetched successfully";
 export const SETTINGS_LIMITS_UPDATED = "Settings limits updated successfully";
 export const SETTINGS_LIMITS_NOT_FOUND = "Settings limits id not found";
 
+export const ACTIVITY_LOGS_FETCHED = "Activity logs fetched successfully";
+
 export const SETTINGS_FIELD_NAMES = {
   /* ================= dvc_cnfg ================= */
 

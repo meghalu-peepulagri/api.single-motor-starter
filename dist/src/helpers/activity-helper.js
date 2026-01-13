@@ -1,6 +1,42 @@
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { ActivityService } from "../services/db/activity-service.js";
 /**
+ * Helper to filter activity logs
+ */
+export function activityFilters(query, user) {
+    const whereQueryData = {
+        columns: [],
+        relations: [],
+        values: [],
+    };
+    if (query.entity_type) {
+        whereQueryData.columns.push("entity_type");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push(query.entity_type);
+    }
+    else if (query.entity) {
+        whereQueryData.columns.push("entity_type");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push(query.entity);
+    }
+    if (query.entity_id) {
+        whereQueryData.columns.push("entity_id");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push(query.entity_id);
+    }
+    if (query.action) {
+        whereQueryData.columns.push("action");
+        whereQueryData.relations.push("contains");
+        whereQueryData.values.push(query.action);
+    }
+    if (user.user_type !== "ADMIN") {
+        whereQueryData.columns.push("performed_by");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push(user.id);
+    }
+    return whereQueryData;
+}
+/**
  * Helper to prepare granular activity logs for device updates
  */
 export function prepareDeviceUpdateLogs(data) {
