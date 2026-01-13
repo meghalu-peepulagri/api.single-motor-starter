@@ -25,9 +25,10 @@ const serialNoValidator = v.pipe(v.string(SERIAL_NO_REQUIRED), v.transform(value
 const pcbNumberValidator = v.pipe(v.string(PCB_NUMBER_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(PCB_NUMBER_REQUIRED), v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED), v.minLength(3, PCB_MIN_LEN));
 const starterNumberValidator = v.pipe(v.string(STARTER_NUMBER_REQUIRED), v.trim(), v.nonEmpty(STARTER_NUMBER_REQUIRED), v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED), v.minLength(3, STARTER_NUMBER_MIN_LEN));
 const pcbOrSerialNumberValidator = v.pipe(v.string(PCB_SERIAL_NUMBER_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(PCB_SERIAL_NUMBER_REQUIRED), v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED), v.minLength(3, MIN_3_CHARACTERS_REQUIRED));
+const hardwareVersion = v.nullish(v.optional(v.string()));
 export const requiredNonNegativeInt = (REQ, NON_NEG) => v.pipe(v.number(REQ), v.integer(), v.minValue(0, NON_NEG));
 export const requiredNonNegativeNumber = (REQ, NON_NEG) => v.pipe(v.number(REQ), v.minValue(0, NON_NEG));
 export const requiredString = (REQ) => v.pipe(v.string(REQ), v.trim(), v.minLength(1, REQ));
 export const optionalNonNegativeInt = (REQ, NON_NEG) => v.optional(requiredNonNegativeInt(REQ, NON_NEG));
 export const optionalNonNegativeNumber = (REQ, NON_NEG) => v.optional(requiredNonNegativeNumber(REQ, NON_NEG));
-export { emailValidator, locationTitleValidator, nameValidator, passwordValidator, phoneValidator, userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator, aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator, starterNumberValidator, pcbOrSerialNumberValidator };
+export { emailValidator, locationTitleValidator, nameValidator, passwordValidator, phoneValidator, userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator, aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator, starterNumberValidator, pcbOrSerialNumberValidator, hardwareVersion };

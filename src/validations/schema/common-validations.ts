@@ -166,6 +166,10 @@ const pcbOrSerialNumberValidator = v.pipe(
   v.minLength(3, MIN_3_CHARACTERS_REQUIRED),
 );
 
+const hardwareVersion = v.nullish(
+  v.optional(v.string())
+)
+
 export const requiredNonNegativeInt = (REQ: string, NON_NEG: string) =>
   v.pipe(v.number(REQ), v.integer(), v.minValue(0, NON_NEG));
 
@@ -186,6 +190,6 @@ export {
   passwordValidator, phoneValidator,
   userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator,
   aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator,
-  starterNumberValidator, pcbOrSerialNumberValidator
+  starterNumberValidator, pcbOrSerialNumberValidator, hardwareVersion
 };
 
