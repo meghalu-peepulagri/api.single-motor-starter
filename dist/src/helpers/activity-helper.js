@@ -156,7 +156,7 @@ export function prepareMotorUpdateLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: `State updated to'${motorState(Number(data.newData.state))}' with mode '${mode}'`
+            message: (data.newData.state === 0 || data.newData.state === 1) ? `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'` : `State not updated due to '${motorState(Number(data.newData.state))}'`
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== null && data.newData.mode !== data.oldData.mode) {
@@ -168,7 +168,7 @@ export function prepareMotorUpdateLogs(data) {
             deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
-            message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`
+            message: (data.newData.mode === "MANUAL" || data.newData.mode === "AUTO") ? `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'` : `Mode not updated due to '${data.newData.mode}'`
         }));
     }
     return logs;
@@ -215,7 +215,7 @@ export function prepareMotorSyncLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'`
+            message: (data.newData.state === 0 || data.newData.state === 1) ? `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'` : `State not updated due to '${motorState(Number(data.newData.state))}'`
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
@@ -227,7 +227,7 @@ export function prepareMotorSyncLogs(data) {
             deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
-            message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`
+            message: (data.newData.mode === "MANUAL" || data.newData.mode === "AUTO") ? `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'` : `Mode not updated due to '${data.newData.mode}'`
         }));
     }
     return logs;
@@ -247,7 +247,7 @@ export function prepareMotorAckLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'`
+            message: (data.newData.state === 0 || data.newData.state === 1) ? `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'` : `State not updated due to '${motorState(Number(data.newData.state))}'`
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
@@ -259,7 +259,7 @@ export function prepareMotorAckLogs(data) {
             deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
-            message: `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'`
+            message: (data.newData.mode === "MANUAL" || data.newData.mode === "AUTO") ? `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'` : `Mode not updated due to '${data.newData.mode}'`
         }));
     }
     return logs;
