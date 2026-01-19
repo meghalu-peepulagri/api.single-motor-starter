@@ -42,8 +42,23 @@ export class StarterDefaultSettingsHandlers {
       const reqBody = await c.req.json();
       paramsValidateException.emptyBodyValidation(reqBody);
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettings>("update-default-settings", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA);
-      const defaultSettingData = await getSingleRecordByAColumnValue<StarterDefaultSettingsTable>(starterDefaultSettings, "id", "=", defaultSettingId, ["id"]);
+      const defaultSettingData = await getSingleRecordByAColumnValue<StarterDefaultSettingsTable>(starterDefaultSettings, "id", "=", defaultSettingId);
       if (!defaultSettingData) throw new BadRequestException(DEFAULT_SETTINGS_NOT_FOUND);
+      const { id, created_at, updated_at, ...rest } = defaultSettingData;
+
+      const changedOldData: Record<string, any> = {};
+      const changedNewData: Record<string, any> = {};
+
+      for (const key of Object.keys(validatedBody)) {
+        const oldValue = (rest as any)[key];
+        const newValue = (validatedBody as any)[key];
+
+        // strict comparison to avoid false positives
+        if (newValue !== undefined && oldValue !== newValue) {
+          changedOldData[key] = oldValue;
+          changedNewData[key] = newValue;
+        }
+      }
 
       await db.transaction(async (trx) => {
         await updateRecordById<StarterDefaultSettingsTable>(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
@@ -53,8 +68,8 @@ export class StarterDefaultSettingsHandlers {
           action: "DEFAULT_SETTINGS_UPDATED",
           entityType: "SETTING",
           entityId: Number(defaultSettingData.id),
-          oldData: defaultSettingData,
-          newData: validatedBody
+          oldData: changedOldData,
+          newData: changedNewData,
         }, trx);
       });
       return sendResponse(c, 200, DEFAULT_SETTINGS_UPDATED);
@@ -108,7 +123,7 @@ export class StarterDefaultSettingsHandlers {
         ["=", "=", "="],
         [starterId, 1, "TRUE"]
       )) || {};
-      
+
       const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
 
       if (!Object.keys(delta).length) {
