@@ -1,23 +1,23 @@
 import type { Context } from "hono";
 import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, DEVICE_SCHEMA, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
-import { starterBoxes, type StarterBox, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
-import { starterDefaultSettings, type StarterDefaultSettings, type StarterDefaultSettingsTable } from "../database/schemas/starter-default-settings.js";
-import { starterSettingsLimits, type StarterSettingsLimits, type StarterSettingsLimitsTable } from "../database/schemas/starter-settings-limits.js";
-import { starterSettings, type StarterSettings, type StarterSettingsTable } from "../database/schemas/starter-settings.js";
+import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
+import { starterDefaultSettings, type StarterDefaultSettingsTable } from "../database/schemas/starter-default-settings.js";
+import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../database/schemas/starter-settings-limits.js";
+import { starterSettings, type StarterSettingsTable } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
+import type { WhereQueryData } from "../types/db-types.js";
+import { logger } from "../utils/logger.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
-import type { WhereQueryData } from "../types/db-types.js";
-import { ActivityService } from "../services/db/activity-service.js";
-import { logger } from "../utils/logger.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -104,11 +104,11 @@ export class StarterDefaultSettingsHandlers {
       }
 
       const oldSettings = (await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(starterSettings,
-        ["starter_id", "pcb_number", "is_new_configuration_saved", "acknowledgement"],
-        ["=", "=", "=", "="],
-        [starterId, starter.pcb_number, 1, "TRUE"]
+        ["starter_id", "is_new_configuration_saved", "acknowledgement"],
+        ["=", "=", "="],
+        [starterId, 1, "TRUE"]
       )) || {};
-
+      
       const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
 
       if (!Object.keys(delta).length) {
@@ -120,7 +120,7 @@ export class StarterDefaultSettingsHandlers {
       if (devicePayload?.D) {
         setImmediate(async () => {
           try {
-            await publishMultipleTimesInBackground(devicePayload, String(starter.pcb_number), starter.id);
+            await publishMultipleTimesInBackground(devicePayload, starter);
           } catch (error) {
             // TODO: Remove catch only for logging
             logger.error("Background publish failed:", error);

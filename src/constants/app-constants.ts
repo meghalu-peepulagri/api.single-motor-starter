@@ -307,203 +307,198 @@ export const SETTINGS_LIMITS_NOT_FOUND = "Settings limits id not found";
 export const ACTIVITY_LOGS_FETCHED = "Activity logs fetched successfully";
 
 export const SETTINGS_FIELD_NAMES = {
-  /* ================= dvc_cnfg ================= */
 
-  dvc_flt_en: "Faults enable",
-  dvc_flc: "Full load current",
-  dvc_st: "Seed time",
+  /* ================= Device Configuration ================= */
 
-  dvc_flt_ipf: "Input phase failure fault threshold",
-  dvc_flt_lvf: "Low voltage fault threshold",
-  dvc_flt_hvf: "High voltage fault threshold",
-  dvc_flt_vif: "Voltage imbalance fault threshold",
-  dvc_flt_paminf: "Minimum phase angle for fault",
-  dvc_flt_pamaxf: "Maximum phase angle for fault",
+  allflt_en: "All faults enable",
+  flc: "Motor full load current",
+  as_dly: "Auto start seed time",
+  pr_flt_en: "Pre fault enable",
+  tpf: "Time per fault",
 
-  dvc_alt_pfa: "Phase failure alert value",
-  dvc_alt_lva: "Low voltage alert value",
-  dvc_alt_hva: "High voltage alert value",
-  dvc_alt_via: "Voltage imbalance alert value",
-  dvc_alt_pamina: "Minimum phase angle alert value",
-  dvc_alt_pamaxa: "Maximum phase angle alert value",
+  /* ================= Enables ================= */
 
-  dvc_rec_lvr: "Low voltage recovery threshold",
-  dvc_rec_hvr: "High voltage recovery threshold",
+  v_en: "Voltage faults enable",
+  c_en: "Current faults enable",
 
-  /* ================= mtr_cnfg ================= */
+  /* ================= Fault Thresholds ================= */
 
-  mtr_flt_dr: "Dry run protection fault threshold",
-  mtr_flt_ol: "Overload fault threshold",
-  mtr_flt_lr: "Locked rotor fault threshold",
-  mtr_flt_opf: "Output phase failure",
-  mtr_flt_ci: "Current imbalance fault ratio",
+  ipf: "Input phase failure fault threshold",
+  lvf: "Low voltage fault threshold",
+  hvf: "High voltage fault threshold",
+  vif: "Voltage imbalance fault threshold",
+  paminf: "Minimum phase angle fault threshold",
+  pamaxf: "Maximum phase angle fault threshold",
+  f_dr: "Dry run protection fault threshold",
+  f_ol: "Overload fault threshold",
+  f_lr: "Locked rotor fault threshold",
+  f_opf: "Output phase failure fault threshold",
+  f_ci: "Current imbalance fault ratio",
 
-  mtr_alt_dr: "Dry run protection alert threshold",
-  mtr_alt_ol: "Overload alert threshold",
-  mtr_alt_lr: "Locked rotor alert threshold",
-  mtr_alt_ci: "Current imbalance alert ratio",
+  /* ================= Alert Thresholds ================= */
 
-  mtr_rec_ol: "Overload recovery threshold",
-  mtr_rec_lr: "Locked rotor recovery threshold",
-  mtr_rec_ci: "Current imbalance recovery ratio",
+  pfa: "Phase failure alert value",
+  lva: "Low voltage alert value",
+  hva: "High voltage alert value",
+  via: "Voltage imbalance alert value",
+  pamina: "Minimum phase angle alert value",
+  pamaxa: "Maximum phase angle alert value",
+  dr: "Dry run protection alert threshold",
+  ol: "Overload alert threshold",
+  lr: "Locked rotor alert threshold",
+  ci: "Current imbalance alert ratio",
 
-  /* ================= atml_cnfg ================= */
+  /* ================= Recovery Settings ================= */
 
-  atml_ug_r: "U gain R for Atmel calibration",
-  atml_ug_y: "U gain Y for Atmel calibration",
-  atml_ug_b: "U gain B for Atmel calibration",
+  lvr: "Low voltage recovery threshold",
+  hvr: "High voltage recovery threshold",
+  olf: "Overload recovery factor",
+  lrf: "Locked rotor recovery factor",
+  opf: "Output phase failure recovery",
+  cif: "Current imbalance recovery factor",
 
-  atml_ig_r: "I gain R for Atmel calibration",
-  atml_ig_y: "I gain Y for Atmel calibration",
-  atml_ig_b: "I gain B for Atmel calibration",
+  /* ================= ATMEL Calibrations ================= */
 
-  /* ================= mqt_cnfg ================= */
+  ug_r: "Voltage gain R calibration",
+  ug_y: "Voltage gain Y calibration",
+  ug_b: "Voltage gain B calibration",
+  ip_r: "Current gain R calibration",
+  ip_y: "Current gain Y calibration",
+  ip_b: "Current gain B calibration",
 
-  mqt_ca_fn: "CA certificate filename",
-  mqt_bkr_adrs: "MQTT broker address",
-  mqt_c_id: "MQTT client ID",
-  mqt_emqx_usrn: "EMQX server username",
-  mqt_emqx_pswd: "EMQX server password",
-  mqt_prod_http: "Production server HTTP URL",
-  mqt_bkp_http: "Backup server HTTP URL",
-  mqt_bkr_port: "MQTT broker port",
-  mqt_ce_len: "CA certificate length",
+  /* ================= ADC Calibrations ================= */
 
-  /* ================= ivrs_cnfg ================= */
+  vg_r: "Voltage gain R (ADC)",
+  vg_y: "Voltage gain Y (ADC)",
+  vg_b: "Voltage gain B (ADC)",
+  vo_r: "Voltage offset R (ADC)",
+  vo_y: "Voltage offset Y (ADC)",
+  vo_b: "Voltage offset B (ADC)",
+  ig_r: "Current gain R (ADC)",
+  ig_y: "Current gain Y (ADC)",
+  ig_b: "Current gain B (ADC)",
+  io_r: "Current offset R (ADC)",
+  io_y: "Current offset Y (ADC)",
+  io_b: "Current offset B (ADC)",
 
-  ivrs_sms_pswd: "SMS password",
-  ivrs_c_lang: "Current language",
-  ivrs_auth_num: "Authorized numbers list",
+  /* ================= PT100 / PT1000 Calibrations ================= */
 
-  /* ================= frq_cnfg ================= */
+  r1: "RTD resistance R1",
+  r2: "RTD resistance R2",
+  off: "RTD temperature offset",
 
-  frq_dft_liv_f: "Default live data frequency",
-  frq_h_liv_f: "High priority payload frequency",
-  frq_m_liv_f: "Medium priority payload frequency",
-  frq_l_liv_f: "Low priority payload frequency",
-  frq_pwr_info_f: "Power info payload frequency",
+  /* ================= MQTT Configuration ================= */
 
-  /* ================= feats_en ================= */
+  ca_fn: "CA certificate filename",
+  bkr_adrs: "MQTT broker address",
+  sn: "MQTT client ID",
+  usrn: "MQTT username",
+  pswd: "MQTT password",
+  prd_url: "Production server URL",
+  port: "MQTT broker port",
+  crt_en: "Certificate enable length",
 
-  feats_ivrs_en: "IVRS feature enable",
-  feats_sms_en: "SMS feature enable",
-  feats_rmt_en: "Remote feature enable",
+  /* ================= IVRS Configuration ================= */
 
-  /* ================= flt_en ================= */
+  sms_pswd: "SMS password",
+  c_lang: "Communication language",
+  auth_num: "Authorized phone numbers",
 
-  flt_en_ipf: "Input phase failure fault enable",
-  flt_en_lvf: "Low voltage fault enable",
-  flt_en_hvf: "High voltage fault enable",
-  flt_en_vif: "Voltage imbalance fault enable",
-  flt_en_dr: "Dry run protection fault enable",
-  flt_en_ol: "Overload fault enable",
-  flt_en_lr: "Locked rotor fault enable",
-  flt_en_opf: "Output phase failure fault enable",
-  flt_en_ci: "Current imbalance fault enable",
+  /* ================= Frequency Configuration ================= */
+
+  dft_liv_f: "Default live data frequency",
+  h_liv_f: "High priority frequency",
+  m_liv_f: "Medium priority frequency",
+  l_liv_f: "Low priority frequency",
+  pwr_info_f: "Power info frequency",
+
+  /* ================= Feature Enables ================= */
+
+  ivrs_en: "IVRS feature enable",
+  sms_en: "SMS feature enable",
+  rmt_en: "Remote access enable",
 };
 
 
 export const DEVICE_SCHEMA = {
-  dvc_cnfg: {
-    flt_en: "dvc_flt_en",
-    flc: "dvc_flc",
-    st: "dvc_st",
-    flt: {
-      ipf: "dvc_flt_ipf",
-      lvf: "dvc_flt_lvf",
-      hvf: "dvc_flt_hvf",
-      vif: "dvc_flt_vif",
-      paminf: "dvc_flt_paminf",
-      pamaxf: "dvc_flt_pamaxf",
-    },
-    alt: {
-      pfa: "dvc_alt_pfa",
-      lva: "dvc_alt_lva",
-      hva: "dvc_alt_hva",
-      via: "dvc_alt_via",
-      pamina: "dvc_alt_pamina",
-      pamaxa: "dvc_alt_pamaxa",
-    },
-    rec: {
-      lvr: "dvc_rec_lvr",
-      hvr: "dvc_rec_hvr",
-    },
+  dvc_c: {
+    allflt_en: "allflt_en",
+    flc: "flc",
+    as_dly: "as_dly",
+
+    ipf: "ipf",
+    lvf: "lvf",
+    hvf: "hvf",
+    vif: "vif",
+    paminf: "paminf",
+    pamaxf: "pamaxf",
+
+    pfa: "pfa",
+    lva: "lva",
+    hva: "hva",
+    via: "via",
+    pamina: "pamina",
+    pamaxa: "pamaxa",
+
+    lvr: "lvr",
+    hvr: "hvr",
+
+    f_dr: "f_dr",
+    f_ol: "f_ol",
+    f_lr: "f_lr",
+    f_opf: "f_opf",
+    f_ci: "f_ci",
+
+    dr: "dr",
+    ol: "ol",
+    lr: "lr",
+    ci: "ci",
+
+    olf: "olf",
+    lrf: "lrf",
+    opf: "opf",
+    cif: "cif",
+
+    v_en: "v_en",
+    c_en: "c_en",
   },
 
-  mtr_cnfg: {
-    flt: {
-      dr: "mtr_flt_dr",
-      ol: "mtr_flt_ol",
-      lr: "mtr_flt_lr",
-      opf: "mtr_flt_opf",
-      ci: "mtr_flt_ci",
-    },
-    alt: {
-      dr: "mtr_alt_dr",
-      ol: "mtr_alt_ol",
-      lr: "mtr_alt_lr",
-      ci: "mtr_alt_ci",
-    },
-    rec: {
-      ol: "mtr_rec_ol",
-      lr: "mtr_rec_lr",
-      ci: "mtr_rec_ci",
-    },
+  clb: {
+    ug_r: "ug_r",
+    ug_y: "ug_y",
+    ug_b: "ug_b",
+    ig_r: "ig_r",
+    ig_y: "ig_y",
+    ig_b: "ig_b",
   },
 
-  atml_cnfg: {
-    sn: "atml_sn",
-    ug_r: "atml_ug_r",
-    ug_y: "atml_ug_y",
-    ug_b: "atml_ug_b",
-    ig_r: "atml_ig_r",
-    ig_y: "atml_ig_y",
-    ig_b: "atml_ig_b",
-  },
-
-  mqt_cnfg: {
-    ca_fn: "mqt_ca_fn",
-    bkr_adrs: "mqt_bkr_adrs",
-    c_id: "mqt_c_id",
-    emqx_usrn: "mqt_emqx_usrn",
-    emqx_pswd: "mqt_emqx_pswd",
-    prod_http: "mqt_prod_http",
-    bkp_http: "mqt_bkp_http",
-    mqtt_c_indx: "mqt_mqtt_c_indx",
-    k_alive_t: "mqt_k_alive_t",
-    bkr_port: "mqt_bkr_port",
-    ce_len: "mqt_ce_len",
+  mqt_c: {
+    ca_fn: "ca_fn",
+    bkr_adrs: "bkr_adrs",
+    usrn: "usrn",
+    pswd: "pswd",
+    prd_url: "prd_url",
+    port: "port",
+    crt_en: "crt_en",
   },
 
   ivrs_info: {
-    sms_pswd: "ivrs_sms_pswd",
-    c_lang: "ivrs_c_lang",
-    auth_num: "ivrs_auth_num",
+    sms_pswd: "sms_pswd",
+    c_lang: "c_lang",
+    auth_num: "auth_num",
   },
 
-  frq_cnfg: {
-    dft_liv_f: "frq_dft_liv_f",
-    h_liv_f: "frq_h_liv_f",
-    m_liv_f: "frq_m_liv_f",
-    l_liv_f: "frq_l_liv_f",
-    pwr_info_f: "frq_pwr_info_f",
+  fq_c: {
+    dft_liv_f: "dft_liv_f",
+    h_liv_f: "h_liv_f",
+    m_liv_f: "m_liv_f",
+    l_liv_f: "l_liv_f",
+    pwr_info_f: "pwr_info_f",
   },
 
-  feats_en: {
-    ivrs_en: "feats_ivrs_en",
-    sms_en: "feats_sms_en",
-    rmt_en: "feats_rmt_en",
-  },
-
-  flt_en: {
-    ipf: "flt_en_ipf",
-    lvf: "flt_en_lvf",
-    hvf: "flt_en_hvf",
-    vif: "flt_en_vif",
-    dr: "flt_en_dr",
-    ol: "flt_en_ol",
-    lr: "flt_en_lr",
-    opf: "flt_en_opf",
-    ci: "flt_en_ci",
+  f_e: {
+    ivrs_en: "ivrs_en",
+    sms_en: "sms_en",
+    rmt_en: "rmt_en",
   },
 } as const;

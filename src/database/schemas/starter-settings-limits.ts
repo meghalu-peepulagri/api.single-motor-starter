@@ -1,146 +1,167 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, pgTable, real, serial, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { starterBoxes } from "./starter-boxes.js";
 
 export const starterSettingsLimits = pgTable("starter_settings_limits", {
   id: serial("id").primaryKey(),
-
   starter_id: integer("starter_id").references(() => starterBoxes.id).notNull(),
 
-  /* ================= Device Configuration Limits ================= */
+  // ================= Device Configurations – Settings =================
+  allflt_en_min: integer("allflt_en_min").default(0),
+  allflt_en_max: integer("allflt_en_max").default(1),
 
-  // Full Load Current Limits
-  dvc_flc_min: real("dvc_flc_min").default(1.0),
-  dvc_flc_max: real("dvc_flc_max").default(10.0),
+  pr_flt_en_min: integer("pr_flt_en_min").default(0),
+  pr_flt_en_max: integer("pr_flt_en_max").default(65355),
 
-  // Fault Threshold Limits
-  dvc_flt_ipf_min: real("dvc_flt_ipf_min").default(0.0),
-  dvc_flt_ipf_max: real("dvc_flt_ipf_max").default(300.0),
+  flc_min: real("flc_min").default(1.0),
+  flc_max: real("flc_max").default(10.0),
 
-  dvc_flt_lvf_min: real("dvc_flt_lvf_min").default(300.0),
-  dvc_flt_lvf_max: real("dvc_flt_lvf_max").default(380.0),
+  as_dly_min: integer("as_dly_min").default(5),
+  as_dly_max: integer("as_dly_max"),
 
-  dvc_flt_hvf_min: real("dvc_flt_hvf_min").default(480.0),
-  dvc_flt_hvf_max: real("dvc_flt_hvf_max").default(550.0),
+  tpf_min: real("tpf_min").default(0),
+  tpf_max: real("tpf_max").default(10),
 
-  dvc_flt_vif_min: real("dvc_flt_vif_min").default(5.0),
-  dvc_flt_vif_max: real("dvc_flt_vif_max").default(30.0),
+  // Enables
+  v_en: integer("v_en").default(0),
+  c_en: integer("c_en").default(0),
 
-  dvc_flt_paminf_min: real("dvc_flt_paminf_min").default(100.0),
-  dvc_flt_paminf_max: real("dvc_flt_paminf_max").default(110.0),
+  // ================= Fault Thresholds =================
+  ipf_min: real("ipf_min").default(0.0),
+  ipf_max: real("ipf_max").default(300.0),
 
-  dvc_flt_pamaxf_min: real("dvc_flt_pamaxf_min").default(125.0),
-  dvc_flt_pamaxf_max: real("dvc_flt_pamaxf_max").default(130.0),
+  lvf_min: real("lvf_min").default(300),
+  lvf_max: real("lvf_max").default(380),
 
-  dvc_flt_fminf_min: real("dvc_flt_fminf_min").default(45.0),
-  dvc_flt_fminf_max: real("dvc_flt_fminf_max").default(48.0),
+  hvf_min: real("hvf_min").default(480),
+  hvf_max: real("hvf_max").default(550),
 
-  dvc_flt_fmaxf_min: real("dvc_flt_fmaxf_min").default(51.0),
-  dvc_flt_fmaxf_max: real("dvc_flt_fmaxf_max").default(55.0),
+  vif_min: real("vif_min").default(5),
+  vif_max: real("vif_max").default(30),
 
-  // Alert Threshold Limits
-  dvc_alt_pfa_min: real("dvc_alt_pfa_min").default(280.0),
-  dvc_alt_pfa_max: real("dvc_alt_pfa_max").default(360.0),
+  paminf_min: real("paminf_min").default(100),
+  paminf_max: real("paminf_max").default(110),
 
-  dvc_alt_lva_min: real("dvc_alt_lva_min").default(340.0),
-  dvc_alt_lva_max: real("dvc_alt_lva_max").default(380.0),
+  pamaxf_min: real("pamaxf_min").default(125),
+  pamaxf_max: real("pamaxf_max").default(130),
 
-  dvc_alt_hva_min: real("dvc_alt_hva_min").default(470.0),
-  dvc_alt_hva_max: real("dvc_alt_hva_max").default(500.0),
+  f_dr: real("f_dr").default(10),
+  f_dr_min: real("f_dr_min").default(10),
+  f_dr_max: real("f_dr_max").default(50),
 
-  dvc_alt_via_min: real("dvc_alt_via_min").default(10.0),
-  dvc_alt_via_max: real("dvc_alt_via_max").default(20.0),
+  f_ol: real("f_ol").default(120),
+  f_ol_min: real("f_ol_min").default(120),
+  f_ol_max: real("f_ol_max").default(150),
 
-  dvc_alt_pamina_min: real("dvc_alt_pamina_min").default(100.0),
-  dvc_alt_pamina_max: real("dvc_alt_pamina_max").default(115.0),
+  f_lr: real("f_lr").default(350),
+  f_lr_min: real("f_lr_min").default(350),
+  f_lr_max: real("f_lr_max").default(450),
 
-  dvc_alt_pamaxa_min: real("dvc_alt_pamaxa_min").default(125.0),
-  dvc_alt_pamaxa_max: real("dvc_alt_pamaxa_max").default(135.0),
+  f_opf: real("f_opf").default(0.5),
+  f_ci: real("f_ci").default(15),
+  f_ci_min: real("f_ci_min").default(15),
+  f_ci_max: real("f_ci_max").default(35),
 
-  dvc_alt_fmina_min: real("dvc_alt_fmina_min").default(46.0),
-  dvc_alt_fmina_max: real("dvc_alt_fmina_max").default(49.0),
+  // ================= Alert Thresholds =================
+  pfa_min: real("pfa_min").default(280),
+  pfa_max: real("pfa_max").default(360),
 
-  dvc_alt_fmaxa_min: real("dvc_alt_fmaxa_min").default(51.5),
-  dvc_alt_fmaxa_max: real("dvc_alt_fmaxa_max").default(55.0),
+  lva_min: real("lva_min").default(340),
+  lva_max: real("lva_max").default(380),
 
-  // Recovery Threshold Limits
-  dvc_rec_lvr_min: real("dvc_rec_lvr_min").default(360.0),
-  dvc_rec_lvr_max: real("dvc_rec_lvr_max").default(400.0),
+  hva_min: real("hva_min").default(470),
+  hva_max: real("hva_max").default(500),
 
-  dvc_rec_hvr_min: real("dvc_rec_hvr_min").default(450.0),
-  dvc_rec_hvr_max: real("dvc_rec_hvr_max").default(470.0),
+  via_min: real("via_min").default(10),
+  via_max: real("via_max").default(20),
 
-  /* ================= Motor Configuration Limits ================= */
+  pamina_min: real("pamina_min").default(100),
+  pamina_max: real("pamina_max").default(115),
 
-  // Motor Fault Threshold Limits
-  mtr_flt_dr_min: real("mtr_flt_dr_min").default(10.0),
-  mtr_flt_dr_max: real("mtr_flt_dr_max").default(50.0),
+  pamaxa_min: real("pamaxa_min").default(125),
+  pamaxa_max: real("pamaxa_max").default(135),
 
-  mtr_flt_ol_min: real("mtr_flt_ol_min").default(120.0),
-  mtr_flt_ol_max: real("mtr_flt_ol_max").default(150.0),
+  dr_min: real("dr_min").default(10),
+  dr_max: real("dr_max").default(60),
 
-  mtr_flt_lr_min: real("mtr_flt_lr_min").default(350.0),
-  mtr_flt_lr_max: real("mtr_flt_lr_max").default(450.0),
+  ol_min: real("ol_min").default(110),
+  ol_max: real("ol_max").default(150),
 
-  mtr_flt_ci_min: real("mtr_flt_ci_min").default(15.0),
-  mtr_flt_ci_max: real("mtr_flt_ci_max").default(35.0),
+  lr_min: real("lr_min").default(300),
+  lr_max: real("lr_max").default(400),
 
-  // Motor Alert Threshold Limits
-  mtr_alt_dr_min: real("mtr_alt_dr_min").default(10.0),
-  mtr_alt_dr_max: real("mtr_alt_dr_max").default(60.0),
+  ci_min: real("ci_min").default(15),
+  ci_max: real("ci_max").default(30),
 
-  mtr_alt_ol_min: real("mtr_alt_ol_min").default(110.0),
-  mtr_alt_ol_max: real("mtr_alt_ol_max").default(150.0),
+  // ================= Recovery Settings =================
+  lvr_min: real("lvr_min").default(360),
+  lvr_max: real("lvr_max").default(400),
 
-  mtr_alt_lr_min: real("mtr_alt_lr_min").default(300.0),
-  mtr_alt_lr_max: real("mtr_alt_lr_max").default(400.0),
+  hvr_min: real("hvr_min").default(450),
+  hvr_max: real("hvr_max").default(470),
 
-  mtr_alt_ci_min: real("mtr_alt_ci_min").default(15.0),
-  mtr_alt_ci_max: real("mtr_alt_ci_max").default(30.0),
+  olf_min: real("olf_min").default(1),
+  olf_max: real("olf_max").default(9),
 
-  // Motor Recovery Limits
-  mtr_rec_ci_min: real("mtr_rec_ci_min").default(0.5),
-  mtr_rec_ci_max: real("mtr_rec_ci_max").default(1.0),
+  lrf_min: real("lrf_min").default(1),
+  lrf_max: real("lrf_max").default(9),
 
-  /* ================= Atmel Calibration Limits ================= */
+  opf: real("opf").default(0.5),
+  cif_min: real("cif_min").default(0.5),
+  cif_max: real("cif_max").default(1.0),
 
-  atml_ug_r_min: real("atml_ug_r_min").default(1.0),
-  atml_ug_r_max: real("atml_ug_r_max").default(65536.0),
+  // ================= ATMEL Calibrations =================
+  ug_r: integer("ug_r").default(50567),
+  ug_y: integer("ug_y").default(49867),
+  ug_b: integer("ug_b").default(51078),
+  ip_r: integer("ip_r").default(8974),
+  ip_y: integer("ip_y").default(8974),
+  ip_b: integer("ip_b").default(8974),
 
-  atml_ug_y_min: real("atml_ug_y_min").default(1.0),
-  atml_ug_y_max: real("atml_ug_y_max").default(65536.0),
+  // ================= ADC Calibrations =================
+  vg_r: real("vg_r").default(0),
+  vg_y: real("vg_y").default(0),
+  vg_b: real("vg_b").default(0),
+  vo_r: real("vo_r").default(0),
+  vo_y: real("vo_y").default(0),
+  vo_b: real("vo_b").default(0),
+  ig_r: real("ig_r").default(0),
+  ig_y: real("ig_y").default(0),
+  ig_b: real("ig_b").default(0),
+  io_r: real("io_r").default(0),
+  io_y: real("io_y").default(0),
+  io_b: real("io_b").default(0),
 
-  atml_ug_b_min: real("atml_ug_b_min").default(1.0),
-  atml_ug_b_max: real("atml_ug_b_max").default(65536.0),
+  // ================= PT100/PT1000 Calibrations =================
+  r1: integer("r1").default(0),
+  r2: integer("r2").default(0),
+  off: integer("off").default(0),
 
-  atml_ig_r_min: real("atml_ig_r_min").default(1.0),
-  atml_ig_r_max: real("atml_ig_r_max").default(65536.0),
+  // ================= MQTT Configuration =================
+  ca_fn: varchar("ca_fn", { length: 100 }),
+  bkr_adrs: varchar("bkr_adrs", { length: 100 }),
+  sn: varchar("sn", { length: 50 }),
+  usrn: varchar("usrn", { length: 50 }),
+  pswd: varchar("pswd", { length: 50 }),
+  prd_url: varchar("prd_url", { length: 100 }),
+  port: integer("port").default(1883),
+  crt_en: integer("crt_en").default(2048),
 
-  atml_ig_y_min: real("atml_ig_y_min").default(1.0),
-  atml_ig_y_max: real("atml_ig_y_max").default(65536.0),
+  // ================= IVRS Configuration =================
+  sms_pswd: varchar("sms_pswd", { length: 20 }),
+  c_lang: integer("c_lang").default(1),
+  auth_num: varchar("auth_num", { length: 15 }).array(),
 
-  atml_ig_b_min: real("atml_ig_b_min").default(1.0),
-  atml_ig_b_max: real("atml_ig_b_max").default(65536.0),
-
-  atml_tpf_min: real("atml_tpf_min").default(0.0),
-  atml_tpf_max: real("atml_tpf_max").default(10.0),
-
-  /* ================= Frequency Configuration Limits ================= */
-
-  frq_dft_liv_f_min: real("frq_dft_liv_f_min").default(1.0),
-  frq_dft_liv_f_max: real("frq_dft_liv_f_max").default(30.0),
-
-  frq_h_liv_f_min: real("frq_h_liv_f_min").default(1.0),
-  frq_h_liv_f_max: real("frq_h_liv_f_max").default(30.0),
-
-  frq_m_liv_f_min: real("frq_m_liv_f_min").default(1.0),
-  frq_m_liv_f_max: real("frq_m_liv_f_max").default(30.0),
-
-  frq_l_liv_f_min: real("frq_l_liv_f_min").default(1.0),
-  frq_l_liv_f_max: real("frq_l_liv_f_max").default(30.0),
-
-  frq_pwr_info_f_min: real("frq_pwr_info_f_min").default(1.0),
-  frq_pwr_info_f_max: real("frq_pwr_info_f_max").default(30.0),
+  // ================= Frequency Configuration =================
+  dft_liv_f: integer("dft_liv_f").default(5),
+  h_liv_f: integer("h_liv_f").default(2),
+  m_liv_f: integer("m_liv_f").default(4),
+  l_liv_f: integer("l_liv_f").default(3),
+  pwr_info_f: integer("pwr_info_f").default(20),
+  // ================= Feature Enables =================
+  ivrs_en: integer("ivrs_en").default(0),
+  sms_en: integer("sms_en").default(0),
+  rmt_en: integer("rmt_en").default(0),
 
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow().default(sql`CURRENT_TIMESTAMP`)

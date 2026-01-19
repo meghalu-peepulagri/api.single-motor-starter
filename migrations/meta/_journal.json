@@ -5,71 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1767091383393,
-      "tag": "0000_rich_cammi",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1767408972691,
-      "tag": "0001_fluffy_arachne",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1767409182807,
-      "tag": "0002_absent_plazm",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1767430987023,
-      "tag": "0003_panoramic_malice",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1767854872845,
-      "tag": "0004_dark_thunderbolt",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1767855838423,
-      "tag": "0005_gigantic_microchip",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1768237642476,
-      "tag": "0006_sharp_mordo",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1768279469103,
-      "tag": "0007_tired_raza",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1768287102844,
-      "tag": "0008_young_blink",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1768296609461,
-      "tag": "0009_legal_pandemic",
+      "when": 1768836996964,
+      "tag": "0000_nice_madame_hydra",
       "breakpoints": true
     }
   ]

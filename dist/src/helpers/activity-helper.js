@@ -279,7 +279,7 @@ export function prepareUserUpdateLogs(data) {
                 entityType: "USER",
                 entityId: data.userId,
                 oldData: { [field]: data.oldData[field] },
-                newData: { [field]: data.newData[field] }
+                newData: { [field]: data.newData[field] },
             }));
         }
     });
@@ -302,7 +302,8 @@ export function prepareSettingsUpdateLogs(data) {
                 entityType: "SETTING",
                 entityId: data.starterId,
                 oldData: { [field]: data.oldData[field] },
-                newData: { [field]: data.newData[field] }
+                newData: { [field]: data.newData[field] },
+                deviceId: data.starterId
             }));
         }
     });

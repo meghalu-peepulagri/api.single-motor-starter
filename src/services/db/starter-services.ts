@@ -12,14 +12,14 @@ import { users, type User } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
+import { prepareHardWareVersion, prepareStmAtmelSettingsData } from "../../helpers/settings-helpers.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
-import { getStarterDefaultSettings } from "./settings-services.js";
-import { prepareHardWareVersion, prepareSettingsData } from "../../helpers/settings-helpers.js";
 import { publishHardwareData, publishStarterSettings } from "./mqtt-db-services.js";
+import { getStarterDefaultSettings } from "./settings-services.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User, externalTrx?: any) {
@@ -32,15 +32,15 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
     await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
 
     const settings = starter.pcb_number && await saveSingleRecord<StarterSettingsTable>(starterSettings, {
-      starter_id: Number(starter.id), created_by: userPayload.id, pcb_number: String(starter.pcb_number), acknowledgement: "TRUE",
+      starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE",
       ...defaultSettingsData
     }, trx) || null;
 
-    const preparedSettingsData = prepareSettingsData(starter, settings);
+    const preparedSettingsData = prepareStmAtmelSettingsData(starter, settings);
     const preparedHardWarePublishData = prepareHardWareVersion(starter)
     if (!preparedSettingsData || !starter.pcb_number) return null;
-    if (preparedHardWarePublishData) publishHardwareData(preparedHardWarePublishData, starter.pcb_number);
-    preparedSettingsData && starter.pcb_number && await publishStarterSettings(preparedSettingsData, String(starter.pcb_number));
+    if (preparedHardWarePublishData) publishHardwareData(preparedHardWarePublishData, starter);
+    preparedSettingsData && starter.pcb_number && await publishStarterSettings(preparedSettingsData, starter);
     if (starter) saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
     return starter;
   };

@@ -7,14 +7,14 @@ import { starterSettings } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
+import { logger } from "../utils/logger.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
-import { ActivityService } from "../services/db/activity-service.js";
-import { logger } from "../utils/logger.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettingsHandler = async (c) => {
@@ -88,7 +88,7 @@ export class StarterDefaultSettingsHandlers {
             if (!Object.keys(cleanedBody).length) {
                 throw new BadRequestException("No valid settings provided");
             }
-            const oldSettings = (await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "pcb_number", "is_new_configuration_saved", "acknowledgement"], ["=", "=", "=", "="], [starterId, starter.pcb_number, 1, "TRUE"])) || {};
+            const oldSettings = (await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "is_new_configuration_saved", "acknowledgement"], ["=", "=", "="], [starterId, 1, "TRUE"])) || {};
             const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
             if (!Object.keys(delta).length) {
                 return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
@@ -97,7 +97,7 @@ export class StarterDefaultSettingsHandlers {
             if (devicePayload?.D) {
                 setImmediate(async () => {
                     try {
-                        await publishMultipleTimesInBackground(devicePayload, String(starter.pcb_number), starter.id);
+                        await publishMultipleTimesInBackground(devicePayload, starter);
                     }
                     catch (error) {
                         // TODO: Remove catch only for logging

@@ -1,9 +1,11 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
-import type { StarterBox, StarterBoxTable } from "../database/schemas/starter-boxes.js";
-import { publishStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
-import { randomSequenceNumber } from "./mqtt-helpers.js";
+import type { StarterBox } from "../database/schemas/starter-boxes.js";
+import { publishStarterSettings, publishUpdatedStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
 import { logger } from "../utils/logger.js";
+import { randomSequenceNumber } from "./mqtt-helpers.js";
+import { ACK_TYPES } from "./packet-types-helper.js";
+
 
 // Integer only helper
 export const integerOnly = (field: keyof typeof SETTINGS_FIELD_NAMES) =>
@@ -39,130 +41,106 @@ export const requiredText = (field: keyof typeof SETTINGS_FIELD_NAMES) =>
   v.string(`${SETTINGS_FIELD_NAMES[field]} is required`);
 
 
-export const prepareSettingsData = (starter: StarterBox, settings: any) => {
-  if (!starter?.pcb_number || !settings) return null;
+export const prepareStmAtmelSettingsData = (starter: StarterBox, settings: any) => {
+  if (!starter?.pcb_number || !starter?.mac_address || !settings) return null;
 
   return {
     T: 13,
     S: randomSequenceNumber(),
 
     D: {
-      /* ================= dvc_cnfg ================= */
-      dvc_cnfg: {
-        flt_en: settings.dvc_flt_en,
-        flc: settings.dvc_flc,
-        st: settings.dvc_st,
+      /* ================= Device Config ================= */
+      dvc_c: {
+        /* ================= Basic ================= */
+        allflt_en: settings.allflt_en,
+        flc: settings.flc,
+        as_dly: settings.st,
 
-        flt: {
-          ipf: settings.dvc_flt_ipf,
-          lvf: settings.dvc_flt_lvf,
-          hvf: settings.dvc_flt_hvf,
-          vif: settings.dvc_flt_vif,
-          paminf: settings.dvc_flt_paminf,
-          pamaxf: settings.dvc_flt_pamaxf,
-        },
+        /* ================= Enables ================= */
+        v_en: settings.v_en,
+        c_en: settings.c_en,
 
-        alt: {
-          pfa: settings.dvc_alt_pfa,
-          lva: settings.dvc_alt_lva,
-          hva: settings.dvc_alt_hva,
-          via: settings.dvc_alt_via,
-          pamina: settings.dvc_alt_pamina,
-          pamaxa: settings.dvc_alt_pamaxa,
-        },
+        /* ================= Fault Thresholds ================= */
+        ipf: settings.ipf,
+        lvf: settings.lvf,
+        hvf: settings.hvf,
+        vif: settings.vif,
+        paminf: settings.paminf,
+        pamaxf: settings.pamaxf,
 
-        rec: {
-          lvr: settings.dvc_rec_lvr,
-          hvr: settings.dvc_rec_hvr,
-        },
+        f_dr: settings.f_dr,
+        f_ol: settings.f_ol,
+        f_lr: settings.f_lr,
+        f_opf: settings.f_opf,
+        f_ci: settings.f_ci,
+
+        /* ================= Alert Thresholds ================= */
+        pfa: settings.pfa,
+        lva: settings.lva,
+        hva: settings.hva,
+        via: settings.via,
+        pamina: settings.pamina,
+        pamaxa: settings.pamaxa,
+
+        dr: settings.dr,
+        ol: settings.ol,
+        lr: settings.lr,
+        ci: settings.ci,
+
+        /* ================= Recovery Settings ================= */
+        lvr: settings.lvr,
+        hvr: settings.hvr,
+        olf: settings.olf,
+        lrf: settings.lrf,
+        opf: settings.opf,
+        cif: settings.cif,
+      },
+      /* ================= Calibrations ================= */
+      clb: {
+        ug_r: settings.ug_r,
+        ug_y: settings.ug_y,
+        ug_b: settings.ug_b,
+        ig_r: settings.ig_r,
+        ig_y: settings.ig_y,
+        ig_b: settings.ig_b,
       },
 
-      /* ================= mtr_cnfg ================= */
-      mtr_cnfg: {
-        flt: {
-          dr: settings.mtr_flt_dr,
-          ol: settings.mtr_flt_ol,
-          lr: settings.mtr_flt_lr,
-          opf: settings.mtr_flt_opf,
-          ci: settings.mtr_flt_ci,
-        },
-
-        alt: {
-          dr: settings.mtr_alt_dr,
-          ol: settings.mtr_alt_ol,
-          lr: settings.mtr_alt_lr,
-          ci: settings.mtr_alt_ci,
-        },
-
-        rec: {
-          ol: settings.mtr_rec_ol,
-          lr: settings.mtr_rec_lr,
-          ci: settings.mtr_rec_ci,
-        },
+      /* ================= MQTT Configuration ================= */
+      mqt_c: {
+        ca_fn: settings.ca_fn,
+        bkr_adrs: settings.bkr_adrs,
+        usrn: settings.usrn,
+        pswd: settings.pswd,
+        prd_url: settings.prd_url,
+        port: settings.port,
+        crt_en: settings.crt_en,
       },
 
-      /* ================= atml_cnfg ================= */
-      atml_cnfg: {
-        sn: starter.pcb_number,
-        ug_r: settings.atml_ug_r,
-        ug_y: settings.atml_ug_y,
-        ug_b: settings.atml_ug_b,
-        ig_r: settings.atml_ig_r,
-        ig_y: settings.atml_ig_y,
-        ig_b: settings.atml_ig_b,
-      },
-
-      /* ================= mqt_cnfg ================= */
-      mqt_cnfg: {
-        ca_fn: settings.mqt_ca_fn,
-        bkr_adrs: settings.mqt_bkr_adrs,
-        c_id: settings.mqt_c_id,
-        emqx_usrn: settings.mqt_emqx_usrn,
-        emqx_pswd: settings.mqt_emqx_pswd,
-        prod_http: settings.mqt_prod_http,
-        bkp_http: settings.mqt_bkp_http,
-        bkr_port: settings.mqt_bkr_port,
-        ce_len: settings.mqt_ce_len,
-      },
-
-      /* ================= ivrs_info ================= */
+      /* ================= IVRS Configuration ================= */
       ivrs_info: {
-        sms_pswd: settings.ivrs_sms_pswd,
-        c_lang: settings.ivrs_c_lang,
-        auth_num: settings.ivrs_auth_num ?? [],
+        sms_pswd: settings.sms_pswd,
+        c_lang: settings.c_lang,
+        auth_num: settings.auth_num ?? [],
       },
 
-      /* ================= frq_cnfg ================= */
-      frq_cnfg: {
-        dft_liv_f: settings.frq_dft_liv_f,
-        h_liv_f: settings.frq_h_liv_f,
-        m_liv_f: settings.frq_m_liv_f,
-        l_liv_f: settings.frq_l_liv_f,
-        pwr_info_f: settings.frq_pwr_info_f,
+      /* ================= Frequency Configuration ================= */
+      fq_c: {
+        dft_liv_f: settings.dft_liv_f,
+        h_liv_f: settings.h_liv_f,
+        m_liv_f: settings.m_liv_f,
+        l_liv_f: settings.l_liv_f,
+        pwr_info_f: settings.pwr_info_f,
       },
 
-      /* ================= feats_en ================= */
-      feats_en: {
-        ivrs_en: settings.feats_ivrs_en,
-        sms_en: settings.feats_sms_en,
-        rmt_en: settings.feats_rmt_en,
-      },
-
-      /* ================= flt_en ================= */
-      flt_en: {
-        ipf: settings.flt_en_ipf,
-        lvf: settings.flt_en_lvf,
-        hvf: settings.flt_en_hvf,
-        vif: settings.flt_en_vif,
-        dr: settings.flt_en_dr,
-        ol: settings.flt_en_ol,
-        lr: settings.flt_en_lr,
-        opf: settings.flt_en_opf,
-        ci: settings.flt_en_ci,
+      /* ================= Feature Enables ================= */
+      f_e: {
+        ivrs_en: settings.ivrs_en,
+        sms_en: settings.sms_en,
+        rmt_en: settings.rmt_en,
       },
     },
   };
-};
+}
 
 export const prepareHardWareVersion = (starterDetails: StarterBox) => {
   if (!starterDetails.hardware_version) return;
@@ -177,8 +155,6 @@ export const prepareHardWareVersion = (starterDetails: StarterBox) => {
 };
 
 
-import { ACK_TYPES } from "./packet-types-helper.js";
-
 const validateSettingsAck = (payload: any, expectedSequence: number) => {
   return (
     payload &&
@@ -190,8 +166,7 @@ const validateSettingsAck = (payload: any, expectedSequence: number) => {
 
 export const publishMultipleTimesInBackground = async (
   devicePayload: any,
-  pcbNumber: string,
-  starterId: number
+  starterDetails: StarterBox
 ): Promise<void> => {
   const totalAttempts = 3;
   const ackWaitTimes = [3000, 5000, 5000];
@@ -200,10 +175,10 @@ export const publishMultipleTimesInBackground = async (
 
   for (let i = 0; i < totalAttempts; i++) {
     try {
-      publishStarterSettings(devicePayload, pcbNumber);
+      publishUpdatedStarterSettings(devicePayload, starterDetails);
 
       const ackReceived = await waitForAck(
-        pcbNumber,
+        starterDetails.pcb_number,
         ackWaitTimes[i],
         isAckValid
       );
@@ -213,9 +188,9 @@ export const publishMultipleTimesInBackground = async (
       }
 
     } catch (error) {
-      logger.error(`Attempt ${i + 1} failed for starter ${starterId}`, error);
+      logger.error(`Attempt ${i + 1} failed for starter ${starterDetails.id}`, error);
     }
   }
 
-  logger.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterId}.`);
+  logger.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterDetails.id}.`);
 };
