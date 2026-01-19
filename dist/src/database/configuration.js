@@ -16,6 +16,7 @@ import * as usersSchema from "./schemas/users.js";
 import * as starterDefaultSettingsSchema from "./schemas/starter-default-settings.js";
 import * as starterSettingsSchema from "./schemas/starter-settings.js";
 import * as starterSettingsLimitsSchema from "./schemas/starter-settings-limits.js";
+import * as alertsFaultsSchema from "./schemas/alerts-faults.js";
 import env from "../env.js";
 import fs from "fs";
 const { Pool } = pg;
@@ -47,7 +48,8 @@ const db = drizzle(dbClient, {
         ...MotorRunTimeSchema,
         ...starterDefaultSettingsSchema,
         ...starterSettingsSchema,
-        ...starterSettingsLimitsSchema
+        ...starterSettingsLimitsSchema,
+        ...alertsFaultsSchema,
     },
 });
 export default db;

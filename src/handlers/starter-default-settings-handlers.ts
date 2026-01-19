@@ -17,6 +17,7 @@ import { validatedRequest } from "../validations/validate-request.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { ActivityService } from "../services/db/activity-service.js";
+import { logger } from "../utils/logger.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -122,6 +123,7 @@ export class StarterDefaultSettingsHandlers {
             await publishMultipleTimesInBackground(devicePayload, String(starter.pcb_number), starter.id);
           } catch (error) {
             // TODO: Remove catch only for logging
+            logger.error("Background publish failed:", error);
             console.error("Background publish failed:", error);
           }
         });
