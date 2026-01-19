@@ -17,6 +17,7 @@
     "@hono/node-server": "^1.19.6",
     "argon2": "^0.44.0",
     "axios": "^1.13.2",
+    "bullmq": "^5.66.5",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.7",

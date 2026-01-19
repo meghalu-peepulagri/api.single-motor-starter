@@ -1,27 +1,28 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARTER_NOT_DEPLOYED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways } from "../database/schemas/gateways.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
-import { users } from "../database/schemas/users.js";
 import {} from "../database/schemas/user-activity-logs.js";
+import { users } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
-import { getPaginationOffParams } from "../helpers/pagination-helper.js";
+import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
+import { starterFilters } from "../helpers/starter-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { prepareDeletionLog } from "../helpers/activity-helper.js";
+import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount } from "../services/db/alerts-services.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime, updateMotorStateByStarterIds } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors, updateStarterStatus } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
+import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { starterFilters } from "../helpers/starter-helper.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBoxHandler = async (c) => {
@@ -44,6 +45,36 @@ export class StarterHandlers {
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
             console.error("Error at add starter box :", error);
+            throw error;
+        }
+    };
+    getConsecutiveAlertsFaultsHandler = async (c) => {
+        try {
+            const query = c.req.query();
+            const starterId = +c.req.param("starter_id");
+            const motorId = +c.req.param("motor_id");
+            const type = query.type || "alert";
+            // Validate IDs
+            paramsValidateException.validateId(starterId, "Starter id");
+            paramsValidateException.validateId(motorId, "Motor id");
+            const { page, pageSize, offset } = getPaginationOffParams(query);
+            // Fetch consecutive grouped data
+            const data = type === "fault"
+                ? await getConsecutiveFaultsPaginated(starterId, motorId, offset, pageSize)
+                : await getConsecutiveAlertsPaginated(starterId, motorId, offset, pageSize);
+            const message = type === "fault" ? "Faults fetched successfully" : "Alerts fetched successfully";
+            // Get total count from service
+            const totalRecords = await getConsecutiveGroupsCount(starterId, motorId, type);
+            const paginationInfo = getPaginationData(page, pageSize, totalRecords);
+            const response = {
+                pagination: paginationInfo,
+                records: data || [],
+            };
+            return sendResponse(c, 200, message, response);
+        }
+        catch (error) {
+            logger.error("Error at getConsecutiveAlertsFaultsHandler :", error);
+            console.error("Error at getConsecutiveAlertsFaultsHandler :", error);
             throw error;
         }
     };

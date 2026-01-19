@@ -14,6 +14,7 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
+import { logger } from "../utils/logger.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettingsHandler = async (c) => {
@@ -100,6 +101,7 @@ export class StarterDefaultSettingsHandlers {
                     }
                     catch (error) {
                         // TODO: Remove catch only for logging
+                        logger.error("Background publish failed:", error);
                         console.error("Background publish failed:", error);
                     }
                 });

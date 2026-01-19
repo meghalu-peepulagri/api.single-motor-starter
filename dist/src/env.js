@@ -17,6 +17,8 @@ const VEnvSchema = object({
     EMQX_CLIENT_ID: string(),
     MSG91_SMS_API_KEY: string(),
     MSG91_SMS_TEMPLATE_ID: string(),
+    // REDIS_HOST: string(),
+    // REDIS_PORT: string(),
 });
 let envData;
 try {
