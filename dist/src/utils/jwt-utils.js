@@ -34,7 +34,7 @@ async function genJWTTokensForUser(userId) {
 }
 async function verifyJWTToken(token) {
     try {
-        const decodedPayload = await verify(token, jwtConfig.secret, "HS256");
+        const decodedPayload = await verify(token, jwtConfig.secret);
         return decodedPayload;
     }
     catch (error) {
