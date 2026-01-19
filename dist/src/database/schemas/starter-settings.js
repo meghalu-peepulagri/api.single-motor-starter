@@ -1,85 +1,99 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, json, pgEnum, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, pgEnum, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { starterBoxes } from "./starter-boxes.js";
 import { users } from "./users.js";
 export const acknowledgementEnum = pgEnum("acknowledgement_enum", ["TRUE", "FALSE"]);
 // TRUE = Acknowledged, FALSE = Not Acknowledged
 export const starterSettings = pgTable("starter_settings", {
     id: serial("id").primaryKey(),
-    /* ================= dvc_cnfg — Device Configuration ================= */
-    dvc_flt_en: integer("dvc_flt_en").default(0),
-    dvc_flc: real("dvc_flc"),
-    dvc_st: integer("dvc_st"),
-    starter_id: integer("starter_id").references(() => starterBoxes.id).notNull(),
-    pcb_number: varchar("pcb_number").notNull(),
-    dvc_flt_ipf: real("dvc_flt_ipf"),
-    dvc_flt_lvf: real("dvc_flt_lvf"),
-    dvc_flt_hvf: real("dvc_flt_hvf"),
-    dvc_flt_vif: real("dvc_flt_vif"),
-    dvc_flt_paminf: real("dvc_flt_paminf"),
-    dvc_flt_pamaxf: real("dvc_flt_pamaxf"),
-    dvc_alt_pfa: real("dvc_alt_pfa"),
-    dvc_alt_lva: real("dvc_alt_lva"),
-    dvc_alt_hva: real("dvc_alt_hva"),
-    dvc_alt_via: real("dvc_alt_via"),
-    dvc_alt_pamina: real("dvc_alt_pamina"),
-    dvc_alt_pamaxa: real("dvc_alt_pamaxa"),
-    dvc_rec_lvr: real("dvc_rec_lvr"),
-    dvc_rec_hvr: real("dvc_rec_hvr"),
-    /* ================= mtr_cnfg — Motor Configuration ================= */
-    mtr_flt_dr: real("mtr_flt_dr"),
-    mtr_flt_ol: real("mtr_flt_ol"),
-    mtr_flt_lr: real("mtr_flt_lr"),
-    mtr_flt_opf: real("mtr_flt_opf"),
-    mtr_flt_ci: real("mtr_flt_ci"),
-    mtr_alt_dr: real("mtr_alt_dr"),
-    mtr_alt_ol: real("mtr_alt_ol"),
-    mtr_alt_lr: real("mtr_alt_lr"),
-    mtr_alt_ci: real("mtr_alt_ci"),
-    mtr_rec_ol: real("mtr_rec_ol"),
-    mtr_rec_lr: real("mtr_rec_lr"),
-    mtr_rec_ci: real("mtr_rec_ci"),
-    /* ================= atml_cnfg — Atmel Calibration ================= */
-    atml_ug_r: integer("atml_ug_r"),
-    atml_ug_y: integer("atml_ug_y"),
-    atml_ug_b: integer("atml_ug_b"),
-    atml_ig_r: integer("atml_ig_r"),
-    atml_ig_y: integer("atml_ig_y"),
-    atml_ig_b: integer("atml_ig_b"),
-    /* ================= mqt_cnfg — MQTT & Server ================= */
-    mqt_ca_fn: varchar("mqt_ca_fn"),
-    mqt_bkr_adrs: varchar("mqt_bkr_adrs"),
-    mqt_c_id: varchar("mqt_c_id"),
-    mqt_emqx_usrn: varchar("mqt_emqx_usrn"),
-    mqt_emqx_pswd: varchar("mqt_emqx_pswd"),
-    mqt_prod_http: varchar("mqt_prod_http"),
-    mqt_bkp_http: varchar("mqt_bkp_http"),
-    mqt_bkr_port: integer("mqt_bkr_port"),
-    mqt_ce_len: integer("mqt_ce_len"),
-    /* ================= ivrs_cnfg — IVRS ================= */
-    ivrs_sms_pswd: varchar("ivrs_sms_pswd"),
-    ivrs_c_lang: integer("ivrs_c_lang"),
-    ivrs_auth_num: json("ivrs_auth_num").$type(),
-    /* ================= frq_cnfg — Frequency ================= */
-    frq_dft_liv_f: integer("frq_dft_liv_f"),
-    frq_h_liv_f: integer("frq_h_liv_f"),
-    frq_m_liv_f: integer("frq_m_liv_f"),
-    frq_l_liv_f: integer("frq_l_liv_f"),
-    frq_pwr_info_f: integer("frq_pwr_info_f"),
-    /* ================= feats_en — Feature Enable ================= */
-    feats_ivrs_en: integer("feats_ivrs_en").default(0),
-    feats_sms_en: integer("feats_sms_en").default(1),
-    feats_rmt_en: integer("feats_rmt_en").default(0),
-    /* ================= flt_en — Individual Fault Enable ================= */
-    flt_en_ipf: integer("flt_en_ipf").default(1),
-    flt_en_lvf: integer("flt_en_lvf").default(1),
-    flt_en_hvf: integer("flt_en_hvf").default(1),
-    flt_en_vif: integer("flt_en_vif").default(1),
-    flt_en_dr: integer("flt_en_dr").default(1),
-    flt_en_ol: integer("flt_en_ol").default(1),
-    flt_en_lr: integer("flt_en_lr").default(1),
-    flt_en_opf: integer("flt_en_opf").default(1),
-    flt_en_ci: integer("flt_en_ci").default(1),
+    starter_id: integer("starter_id").notNull().references(() => starterBoxes.id),
+    // ================= Device Configuration (35 fields) =================
+    allflt_en: integer("allflt_en").default(0), // To enable and disable faults
+    flc: real("flc").default(1.65), // Motor Full Load Current
+    as_dly: integer("as_dly").default(5), // Auto Start Seed Time for Motor
+    pr_flt_en: integer("pr_flt_en").default(0),
+    tpf: real("tpf").default(0), // Time per fault
+    // Enables (2 fields)
+    v_en: integer("v_en").default(0), // Voltage faults enable
+    c_en: integer("c_en").default(0), // Current faults enable
+    // Fault Thresholds (13 fields)
+    ipf: real("ipf").default(0), // Input Phase Failure
+    lvf: real("lvf").default(300), // Low Voltage Fault Threshold
+    hvf: real("hvf").default(480), // High Voltage Fault Threshold
+    vif: real("vif").default(5), // Voltage Imbalance Fault Threshold
+    paminf: real("paminf").default(100), // Minimum Phase Angle for Fault
+    pamaxf: real("pamaxf").default(125), // Maximum Phase Angle for Fault
+    f_dr: real("f_dr").default(10), // Dry Run Protection Fault Threshold for Motor
+    f_ol: real("f_ol").default(120), // Over Load Fault Threshold Motor
+    f_lr: real("f_lr").default(350), // Locked Rotor Fault for Motor
+    f_opf: real("f_opf").default(0.5), // Output Phase Failure for Motor
+    f_ci: real("f_ci").default(15), // Current Imbalance Fault Ratio for Motor
+    // Alert Thresholds (12 fields)
+    pfa: real("pfa").default(280), // Phase Failure Alert Value
+    lva: real("lva").default(340), // Low Voltage Alert Value
+    hva: real("hva").default(470), // High Voltage Alert Value
+    via: real("via").default(10), // Voltage Imbalance Alert Value
+    pamina: real("pamina").default(100), // Minimum Phase Angle Alert Value
+    pamaxa: real("pamaxa").default(125), // Maximum Phase Angle Alert Value
+    dr: real("dr").default(10), // Dry Run Protection Alert Threshold for Motor
+    ol: real("ol").default(110), // Over Load Alert Threshold for Motor
+    lr: real("lr").default(300), // Locked Rotor Alert for Motor
+    ci: real("ci").default(15), // Current Imbalance Alert Ratio for Motor
+    // Recovery Settings (6 fields)
+    lvr: real("lvr").default(360), // Low Voltage Recovery
+    hvr: real("hvr").default(450), // High Voltage Recovery
+    olf: real("olf").default(1), // Over Load Recovery for Motor
+    lrf: real("lrf").default(1), // Locked Rotor Recovery for Motor
+    opf: real("opf").default(0.5), // Motor output phase failure
+    cif: real("cif").default(0.5), // Current Imbalance Recovery for Motor
+    // ================= Calibrations =================
+    // ATMEL Calibrations (6 fields)
+    ug_r: integer("ug_r").default(50567),
+    ug_y: integer("ug_y").default(49867),
+    ug_b: integer("ug_b").default(51078),
+    ip_r: integer("ip_r").default(8974),
+    ip_y: integer("ip_y").default(8974),
+    ip_b: integer("ip_b").default(8974),
+    // ADC Calibrations (12 fields)
+    vg_r: real("vg_r").default(0),
+    vg_y: real("vg_y").default(0),
+    vg_b: real("vg_b").default(0),
+    vo_r: real("vo_r").default(0),
+    vo_y: real("vo_y").default(0),
+    vo_b: real("vo_b").default(0),
+    ig_r: real("ig_r").default(0),
+    ig_y: real("ig_y").default(0),
+    ig_b: real("ig_b").default(0),
+    io_r: real("io_r").default(0),
+    io_y: real("io_y").default(0),
+    io_b: real("io_b").default(0),
+    // PT100/PT1000 Calibrations (3 fields)
+    r1: integer("r1").default(0),
+    r2: integer("r2").default(0),
+    off: integer("off").default(0),
+    // ================= MQTT Configuration (8 fields) =================
+    ca_fn: varchar("ca_fn", { length: 100 }).default(""),
+    bkr_adrs: varchar("bkr_adrs", { length: 100 }).default(""),
+    sn: varchar("sn", { length: 50 }).default(""),
+    usrn: varchar("usrn", { length: 50 }).default(""),
+    pswd: varchar("pswd", { length: 50 }).default(""),
+    prd_url: varchar("prd_url", { length: 100 }).default(""),
+    port: integer("port").default(1883),
+    crt_en: integer("crt_en").default(2048),
+    // ================= IVRS Configuration (3 fields) =================
+    sms_pswd: varchar("sms_pswd", { length: 20 }).default(""),
+    c_lang: integer("c_lang").default(1),
+    auth_num: varchar("auth_num", { length: 10 }).array(),
+    // ================= Frequency Configuration (5 fields) =================
+    dft_liv_f: integer("dft_liv_f").default(5),
+    h_liv_f: integer("h_liv_f").default(2),
+    m_liv_f: integer("m_liv_f").default(4),
+    l_liv_f: integer("l_liv_f").default(3),
+    pwr_info_f: integer("pwr_info_f").default(20),
+    // ================= Feature Enables (3 fields) =================
+    ivrs_en: integer("ivrs_en").default(0),
+    sms_en: integer("sms_en").default(0),
+    rmt_en: integer("rmt_en").default(0),
     time_stamp: timestamp("time_stamp").defaultNow(),
     is_new_configuration_saved: integer("is_new_configuration_saved").default(1),
     acknowledgement: acknowledgementEnum().default("FALSE"),

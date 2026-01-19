@@ -7,14 +7,14 @@ import { starterSettings } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
+import { logger } from "../utils/logger.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
-import { ActivityService } from "../services/db/activity-service.js";
-import { logger } from "../utils/logger.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettingsHandler = async (c) => {
@@ -36,9 +36,21 @@ export class StarterDefaultSettingsHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validatedBody = await validatedRequest("update-default-settings", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA);
-            const defaultSettingData = await getSingleRecordByAColumnValue(starterDefaultSettings, "id", "=", defaultSettingId, ["id"]);
+            const defaultSettingData = await getSingleRecordByAColumnValue(starterDefaultSettings, "id", "=", defaultSettingId);
             if (!defaultSettingData)
                 throw new BadRequestException(DEFAULT_SETTINGS_NOT_FOUND);
+            const { id, created_at, updated_at, ...rest } = defaultSettingData;
+            const changedOldData = {};
+            const changedNewData = {};
+            for (const key of Object.keys(validatedBody)) {
+                const oldValue = rest[key];
+                const newValue = validatedBody[key];
+                // strict comparison to avoid false positives
+                if (newValue !== undefined && oldValue !== newValue) {
+                    changedOldData[key] = oldValue;
+                    changedNewData[key] = newValue;
+                }
+            }
             await db.transaction(async (trx) => {
                 await updateRecordById(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
                 // Add activity log if needed (currently not in service, but let's be consistent)
@@ -47,8 +59,8 @@ export class StarterDefaultSettingsHandlers {
                     action: "DEFAULT_SETTINGS_UPDATED",
                     entityType: "SETTING",
                     entityId: Number(defaultSettingData.id),
-                    oldData: defaultSettingData,
-                    newData: validatedBody
+                    oldData: changedOldData,
+                    newData: changedNewData,
                 }, trx);
             });
             return sendResponse(c, 200, DEFAULT_SETTINGS_UPDATED);
@@ -88,7 +100,7 @@ export class StarterDefaultSettingsHandlers {
             if (!Object.keys(cleanedBody).length) {
                 throw new BadRequestException("No valid settings provided");
             }
-            const oldSettings = (await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "pcb_number", "is_new_configuration_saved", "acknowledgement"], ["=", "=", "=", "="], [starterId, starter.pcb_number, 1, "TRUE"])) || {};
+            const oldSettings = (await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "is_new_configuration_saved", "acknowledgement"], ["=", "=", "="], [starterId, 1, "TRUE"])) || {};
             const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
             if (!Object.keys(delta).length) {
                 return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
@@ -97,7 +109,7 @@ export class StarterDefaultSettingsHandlers {
             if (devicePayload?.D) {
                 setImmediate(async () => {
                     try {
-                        await publishMultipleTimesInBackground(devicePayload, String(starter.pcb_number), starter.id);
+                        await publishMultipleTimesInBackground(devicePayload, starter);
                     }
                     catch (error) {
                         // TODO: Remove catch only for logging

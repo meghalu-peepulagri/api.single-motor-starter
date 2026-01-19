@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults, type AlertsFaultsTable } from "../../database/schemas/alerts-faults.js";
 import { motors } from "../../database/schemas/motors.js";
-import { starterBoxes, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
+import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
 import { controlMode } from "../../helpers/control-helpers.js";
 import { extractPreviousData } from "../../helpers/motor-helper.js";
@@ -269,15 +269,24 @@ export async function heartbeatHandler(message: any, topic: string) {
   }
 }
 
-export function publishStarterSettings(preparedData: any, pcbNumber: string) {
-  if (!pcbNumber) return null;
-  const topic = `peepul/${pcbNumber}/cmd`;
+export function publishStarterSettings(preparedData: any, starterDetails: StarterBox) {
+  if (!starterDetails) return null;
+  const macOrPcb = starterDetails.device_status === 'READY' || starterDetails.device_status === 'TEST' ? starterDetails.mac_address : starterDetails.pcb_number;
+  const topic = `peepul/${macOrPcb}/cmd`;
   mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
 }
 
-export function publishHardwareData(preparedData: any, pcbNumber: string) {
-  if (!preparedData) return null;
-  const topic = `peepul/${pcbNumber}/cmd`;
+export function publishUpdatedStarterSettings(preparedData: any, starterData: StarterBox) {
+  if (!starterData) return null;
+  const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
+  const topic = `peepul/${macOrPcb}/cmd`;
+  mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
+}
+
+export function publishHardwareData(preparedData: any, starterDetails: StarterBox) {
+  if (!preparedData || !starterDetails) return null;
+  const macOrPcb = starterDetails.device_status === 'READY' || starterDetails.device_status === 'TEST' ? starterDetails.mac_address : starterDetails.pcb_number;
+  const topic = `peepul/${macOrPcb}/cmd`;
   mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
 }
 
@@ -302,7 +311,7 @@ export async function adminConfigDataRequestAckHandler(message: any, topic: stri
 }
 
 export const waitForAck = (
-  pcbNumber: string,
+  pcbNumber: string | null,
   timeoutMs: number,
   validator?: (message: any) => boolean
 ): Promise<boolean> => {
