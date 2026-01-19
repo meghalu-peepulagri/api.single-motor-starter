@@ -34,7 +34,7 @@ async function genJWTTokensForUser(userId) {
 }
 async function verifyJWTToken(token) {
     try {
-        const decodedPayload = await verify(token, jwtConfig.secret);
+        const decodedPayload = await verify(token, jwtConfig.secret, { ignoreExpiration: true });
         return decodedPayload;
     }
     catch (error) {
