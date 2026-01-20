@@ -151,7 +151,7 @@ export class StarterDefaultSettingsHandlers {
       });
       return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
     } catch (error: any) {
-      console.error("Error at insertStarterSetting:", error);
+      console.error("Error at insert Starter Setting:", error);
       throw error;
     }
   };
