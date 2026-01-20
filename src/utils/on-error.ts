@@ -26,12 +26,12 @@ export function getValidationErrors(issues: BaseIssue<unknown>[] = []) {
   return errors;
 }
 
-export function validationErrors(issues: any[] = []) {
+export function validationErrors(issues: BaseIssue<unknown>[] = []) {
   return issues.reduce((acc, issue) => {
     if (!issue.path) return acc;
 
     const fullPath = issue.path
-      .map((p: any) => (p.key !== undefined ? p.key : p.index))
+      .map((p) => (p.key !== undefined ? p.key : 'index' in p ? p.index : ''))
       .join('.');
 
     if (!fullPath) return acc;
@@ -44,7 +44,7 @@ export function validationErrors(issues: any[] = []) {
 
 
 
-const onError: ErrorHandler = (err: any, c: Context) => {
+const onError: ErrorHandler = (err: Error & { status?: number; errData?: unknown }, c: Context) => {
   const currentStatus = "status" in err ? err.status : c.newResponse(null).status;
   const statusCode = currentStatus !== OK ? (currentStatus as StatusCode) : INTERNAL_SERVER_ERROR;
 
@@ -61,7 +61,7 @@ const onError: ErrorHandler = (err: any, c: Context) => {
 
 
 
-export function parseUniqueConstraintError(error: any) {
+export function parseUniqueConstraintError(error: Error & { code?: string; constraint?: string }) {
   if (error?.code !== "23505") throw error;
 
   const idx = error.constraint;
@@ -69,26 +69,27 @@ export function parseUniqueConstraintError(error: any) {
   throw new ConflictException(message)
 }
 
-export function parseDatabaseError(error: any) {
+export function parseDatabaseError(error: Error & { cause?: Error & { code?: string; constraint?: string } }) {
   const pgError = error.cause ?? error;
-  if (pgError?.code === "23505") {
+  if ('code' in pgError && pgError?.code === "23505") {
     return parseUniqueConstraintError(pgError);
   }
 }
 
-export function handleJsonParseError(error: any) {
+export function handleJsonParseError(error: Error) {
   if (error.message?.includes("Unexpected end of JSON")) {
     throw new BadRequestException("Invalid or missing JSON body");
   }
 }
 
-export function handleForeignKeyViolationError(error: any) {
+export function handleForeignKeyViolationError(error: Error & { cause?: Error & { code?: string; constraint?: string; detail?: string } }) {
   const pgError = error.cause ?? error;
 
-  if (pgError?.code === "23503") {
-    const constraint = pgError.constraint ?? "";
+  if ('code' in pgError && pgError?.code === "23503") {
+    const constraint = 'constraint' in pgError ? pgError.constraint ?? "" : "";
     const mappedMessage = FOREIGN_KEY_MESSAGES[constraint];
-    const [, field, value] = pgError.detail?.match(/\((.*?)\)=\((.*?)\)/) || [];
+    const detail = 'detail' in pgError ? pgError.detail : undefined;
+    const [, field, value] = detail?.match(/\((.*?)\)=\((.*?)\)/) || [];
     const message = mappedMessage ? mappedMessage : field && value ? `Invalid foreign key: ${field} '${value}' does not exist.` : "Invalid foreign key value: Referenced record not found.";
     throw new BadRequestException(message);
   }

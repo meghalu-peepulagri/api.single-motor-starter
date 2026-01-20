@@ -1,5 +1,5 @@
 {
-  "id": "80664a28-8115-4865-bed8-3e04d196b14c",
+  "id": "521888d4-0c3e-48fe-b66b-2dc68928902d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -523,8 +523,8 @@
         }
       },
       "indexes": {
-        "filed_user_id_idx": {
-          "name": "filed_user_id_idx",
+        "field_user_id_idx": {
+          "name": "field_user_id_idx",
           "columns": [
             {
               "expression": "created_by",
@@ -1156,12 +1156,6 @@
           "primaryKey": true,
           "notNull": true
         },
-        "pond_id": {
-          "name": "pond_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
         "motor_id": {
           "name": "motor_id",
           "type": "integer",
@@ -1282,19 +1276,6 @@
         }
       },
       "foreignKeys": {
-        "motor_schedules_pond_id_fields_id_fk": {
-          "name": "motor_schedules_pond_id_fields_id_fk",
-          "tableFrom": "motor_schedules",
-          "tableTo": "fields",
-          "columnsFrom": [
-            "pond_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "motor_schedules_motor_id_motors_id_fk": {
           "name": "motor_schedules_motor_id_motors_id_fk",
           "tableFrom": "motor_schedules",
@@ -1593,7 +1574,7 @@
           "name": "name",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "alias_name": {
           "name": "alias_name",
@@ -1605,13 +1586,13 @@
           "name": "mac_address",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "pcb_number": {
           "name": "pcb_number",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "starter_number": {
           "name": "starter_number",
@@ -1687,6 +1668,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'SINGLE_STARTER'"
+        },
+        "hardware_version": {
+          "name": "hardware_version",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1964,6 +1951,556 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.starter_default_settings": {
+      "name": "starter_default_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "allflt_en": {
+          "name": "allflt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "flc": {
+          "name": "flc",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1.65
+        },
+        "as_dly": {
+          "name": "as_dly",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "pr_flt_en": {
+          "name": "pr_flt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "tpf": {
+          "name": "tpf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "v_en": {
+          "name": "v_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "c_en": {
+          "name": "c_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ipf": {
+          "name": "ipf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "lvf": {
+          "name": "lvf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 300
+        },
+        "hvf": {
+          "name": "hvf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 480
+        },
+        "vif": {
+          "name": "vif",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "paminf": {
+          "name": "paminf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 100
+        },
+        "pamaxf": {
+          "name": "pamaxf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 125
+        },
+        "f_dr": {
+          "name": "f_dr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "f_ol": {
+          "name": "f_ol",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 120
+        },
+        "f_lr": {
+          "name": "f_lr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 350
+        },
+        "f_opf": {
+          "name": "f_opf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "f_ci": {
+          "name": "f_ci",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "pfa": {
+          "name": "pfa",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 280
+        },
+        "lva": {
+          "name": "lva",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 340
+        },
+        "hva": {
+          "name": "hva",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 470
+        },
+        "via": {
+          "name": "via",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "pamina": {
+          "name": "pamina",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 100
+        },
+        "pamaxa": {
+          "name": "pamaxa",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 125
+        },
+        "dr": {
+          "name": "dr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "ol": {
+          "name": "ol",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 110
+        },
+        "lr": {
+          "name": "lr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 300
+        },
+        "ci": {
+          "name": "ci",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "lvr": {
+          "name": "lvr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 360
+        },
+        "hvr": {
+          "name": "hvr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 450
+        },
+        "olf": {
+          "name": "olf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "lrf": {
+          "name": "lrf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "opf": {
+          "name": "opf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "cif": {
+          "name": "cif",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "ug_r": {
+          "name": "ug_r",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 50567
+        },
+        "ug_y": {
+          "name": "ug_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 49867
+        },
+        "ug_b": {
+          "name": "ug_b",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 51078
+        },
+        "ip_r": {
+          "name": "ip_r",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "ip_y": {
+          "name": "ip_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "ip_b": {
+          "name": "ip_b",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "vg_r": {
+          "name": "vg_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vg_y": {
+          "name": "vg_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vg_b": {
+          "name": "vg_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_r": {
+          "name": "vo_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_y": {
+          "name": "vo_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_b": {
+          "name": "vo_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_r": {
+          "name": "ig_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_y": {
+          "name": "ig_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_b": {
+          "name": "ig_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_r": {
+          "name": "io_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_y": {
+          "name": "io_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_b": {
+          "name": "io_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "r1": {
+          "name": "r1",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "r2": {
+          "name": "r2",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "off": {
+          "name": "off",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ca_fn": {
+          "name": "ca_fn",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "bkr_adrs": {
+          "name": "bkr_adrs",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "sn": {
+          "name": "sn",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "usrn": {
+          "name": "usrn",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "pswd": {
+          "name": "pswd",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "prd_url": {
+          "name": "prd_url",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "port": {
+          "name": "port",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1883
+        },
+        "crt_en": {
+          "name": "crt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 2048
+        },
+        "sms_pswd": {
+          "name": "sms_pswd",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "c_lang": {
+          "name": "c_lang",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "auth_num": {
+          "name": "auth_num",
+          "type": "varchar(10)[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dft_liv_f": {
+          "name": "dft_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "h_liv_f": {
+          "name": "h_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 2
+        },
+        "m_liv_f": {
+          "name": "m_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 4
+        },
+        "l_liv_f": {
+          "name": "l_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 3
+        },
+        "pwr_info_f": {
+          "name": "pwr_info_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 20
+        },
+        "ivrs_en": {
+          "name": "ivrs_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "sms_en": {
+          "name": "sms_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "rmt_en": {
+          "name": "rmt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2305,6 +2842,1449 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.starter_settings_limits": {
+      "name": "starter_settings_limits",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "starter_id": {
+          "name": "starter_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allflt_en_min": {
+          "name": "allflt_en_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "allflt_en_max": {
+          "name": "allflt_en_max",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "pr_flt_en_min": {
+          "name": "pr_flt_en_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "pr_flt_en_max": {
+          "name": "pr_flt_en_max",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65355
+        },
+        "flc_min": {
+          "name": "flc_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "flc_max": {
+          "name": "flc_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "as_dly_min": {
+          "name": "as_dly_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "as_dly_max": {
+          "name": "as_dly_max",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tpf_min": {
+          "name": "tpf_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "tpf_max": {
+          "name": "tpf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "v_en": {
+          "name": "v_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "c_en": {
+          "name": "c_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ipf_min": {
+          "name": "ipf_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ipf_max": {
+          "name": "ipf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 300
+        },
+        "lvf_min": {
+          "name": "lvf_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 300
+        },
+        "lvf_max": {
+          "name": "lvf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 380
+        },
+        "hvf_min": {
+          "name": "hvf_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 480
+        },
+        "hvf_max": {
+          "name": "hvf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 550
+        },
+        "vif_min": {
+          "name": "vif_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "vif_max": {
+          "name": "vif_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 30
+        },
+        "paminf_min": {
+          "name": "paminf_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 100
+        },
+        "paminf_max": {
+          "name": "paminf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 110
+        },
+        "pamaxf_min": {
+          "name": "pamaxf_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 125
+        },
+        "pamaxf_max": {
+          "name": "pamaxf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 130
+        },
+        "f_dr": {
+          "name": "f_dr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "f_dr_min": {
+          "name": "f_dr_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "f_dr_max": {
+          "name": "f_dr_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 50
+        },
+        "f_ol": {
+          "name": "f_ol",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 120
+        },
+        "f_ol_min": {
+          "name": "f_ol_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 120
+        },
+        "f_ol_max": {
+          "name": "f_ol_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 150
+        },
+        "f_lr": {
+          "name": "f_lr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 350
+        },
+        "f_lr_min": {
+          "name": "f_lr_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 350
+        },
+        "f_lr_max": {
+          "name": "f_lr_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 450
+        },
+        "f_opf": {
+          "name": "f_opf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "f_ci": {
+          "name": "f_ci",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "f_ci_min": {
+          "name": "f_ci_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "f_ci_max": {
+          "name": "f_ci_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 35
+        },
+        "pfa_min": {
+          "name": "pfa_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 280
+        },
+        "pfa_max": {
+          "name": "pfa_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 360
+        },
+        "lva_min": {
+          "name": "lva_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 340
+        },
+        "lva_max": {
+          "name": "lva_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 380
+        },
+        "hva_min": {
+          "name": "hva_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 470
+        },
+        "hva_max": {
+          "name": "hva_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 500
+        },
+        "via_min": {
+          "name": "via_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "via_max": {
+          "name": "via_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 20
+        },
+        "pamina_min": {
+          "name": "pamina_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 100
+        },
+        "pamina_max": {
+          "name": "pamina_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 115
+        },
+        "pamaxa_min": {
+          "name": "pamaxa_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 125
+        },
+        "pamaxa_max": {
+          "name": "pamaxa_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 135
+        },
+        "dr_min": {
+          "name": "dr_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "dr_max": {
+          "name": "dr_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 60
+        },
+        "ol_min": {
+          "name": "ol_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 110
+        },
+        "ol_max": {
+          "name": "ol_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 150
+        },
+        "lr_min": {
+          "name": "lr_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 300
+        },
+        "lr_max": {
+          "name": "lr_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 400
+        },
+        "ci_min": {
+          "name": "ci_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "ci_max": {
+          "name": "ci_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 30
+        },
+        "lvr_min": {
+          "name": "lvr_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 360
+        },
+        "lvr_max": {
+          "name": "lvr_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 400
+        },
+        "hvr_min": {
+          "name": "hvr_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 450
+        },
+        "hvr_max": {
+          "name": "hvr_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 470
+        },
+        "olf_min": {
+          "name": "olf_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "olf_max": {
+          "name": "olf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 9
+        },
+        "lrf_min": {
+          "name": "lrf_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "lrf_max": {
+          "name": "lrf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 9
+        },
+        "opf": {
+          "name": "opf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "cif_min": {
+          "name": "cif_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "cif_max": {
+          "name": "cif_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ug_r": {
+          "name": "ug_r",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 50567
+        },
+        "ug_y": {
+          "name": "ug_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 49867
+        },
+        "ug_b": {
+          "name": "ug_b",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 51078
+        },
+        "ip_r": {
+          "name": "ip_r",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "ip_y": {
+          "name": "ip_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "ip_b": {
+          "name": "ip_b",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "vg_r": {
+          "name": "vg_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vg_y": {
+          "name": "vg_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vg_b": {
+          "name": "vg_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_r": {
+          "name": "vo_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_y": {
+          "name": "vo_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_b": {
+          "name": "vo_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_r": {
+          "name": "ig_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_y": {
+          "name": "ig_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_b": {
+          "name": "ig_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_r": {
+          "name": "io_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_y": {
+          "name": "io_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_b": {
+          "name": "io_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "r1": {
+          "name": "r1",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "r2": {
+          "name": "r2",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "off": {
+          "name": "off",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ca_fn": {
+          "name": "ca_fn",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bkr_adrs": {
+          "name": "bkr_adrs",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sn": {
+          "name": "sn",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usrn": {
+          "name": "usrn",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pswd": {
+          "name": "pswd",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prd_url": {
+          "name": "prd_url",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "port": {
+          "name": "port",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1883
+        },
+        "crt_en": {
+          "name": "crt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 2048
+        },
+        "sms_pswd": {
+          "name": "sms_pswd",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "c_lang": {
+          "name": "c_lang",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "auth_num": {
+          "name": "auth_num",
+          "type": "varchar(15)[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dft_liv_f": {
+          "name": "dft_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "h_liv_f": {
+          "name": "h_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 2
+        },
+        "m_liv_f": {
+          "name": "m_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 4
+        },
+        "l_liv_f": {
+          "name": "l_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 3
+        },
+        "pwr_info_f": {
+          "name": "pwr_info_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 20
+        },
+        "ivrs_en": {
+          "name": "ivrs_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "sms_en": {
+          "name": "sms_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "rmt_en": {
+          "name": "rmt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "starter_settings_limits_idx": {
+          "name": "starter_settings_limits_idx",
+          "columns": [
+            {
+              "expression": "starter_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "starter_settings_limits_starter_id_starter_boxes_id_fk": {
+          "name": "starter_settings_limits_starter_id_starter_boxes_id_fk",
+          "tableFrom": "starter_settings_limits",
+          "tableTo": "starter_boxes",
+          "columnsFrom": [
+            "starter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.starter_settings": {
+      "name": "starter_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "starter_id": {
+          "name": "starter_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allflt_en": {
+          "name": "allflt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "flc": {
+          "name": "flc",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1.65
+        },
+        "as_dly": {
+          "name": "as_dly",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "pr_flt_en": {
+          "name": "pr_flt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "tpf": {
+          "name": "tpf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "v_en": {
+          "name": "v_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "c_en": {
+          "name": "c_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ipf": {
+          "name": "ipf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "lvf": {
+          "name": "lvf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 300
+        },
+        "hvf": {
+          "name": "hvf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 480
+        },
+        "vif": {
+          "name": "vif",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "paminf": {
+          "name": "paminf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 100
+        },
+        "pamaxf": {
+          "name": "pamaxf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 125
+        },
+        "f_dr": {
+          "name": "f_dr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "f_ol": {
+          "name": "f_ol",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 120
+        },
+        "f_lr": {
+          "name": "f_lr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 350
+        },
+        "f_opf": {
+          "name": "f_opf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "f_ci": {
+          "name": "f_ci",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "pfa": {
+          "name": "pfa",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 280
+        },
+        "lva": {
+          "name": "lva",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 340
+        },
+        "hva": {
+          "name": "hva",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 470
+        },
+        "via": {
+          "name": "via",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "pamina": {
+          "name": "pamina",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 100
+        },
+        "pamaxa": {
+          "name": "pamaxa",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 125
+        },
+        "dr": {
+          "name": "dr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "ol": {
+          "name": "ol",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 110
+        },
+        "lr": {
+          "name": "lr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 300
+        },
+        "ci": {
+          "name": "ci",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "lvr": {
+          "name": "lvr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 360
+        },
+        "hvr": {
+          "name": "hvr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 450
+        },
+        "olf": {
+          "name": "olf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "lrf": {
+          "name": "lrf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "opf": {
+          "name": "opf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "cif": {
+          "name": "cif",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0.5
+        },
+        "ug_r": {
+          "name": "ug_r",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 50567
+        },
+        "ug_y": {
+          "name": "ug_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 49867
+        },
+        "ug_b": {
+          "name": "ug_b",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 51078
+        },
+        "ip_r": {
+          "name": "ip_r",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "ip_y": {
+          "name": "ip_y",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "ip_b": {
+          "name": "ip_b",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 8974
+        },
+        "vg_r": {
+          "name": "vg_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vg_y": {
+          "name": "vg_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vg_b": {
+          "name": "vg_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_r": {
+          "name": "vo_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_y": {
+          "name": "vo_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vo_b": {
+          "name": "vo_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_r": {
+          "name": "ig_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_y": {
+          "name": "ig_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_b": {
+          "name": "ig_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_r": {
+          "name": "io_r",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_y": {
+          "name": "io_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_b": {
+          "name": "io_b",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "r1": {
+          "name": "r1",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "r2": {
+          "name": "r2",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "off": {
+          "name": "off",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ca_fn": {
+          "name": "ca_fn",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "bkr_adrs": {
+          "name": "bkr_adrs",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "sn": {
+          "name": "sn",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "usrn": {
+          "name": "usrn",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "pswd": {
+          "name": "pswd",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "prd_url": {
+          "name": "prd_url",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "port": {
+          "name": "port",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1883
+        },
+        "crt_en": {
+          "name": "crt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 2048
+        },
+        "sms_pswd": {
+          "name": "sms_pswd",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "''"
+        },
+        "c_lang": {
+          "name": "c_lang",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "auth_num": {
+          "name": "auth_num",
+          "type": "varchar(10)[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dft_liv_f": {
+          "name": "dft_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "h_liv_f": {
+          "name": "h_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 2
+        },
+        "m_liv_f": {
+          "name": "m_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 4
+        },
+        "l_liv_f": {
+          "name": "l_liv_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 3
+        },
+        "pwr_info_f": {
+          "name": "pwr_info_f",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 20
+        },
+        "ivrs_en": {
+          "name": "ivrs_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "sms_en": {
+          "name": "sms_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "rmt_en": {
+          "name": "rmt_en",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "time_stamp": {
+          "name": "time_stamp",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "is_new_configuration_saved": {
+          "name": "is_new_configuration_saved",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "acknowledgement": {
+          "name": "acknowledgement",
+          "type": "acknowledgement_enum",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'FALSE'"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "starter_settings_idx": {
+          "name": "starter_settings_idx",
+          "columns": [
+            {
+              "expression": "starter_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "starter_settings_starter_id_starter_boxes_id_fk": {
+          "name": "starter_settings_starter_id_starter_boxes_id_fk",
+          "tableFrom": "starter_settings",
+          "tableTo": "starter_boxes",
+          "columnsFrom": [
+            "starter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "starter_settings_created_by_users_id_fk": {
+          "name": "starter_settings_created_by_users_id_fk",
+          "tableFrom": "starter_settings",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.user_activity_logs": {
       "name": "user_activity_logs",
       "schema": "",
@@ -2315,14 +4295,14 @@
           "primaryKey": true,
           "notNull": true
         },
-        "field_name": {
-          "name": "field_name",
-          "type": "varchar",
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
-        "user_id": {
-          "name": "user_id",
+        "performed_by": {
+          "name": "performed_by",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
@@ -2333,21 +4313,39 @@
           "primaryKey": false,
           "notNull": true
         },
-        "performed_by": {
-          "name": "performed_by",
-          "type": "integer",
+        "entity_type": {
+          "name": "entity_type",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": true
         },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "old_data": {
           "name": "old_data",
-          "type": "varchar",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "new_data": {
           "name": "new_data",
-          "type": "varchar",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -2372,6 +4370,27 @@
           "columns": [
             {
               "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "entity_idx": {
+          "name": "entity_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2409,6 +4428,19 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "user_activity_logs_device_id_starter_boxes_id_fk": {
+          "name": "user_activity_logs_device_id_starter_boxes_id_fk",
+          "tableFrom": "user_activity_logs",
+          "tableTo": "starter_boxes",
+          "columnsFrom": [
+            "device_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2437,7 +4469,7 @@
           "name": "email",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "phone": {
           "name": "phone",
@@ -2573,6 +4605,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2588,6 +4621,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2706,6 +4740,14 @@
       "values": [
         "SINGLE_STARTER",
         "MULTI_STARTER"
+      ]
+    },
+    "public.acknowledgement_enum": {
+      "name": "acknowledgement_enum",
+      "schema": "public",
+      "values": [
+        "TRUE",
+        "FALSE"
       ]
     }
   },

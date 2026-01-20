@@ -25,6 +25,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     signal_quality: integer("signal_quality").notNull().default(0),
     network_type: varchar("network_type").notNull().default("NUll"),
     starter_type: starterType().notNull().default("SINGLE_STARTER"),
+    hardware_version: varchar("hardware_version"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),

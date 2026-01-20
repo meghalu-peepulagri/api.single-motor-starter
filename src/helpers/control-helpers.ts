@@ -18,9 +18,20 @@ export function lastOff(code: number) {
 
 export function controlMode(code: number) {
   switch (code) {
-    case 0: return "MANUAL";
-    case 1: return "AUTO";
-    default: return "Unknown";
+    case 0:
+      return "MANUAL";
+    case 1:
+      return "AUTO";
+    case 2:
+      return "ALREADY AUTO";
+    case 3:
+      return "ALREADY MANUAL";
+    case 4:
+      return "INVALID REQUEST";
+    case 5:
+      return "FEATURE NOT ENABLED";
+    default:
+      return "Unknown mode";
   }
 }
 
@@ -28,7 +39,14 @@ export function motorState(code: number) {
   switch (code) {
     case 0: return "OFF";
     case 1: return "ON";
-    default: return "Unknown";
+    case 2: return "POWER NOT PRESENT";
+    case 3: return "FAULT BLOCKED";
+    case 4: return "INVALID CONTROL MODE CHANGE";
+    case 5: return "INVALID REQUEST";
+    case 6: return "ALREADY ON";
+    case 7: return "ALREADY OFF";
+    case 8: return "FEATURE NOT ENABLED";
+    default: return "Unknown state";
   }
 }
 

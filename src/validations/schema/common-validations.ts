@@ -86,7 +86,7 @@ const hpValidator = v.pipe(
   v.maxValue(30, HP_MAX),
 )
 
-export const filedNameValidator = v.pipe(
+export const fieldNameValidator = v.pipe(
   v.string(FIELD_NAME_MUST_STRING),
   v.transform(value => value.trim()),
   v.nonEmpty(FIELD_NAME_REQUIRED),
@@ -126,13 +126,13 @@ const starterBoxTitleValidator = v.nullish(v.optional(v.pipe(
 )));
 
 
-const macAddressValidator = v.nullish(v.optional(v.pipe(
+const macAddressValidator = v.pipe(
   v.string(MAC_REQUIRED),
   v.transform(value => value.trim()),
   v.nonEmpty(MAC_REQUIRED),
   v.regex(/^([0-9A-Z:]+)$/, "Small letters or spaces are not allowed"),
   v.minLength(3, MAC_MIN_LEN),
-)));
+);
 
 const serialNoValidator = v.pipe(
   v.string(SERIAL_NO_REQUIRED),
@@ -142,13 +142,13 @@ const serialNoValidator = v.pipe(
   v.minLength(3, SERIAL_NO_MIN_LEN),
 );
 
-const pcbNumberValidator = v.nullish(v.optional(v.pipe(
+const pcbNumberValidator = v.pipe(
   v.string(PCB_NUMBER_REQUIRED),
   v.transform(value => value.trim()),
   v.nonEmpty(PCB_NUMBER_REQUIRED),
   v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED),
   v.minLength(3, PCB_MIN_LEN),
-)));
+);
 
 const starterNumberValidator = v.pipe(
   v.string(STARTER_NUMBER_REQUIRED),
@@ -166,11 +166,30 @@ const pcbOrSerialNumberValidator = v.pipe(
   v.minLength(3, MIN_3_CHARACTERS_REQUIRED),
 );
 
+const hardwareVersion = v.nullish(
+  v.optional(v.string())
+)
+
+export const requiredNonNegativeInt = (REQ: string, NON_NEG: string) =>
+  v.pipe(v.number(REQ), v.integer(), v.minValue(0, NON_NEG));
+
+export const requiredNonNegativeNumber = (REQ: string, NON_NEG: string) =>
+  v.pipe(v.number(REQ), v.minValue(0, NON_NEG));
+
+export const requiredString = (REQ: string) =>
+  v.pipe(v.string(REQ), v.trim(), v.minLength(1, REQ));
+
+export const optionalNonNegativeInt = (REQ: string, NON_NEG: string) =>
+  v.optional(requiredNonNegativeInt(REQ, NON_NEG));
+
+export const optionalNonNegativeNumber = (REQ: string, NON_NEG: string) =>
+  v.optional(requiredNonNegativeNumber(REQ, NON_NEG));
+
 export {
   emailValidator, locationTitleValidator, nameValidator,
   passwordValidator, phoneValidator,
   userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator,
   aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator,
-  starterNumberValidator, pcbOrSerialNumberValidator
+  starterNumberValidator, pcbOrSerialNumberValidator, hardwareVersion
 };
 

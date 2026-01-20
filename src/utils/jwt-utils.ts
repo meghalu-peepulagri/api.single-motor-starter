@@ -2,7 +2,6 @@ import type { Context } from "hono";
 
 import { sign, verify } from "hono/jwt";
 import { JwtTokenExpired, JwtTokenInvalid, JwtTokenSignatureMismatched } from "hono/utils/jwt/types";
-
 import type { JWTPayload } from "../types/app-types.js";
 
 import { jwtConfig } from "../config/jwt-config.js";

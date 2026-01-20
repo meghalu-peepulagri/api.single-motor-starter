@@ -6,24 +6,26 @@ import { isAuthorized } from "../middlewares/isAuthorized.js";
 const motorHandlers = new StarterHandlers();
 const starterRoutes = factory.createApp();
 
-starterRoutes.post("/", isAuthorized, motorHandlers.addStarterBox);
+starterRoutes.post("/", isAuthorized, motorHandlers.addStarterBoxHandler);
 
-starterRoutes.get("/mobile", isAuthorized, motorHandlers.starterListMobile);
-starterRoutes.get("/web/all", isAuthorized, isAdmin, motorHandlers.starterListWeb);
+starterRoutes.get("/mobile", isAuthorized, motorHandlers.starterListMobileHandler);
+starterRoutes.get("/web/all", isAuthorized, isAdmin, motorHandlers.starterListWebHandler);
 
-starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobile);
-starterRoutes.patch("/assign-web", isAuthorized, motorHandlers.assignStarterWeb);
-starterRoutes.patch("/assign-location", isAuthorized, motorHandlers.assignLocationToStarter);
-starterRoutes.patch("/replace", isAuthorized, motorHandlers.replaceStarterLocation);
-starterRoutes.patch("/update-status", motorHandlers.markStarterStatus);
+starterRoutes.patch("/assign", isAuthorized, motorHandlers.assignStarterMobileHandler);
+starterRoutes.patch("/assign-web", isAuthorized, motorHandlers.assignStarterWebHandler);
+starterRoutes.patch("/assign-location", isAuthorized, motorHandlers.assignLocationToStarterHandler);
+starterRoutes.patch("/replace", isAuthorized, motorHandlers.replaceStarterLocationHandler);
+starterRoutes.patch("/update-status", motorHandlers.markStarterStatusHandler);
+starterRoutes.get("/latest-pcb-number", isAuthorized, motorHandlers.getLatestPcbNumberHandler);
 
-starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.starterRunTime);
-starterRoutes.get("/:id/analytics", isAuthorized, motorHandlers.starterAnalytics);
-starterRoutes.get("/:id/motors", isAuthorized, motorHandlers.starterConnectedMotors);
-starterRoutes.patch("/:id/deploy-status", isAuthorized, motorHandlers.updateDeployStatus);
-starterRoutes.patch("/:id/details", isAuthorized, motorHandlers.updateStarterDetails);
+starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.starterRunTimeHandler);
+starterRoutes.get("/:id/analytics", isAuthorized, motorHandlers.starterAnalyticsHandler);
+starterRoutes.get("/:id/motors", isAuthorized, motorHandlers.starterConnectedMotorsHandler);
+starterRoutes.get("/:starter_id/motors/:motor_id/alerts-faults", isAuthorized, motorHandlers.getConsecutiveAlertsFaultsHandler);
+starterRoutes.patch("/:id/deploy-status", isAuthorized, motorHandlers.updateDeployStatusHandler);
+starterRoutes.patch("/:id/details", isAuthorized, motorHandlers.updateStarterDetailsHandler);
 
-starterRoutes.patch("/:id", isAuthorized, motorHandlers.deleteStarterBox);
+starterRoutes.patch("/:id", isAuthorized, motorHandlers.deleteStarterBoxHandler);
 
 
 export default starterRoutes;

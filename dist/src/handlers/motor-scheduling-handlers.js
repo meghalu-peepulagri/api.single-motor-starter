@@ -3,7 +3,7 @@ import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict } from "../helpers/motor-helper.js";
 import { deleteRecordById, getPaginatedRecordsConditionally, getRecordById, getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getMotorSchedulesWeekly, getMotorSchedulesWeeklyUpdate, getOneTimeMotorSchedules, getOneTimeMotorSchedulesUpdate } from "../services/db/motor-schedules-services.js";
@@ -29,7 +29,6 @@ export class MotorScheduleHandler {
                 await checkMotorScheduleConflict(validatedReqData, existingMotorSchedule);
             }
             const preparedScheduledData = {
-                pond_id: existedMotor.pond_id,
                 motor_id: validatedReqData.motor_id,
                 schedule_type: validatedReqData.schedule_type,
                 schedule_date: validatedReqData.schedule_date || null,
@@ -48,7 +47,7 @@ export class MotorScheduleHandler {
             throw error;
         }
     }
-    motorScheduleList = async (c) => {
+    motorScheduleListHandler = async (c) => {
         try {
             const motorId = +c.req.param("motor_id");
             const query = c.req.query();
@@ -77,7 +76,7 @@ export class MotorScheduleHandler {
             throw error;
         }
     };
-    editMotorSchedule = async (c) => {
+    editMotorScheduleHandler = async (c) => {
         try {
             const scheduleId = +c.req.param("id");
             paramsValidateException.validateId(scheduleId, "schedule id");
@@ -104,7 +103,7 @@ export class MotorScheduleHandler {
             throw error;
         }
     };
-    deleteMotorSchedule = async (c) => {
+    deleteMotorScheduleHandler = async (c) => {
         try {
             const scheduleId = +c.req.param("id");
             paramsValidateException.validateId(scheduleId, "schedule id");
@@ -120,7 +119,7 @@ export class MotorScheduleHandler {
             throw error;
         }
     };
-    createMotorScheduleForPond = async (c) => {
+    createMotorScheduleForPondHandler = async (c) => {
         try {
             const reqData = await c.req.json();
             const validatedReqData = await validatedRequest("create-motor-schedule", reqData, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA);

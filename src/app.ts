@@ -7,14 +7,14 @@ import indexRoute from "./routes/index-routes.js";
 import notFound from "./utils/not-found.js";
 import onError from "./utils/on-error.js";
 import { sendResponse } from "./utils/send-response.js";
-import { logger } from "hono/logger";
+import { apiLogger } from "./middlewares/api-logger.js";
 
 const appVersion = envData.API_VERSION;
 const baseUrl = `/${appVersion}`;
 
 const app = factory.createApp().basePath(baseUrl);
 app.use("*", cors());
-app.use(logger());
+app.use(apiLogger);
 
 app.route("/", indexRoute);
 app.get("/", (c) => sendResponse(c, OK, SERVICE_UP));

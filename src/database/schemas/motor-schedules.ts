@@ -8,7 +8,6 @@ export const scheduleStatusEnum = pgEnum("schedule_status", ["PENDING", "RUNNING
 
 export const motorSchedules = pgTable("motor_schedules", {
   id: serial("id").primaryKey().notNull(),
-  pond_id: integer("pond_id").notNull().references(() => fields.id),
   motor_id: integer("motor_id").notNull().references(() => motors.id),
 
   schedule_type: motorScheduleTypeEnum().default("ONE_TIME").notNull(), // One Time,  Daily, Weekly

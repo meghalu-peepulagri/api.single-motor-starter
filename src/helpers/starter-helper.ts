@@ -1,8 +1,8 @@
-import { eq, ilike, ne, sql } from "drizzle-orm";
+import { eq, ne, sql } from "drizzle-orm";
+import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import type { User } from "../database/schemas/users.js";
 import type { starterBoxPayloadType } from "../types/app-types.js";
-import { motors } from "../database/schemas/motors.js";
 
 
 export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User) {

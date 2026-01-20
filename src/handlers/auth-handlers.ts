@@ -6,15 +6,15 @@ import { CREATED } from "../constants/http-status-codes.js";
 import db from "../database/configuration.js";
 import { deviceTokens, type DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import { type NewOtp } from "../database/schemas/otp.js";
-import { userActivityLogs, type NewUserActivityLog } from "../database/schemas/user-activity-logs.js";
 import { users, type NewUser, type UsersTable } from "../database/schemas/users.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 import { prepareOTPData } from "../helpers/otp-helper.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
-import { OtpService } from "../services/db/otp-service.js";
+import { OtpService } from "../services/db/otp-services.js";
 import { SmsService } from "../services/sms/sms-service.js";
 import { genJWTTokensForUser } from "../utils/jwt-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -27,7 +27,7 @@ const otpService = new OtpService();
 const smsService = new SmsService();
 
 export class AuthHandlers {
-    userRegisterHandlers = async (c: Context) => {
+    userRegisterHandler = async (c: Context) => {
         try {
             const userPayload = c.get("user_payload");
             const reqBody = await c.req.json();
@@ -55,22 +55,20 @@ export class AuthHandlers {
                 createdUser = await saveSingleRecord<UsersTable>(users, userData, trx);
                 if (!createdUser) return;
 
-                const logData: NewUserActivityLog = {
-                    user_id: Number(createdUser.id),
+                await ActivityService.logActivity({
+                    userId: Number(createdUser.id),
+                    performedBy: userPayload?.id ?? Number(createdUser.id),
                     action: "REGISTERED",
-                    performed_by: userPayload?.id ?? Number(createdUser.id),
-                    old_data: null,
-                    new_data: null,
-                };
-
-                await saveSingleRecord(userActivityLogs, logData, trx);
+                    entityType: "AUTH",
+                    entityId: Number(createdUser.id),
+                }, trx);
             });
 
             if (!userPayload && createdUser) {
                 const phone = createdUser.phone;
-                const otpData = prepareOTPData(createdUser, phone, "REGISTERED");
+                const otpData = prepareOTPData(phone, "REGISTERED");
                 await otpService.createOTP(otpData);
-                await smsService.sendSms(phone, otpData.otp, validUserReq.signature_id);
+                // await smsService.sendSms(phone, otpData.otp, validUserReq.signature_id);
             }
 
             return sendResponse(c, CREATED, USER_CREATED);
@@ -83,7 +81,7 @@ export class AuthHandlers {
         }
     };
 
-    signInWithEmailHandlers = async (c: Context) => {
+    signInWithEmailHandler = async (c: Context) => {
         try {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
@@ -108,7 +106,7 @@ export class AuthHandlers {
         }
     }
 
-    signInWithPhoneHandlers = async (c: Context) => {
+    signInWithPhoneHandler = async (c: Context) => {
         try {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
@@ -117,9 +115,9 @@ export class AuthHandlers {
             const loginUser = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["phone", "status"], ["=", "!="], [validatedPhone.phone, "ARCHIVED"]);
             if (!loginUser) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
 
-            const otpData = prepareOTPData(loginUser, validatedPhone.phone, "SIGN_IN_WITH_OTP");
+            const otpData = prepareOTPData(validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
-            await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
+            // await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
             return sendResponse(c, CREATED, OTP_SENT);
         } catch (error: any) {
             console.error("Error at sign in with phone :", error);
@@ -130,7 +128,7 @@ export class AuthHandlers {
     }
 
 
-    verifyOtpHandlers = async (c: Context) => {
+    verifyOtpHandler = async (c: Context) => {
         try {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);

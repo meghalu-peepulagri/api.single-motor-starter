@@ -11,7 +11,7 @@ const otpValidator = v.pipe(v.string(OTP_REQUIRED), v.transform(value => value.t
 export const idValidator = v.pipe(v.number(ID_NUMBER), v.minValue(1, ID_INVALID));
 const motorNameValidator = v.pipe(v.string(MOTOR_NAME), v.transform(value => value.trim()), v.nonEmpty(MOTOR_REQUIRED), v.regex(/^[A-Z].*$/i, MOTOR_NAME_STARTS_LETTER), v.minLength(3, MOTOR_MIN_LENGTH));
 const hpValidator = v.pipe(v.number(HP_REQUIRED), v.minValue(1, HP_MIN), v.maxValue(30, HP_MAX));
-export const filedNameValidator = v.pipe(v.string(FIELD_NAME_MUST_STRING), v.transform(value => value.trim()), v.nonEmpty(FIELD_NAME_REQUIRED), v.regex(/^[A-Z ]+$/i, FIELD_NAME_INVALID), v.minLength(3, FIELD_NAME_MIN_LEN));
+export const fieldNameValidator = v.pipe(v.string(FIELD_NAME_MUST_STRING), v.transform(value => value.trim()), v.nonEmpty(FIELD_NAME_REQUIRED), v.regex(/^[A-Z ]+$/i, FIELD_NAME_INVALID), v.minLength(3, FIELD_NAME_MIN_LEN));
 function requiredNumber(errorMessage) {
     return v.pipe(v.number(errorMessage), v.custom(val => typeof val === "number" && val !== 0, errorMessage));
 }
@@ -20,9 +20,15 @@ function requiredNumberOptional(errorMessage) {
 }
 const aliasStarterNameValidator = v.optional(v.pipe(v.string(DEVICE_NAME_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(DEVICE_NAME_REQUIRED), v.regex(/^[A-Z].*$/i, DEVICE_NAME_STARTS_LETTER), v.minLength(3, DEVICE_MIN_LEN)));
 const starterBoxTitleValidator = v.nullish(v.optional(v.pipe(v.string(DEVICE_NAME_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(DEVICE_NAME_REQUIRED), v.regex(/^[A-Z].*$/i, DEVICE_NAME_STARTS_LETTER), v.minLength(3, DEVICE_MIN_LEN))));
-const macAddressValidator = v.nullish(v.optional(v.pipe(v.string(MAC_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(MAC_REQUIRED), v.regex(/^([0-9A-Z:]+)$/, "Small letters or spaces are not allowed"), v.minLength(3, MAC_MIN_LEN))));
+const macAddressValidator = v.pipe(v.string(MAC_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(MAC_REQUIRED), v.regex(/^([0-9A-Z:]+)$/, "Small letters or spaces are not allowed"), v.minLength(3, MAC_MIN_LEN));
 const serialNoValidator = v.pipe(v.string(SERIAL_NO_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(SERIAL_NO_REQUIRED), v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED), v.minLength(3, SERIAL_NO_MIN_LEN));
-const pcbNumberValidator = v.nullish(v.optional(v.pipe(v.string(PCB_NUMBER_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(PCB_NUMBER_REQUIRED), v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED), v.minLength(3, PCB_MIN_LEN))));
+const pcbNumberValidator = v.pipe(v.string(PCB_NUMBER_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(PCB_NUMBER_REQUIRED), v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED), v.minLength(3, PCB_MIN_LEN));
 const starterNumberValidator = v.pipe(v.string(STARTER_NUMBER_REQUIRED), v.trim(), v.nonEmpty(STARTER_NUMBER_REQUIRED), v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED), v.minLength(3, STARTER_NUMBER_MIN_LEN));
 const pcbOrSerialNumberValidator = v.pipe(v.string(PCB_SERIAL_NUMBER_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(PCB_SERIAL_NUMBER_REQUIRED), v.regex(/^[A-Z0-9]+$/, SMALL_LETTERS_NOT_ALLOWED), v.minLength(3, MIN_3_CHARACTERS_REQUIRED));
-export { emailValidator, locationTitleValidator, nameValidator, passwordValidator, phoneValidator, userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator, aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator, starterNumberValidator, pcbOrSerialNumberValidator };
+const hardwareVersion = v.nullish(v.optional(v.string()));
+export const requiredNonNegativeInt = (REQ, NON_NEG) => v.pipe(v.number(REQ), v.integer(), v.minValue(0, NON_NEG));
+export const requiredNonNegativeNumber = (REQ, NON_NEG) => v.pipe(v.number(REQ), v.minValue(0, NON_NEG));
+export const requiredString = (REQ) => v.pipe(v.string(REQ), v.trim(), v.minLength(1, REQ));
+export const optionalNonNegativeInt = (REQ, NON_NEG) => v.optional(requiredNonNegativeInt(REQ, NON_NEG));
+export const optionalNonNegativeNumber = (REQ, NON_NEG) => v.optional(requiredNonNegativeNumber(REQ, NON_NEG));
+export { emailValidator, locationTitleValidator, nameValidator, passwordValidator, phoneValidator, userTypeValidator, otpValidator, requiredNumber, requiredNumberOptional, motorNameValidator, hpValidator, aliasStarterNameValidator, starterBoxTitleValidator, macAddressValidator, serialNoValidator, pcbNumberValidator, starterNumberValidator, pcbOrSerialNumberValidator, hardwareVersion };

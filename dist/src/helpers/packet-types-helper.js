@@ -9,7 +9,8 @@ export const REQUEST_TYPES = {
     POWER_INFO_REQUEST: 8,
     DEVICE_INFO_REQUEST: 10,
     QUECTEL_FILE_DELETE: 11,
-    QUECTEL_FILE_ADD: 12
+    QUECTEL_FILE_ADD: 12,
+    UPDATE_STARTER_SETTINGS: 13
 };
 export const ACK_TYPES = {
     LIVE_DATA: 41,
@@ -24,7 +25,8 @@ export const ACK_TYPES = {
     DEVICE_INFO_ACK: 39,
     HEART_BEAT: 40,
     QUECTEL_FILE_DELETE_ACK: 42,
-    QUECTEL_FILE_ADD_ACK: 43
+    QUECTEL_FILE_ADD_ACK: 43,
+    ADMIN_CONFIG_DATA_REQUEST_ACK: 44
 };
 export function findTopicACKByType(payload) {
     const type = payload.T;
@@ -42,6 +44,10 @@ export function findTopicACKByType(payload) {
         case 40: return "HEART_BEAT";
         case 42: return "QUECTEL_FILE_DELETE_ACK";
         case 43: return "QUECTEL_FILE_ADD_ACK";
+        case 44: return "ADMIN_CONFIG_DATA_REQUEST_ACK";
+        case 45: return "FOTA_REQUEST_ACK";
+        case 46: return "FOTA_FILE_INFO_ACK";
+        case 47: return "FOTA_INITIALIZATION_REQUEST_ACK";
         default: return "UNKNOWN";
     }
 }
@@ -88,7 +94,7 @@ export function getValidStrength(value) {
     const isValid = value >= 2 && value <= 30;
     return {
         strength: isValid ? value : 0,
-        status: isValid ? "ACTIVE" : "INACTIVE",
+        status: (isValid ? "ACTIVE" : "INACTIVE"),
     };
 }
 export function getValidNetwork(value) {

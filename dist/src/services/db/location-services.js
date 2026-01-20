@@ -1,8 +1,8 @@
 import { and, desc, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { locations } from "../../database/schemas/locations.js";
-import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { motors } from "../../database/schemas/motors.js";
+import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 export async function getLocationsList(whereQueryData, orderQueryData) {
     const whereQuery = whereQueryData && whereQueryData.length > 0 ? and(...whereQueryData) : undefined;
     const orderQuery = prepareOrderByQueryConditions(locations, orderQueryData);
@@ -62,6 +62,14 @@ export async function getLocationsList(whereQueryData, orderQueryData) {
                     state: true,
                     mode: true,
                     alias_name: true,
+                },
+                with: {
+                    starter: {
+                        columns: {
+                            id: true,
+                            power: true,
+                        },
+                    },
                 },
             },
         },

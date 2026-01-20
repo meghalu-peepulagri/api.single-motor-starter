@@ -6,6 +6,6 @@ import { isAuthorized } from "../middlewares/isAuthorized.js";
 const userActivitiesHandler = new UserActivityHandlers();
 const userActivitiesRoutes = factory.createApp();
 
-userActivitiesRoutes.get("/:user_id", isAuthorized, userActivitiesHandler.getUserActivities);
+userActivitiesRoutes.get("/:user_id", isAuthorized, userActivitiesHandler.getUserActivitiesHandler);
 
 export default userActivitiesRoutes;

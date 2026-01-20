@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { USER_ACTIVITIES } from "../constants/app-constants.js";
 import { userActivityLogs, type UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
-import { ParamsValidateException } from "../exceptions/paramsValidateException.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { getRecordsConditionally } from "../services/db/base-db-services.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
@@ -11,7 +11,7 @@ const paramsValidateException = new ParamsValidateException();
 
 export class UserActivityHandlers {
 
-  getUserActivities = async (c: Context) => {
+  getUserActivitiesHandler = async (c: Context) => {
     try {
       const userId = +c.req.param("user_id");
       paramsValidateException.validateId(userId, "user id");

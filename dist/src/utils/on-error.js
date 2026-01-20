@@ -22,7 +22,7 @@ export function validationErrors(issues = []) {
         if (!issue.path)
             return acc;
         const fullPath = issue.path
-            .map((p) => (p.key !== undefined ? p.key : p.index))
+            .map((p) => (p.key !== undefined ? p.key : 'index' in p ? p.index : ''))
             .join('.');
         if (!fullPath)
             return acc;
@@ -49,7 +49,7 @@ export function parseUniqueConstraintError(error) {
 }
 export function parseDatabaseError(error) {
     const pgError = error.cause ?? error;
-    if (pgError?.code === "23505") {
+    if ('code' in pgError && pgError?.code === "23505") {
         return parseUniqueConstraintError(pgError);
     }
 }
@@ -60,10 +60,11 @@ export function handleJsonParseError(error) {
 }
 export function handleForeignKeyViolationError(error) {
     const pgError = error.cause ?? error;
-    if (pgError?.code === "23503") {
-        const constraint = pgError.constraint ?? "";
+    if ('code' in pgError && pgError?.code === "23503") {
+        const constraint = 'constraint' in pgError ? pgError.constraint ?? "" : "";
         const mappedMessage = FOREIGN_KEY_MESSAGES[constraint];
-        const [, field, value] = pgError.detail?.match(/\((.*?)\)=\((.*?)\)/) || [];
+        const detail = 'detail' in pgError ? pgError.detail : undefined;
+        const [, field, value] = detail?.match(/\((.*?)\)=\((.*?)\)/) || [];
         const message = mappedMessage ? mappedMessage : field && value ? `Invalid foreign key: ${field} '${value}' does not exist.` : "Invalid foreign key value: Referenced record not found.";
         throw new BadRequestException(message);
     }

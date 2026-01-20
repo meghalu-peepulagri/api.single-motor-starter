@@ -54,7 +54,9 @@ export const MOTOR_VALIDATION_CRITERIA = "Motor details provided do not meet the
 export const STARTER_BOX_VALIDATION_CRITERIA = "Starter Box details provided do not meet the required validation criteria";
 export const CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Create motor schedule details provided do not meet the required validation criteria";
 export const REPLACE_STARTER_BOX_VALIDATION_CRITERIA = "Replace starter box details provided do not meet the required validation criteria";
-
+export const UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA = "Update default settings details provided do not meet the required validation criteria";
+export const INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA = "Insert starter settings details provided do not meet the required validation criteria";
+export const UPDATE_STARTER_SETTINGS_LIMITS_VALIDATION_CRITERIA = "Update starter settings limits details provided do not meet the required validation criteria";
 // Database
 
 export const DB_RECORD_NOT_FOUND = "Database record not found";
@@ -83,7 +85,6 @@ export const INVALID_PHONE = "Invalid Mobile Number";
 export const EMAIL_REQUIRED = "Email is required";
 export const PASSWORD_REQUIRED = "Password is required";
 export const INVALID_PASSWORD = "Invalid password";
-export const PHONE_INVALID_FORMAT = "Enter a valid phone number";
 export const VALID_MAIL = "Invalid email";
 export const PHONE_NUMBER_REQUIRED = "Mobile Number is required";
 export const ALTERNATE_PHONE_NUMBER_REQUIRED = "Alternate phone number is required";
@@ -245,7 +246,7 @@ export const STARTER_NUMBER_REQUIRED = "Starter Number is required";
 export const SMALL_LETTERS_NOT_ALLOWED = "Small characters not allowed";
 export const STARTER_ASSIGNED_SUCCESSFULLY = "Device assigned successfully";
 export const STARTER_ALREADY_ASSIGNED = "Device already assigned";
-export const STARER_NOT_DEPLOYED = "Device not deployed yet";
+export const STARTER_NOT_DEPLOYED = "Device not deployed yet";
 export const STARTER_LIST_FETCHED = "Device fetches successfully";
 export const STARTER_REPLACED_SUCCESSFULLY = "Device location updated successfully";
 export const STARTER_RUNTIME_FETCHED = "Run time fetches successfully";
@@ -258,7 +259,8 @@ export const LOCATION_ID_REQUIRED = "Location is required";
 export const STARTER_DETAILS_UPDATED = "Device details updated successfully";
 export const STARTER_BOX_STATUS_UPDATED = "Device status updated successfully";
 export const PCB_SERIAL_NUMBER_REQUIRED = "PCB/Serial Number is required";
-export const MIN_3_CHARACTERS_REQUIRED = "Min has 3 characters";
+export const MIN_3_CHARACTERS_REQUIRED = "PCB/Serial Number has min 3 characters";
+export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched successfully";
 
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
@@ -292,6 +294,211 @@ export const ALL_WRITE_READ_TYPES = ["OWNER", "MANAGER", "SUPERVISOR", "USER"];
 export const MOTORS_ARRAY_REQUIRED = "Motors must be a non-empty array of motors with starter IDs.";
 
 
+// Settings
+export const DEFAULT_SETTINGS_FETCHED = "Default settings fetched successfully";
+export const DEFAULT_SETTINGS_UPDATED = "Default settings updated successfully";
+export const DEFAULT_SETTINGS_NOT_FOUND = "Default settings not found";
+export const SETTINGS_FETCHED = "Settings details fetched successfully";
+export const ADDED_STARTER_SETTINGS = "Starter settings updated successfully";
+export const SETTINGS_LIMITS_FETCHED = "Settings limits fetched successfully";
+export const SETTINGS_LIMITS_UPDATED = "Settings limits updated successfully";
+export const SETTINGS_LIMITS_NOT_FOUND = "Settings limits id not found";
+
+export const ACTIVITY_LOGS_FETCHED = "Activity logs fetched successfully";
+
+export const SETTINGS_FIELD_NAMES = {
+
+  /* ================= Device Configuration ================= */
+
+  allflt_en: "All faults enable",
+  flc: "Motor full load current",
+  as_dly: "Auto start seed time",
+  pr_flt_en: "Pre fault enable",
+  tpf: "Time per fault",
+
+  /* ================= Enables ================= */
+
+  v_en: "Voltage faults enable",
+  c_en: "Current faults enable",
+
+  /* ================= Fault Thresholds ================= */
+
+  ipf: "Input phase failure fault threshold",
+  lvf: "Low voltage fault threshold",
+  hvf: "High voltage fault threshold",
+  vif: "Voltage imbalance fault threshold",
+  paminf: "Minimum phase angle fault threshold",
+  pamaxf: "Maximum phase angle fault threshold",
+  f_dr: "Dry run protection fault threshold",
+  f_ol: "Overload fault threshold",
+  f_lr: "Locked rotor fault threshold",
+  f_opf: "Output phase failure fault threshold",
+  f_ci: "Current imbalance fault ratio",
+
+  /* ================= Alert Thresholds ================= */
+
+  pfa: "Phase failure alert value",
+  lva: "Low voltage alert value",
+  hva: "High voltage alert value",
+  via: "Voltage imbalance alert value",
+  pamina: "Minimum phase angle alert value",
+  pamaxa: "Maximum phase angle alert value",
+  dr: "Dry run protection alert threshold",
+  ol: "Overload alert threshold",
+  lr: "Locked rotor alert threshold",
+  ci: "Current imbalance alert ratio",
+
+  /* ================= Recovery Settings ================= */
+
+  lvr: "Low voltage recovery threshold",
+  hvr: "High voltage recovery threshold",
+  olf: "Overload recovery factor",
+  lrf: "Locked rotor recovery factor",
+  opf: "Output phase failure recovery",
+  cif: "Current imbalance recovery factor",
+
+  /* ================= ATMEL Calibrations ================= */
+
+  ug_r: "Voltage gain R calibration",
+  ug_y: "Voltage gain Y calibration",
+  ug_b: "Voltage gain B calibration",
+  ip_r: "Current gain R calibration",
+  ip_y: "Current gain Y calibration",
+  ip_b: "Current gain B calibration",
+
+  /* ================= ADC Calibrations ================= */
+
+  vg_r: "Voltage gain R (ADC)",
+  vg_y: "Voltage gain Y (ADC)",
+  vg_b: "Voltage gain B (ADC)",
+  vo_r: "Voltage offset R (ADC)",
+  vo_y: "Voltage offset Y (ADC)",
+  vo_b: "Voltage offset B (ADC)",
+  ig_r: "Current gain R (ADC)",
+  ig_y: "Current gain Y (ADC)",
+  ig_b: "Current gain B (ADC)",
+  io_r: "Current offset R (ADC)",
+  io_y: "Current offset Y (ADC)",
+  io_b: "Current offset B (ADC)",
+
+  /* ================= PT100 / PT1000 Calibrations ================= */
+
+  r1: "RTD resistance R1",
+  r2: "RTD resistance R2",
+  off: "RTD temperature offset",
+
+  /* ================= MQTT Configuration ================= */
+
+  ca_fn: "CA certificate filename",
+  bkr_adrs: "MQTT broker address",
+  sn: "MQTT client ID",
+  usrn: "MQTT username",
+  pswd: "MQTT password",
+  prd_url: "Production server URL",
+  port: "MQTT broker port",
+  crt_en: "Certificate enable length",
+
+  /* ================= IVRS Configuration ================= */
+
+  sms_pswd: "SMS password",
+  c_lang: "Communication language",
+  auth_num: "Authorized phone numbers",
+
+  /* ================= Frequency Configuration ================= */
+
+  dft_liv_f: "Default live data frequency",
+  h_liv_f: "High priority frequency",
+  m_liv_f: "Medium priority frequency",
+  l_liv_f: "Low priority frequency",
+  pwr_info_f: "Power info frequency",
+
+  /* ================= Feature Enables ================= */
+
+  ivrs_en: "IVRS feature enable",
+  sms_en: "SMS feature enable",
+  rmt_en: "Remote access enable",
+};
 
 
+export const DEVICE_SCHEMA = {
+  dvc_c: {
+    allflt_en: "allflt_en",
+    flc: "flc",
+    as_dly: "as_dly",
 
+    ipf: "ipf",
+    lvf: "lvf",
+    hvf: "hvf",
+    vif: "vif",
+    paminf: "paminf",
+    pamaxf: "pamaxf",
+
+    pfa: "pfa",
+    lva: "lva",
+    hva: "hva",
+    via: "via",
+    pamina: "pamina",
+    pamaxa: "pamaxa",
+
+    lvr: "lvr",
+    hvr: "hvr",
+
+    f_dr: "f_dr",
+    f_ol: "f_ol",
+    f_lr: "f_lr",
+    f_opf: "f_opf",
+    f_ci: "f_ci",
+
+    dr: "dr",
+    ol: "ol",
+    lr: "lr",
+    ci: "ci",
+
+    olf: "olf",
+    lrf: "lrf",
+    opf: "opf",
+    cif: "cif",
+
+    v_en: "v_en",
+    c_en: "c_en",
+  },
+
+  clb: {
+    ug_r: "ug_r",
+    ug_y: "ug_y",
+    ug_b: "ug_b",
+    ig_r: "ig_r",
+    ig_y: "ig_y",
+    ig_b: "ig_b",
+  },
+
+  mqt_c: {
+    ca_fn: "ca_fn",
+    bkr_adrs: "bkr_adrs",
+    usrn: "usrn",
+    pswd: "pswd",
+    prd_url: "prd_url",
+    port: "port",
+    crt_en: "crt_en",
+  },
+
+  ivrs_info: {
+    sms_pswd: "sms_pswd",
+    c_lang: "c_lang",
+    auth_num: "auth_num",
+  },
+
+  fq_c: {
+    dft_liv_f: "dft_liv_f",
+    h_liv_f: "h_liv_f",
+    m_liv_f: "m_liv_f",
+    l_liv_f: "l_liv_f",
+    pwr_info_f: "pwr_info_f",
+  },
+
+  f_e: {
+    ivrs_en: "ivrs_en",
+    sms_en: "sms_en",
+    rmt_en: "rmt_en",
+  },
+} as const;
