@@ -1,9 +1,9 @@
 import { and, desc, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { locations, type LocationsTable } from "../../database/schemas/locations.js";
+import { motors } from "../../database/schemas/motors.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { motors } from "../../database/schemas/motors.js";
 
 
 export async function getLocationsList(whereQueryData: any, orderQueryData: OrderByQueryData<LocationsTable>) {
@@ -70,6 +70,14 @@ export async function getLocationsList(whereQueryData: any, orderQueryData: Orde
           state: true,
           mode: true,
           alias_name: true,
+        },
+        with: {
+          starter: {
+            columns: {
+              id: true,
+              power: true,
+            },
+          },
         },
       },
     },
