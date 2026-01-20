@@ -225,26 +225,13 @@ export async function heartbeatHandler(message, topic) {
         throw error;
     }
 }
-export function publishStarterSettings(preparedData, starterDetails) {
-    if (!starterDetails)
-        return null;
-    const macOrPcb = starterDetails.device_status === 'READY' || starterDetails.device_status === 'TEST' ? starterDetails.mac_address : starterDetails.pcb_number;
-    const topic = `peepul/${macOrPcb}/cmd`;
-    mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
-}
-export function publishUpdatedStarterSettings(preparedData, starterData) {
+export function publishData(preparedData, starterData) {
     if (!starterData)
         return null;
     const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
     const topic = `peepul/${macOrPcb}/cmd`;
-    mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
-}
-export function publishHardwareData(preparedData, starterDetails) {
-    if (!preparedData || !starterDetails)
-        return null;
-    const macOrPcb = starterDetails.device_status === 'READY' || starterDetails.device_status === 'TEST' ? starterDetails.mac_address : starterDetails.pcb_number;
-    const topic = `peepul/${macOrPcb}/cmd`;
-    mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
+    const payload = JSON.stringify(preparedData);
+    mqttServiceInstance.publish(topic, payload);
 }
 export async function adminConfigDataRequestAckHandler(message, topic) {
     try {
@@ -265,7 +252,7 @@ export async function adminConfigDataRequestAckHandler(message, topic) {
         throw error;
     }
 }
-export const waitForAck = (pcbNumber, timeoutMs, validator) => {
+export const waitForAck = (identifiers, timeoutMs, validator) => {
     return new Promise((resolve) => {
         const mqttClient = mqttServiceInstance.getClient();
         if (!mqttClient || !mqttClient.connected) {
@@ -273,48 +260,39 @@ export const waitForAck = (pcbNumber, timeoutMs, validator) => {
             resolve(false);
             return;
         }
+        const validIdentifiers = identifiers.filter(Boolean);
+        const topics = validIdentifiers.map((id) => `peepul/${id}/status`);
         let settled = false;
-        const topic = `peepul/${pcbNumber}/status`;
+        const cleanup = () => {
+            topics.forEach((t) => mqttClient.unsubscribe(t));
+            mqttClient.removeListener("message", onMessage);
+        };
         const timeout = setTimeout(() => {
             if (!settled) {
                 settled = true;
-                mqttClient.removeListener("message", onMessage);
+                cleanup();
                 resolve(false);
             }
         }, timeoutMs);
         const onMessage = (receivedTopic, message) => {
-            if (receivedTopic !== topic)
+            if (!topics.includes(receivedTopic))
                 return;
             try {
-                const payloadStr = message.toString();
-                const payload = JSON.parse(payloadStr);
-                // If a validator is provided, use it
-                if (validator) {
-                    if (validator(payload)) {
-                        if (!settled) {
-                            settled = true;
-                            clearTimeout(timeout);
-                            mqttClient.removeListener("message", onMessage);
-                            resolve(true);
-                        }
-                    }
+                const payload = JSON.parse(message.toString());
+                if (validator && !validator(payload))
                     return;
-                }
-                // Default behavior (legacy): just check if it's a valid JSON with T
-                if (payload && payload.T) {
-                    if (!settled) {
-                        settled = true;
-                        clearTimeout(timeout);
-                        mqttClient.removeListener("message", onMessage);
-                        resolve(true);
-                    }
+                if (!settled) {
+                    settled = true;
+                    clearTimeout(timeout);
+                    cleanup();
+                    resolve(true);
                 }
             }
-            catch (e) {
-                // failed to parse, ignore
+            catch {
+                // ignore invalid JSON
             }
         };
-        mqttClient.subscribe(topic);
+        topics.forEach((topic) => mqttClient.subscribe(topic));
         mqttClient.on("message", onMessage);
     });
 };

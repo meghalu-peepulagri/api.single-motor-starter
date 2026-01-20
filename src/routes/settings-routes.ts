@@ -14,5 +14,7 @@ settingsRoutes.post("/starter/:starter_id", isAuthorized, settingsHandlers.inser
 settingsRoutes.get("/limits/:starter_id", isAuthorized, settingsHandlers.getStarterSettingsLimitsHandler);
 settingsRoutes.patch("/limits/:id", isAuthorized, settingsHandlers.updateStarterSettingsLimitsHandler);
 settingsRoutes.get("/ack-history/:starter_id", isAuthorized, settingsHandlers.getStarterAckHistoryHandler);
+settingsRoutes.get("/acknowledged/:starter_id", isAuthorized, settingsHandlers.getStarterSettingDetailsMobileHandler);
+settingsRoutes.get("/limits-mobile/:starter_id", isAuthorized, settingsHandlers.getStarterSettingsLimitsMobileHandler);
 
 export default settingsRoutes;

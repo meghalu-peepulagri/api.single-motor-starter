@@ -1,7 +1,7 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import type { StarterBox } from "../database/schemas/starter-boxes.js";
-import { publishStarterSettings, publishUpdatedStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
+import { publishData, waitForAck } from "../services/db/mqtt-db-services.js";
 import { logger } from "../utils/logger.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 import { ACK_TYPES } from "./packet-types-helper.js";
@@ -171,14 +171,20 @@ export const publishMultipleTimesInBackground = async (
   const totalAttempts = 3;
   const ackWaitTimes = [3000, 5000, 5000];
 
-  const isAckValid = (payload: any) => validateSettingsAck(payload, devicePayload.S);
+  const isAckValid = (payload: any) =>
+    validateSettingsAck(payload, devicePayload.S);
+
+  const ackIdentifiers = [
+    starterDetails.pcb_number,
+    starterDetails.mac_address,
+  ].filter(Boolean);
 
   for (let i = 0; i < totalAttempts; i++) {
     try {
-      publishUpdatedStarterSettings(devicePayload, starterDetails);
+      publishData(devicePayload, starterDetails);
 
       const ackReceived = await waitForAck(
-        starterDetails.pcb_number,
+        ackIdentifiers,
         ackWaitTimes[i],
         isAckValid
       );
@@ -188,9 +194,14 @@ export const publishMultipleTimesInBackground = async (
       }
 
     } catch (error) {
-      logger.error(`Attempt ${i + 1} failed for starter ${starterDetails.id}`, error);
+      logger.error(
+        `Attempt ${i + 1} failed for starter ${starterDetails.id}`,
+        error
+      );
     }
   }
 
-  logger.error(`[Failure] All ${totalAttempts} retry attempts failed for starter ${starterDetails.id}.`);
+  logger.error(
+    `[Failure] All ${totalAttempts} retry attempts failed for starter id : ${starterDetails.id}. pcb : ${starterDetails.pcb_number}, mac : ${starterDetails.mac_address}`
+  );
 };
