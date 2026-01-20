@@ -6,7 +6,7 @@ import { DEVICE_SCHEMA } from "../../constants/app-constants.js";
 export async function getStarterDefaultSettings() {
     return await db.select().from(starterDefaultSettings).limit(1);
 }
-export async function starterAcknowledgedSettings(starterId) {
+export async function starterAcknowledgedSettings(starterId, filter) {
     return db.query.starterSettings.findFirst({
         where: and(eq(starterSettings.starter_id, starterId), eq(starterSettings.acknowledgement, "TRUE"), eq(starterSettings.is_new_configuration_saved, 1)),
         orderBy: desc(starterSettings.created_at),
@@ -49,6 +49,32 @@ export async function updateLatestStarterSettings(starterId, isNewConfigurationS
           WHERE starter_id = ${starterId}
         )
       `);
+}
+export async function getAcknowledgedStarterSettings(starterId, columns) {
+    return db.query.starterSettings.findFirst({
+        where: and(eq(starterSettings.starter_id, starterId), eq(starterSettings.acknowledgement, "TRUE"), eq(starterSettings.is_new_configuration_saved, 1)),
+        orderBy: desc(starterSettings.created_at),
+        columns,
+        with: {
+            starter: {
+                columns: {
+                    id: true,
+                    name: true,
+                    pcb_number: true,
+                    mac_address: true,
+                },
+                with: {
+                    motors: {
+                        columns: {
+                            id: true,
+                            name: true,
+                            hp: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
 }
 export const prepareStarterSettingsData = (dynamicPayload) => {
     if (!dynamicPayload?.D || Object.keys(dynamicPayload.D).length === 0) {

@@ -18,7 +18,7 @@ import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas
 import type { User, UsersTable } from "../database/schemas/users.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
-  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable;
+  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable | StarterBoxParametersTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User :
@@ -36,6 +36,7 @@ export type DBRecord<T extends DBTable> =
   T extends DeviceRunTimeTable ? DeviceRunTime :
   T extends MotorRunTimeTable ? MotorRunTime :
   T extends StarterDefaultSettingsTable ? StarterDefaultSettings :
+  T extends StarterSettingsLimitsTable ? StarterSettingsLimits :
   T extends StarterSettingsTable ? StarterSettings :
   T extends StarterSettingsLimitsTable ? StarterSettingsLimits :
   never;

@@ -8,7 +8,7 @@ export async function getStarterDefaultSettings() {
   return await db.select().from(starterDefaultSettings).limit(1);
 }
 
-export async function starterAcknowledgedSettings(starterId: number) {
+export async function starterAcknowledgedSettings(starterId: number, filter?: any) {
   return db.query.starterSettings.findFirst({
     where: and(eq(starterSettings.starter_id, starterId), eq(starterSettings.acknowledgement, "TRUE"), eq(starterSettings.is_new_configuration_saved, 1)),
     orderBy: desc(starterSettings.created_at),
@@ -57,6 +57,37 @@ export async function updateLatestStarterSettings(starterId: number, isNewConfig
     );
 }
 
+export async function getAcknowledgedStarterSettings(starterId: number, columns?: Record<string, boolean>) {
+  return db.query.starterSettings.findFirst({
+    where: and(
+      eq(starterSettings.starter_id, starterId),
+      eq(starterSettings.acknowledgement, "TRUE"),
+      eq(starterSettings.is_new_configuration_saved, 1)
+    ),
+    orderBy: desc(starterSettings.created_at),
+    columns,
+    with: {
+      starter: {
+        columns: {
+          id: true,
+          name: true,
+          pcb_number: true,
+          mac_address: true,
+        },
+        with: {
+          motors: {
+            columns: {
+              id: true,
+              name: true,
+              hp: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 type DeviceCategory = keyof typeof DEVICE_SCHEMA;
 
 
@@ -91,3 +122,4 @@ export const prepareStarterSettingsData = (
     D: filteredD,
   };
 };
+

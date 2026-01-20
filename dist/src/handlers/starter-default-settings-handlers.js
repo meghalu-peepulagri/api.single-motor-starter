@@ -9,8 +9,8 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { buildCategoryPayloadFromFlat, randomSequenceNumber, removeEmptyObjectsDeep } from "../helpers/mqtt-helpers.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
+import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
+import { getAcknowledgedStarterSettings, getStarterDefaultSettings, prepareStarterSettingsData, starterAcknowledgedSettings } from "../services/db/settings-services.js";
 import { logger } from "../utils/logger.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -175,6 +175,49 @@ export class StarterDefaultSettingsHandlers {
         }
         catch (error) {
             console.error("Error at getStarterAckHistory:", error);
+            throw error;
+        }
+    };
+    getStarterSettingDetailsMobileHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("starter_id");
+            const query = c.req.query();
+            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starterData)
+                throw new BadRequestException(DEVICE_NOT_FOUND);
+            const defaultColumns = ["id", "starter_id", "lvf", "hvf", "time_stamp"];
+            let columnsToFetch = defaultColumns;
+            if (query.columns) {
+                const extraColumns = query.columns.split(",");
+                columnsToFetch = getTableColumnsWithDefaults(starterSettings, defaultColumns, extraColumns);
+            }
+            const columnsToFetchObj = columnsToFetch.reduce((obj, column) => { obj[column] = true; return obj; }, {});
+            const response = await getAcknowledgedStarterSettings(starterId, columnsToFetchObj);
+            return sendResponse(c, 200, SETTINGS_FETCHED, response);
+        }
+        catch (error) {
+            console.error("Error at get starter setting details in Mobile:", error);
+            throw error;
+        }
+    };
+    getStarterSettingsLimitsMobileHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("starter_id");
+            const query = c.req.query();
+            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starterData)
+                throw new BadRequestException(DEVICE_NOT_FOUND);
+            const defaultColumns = ["id", "starter_id", "lvf_min", "lvf_max", "hvf_min", "hvf_max", "created_at"];
+            let columnsToFetch = defaultColumns;
+            if (query.columns) {
+                const extraColumns = query.columns.split(",");
+                columnsToFetch = getTableColumnsWithDefaults(starterSettingsLimits, defaultColumns, extraColumns);
+            }
+            const response = await getSingleRecordByAColumnValue(starterSettingsLimits, "starter_id", "=", [starterId], columnsToFetch);
+            return sendResponse(c, 200, SETTINGS_LIMITS_FETCHED, response);
+        }
+        catch (error) {
+            console.error("Error at get starter setting details in Mobile:", error);
             throw error;
         }
     };
