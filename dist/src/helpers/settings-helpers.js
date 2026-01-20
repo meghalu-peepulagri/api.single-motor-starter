@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
-import { publishUpdatedStarterSettings, waitForAck } from "../services/db/mqtt-db-services.js";
+import { publishData, waitForAck } from "../services/db/mqtt-db-services.js";
 import { logger } from "../utils/logger.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 import { ACK_TYPES } from "./packet-types-helper.js";
@@ -125,11 +125,11 @@ export const publishMultipleTimesInBackground = async (devicePayload, starterDet
     const isAckValid = (payload) => validateSettingsAck(payload, devicePayload.S);
     const ackIdentifiers = [
         starterDetails.pcb_number,
-        starterDetails.mac_address, // <-- support MAC ACK also
+        starterDetails.mac_address,
     ].filter(Boolean);
     for (let i = 0; i < totalAttempts; i++) {
         try {
-            publishUpdatedStarterSettings(devicePayload, starterDetails);
+            publishData(devicePayload, starterDetails);
             const ackReceived = await waitForAck(ackIdentifiers, ackWaitTimes[i], isAckValid);
             if (ackReceived) {
                 return; // stop retries on ACK

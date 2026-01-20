@@ -11,40 +11,47 @@ import { users } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
-import { prepareHardWareVersion, prepareStmAtmelSettingsData } from "../../helpers/settings-helpers.js";
+import { prepareHardWareVersion, prepareStmAtmelSettingsData, publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
+import { logger } from "../../utils/logger.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
-import { publishHardwareData, publishStarterSettings } from "./mqtt-db-services.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload, externalTrx) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     const defaultSettings = await getStarterDefaultSettings();
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
+    let createdStarter = null;
+    let preparedSettingsData = null;
+    let preparedHardwareData = null;
     const action = async (trx) => {
         const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
         await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
-        const settings = starter.pcb_number && await saveSingleRecord(starterSettings, {
-            starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE",
-            ...defaultSettingsData
-        }, trx) || null;
-        const preparedSettingsData = prepareStmAtmelSettingsData(starter, settings);
-        const preparedHardWarePublishData = prepareHardWareVersion(starter);
-        if (!preparedSettingsData || !starter.pcb_number)
-            return null;
-        if (preparedHardWarePublishData)
-            publishHardwareData(preparedHardWarePublishData, starter);
-        preparedSettingsData && starter.pcb_number && await publishStarterSettings(preparedSettingsData, starter);
-        if (starter)
-            saveSingleRecord(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
+        const settings = await saveSingleRecord(starterSettings, { starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE", ...defaultSettingsData }, trx);
+        preparedSettingsData = prepareStmAtmelSettingsData(starter, settings);
+        preparedHardwareData = prepareHardWareVersion(starter);
+        await saveSingleRecord(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
+        createdStarter = starter;
         return starter;
     };
-    if (externalTrx) {
-        return await action(externalTrx);
+    const starter = externalTrx ? await action(externalTrx) : await db.transaction(action);
+    if (!starter)
+        return null;
+    if (preparedHardwareData) {
+        publishMultipleTimesInBackground(preparedHardwareData, starter);
     }
-    else {
-        return await db.transaction(action);
+    if (preparedSettingsData && starter.mac_address) {
+        setImmediate(async () => {
+            try {
+                await publishMultipleTimesInBackground(preparedSettingsData, starter);
+            }
+            catch (error) {
+                // TODO: Only logging for catch unnecessary improve
+                logger.error(`[STARTER ADD] Background settings publish crashed starterId=${starter.id}`, error);
+            }
+        });
     }
+    return starter;
 }
 export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload, externalTrx) {
     const assignedAt = new Date();

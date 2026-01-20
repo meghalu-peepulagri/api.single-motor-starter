@@ -225,28 +225,13 @@ export async function heartbeatHandler(message, topic) {
         throw error;
     }
 }
-export function publishStarterSettings(preparedData, starterDetails) {
-    if (!starterDetails)
-        return null;
-    const macOrPcb = starterDetails.device_status === 'READY' || starterDetails.device_status === 'TEST' ? starterDetails.mac_address : starterDetails.pcb_number;
-    const topic = `peepul/${macOrPcb}/cmd`;
-    const payload = JSON.stringify(preparedData);
-    mqttServiceInstance.publish(topic, payload);
-}
-export function publishUpdatedStarterSettings(preparedData, starterData) {
+export function publishData(preparedData, starterData) {
     if (!starterData)
         return null;
     const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
     const topic = `peepul/${macOrPcb}/cmd`;
     const payload = JSON.stringify(preparedData);
     mqttServiceInstance.publish(topic, payload);
-}
-export function publishHardwareData(preparedData, starterDetails) {
-    if (!preparedData || !starterDetails)
-        return null;
-    const macOrPcb = starterDetails.device_status === 'READY' || starterDetails.device_status === 'TEST' ? starterDetails.mac_address : starterDetails.pcb_number;
-    const topic = `peepul/${macOrPcb}/cmd`;
-    mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
 }
 export async function adminConfigDataRequestAckHandler(message, topic) {
     try {
