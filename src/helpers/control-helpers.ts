@@ -90,6 +90,7 @@ export function getFaultDescription(faultCode: number) {
       faults.push(description);
     }
   }
+
   return faults.length > 0 ? faults.join(", ") : "Unknown Fault";
 }
 

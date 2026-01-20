@@ -1,5 +1,5 @@
 import { desc, relations, sql } from "drizzle-orm";
-import { index, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 
 import { motors } from "./motors.js";
 import { starterBoxes } from "./starter-boxes.js";
@@ -11,10 +11,10 @@ export const alertsFaults = pgTable("alerts_faults", {
   starter_id: integer("starter_id").references(() => starterBoxes.id),
   motor_id: integer("motor_id").references(() => motors.id),
   alert_code: integer("alert_code"),
-  alert_description: text("alert_description"),
+  alert_description: varchar("alert_description"),
 
   fault_code: integer("fault_code"),
-  fault_description: text("fault_description"),
+  fault_description: varchar("fault_description"),
 
   timestamp: timestamp("timestamp"),
   user_id: integer("user_id").references(() => users.id),
