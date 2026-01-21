@@ -200,16 +200,22 @@ export async function motorControlAckHandler(message, topic) {
         const location_id = motor.location_id;
         const mode_description = motor.mode;
         const prevState = motor.state;
-        const stateChanged = message.D !== prevState;
-        const state = message.D;
+        const newState = message.D;
+        const stateChanged = newState !== prevState;
         await db.transaction(async (trx) => {
-            if (stateChanged) {
-                if (state === 0 || state === 1) {
-                    await trx.update(motors).set({ state, updated_at: new Date() }).where(eq(motors.id, motor.id));
-                    await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: state, mode_description }, trx);
-                }
+            // Update motor state ONLY if changed
+            if (stateChanged && (newState === 0 || newState === 1)) {
+                await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor.id));
+                await trackMotorRunTime({
+                    starter_id, motor_id,
+                    location_id,
+                    previous_state: prevState,
+                    new_state: newState,
+                    mode_description,
+                }, trx);
             }
-            await ActivityService.writeMotorAckLogs(motor.created_by || 0, motor.id, { state: prevState, mode: mode_description }, { state: state, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+            // Always log ACK (changed or not)
+            await ActivityService.writeMotorAckLogs(motor.created_by || 0, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
         });
     }
     catch (error) {

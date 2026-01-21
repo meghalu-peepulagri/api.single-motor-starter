@@ -43,24 +43,19 @@ export function activityFilters(query: any, user: any) {
   }
 
   if (query.action === "ON" || query.action === "OFF") {
+    // Filter by message containing ON or OFF
     whereQueryData.columns.push("message");
     whereQueryData.relations.push("contains");
     whereQueryData.values.push(query.action);
 
     whereQueryData.columns.push("action");
-    whereQueryData.relations.push("=");
-    whereQueryData.values.push("MOTOR_STATE_SYNC");
+    whereQueryData.relations.push("IN");
+    whereQueryData.values.push(["MOTOR_STATE_SYNC", "MOTOR_CONTROL_ACK"]);
   } else if (query.action) {
     whereQueryData.columns.push("action");
     whereQueryData.relations.push("contains");
     whereQueryData.values.push(query.action);
   }
-
-  // if (user.user_type !== "ADMIN") {
-  //   whereQueryData.columns.push("performed_by");
-  //   whereQueryData.relations.push("=");
-  //   whereQueryData.values.push(user.id);
-  // }
 
   return whereQueryData;
 }
