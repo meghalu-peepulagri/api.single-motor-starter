@@ -157,7 +157,6 @@ export class StarterHandlers {
             const activityLogs = [];
             await db.transaction(async (trx) => {
                 if (userPayload.user_type === "USER") {
-                    console.log("user log in");
                     await updateRecordById(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
                     await saveSingleRecord(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
                 }
