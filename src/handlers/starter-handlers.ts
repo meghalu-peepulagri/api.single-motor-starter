@@ -25,6 +25,7 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { message } from "valibot";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {
@@ -171,21 +172,25 @@ export class StarterHandlers {
       let message = "";
 
       const activityLogs: NewUserActivityLog[] = [];
-      if (activityLogs.length > 0) {
-        await db.transaction(async (trx) => {
-          if (userPayload.user_type === "USER") {
-            await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
-            await saveSingleRecord<MotorsTable>(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
-          }
-          if (userPayload.user_type === "ADMIN") {
-            await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
-          }
-          if (motor) {
-            await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
-          }
+      await db.transaction(async (trx) => {
+        if (userPayload.user_type === "USER") {
+          console.log("user log in");
+
+          await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
+          await saveSingleRecord<MotorsTable>(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
+        }
+        if (userPayload.user_type === "ADMIN") {
+          await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
+        }
+        if (motor) {
+          await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
+        }
+
+        if (activityLogs.length > 0) {
           await ActivityService.writeBatchDeletionLogs(activityLogs, trx);
-        });
-      }
+        }
+      });
+
       if (userPayload.user_type === "USER") {
         message = STARTER_REMOVED_SUCCESS;
       } else {
