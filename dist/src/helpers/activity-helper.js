@@ -48,11 +48,6 @@ export function activityFilters(query, user) {
         whereQueryData.relations.push("contains");
         whereQueryData.values.push(query.action);
     }
-    // if (user.user_type !== "ADMIN") {
-    //   whereQueryData.columns.push("performed_by");
-    //   whereQueryData.relations.push("=");
-    //   whereQueryData.values.push(user.id);
-    // }
     return whereQueryData;
 }
 /**

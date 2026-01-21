@@ -47,6 +47,10 @@ export const starterDefaultSettings = pgTable("starter_default_settings", {
   lrf: real("lrf").default(1),                  // Locked Rotor Recovery for Motor
   opf: real("opf").default(0.5),                // Motor output phase failure
   cif: real("cif").default(0.5),                // Current Imbalance Recovery for Motor
+  drf: real("drf").default(5),                  // Dry Run Recovery for Motor
+  lrr: real("lrr").default(10),                 // Inrush Current Recovery for Motor
+  olr: real("olr").default(10),                 // Over Load Recovery Time for Motor
+  cir : real("cir").default(10),                // Current Imbalance Recovery Time for Motor
 
   // ================= Calibrations =================
 

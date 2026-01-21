@@ -22,6 +22,27 @@
       "when": 1768966552817,
       "tag": "0002_narrow_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1768994126766,
+      "tag": "0003_nifty_agent_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1768994599730,
+      "tag": "0004_serious_lila_cheney",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1768995685072,
+      "tag": "0005_typical_firelord",
+      "breakpoints": true
     }
   ]
 }

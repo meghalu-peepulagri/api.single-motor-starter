@@ -1,3 +1,4 @@
+import { realOnly } from "../helpers/settings-helpers.js";
 export const DEF_422 = "Validation Failed";
 export const DEF_404 = "Data Not Found";
 export const DEF_409 = "Data Conflict Encountered";
@@ -315,6 +316,10 @@ export const SETTINGS_FIELD_NAMES = {
     lrf: "Locked rotor recovery factor",
     opf: "Output phase failure recovery",
     cif: "Current imbalance recovery factor",
+    drf: "Dry Run Recovery for Motor",
+    lrr: "Inrush Current Recovery for Motor",
+    olr: "Over Load Recovery Time for Motor",
+    cir: "Current Imbalance Recovery Time for Motor",
     /* ================= ATMEL Calibrations ================= */
     ug_r: "Voltage gain R calibration",
     ug_y: "Voltage gain Y calibration",
