@@ -52,6 +52,7 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
     last_off_code: cleanScalar(data.l_of) || 0,
     last_off_description: lastOff(data.l_of) || "Unknown",
     group_id: validatedData.group || null,
+    temp: cleanScalar(data.temp) || 0,
 
     // Timestamp
     time_stamp: parseTimestamp(validatedData.ct),

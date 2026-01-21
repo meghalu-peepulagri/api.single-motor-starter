@@ -40,6 +40,10 @@ export const vUpdateDefaultSettings = v.object({
     lrf: realOnly("lrf"),
     opf: realOnly("opf"),
     cif: realOnly("cif"),
+    drf: realOnly("drf"), // Dry Run Recovery for Motor
+    lrr: realOnly("lrr"), // Inrush Current Recovery for Motor
+    olr: realOnly("olr"), // Over Load Recovery Time for Motor
+    cir: realOnly("cir"),
     /* ================= ATMEL Calibrations ================= */
     ug_r: integerOnly("ug_r"),
     ug_y: integerOnly("ug_y"),

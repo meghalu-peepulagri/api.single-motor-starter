@@ -37,7 +37,7 @@ export function findTopicACKByType(payload) {
         case 33: return "SCHEDULING_ACK";
         case 34: return "CALIBRATION_ACK";
         case 35: return "LIVE_DATA_REQUEST_ACK";
-        case 36: return "CONFIG_DATA_REQUEST_ACK";
+        case 36: return "USER_CONFIG_DATA_REQUEST_ACK";
         case 37: return "SCHEDULING_DATA_REQUEST_ACK";
         case 38: return "POWER_INFO_REQUEST_ACK";
         case 39: return "DEVICE_INFO_ACK";

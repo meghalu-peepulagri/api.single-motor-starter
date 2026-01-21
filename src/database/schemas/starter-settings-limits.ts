@@ -7,8 +7,6 @@ export const starterSettingsLimits = pgTable("starter_settings_limits", {
   starter_id: integer("starter_id").references(() => starterBoxes.id).notNull(),
 
   // ================= Device Configurations – Settings =================
-  allflt_en_min: integer("allflt_en_min").default(0),
-  allflt_en_max: integer("allflt_en_max").default(1),
 
   pr_flt_en_min: integer("pr_flt_en_min").default(0),
   pr_flt_en_max: integer("pr_flt_en_max").default(65355),
@@ -45,20 +43,16 @@ export const starterSettingsLimits = pgTable("starter_settings_limits", {
   pamaxf_min: real("pamaxf_min").default(125),
   pamaxf_max: real("pamaxf_max").default(130),
 
-  f_dr: real("f_dr").default(10),
   f_dr_min: real("f_dr_min").default(10),
   f_dr_max: real("f_dr_max").default(50),
 
-  f_ol: real("f_ol").default(120),
   f_ol_min: real("f_ol_min").default(120),
   f_ol_max: real("f_ol_max").default(150),
 
-  f_lr: real("f_lr").default(350),
   f_lr_min: real("f_lr_min").default(350),
   f_lr_max: real("f_lr_max").default(450),
 
   f_opf: real("f_opf").default(0.5),
-  f_ci: real("f_ci").default(15),
   f_ci_min: real("f_ci_min").default(15),
   f_ci_max: real("f_ci_max").default(35),
 
@@ -106,18 +100,32 @@ export const starterSettingsLimits = pgTable("starter_settings_limits", {
   lrf_min: real("lrf_min").default(1),
   lrf_max: real("lrf_max").default(9),
 
-  opf: real("opf").default(0.5),
+  opf_min: real("opf_min").default(0.5),
+  opf_max: real("opf_max").default(1.0),
   cif_min: real("cif_min").default(0.5),
   cif_max: real("cif_max").default(1.0),
+  drf_min: real("drf_min").default(5),
+  drf_max: real("drf_max").default(20),
+  lrr_min: real("irr_min").default(10),
+  lrr_max: real("irr_max").default(50),
+  olr_min: real("olr_min").default(10),
+  olr_max: real("olr_max").default(50),
+  cir_min: real("cir_min").default(10),
+  cir_max: real("cir_max").default(50),
 
   // ================= ATMEL Calibrations =================
-  ug_r: integer("ug_r").default(50567),
-  ug_y: integer("ug_y").default(49867),
-  ug_b: integer("ug_b").default(51078),
-  ip_r: integer("ip_r").default(8974),
-  ip_y: integer("ip_y").default(8974),
-  ip_b: integer("ip_b").default(8974),
-
+  ug_r_min: real("ug_r_min").default(1),
+  ug_r_max: real("ug_r_max").default(65536),
+  ug_y_min: real("ug_y_min").default(1),
+  ug_y_max: real("ug_y_max").default(65536),
+  ug_b_min: real("ug_b_min").default(1),
+  ug_b_max: real("ug_b_max").default(65536),
+  ip_r_min: real("ip_r_min").default(1),
+  ip_r_max: real("ip_r_max").default(65536),
+  ip_y_min: real("ip_y_min").default(1),
+  ip_y_max: real("ip_y_max").default(65536),
+  ip_b_min: real("ip_b_min").default(1),
+  ip_b_max: real("ip_b_max").default(65536),
   // ================= ADC Calibrations =================
   vg_r: real("vg_r").default(0),
   vg_y: real("vg_y").default(0),

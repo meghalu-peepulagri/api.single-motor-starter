@@ -9,7 +9,7 @@ export const starterDefaultSettings = pgTable("starter_default_settings", {
   flc: real("flc").default(1.65),               // Motor Full Load Current
   as_dly: integer("as_dly").default(5),             // Auto Start Seed Time for Motor
   pr_flt_en: integer("pr_flt_en").default(0),
-  tpf: real("tpf").default(0),                   // Time per fault
+  tpf: real("tpf").default(0),                   // Temperature Protection Factor
 
   // Enables (2 fields)
   v_en: integer("v_en").default(0),                 // Voltage faults enable
@@ -47,6 +47,10 @@ export const starterDefaultSettings = pgTable("starter_default_settings", {
   lrf: real("lrf").default(1),                  // Locked Rotor Recovery for Motor
   opf: real("opf").default(0.5),                // Motor output phase failure
   cif: real("cif").default(0.5),                // Current Imbalance Recovery for Motor
+  drf: real("drf").default(5),                  // Dry Run Recovery for Motor
+  lrr: real("lrr").default(10),                 // Inrush Current Recovery for Motor
+  olr: real("olr").default(10),                 // Over Load Recovery Time for Motor
+  cir : real("cir").default(10),                // Current Imbalance Recovery Time for Motor
 
   // ================= Calibrations =================
 

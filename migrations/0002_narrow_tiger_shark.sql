@@ -1,0 +1,1 @@
+ALTER TABLE "starter_boxes" ADD COLUMN "temperature" real DEFAULT 0;

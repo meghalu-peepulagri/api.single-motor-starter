@@ -56,22 +56,42 @@ export async function selectTopicAck(topicType, payload, topic) {
         case "ADMIN_CONFIG_DATA_REQUEST_ACK":
             await adminConfigDataRequestAckHandler(payload, topic);
             break;
+        case "CALIBRATION_ACK":
+            await adminConfigDataRequestAckHandler(payload, topic);
+            break;
+        case "USER_CONFIG_DATA_REQUEST_ACK":
+            await adminConfigDataRequestAckHandler(payload, topic);
+            break;
         default:
             return null;
     }
 }
 const VALID_MODES = ["AUTO", "MANUAL"];
 export async function updateStates(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp } = insertedData;
     const { power, prevState, prevMode, locationId, created_by } = extractPreviousData(previousData, motor_id);
     if (!starter_id)
         return null;
     try {
         await db.transaction(async (trx) => {
             await saveSingleRecord(starterBoxParameters, insertedData, trx);
-            if (power_present !== power && power_present !== null && power_present === 1 || power_present === 0) {
-                await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-                await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
+            const starterBoxUpdates = {};
+            let trackPowerChange = false;
+            if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {
+                starterBoxUpdates.power = power_present;
+                trackPowerChange = true;
+            }
+            if (temp !== null && temp !== undefined) {
+                starterBoxUpdates.temperature = temp;
+            }
+            if (Object.keys(starterBoxUpdates).length > 0) {
+                await updateRecordByIdWithTrx(starterBoxes, starter_id, starterBoxUpdates, trx);
+                if (trackPowerChange) {
+                    await trackDeviceRunTime({
+                        starter_id, motor_id, location_id: locationId, previous_power_state: power,
+                        new_power_state: power_present, motor_state, mode_description, time_stamp
+                    }, trx);
+                }
             }
             if (motor_id) {
                 const updateData = {};
@@ -109,15 +129,29 @@ export async function updateStates(insertedData, previousData) {
     }
 }
 export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp, temp } = insertedData;
     const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
-        if (power_present !== power && power_present === 1 || power_present === 0) {
-            await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-            await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
+        const starterBoxUpdates = {};
+        let trackPowerChange = false;
+        if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {
+            starterBoxUpdates.power = power_present;
+            trackPowerChange = true;
+        }
+        if (temp !== null && temp !== undefined) {
+            starterBoxUpdates.temperature = temp;
+        }
+        if (Object.keys(starterBoxUpdates).length > 0) {
+            await updateRecordByIdWithTrx(starterBoxes, starter_id, starterBoxUpdates, trx);
+            if (trackPowerChange) {
+                await trackDeviceRunTime({
+                    starter_id, motor_id, location_id: locationId, previous_power_state: power,
+                    new_power_state: power_present, motor_state, mode_description, time_stamp
+                }, trx);
+            }
         }
         if (motor_id) {
             const updateData = {};
@@ -141,15 +175,29 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
     });
 }
 export async function updateDevicePowerONAndMotorStateOFF(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp, temp } = insertedData;
     const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
-        if (power_present !== power && power_present === 1 || power_present === 0) {
-            await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
-            await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
+        const starterBoxUpdates = {};
+        let trackPowerChange = false;
+        if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {
+            starterBoxUpdates.power = power_present;
+            trackPowerChange = true;
+        }
+        if (temp !== null && temp !== undefined) {
+            starterBoxUpdates.temperature = temp;
+        }
+        if (Object.keys(starterBoxUpdates).length > 0) {
+            await updateRecordByIdWithTrx(starterBoxes, starter_id, starterBoxUpdates, trx);
+            if (trackPowerChange) {
+                await trackDeviceRunTime({
+                    starter_id, motor_id, location_id: locationId, previous_power_state: power,
+                    new_power_state: power_present, motor_state, mode_description, time_stamp
+                }, trx);
+            }
         }
         if (motor_state !== prevState) {
             if (motor_state === 0 || motor_state === 1) {

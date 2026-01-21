@@ -56,7 +56,6 @@ export function activityFilters(query: any, user: any) {
     whereQueryData.relations.push("contains");
     whereQueryData.values.push(query.action);
   }
-
   return whereQueryData;
 }
 
