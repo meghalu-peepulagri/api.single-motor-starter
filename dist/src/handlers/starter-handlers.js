@@ -23,6 +23,7 @@ import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { message } from "valibot";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBoxHandler = async (c) => {
@@ -154,21 +155,22 @@ export class StarterHandlers {
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             let message = "";
             const activityLogs = [];
-            if (activityLogs.length > 0) {
-                await db.transaction(async (trx) => {
-                    if (userPayload.user_type === "USER") {
-                        await updateRecordById(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED" }, trx);
-                        await saveSingleRecord(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
-                    }
-                    if (userPayload.user_type === "ADMIN") {
-                        await updateRecordById(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
-                    }
-                    if (motor) {
-                        await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
-                    }
+            await db.transaction(async (trx) => {
+                if (userPayload.user_type === "USER") {
+                    console.log("user log in");
+                    await updateRecordById(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
+                    await saveSingleRecord(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
+                }
+                if (userPayload.user_type === "ADMIN") {
+                    await updateRecordById(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
+                }
+                if (motor) {
+                    await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
+                }
+                if (activityLogs.length > 0) {
                     await ActivityService.writeBatchDeletionLogs(activityLogs, trx);
-                });
-            }
+                }
+            });
             if (userPayload.user_type === "USER") {
                 message = STARTER_REMOVED_SUCCESS;
             }
