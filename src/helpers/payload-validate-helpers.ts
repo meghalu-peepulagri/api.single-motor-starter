@@ -40,15 +40,15 @@ function normalizeGroupData(groupData: any) {
 
 const CONFIG = {
   G01: {
-    required: ["p_v", "pwr", "mode", "llv", "m_s", "amp", "flt", "alt", "r_s", "l_on", "l_of"] as const,
+    required: ["p_v", "pwr", "mode", "llv", "m_s", "amp", "flt", "alt", "r_s", "l_on", "l_of", "temp"] as const,
     array3: ["llv", "amp"] as const,
   },
   G02: {
-    required: ["pwr", "mode", "llv", "m_s", "amp"] as const,
+    required: ["pwr", "mode", "llv", "m_s", "amp", "temp"] as const,
     array3: ["llv", "amp"] as const,
   },
   G03: {
-    required: ["pwr", "llv", "m_s"] as const,
+    required: ["pwr", "llv", "m_s", "temp"] as const,
     array3: ["llv"] as const,
   },
   G04: {

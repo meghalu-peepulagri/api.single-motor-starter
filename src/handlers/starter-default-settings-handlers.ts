@@ -128,7 +128,7 @@ export class StarterDefaultSettingsHandlers {
         return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
       }
 
-      const devicePayload = prepareStarterSettingsData({ T: 13, S: randomSequenceNumber(), D: delta });
+      const devicePayload = prepareStarterSettingsData({ T: 4, S: randomSequenceNumber(), D: delta });
 
       // if (devicePayload?.D) {
       //   setImmediate(async () => {

@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { index, integer, pgEnum, pgTable, real, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum } from "../../constants/enum-types.js";
 import { gateways } from "./gateways.js";
 import { locations } from "./locations.js";
@@ -26,6 +26,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     network_type: varchar("network_type").notNull().default("NUll"),
     starter_type: starterType().notNull().default("SINGLE_STARTER"),
     hardware_version: varchar("hardware_version"),
+    temperature: real("temperature").default(0),
     created_at: timestamp("created_at").notNull().defaultNow(),
     assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),

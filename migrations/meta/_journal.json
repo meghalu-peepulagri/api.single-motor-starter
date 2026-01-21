@@ -15,6 +15,13 @@
       "when": 1768928073334,
       "tag": "0001_rare_apocalypse",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768966552817,
+      "tag": "0002_narrow_tiger_shark",
+      "breakpoints": true
     }
   ]
 }
