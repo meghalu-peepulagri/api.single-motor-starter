@@ -25,7 +25,6 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { message } from "valibot";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {

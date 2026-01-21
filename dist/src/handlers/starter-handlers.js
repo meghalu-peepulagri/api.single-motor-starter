@@ -23,7 +23,6 @@ import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { message } from "valibot";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBoxHandler = async (c) => {
