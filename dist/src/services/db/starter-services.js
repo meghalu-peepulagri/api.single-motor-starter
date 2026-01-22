@@ -247,8 +247,8 @@ export async function getStarterAnalytics(starterId, fromDate, toDate, parameter
 export async function getStarterRunTime(starterId, fromDate, toDate, motorId, powerState) {
     const filters = [
         eq(deviceRunTime.starter_box_id, starterId),
-        gte(deviceRunTime.start_time, new Date(fromDate)),
-        lte(deviceRunTime.end_time, new Date(toDate)),
+        gte(deviceRunTime.time_stamp, fromDate),
+        lte(deviceRunTime.time_stamp, toDate),
     ];
     if (motorId) {
         filters.push(eq(deviceRunTime.motor_id, motorId));

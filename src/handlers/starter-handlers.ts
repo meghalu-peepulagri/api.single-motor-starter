@@ -25,7 +25,6 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { message } from "valibot";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {
@@ -214,7 +213,9 @@ export class StarterHandlers {
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [validatedStarterReq.motor_id, "ARCHIVED"]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
 
-      const foundMotorName = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [motor.alias_name, validatedStarterReq.location_id, "ARCHIVED"]);
+      const loweCaseLication = motor.alias_name?.trim().toLocaleLowerCase();
+
+      const foundMotorName = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [loweCaseLication, validatedStarterReq.location_id, "ARCHIVED"]);
       if (foundMotorName) throw new ConflictException("Pump name already exists in this location.");
 
       await db.transaction(async (trx) => {

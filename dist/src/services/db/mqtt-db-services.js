@@ -106,6 +106,11 @@ export async function updateStates(insertedData, previousData) {
                 }
                 if (shouldUpdateMotor) {
                     await updateRecordByIdWithTrx(motors, motor_id, updateData, trx);
+                }
+                const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
+                const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
+                const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
+                if (shouldTrackMotorRuntime) {
                     await trackMotorRunTime({
                         starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: updateData.state ?? prevState,
                         mode_description, time_stamp, previous_power_state: power, new_power_state: power_present
@@ -169,7 +174,10 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
             }
             await ActivityService.writeMotorSyncLogs(0, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx);
         }
-        if ((motor_state !== prevState || power_present !== power) && (motor_state === 0 || motor_state === 1)) {
+        const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
+        const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
+        const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
+        if (shouldTrackMotorRuntime) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
         }
     });
@@ -205,7 +213,10 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
             }
         }
         await ActivityService.writeMotorSyncLogs(0, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: prevMode }, trx);
-        if ((motor_state !== prevState || power_present !== power) && (motor_state === 0 || motor_state === 1)) {
+        const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
+        const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
+        const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
+        if (shouldTrackMotorRuntime) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
         }
     });
@@ -224,7 +235,10 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
             await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description }, trx);
         }
         await ActivityService.writeMotorSyncLogs(0, motor_id, { mode: prevMode }, { mode: mode_description }, trx);
-        if ((motor_state !== prevState || power_present !== power) && (motor_state === 0 || motor_state === 1)) {
+        const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
+        const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
+        const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
+        if (shouldTrackMotorRuntime) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
         }
     });
