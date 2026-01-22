@@ -10,6 +10,7 @@ import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
 import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
+import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "signup": vSignUp,
@@ -47,7 +48,7 @@ export async function validatedRequest<R extends ValidatedRequest>(
   });
 
   if (!validation.success) {
-    throw new BadRequestException(
+    throw new UnprocessableEntityException(
       errorMessage,
       validationErrors(validation.issues),
     );
