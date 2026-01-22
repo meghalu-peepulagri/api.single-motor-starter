@@ -1,4 +1,4 @@
-import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 
 import { safeParseAsync, type BaseSchema } from "valibot";
 import type { AppActivity, ValidatedRequest } from "../types/app-types.js";
@@ -47,7 +47,7 @@ export async function validatedRequest<R extends ValidatedRequest>(
   });
 
   if (!validation.success) {
-    throw new UnprocessableEntityException(
+    throw new BadRequestException(
       errorMessage,
       validationErrors(validation.issues),
     );

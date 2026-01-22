@@ -1,4 +1,4 @@
-import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 import { safeParseAsync } from "valibot";
 import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
@@ -36,7 +36,7 @@ export async function validatedRequest(actionType, reqData, errorMessage) {
         abortPipeEarly: true,
     });
     if (!validation.success) {
-        throw new UnprocessableEntityException(errorMessage, validationErrors(validation.issues));
+        throw new BadRequestException(errorMessage, validationErrors(validation.issues));
     }
     return validation.output;
 }

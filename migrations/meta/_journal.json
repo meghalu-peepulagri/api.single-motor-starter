@@ -43,6 +43,13 @@
       "when": 1768995685072,
       "tag": "0005_typical_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1769053796652,
+      "tag": "0006_ancient_fat_cobra",
+      "breakpoints": true
     }
   ]
 }

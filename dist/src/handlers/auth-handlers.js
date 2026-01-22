@@ -1,6 +1,6 @@
 import argon2 from "argon2";
 import moment from "moment";
-import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, MOBILE_NUMBER_ALREADY_EXIST, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
 import db from "../database/configuration.js";
 import { deviceTokens } from "../database/schemas/device-tokens.js";
@@ -11,6 +11,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 import { prepareOTPData } from "../helpers/otp-helper.js";
+import { checkInternalPhoneUniqueness } from "../helpers/user-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
 import { OtpService } from "../services/db/otp-services.js";
@@ -19,16 +20,24 @@ import { genJWTTokensForUser } from "../utils/jwt-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import ConflictException from "../exceptions/conflict-exception.js";
+import { checkPhoneUniqueness } from "../services/db/user-services.js";
 const paramsValidateException = new ParamsValidateException();
 const otpService = new OtpService();
 const smsService = new SmsService();
 export class AuthHandlers {
+    // TODO : Reduce the code length
     userRegisterHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
+            const allPhones = checkInternalPhoneUniqueness(validUserReq);
+            const isPhoneUnique = await checkPhoneUniqueness(allPhones);
+            if (!isPhoneUnique) {
+                throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
+            }
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
             const isAdmin = userPayload?.user_type === "ADMIN";
             const user_verified = isAdmin ? true : false;

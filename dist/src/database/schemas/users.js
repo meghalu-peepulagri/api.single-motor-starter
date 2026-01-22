@@ -8,6 +8,11 @@ export const users = pgTable("users", {
     full_name: varchar("full_name").notNull(),
     email: varchar("email"),
     phone: varchar("phone").notNull(),
+    alternate_phone_1: varchar("alternate_phone_1"),
+    alternate_phone_2: varchar("alternate_phone_2"),
+    alternate_phone_3: varchar("alternate_phone_3"),
+    alternate_phone_4: varchar("alternate_phone_4"),
+    alternate_phone_5: varchar("alternate_phone_5"),
     user_type: userTypeEnum().default("USER"),
     password: varchar("password"),
     address: varchar("address"),
@@ -24,6 +29,11 @@ export const users = pgTable("users", {
     index("user_status_idx").on(table.status),
     uniqueIndex("unique_mail_idx").on(table.email).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("unique_phone_idx").on(table.phone).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("unique_alt_phone_1_idx").on(table.alternate_phone_1).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("unique_alt_phone_2_idx").on(table.alternate_phone_2).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("unique_alt_phone_3_idx").on(table.alternate_phone_3).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("unique_alt_phone_4_idx").on(table.alternate_phone_4).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("unique_alt_phone_5_idx").on(table.alternate_phone_5).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("valid_user").on(table.email, table.phone).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
 import { locations } from "./locations.js";

@@ -19,14 +19,14 @@ export function getValidationErrors(issues = []) {
 }
 export function validationErrors(issues = []) {
     return issues.reduce((acc, issue) => {
-        if (!issue.path)
-            return acc;
         const fullPath = issue.path
-            .map((p) => (p.key !== undefined ? p.key : 'index' in p ? p.index : ''))
-            .join('.');
-        if (!fullPath)
-            return acc;
-        acc[fullPath] = issue.message;
+            ? issue.path
+                .map((p) => (p.key !== undefined ? p.key : 'index' in p ? p.index : ''))
+                .filter(Boolean)
+                .join('.')
+            : '';
+        const key = fullPath || 'phone';
+        acc[key] = issue.message;
         return acc;
     }, {});
 }
