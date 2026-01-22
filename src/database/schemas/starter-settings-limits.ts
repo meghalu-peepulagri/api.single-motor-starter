@@ -102,43 +102,76 @@ export const starterSettingsLimits = pgTable("starter_settings_limits", {
 
   opf_min: real("opf_min").default(0.5),
   opf_max: real("opf_max").default(1.0),
+
   cif_min: real("cif_min").default(0.5),
   cif_max: real("cif_max").default(1.0),
+
   drf_min: real("drf_min").default(5),
   drf_max: real("drf_max").default(20),
+
   lrr_min: real("irr_min").default(10),
   lrr_max: real("irr_max").default(50),
+
   olr_min: real("olr_min").default(10),
   olr_max: real("olr_max").default(50),
+
   cir_min: real("cir_min").default(10),
   cir_max: real("cir_max").default(50),
 
   // ================= ATMEL Calibrations =================
   ug_r_min: real("ug_r_min").default(1),
   ug_r_max: real("ug_r_max").default(65536),
+
   ug_y_min: real("ug_y_min").default(1),
   ug_y_max: real("ug_y_max").default(65536),
+
   ug_b_min: real("ug_b_min").default(1),
   ug_b_max: real("ug_b_max").default(65536),
+
   ip_r_min: real("ip_r_min").default(1),
   ip_r_max: real("ip_r_max").default(65536),
+
   ip_y_min: real("ip_y_min").default(1),
   ip_y_max: real("ip_y_max").default(65536),
+
   ip_b_min: real("ip_b_min").default(1),
   ip_b_max: real("ip_b_max").default(65536),
   // ================= ADC Calibrations =================
-  vg_r: real("vg_r").default(0),
-  vg_y: real("vg_y").default(0),
-  vg_b: real("vg_b").default(0),
-  vo_r: real("vo_r").default(0),
-  vo_y: real("vo_y").default(0),
-  vo_b: real("vo_b").default(0),
-  ig_r: real("ig_r").default(0),
-  ig_y: real("ig_y").default(0),
-  ig_b: real("ig_b").default(0),
-  io_r: real("io_r").default(0),
-  io_y: real("io_y").default(0),
-  io_b: real("io_b").default(0),
+  vg_r_min: real("vg_r_min").default(0),
+  vg_r_max: real("vg_r_max").default(0),
+
+  vg_y_min: real("vg_y_min").default(0),
+  vg_y_max: real("vg_y_max").default(0),
+
+  vg_b_min: real("vg_b_min").default(0),
+  vg_b_max: real("vg_b_max").default(0),
+
+  vo_r_min: real("vo_r_min").default(0),
+  vo_r_max: real("vo_r_max").default(0),
+
+  vo_y_min: real("vo_y_min").default(0),
+  vo_y_max: real("vo_y_max").default(0),
+
+  vo_b_min: real("vo_b_min").default(0),
+  vo_b_max: real("vo_b_max").default(0),
+
+  ig_r_min: real("ig_r_min").default(1),
+  ig_r_max: real("ig_r_max").default(65536),
+
+  ig_y_min: real("ig_y_min").default(1),
+  ig_y_max: real("ig_y_max").default(65536),
+
+  ig_b_min: real("ig_b_min").default(1),
+  ig_b_max: real("ig_b_max").default(65536),
+
+  io_r_min: real("io_r_min").default(0),
+  io_r_max: real("io_r_max").default(0),
+
+  io_y_min: real("io_y_min").default(0),
+  io_y_max: real("io_y_max").default(0),
+
+  io_b_min: real("io_b_min").default(0),
+  io_b_max: real("io_b_max").default(0),
 
   // ================= PT100/PT1000 Calibrations =================
   r1: integer("r1").default(0),
