@@ -1,4 +1,4 @@
-import { and } from "drizzle-orm";
+import { and, inArray, ne, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { users } from "../../database/schemas/users.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
@@ -14,7 +14,7 @@ export async function paginatedUsersList(whereQueryData, orderByQueryData, pageP
         limit: pageParams.pageSize,
         offset: pageParams.offset,
         columns: {
-            id: true, full_name: true, email: true, phone: true, status: true, created_at: true, updated_at: true,
+            id: true, full_name: true, email: true, phone: true, alternate_phone_1: true, alternate_phone_2: true, alternate_phone_3: true, alternate_phone_4: true, alternate_phone_5: true, status: true, created_at: true, updated_at: true,
         },
     });
     const totalRecords = await getRecordsCount(users, whereConditions || []);
@@ -23,4 +23,15 @@ export async function paginatedUsersList(whereQueryData, orderByQueryData, pageP
         pagination_info: pagination,
         records: usersList,
     };
+}
+export async function checkPhoneUniqueness(phones, excludeUserId) {
+    if (phones.length === 0)
+        return true;
+    const phoneConditions = or(inArray(users.phone, phones), inArray(users.alternate_phone_1, phones), inArray(users.alternate_phone_2, phones), inArray(users.alternate_phone_3, phones), inArray(users.alternate_phone_4, phones), inArray(users.alternate_phone_5, phones));
+    let finalCondition = and(ne(users.status, "ARCHIVED"), phoneConditions);
+    if (excludeUserId) {
+        finalCondition = and(finalCondition, ne(users.id, excludeUserId));
+    }
+    const existingUsers = await db.select({ id: users.id }).from(users).where(finalCondition).limit(1);
+    return existingUsers.length === 0;
 }

@@ -28,15 +28,15 @@ export function getValidationErrors(issues: BaseIssue<unknown>[] = []) {
 
 export function validationErrors(issues: BaseIssue<unknown>[] = []) {
   return issues.reduce((acc, issue) => {
-    if (!issue.path) return acc;
-
     const fullPath = issue.path
-      .map((p) => (p.key !== undefined ? p.key : 'index' in p ? p.index : ''))
-      .join('.');
+      ? issue.path
+        .map((p) => (p.key !== undefined ? p.key : 'index' in p ? p.index : ''))
+        .filter(Boolean)
+        .join('.')
+      : '';
 
-    if (!fullPath) return acc;
-
-    acc[fullPath] = issue.message;
+    const key = fullPath || 'phone';
+    acc[key] = issue.message;
     return acc;
   }, {} as Record<string, string>);
 }

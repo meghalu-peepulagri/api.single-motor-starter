@@ -26,6 +26,11 @@ export const SERVICE_UP = "Service is up and running";
 export const UNIQUE_INDEX_MESSAGES = {
     "unique_mail_idx": "Email already exist.",
     "unique_phone_idx": "Mobile Number already exist.",
+    "unique_alt_phone_1_idx": "Mobile Number already exist.",
+    "unique_alt_phone_2_idx": "Mobile Number already exist.",
+    "unique_alt_phone_3_idx": "Mobile Number already exist.",
+    "unique_alt_phone_4_idx": "Mobile Number already exist.",
+    "unique_alt_phone_5_idx": "Mobile Number already exist.",
     "unique_location_per_user": "Location name already exist.",
     "unique_field_per_user_location": "Field name already exist.",
     "validate_mac_address": "MAC address already exist.",
@@ -100,7 +105,9 @@ export const USER_NOT_EXIST_WITH_PHONE = "User not registered with this number";
 export const USER_LOGIN = "Login successfully";
 export const USER_LOGOUT = "Logout successfully";
 export const REFEREED_BY_REQUIRED = "Refereed by is invalid";
-// Token
+export const MOBILE_NUMBER_ALREADY_EXIST = "Mobile number already exist";
+export const MOBILE_NUMBER_UNIQUE = "Mobile numbers cannot be the same";
+// Token  
 export const TOKEN_REQUIRED = "Access token is required";
 export const TOKEN_EXPIRED = "Session is expired";
 export const TOKEN_SIGNATURE_MISMATCH = "Access token signature mismatch";

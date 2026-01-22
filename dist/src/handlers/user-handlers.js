@@ -1,17 +1,18 @@
-import { USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
+import { MOBILE_NUMBER_ALREADY_EXIST, USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { users } from "../database/schemas/users.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { userFilters } from "../helpers/user-helper.js";
+import { checkInternalPhoneUniqueness, userFilters } from "../helpers/user-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
+import { checkPhoneUniqueness, paginatedUsersList } from "../services/db/user-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { paginatedUsersList } from "../services/db/user-services.js";
 const paramsValidateException = new ParamsValidateException();
 export class UserHandlers {
     listUsersHandler = async (c) => {
@@ -89,6 +90,11 @@ export class UserHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signup", reqBody, USER_UPDATE_VALIDATION_CRITERIA);
+            const allPhones = checkInternalPhoneUniqueness(validUserReq);
+            const isPhoneUnique = await checkPhoneUniqueness(allPhones, userId);
+            if (!isPhoneUnique) {
+                throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
+            }
             const verifiedUser = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [userId, "ARCHIVED"]);
             if (!verifiedUser)
                 throw new NotFoundException(USER_NOT_FOUND);
