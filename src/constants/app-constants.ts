@@ -258,8 +258,8 @@ export const LOCATION_ASSIGNED = "Location assigned successfully";
 export const LOCATION_ID_REQUIRED = "Location is required";
 export const STARTER_DETAILS_UPDATED = "Device details updated successfully";
 export const STARTER_BOX_STATUS_UPDATED = "Device status updated successfully";
-export const PCB_SERIAL_NUMBER_REQUIRED = "PCB/Serial Number is required";
-export const MIN_3_CHARACTERS_REQUIRED = "PCB/Serial Number has min 3 characters";
+export const PCB_SERIAL_NUMBER_REQUIRED = "PCB/Starter Number is required";
+export const MIN_3_CHARACTERS_REQUIRED = "PCB/Starter Number has min 3 characters";
 export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched successfully";
 
 // Gateway 
