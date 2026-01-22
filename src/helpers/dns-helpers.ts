@@ -58,7 +58,6 @@ export function parseQueryDates(query: any) {
     };
   }
 
-  // Date-only input → expand full IST day
   const fromIST = moment.tz(fromDate, "YYYY-MM-DD", IST).startOf("day");
   const toIST = moment.tz(toDate, "YYYY-MM-DD", IST).endOf("day");
 
@@ -67,6 +66,7 @@ export function parseQueryDates(query: any) {
     toDateUTC: toIST.utc().toISOString(),
   };
 }
+
 
 export const parseDurationToSeconds = (duration: string): number => {
   if (!duration) return 0;

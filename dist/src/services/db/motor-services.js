@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -161,7 +161,6 @@ export async function trackMotorRunTime(params, externalTrx) {
                 .set({
                 end_time: now,
                 duration: motorDurationFormatted,
-                motor_state: new_state,
                 motor_mode: mode_description,
                 time_stamp: formattedDate,
                 updated_at: now,
@@ -275,11 +274,13 @@ export async function trackDeviceRunTime(params, externalTrx) {
         return await db.transaction(action);
     }
 }
-export async function getMotorRunTime(starterId, fromDate, toDate, motorId, motorState) {
+export async function getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId, motorState) {
+    const from = new Date(fromDateUTC);
+    const to = new Date(toDateUTC);
     const filters = [
         eq(motorsRunTime.starter_box_id, starterId),
-        gte(motorsRunTime.start_time, new Date(fromDate)),
-        lte(motorsRunTime.time_stamp, toDate),
+        gte(motorsRunTime.start_time, from),
+        lte(motorsRunTime.start_time, to),
     ];
     if (motorId) {
         filters.push(eq(motorsRunTime.motor_id, motorId));
@@ -287,6 +288,10 @@ export async function getMotorRunTime(starterId, fromDate, toDate, motorId, moto
     if (motorState) {
         const motorStateNumber = motorState === "OFF" ? 0 : 1;
         filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
+        const powerFilter = or(inArray(motorsRunTime.power_state, [0, 1]), isNull(motorsRunTime.power_state));
+        if (powerFilter) {
+            filters.push(powerFilter);
+        }
     }
     const records = await db.query.motorsRunTime.findMany({
         where: and(...filters),
@@ -304,7 +309,7 @@ export async function getMotorRunTime(starterId, fromDate, toDate, motorId, moto
             power_state: true,
         }
     });
-    const totalRunTime = await getMotorTotalRunOnTime(starterId, fromDate, toDate, motorId);
+    const totalRunTime = await getMotorTotalRunOnTime(starterId, fromDateUTC, toDateUTC, motorId);
     return {
         total_run_on_time: totalRunTime.total_run_on_time,
         records,

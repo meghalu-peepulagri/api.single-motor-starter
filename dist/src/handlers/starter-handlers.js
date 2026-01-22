@@ -194,7 +194,8 @@ export class StarterHandlers {
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [validatedStarterReq.motor_id, "ARCHIVED"]);
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
-            const foundMotorName = await getSingleRecordByMultipleColumnValues(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [motor.alias_name, validatedStarterReq.location_id, "ARCHIVED"]);
+            const loweCaseLication = motor.alias_name?.trim().toLocaleLowerCase();
+            const foundMotorName = await getSingleRecordByMultipleColumnValues(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [loweCaseLication, validatedStarterReq.location_id, "ARCHIVED"]);
             if (foundMotorName)
                 throw new ConflictException("Pump name already exists in this location.");
             await db.transaction(async (trx) => {
