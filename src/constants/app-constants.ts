@@ -370,6 +370,16 @@ export const SETTINGS_FIELD_NAMES = {
   olr: "Over Load Recovery Time for Motor",
   cir: "Current Imbalance Recovery Time for Motor",
 
+  vflt_under_voltage: "Under voltage fault",
+  vflt_over_voltage: "Over voltage fault",
+  vflt_voltage_imbalance: "Voltage imbalance fault",
+  vflt_phase_failure: "voltage phase failure",
+  cflt_dry_run: "Dry run fault",
+  cflt_over_current: "Over current fault",
+  cflt_output_phase_fail: "Phanse output fail",
+  cflt_curr_imbalance: "Current imbalance fault",
+
+
   /* ================= ATMEL Calibrations ================= */
 
   ug_r: "Voltage gain R calibration",

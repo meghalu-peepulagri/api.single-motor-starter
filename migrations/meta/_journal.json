@@ -64,6 +64,13 @@
       "when": 1769062780178,
       "tag": "0008_empty_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1769137181255,
+      "tag": "0009_elite_thaddeus_ross",
+      "breakpoints": true
     }
   ]
 }

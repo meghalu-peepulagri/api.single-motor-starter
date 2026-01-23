@@ -94,16 +94,20 @@ export class StarterDefaultSettingsHandlers {
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             }
             const validatedBody = await validatedRequest("update-default-settings", body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
-            const cleanedBody = removeEmptyObjectsDeep(validatedBody);
-            if (!Object.keys(cleanedBody).length) {
-                throw new BadRequestException("No valid settings provided");
-            }
-            const oldSettings = (await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "is_new_configuration_saved", "acknowledgement"], ["=", "=", "="], [starterId, 1, "TRUE"])) || {};
-            const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
-            if (!Object.keys(delta).length) {
-                return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
-            }
-            const devicePayload = prepareStarterSettingsData({ T: 4, S: randomSequenceNumber(), D: delta });
+            // const cleanedBody = removeEmptyObjectsDeep(validatedBody);
+            // if (!Object.keys(cleanedBody).length) {
+            //   throw new BadRequestException("No valid settings provided");
+            // }
+            // const oldSettings = (await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(starterSettings,
+            //   ["starter_id", "is_new_configuration_saved", "acknowledgement"],
+            //   ["=", "=", "="],
+            //   [starterId, 1, "TRUE"]
+            // )) || {};
+            // const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
+            // if (!Object.keys(delta).length) {
+            //   return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
+            // }
+            // const devicePayload = prepareStarterSettingsData({ T: 4, S: randomSequenceNumber(), D: delta });
             // if (devicePayload?.D) {
             //   setImmediate(async () => {
             //     try {
@@ -116,9 +120,9 @@ export class StarterDefaultSettingsHandlers {
             //   });
             // }
             await db.transaction(async (trx) => {
-                await saveSingleRecord(starterSettings, { ...cleanedBody, starter_id: starter.id, pcb_number: String(starter.pcb_number), created_by: user.id }, trx);
+                await saveSingleRecord(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
                 // Handle activity logging for settings update
-                await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, { ...oldSettings, ...cleanedBody }, trx);
+                // await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, { ...oldSettings, ...cleanedBody }, trx);
             });
             return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
         }
