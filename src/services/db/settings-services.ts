@@ -26,6 +26,7 @@ export async function starterAcknowledgedSettings(starterId: number, filter?: an
               id: true,
               name: true,
               hp: true,
+              alias_name: true,
             },
           },
         },
