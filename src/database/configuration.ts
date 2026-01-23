@@ -1,7 +1,9 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
-import dbConfig from "../config/db-config.js";
+import fs from "fs";
+import env from "../env.js";
+import * as alertsFaultsSchema from "./schemas/alerts-faults.js";
 import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
 import * as deviceTokensSchema from "./schemas/device-tokens.js";
 import * as fieldsSchema from "./schemas/fields.js";
@@ -11,16 +13,12 @@ import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
 import * as motorsSchema from "./schemas/motors.js";
 import * as otpSchema from "./schemas/otp.js";
 import * as starterBoxSchema from "./schemas/starter-boxes.js";
+import * as starterDefaultSettingsSchema from "./schemas/starter-default-settings.js";
 import * as starterBoxParameters from "./schemas/starter-parameters.js";
+import * as starterSettingsLimitsSchema from "./schemas/starter-settings-limits.js";
+import * as starterSettingsSchema from "./schemas/starter-settings.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
-import * as starterDefaultSettingsSchema from "./schemas/starter-default-settings.js";
-import * as starterSettingsSchema from "./schemas/starter-settings.js";
-import * as starterSettingsLimitsSchema from "./schemas/starter-settings-limits.js";
-import * as alertsFaultsSchema from "./schemas/alerts-faults.js";
-import env from "../env.js";
-import fs from "fs";
-
 
 const { Pool } = pg;
 

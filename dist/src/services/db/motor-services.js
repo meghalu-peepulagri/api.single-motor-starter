@@ -113,21 +113,25 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
 }
 export async function trackMotorRunTime(params, externalTrx) {
     const { starter_id, motor_id, location_id, previous_state, new_state, mode_description, time_stamp, previous_power_state, new_power_state, } = params;
+    // Early return if required IDs are missing
     if (!motor_id || !starter_id)
         return;
     const now = time_stamp ? new Date(time_stamp) : new Date();
     const formattedDate = now.toISOString();
     const action = async (trx) => {
+        // Fetch the most recent open record for this motor
         const [openRecord] = await trx
             .select()
             .from(motorsRunTime)
             .where(and(eq(motorsRunTime.motor_id, motor_id), eq(motorsRunTime.starter_box_id, starter_id), isNull(motorsRunTime.end_time)))
             .orderBy(desc(motorsRunTime.start_time))
             .limit(1);
-        // Detect changes
+        // Detect state changes
         const motorStateChanged = previous_state !== new_state;
-        const powerStateChanged = previous_power_state !== undefined && new_power_state !== undefined && previous_power_state !== new_power_state;
-        const anyChange = motorStateChanged || powerStateChanged;
+        const powerStateChanged = previous_power_state !== undefined &&
+            new_power_state !== undefined &&
+            previous_power_state !== new_power_state;
+        // Case 1: No open record exists - Create initial record
         if (!openRecord) {
             await trx.insert(motorsRunTime).values({
                 motor_id,
@@ -139,13 +143,14 @@ export async function trackMotorRunTime(params, externalTrx) {
                 motor_state: new_state,
                 motor_mode: mode_description,
                 time_stamp: formattedDate,
-                power_start: powerStateChanged ? formattedDate : null,
+                power_start: new_power_state !== undefined ? formattedDate : null,
                 power_end: null,
-                power_state: powerStateChanged ? new_power_state : null,
+                power_state: new_power_state !== undefined ? new_power_state : null,
                 power_duration: null,
             });
             return;
         }
+        // Calculate durations
         const totalDurationMs = now.getTime() - new Date(openRecord.start_time).getTime();
         const motorDurationFormatted = formatDuration(totalDurationMs);
         let powerDurationFormatted = null;
@@ -154,8 +159,9 @@ export async function trackMotorRunTime(params, externalTrx) {
             const powerDurationMs = now.getTime() - powerStartTime.getTime();
             powerDurationFormatted = formatDuration(powerDurationMs);
         }
-        // Close the session if motor state changed
+        // Case 2: Motor state changed
         if (motorStateChanged) {
+            // Close the current motor session
             await trx
                 .update(motorsRunTime)
                 .set({
@@ -163,25 +169,13 @@ export async function trackMotorRunTime(params, externalTrx) {
                 duration: motorDurationFormatted,
                 motor_mode: mode_description,
                 time_stamp: formattedDate,
+                // Close power session ONLY if power state also changed
+                power_end: powerStateChanged ? formattedDate : openRecord.power_end,
+                power_duration: powerStateChanged ? powerDurationFormatted : openRecord.power_duration,
                 updated_at: now,
             })
                 .where(eq(motorsRunTime.id, openRecord.id));
-        }
-        // Update power fields only if power state changed
-        if (powerStateChanged) {
-            await trx
-                .update(motorsRunTime)
-                .set({
-                power_start: openRecord.power_start,
-                power_end: formattedDate,
-                power_state: previous_power_state,
-                power_duration: powerDurationFormatted,
-                updated_at: now,
-            })
-                .where(eq(motorsRunTime.id, openRecord.id));
-        }
-        // Start new session only if ANY change occurred
-        if (anyChange) {
+            // Start a new motor session
             await trx.insert(motorsRunTime).values({
                 motor_id,
                 starter_box_id: starter_id,
@@ -192,25 +186,58 @@ export async function trackMotorRunTime(params, externalTrx) {
                 motor_state: new_state,
                 motor_mode: mode_description,
                 time_stamp: formattedDate,
-                power_start: powerStateChanged ? formattedDate : null,
+                // If power state changed: start new power session
+                // If power state NOT changed: carry forward the existing power_start from previous record
+                power_start: powerStateChanged ? formattedDate : openRecord.power_start,
                 power_end: null,
-                power_state: powerStateChanged ? new_power_state : null,
+                power_state: powerStateChanged ? new_power_state : openRecord.power_state,
                 power_duration: null,
             });
+            return;
         }
-        else {
+        // Case 3: Only power state changed (motor state same)
+        if (powerStateChanged && !motorStateChanged) {
+            // Close the current power session in the existing record
             await trx
                 .update(motorsRunTime)
                 .set({
-                motor_state: new_state,
+                power_end: formattedDate,
+                power_duration: powerDurationFormatted,
+                time_stamp: formattedDate,
+                updated_at: now,
+            })
+                .where(eq(motorsRunTime.id, openRecord.id));
+            // Create a new record with new power session (motor session continues)
+            await trx.insert(motorsRunTime).values({
+                motor_id,
+                starter_box_id: starter_id,
+                location_id,
+                start_time: now,
+                end_time: null,
+                duration: null,
+                motor_state: new_state, // Same motor state
                 motor_mode: mode_description,
                 time_stamp: formattedDate,
-                power_state: new_power_state ?? openRecord.power_state,
+                power_start: formattedDate, // New power session starts
+                power_end: null,
+                power_state: new_power_state,
+                power_duration: null,
+            });
+            return;
+        }
+        // Case 4: No state changes - Just update timestamp
+        if (!motorStateChanged && !powerStateChanged) {
+            await trx
+                .update(motorsRunTime)
+                .set({
+                motor_mode: mode_description,
+                time_stamp: formattedDate,
                 updated_at: now,
             })
                 .where(eq(motorsRunTime.id, openRecord.id));
         }
     };
+    // Execute with or without external transaction
     if (externalTrx) {
         return await action(externalTrx);
     }
