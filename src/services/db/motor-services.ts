@@ -237,9 +237,10 @@ export async function trackMotorRunTime(params: {
       await trx
         .update(motorsRunTime)
         .set({
+          power_start: openRecord.power_start,
           power_end: formattedDate,
+          power_state: previous_power_state,
           power_duration: powerDurationFormatted,
-          power_state: new_power_state,
           updated_at: now,
         })
         .where(eq(motorsRunTime.id, openRecord.id));
@@ -360,7 +361,6 @@ export async function trackDeviceRunTime(params: {
 
 export async function getMotorRunTime(starterId: number, fromDateUTC: string, toDateUTC: string, motorId?: number, motorState?: string) {
 
-
   const from = new Date(fromDateUTC);
   const to = new Date(toDateUTC);
 
@@ -376,17 +376,7 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
 
   if (motorState) {
     const motorStateNumber = motorState === "OFF" ? 0 : 1;
-
     filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
-
-    const powerFilter = or(
-      inArray(motorsRunTime.power_state, [0, 1]),
-      isNull(motorsRunTime.power_state)
-    );
-
-    if (powerFilter) {
-      filters.push(powerFilter);
-    }
   }
 
 

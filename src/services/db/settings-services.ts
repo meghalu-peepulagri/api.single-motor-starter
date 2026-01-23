@@ -80,6 +80,7 @@ export async function getAcknowledgedStarterSettings(starterId: number, columns?
               id: true,
               name: true,
               hp: true,
+              alias_name: true,
             },
           },
         },
