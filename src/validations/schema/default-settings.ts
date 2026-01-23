@@ -7,7 +7,7 @@ export const vUpdateDefaultSettings = v.object({
   allflt_en: enable01("allflt_en"),
   flc: realOnly("flc"),
   as_dly: integerOnly("as_dly"),
-  pr_flt_en: enable01("pr_flt_en"),
+  pr_flt_en: integerOnly("pr_flt_en"),
   tpf: realOnly("tpf"),
 
   /* ================= Enables ================= */
@@ -51,6 +51,16 @@ export const vUpdateDefaultSettings = v.object({
   lrr: realOnly("lrr"),      // Inrush Current Recovery for Motor
   olr: realOnly("olr"),      // Over Load Recovery Time for Motor
   cir: realOnly("cir"),
+
+  vflt_under_voltage: enable01("vflt_under_voltage"),
+  vflt_over_voltage: enable01("vflt_over_voltage"),
+  vflt_voltage_imbalance: enable01("vflt_voltage_imbalance"),
+  vflt_phase_failure: enable01("vflt_phase_failure"),
+  cflt_dry_run: enable01("cflt_dry_run"),
+  cflt_over_current: enable01("cflt_over_current"),
+  cflt_output_phase_fail: enable01("cflt_output_phase_fail"),
+  cflt_curr_imbalance: enable01("cflt_curr_imbalance"),
+
 
   /* ================= ATMEL Calibrations ================= */
   ug_r: integerOnly("ug_r"),

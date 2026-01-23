@@ -69,6 +69,7 @@ export async function getAcknowledgedStarterSettings(starterId, columns) {
                             id: true,
                             name: true,
                             hp: true,
+                            alias_name: true,
                         },
                     },
                 },

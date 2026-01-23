@@ -57,6 +57,16 @@ export const starterSettings = pgTable("starter_settings", {
   lrr: real("lrr").default(10),                 // Locked Rotor Recovery Time for Motor
   cir: real("cir").default(10),                 // Current Imbalance Recovery Time for Motor
 
+  // Primary fault enable
+  vflt_under_voltage: integer("vflt_under_voltage").default(0),
+  vflt_over_voltage: integer("vflt_over_voltage").default(0),
+  vflt_voltage_imbalance: integer("vflt_voltage_imbalance").default(0),
+  vflt_phase_failure: integer("vflt_phase_failure").default(0),
+  cflt_dry_run: integer("cflt_dry_run").default(0),
+  cflt_over_current: integer("cflt_over_current").default(0),
+  cflt_output_phase_fail: integer("cflt_output_phase_fail").default(0),
+  cflt_curr_imbalance: integer("cflt_curr_imbalance").default(0),
+
   // ================= Calibrations =================
 
   // ATMEL Calibrations (6 fields)
