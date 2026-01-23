@@ -287,10 +287,6 @@ export async function getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId
     if (motorState) {
         const motorStateNumber = motorState === "OFF" ? 0 : 1;
         filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
-        const powerFilter = or(inArray(motorsRunTime.power_state, [0, 1]), isNull(motorsRunTime.power_state));
-        if (powerFilter) {
-            filters.push(powerFilter);
-        }
     }
     const records = await db.query.motorsRunTime.findMany({
         where: and(...filters),

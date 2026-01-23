@@ -359,7 +359,6 @@ export async function trackDeviceRunTime(params: {
 
 export async function getMotorRunTime(starterId: number, fromDateUTC: string, toDateUTC: string, motorId?: number, motorState?: string) {
 
-
   const from = new Date(fromDateUTC);
   const to = new Date(toDateUTC);
 
@@ -375,17 +374,7 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
 
   if (motorState) {
     const motorStateNumber = motorState === "OFF" ? 0 : 1;
-
     filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
-
-    const powerFilter = or(
-      inArray(motorsRunTime.power_state, [0, 1]),
-      isNull(motorsRunTime.power_state)
-    );
-
-    if (powerFilter) {
-      filters.push(powerFilter);
-    }
   }
 
 
