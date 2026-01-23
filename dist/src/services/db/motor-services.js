@@ -174,7 +174,6 @@ export async function trackMotorRunTime(params, externalTrx) {
                 .set({
                 power_end: formattedDate,
                 power_duration: powerDurationFormatted,
-                power_state: new_power_state,
                 updated_at: now,
             })
                 .where(eq(motorsRunTime.id, openRecord.id));
