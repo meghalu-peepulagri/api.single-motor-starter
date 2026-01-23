@@ -237,7 +237,9 @@ export async function trackMotorRunTime(params: {
       await trx
         .update(motorsRunTime)
         .set({
+          power_start: openRecord.power_start,
           power_end: formattedDate,
+          power_state: previous_power_state,
           power_duration: powerDurationFormatted,
           updated_at: now,
         })
