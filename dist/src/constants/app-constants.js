@@ -182,6 +182,7 @@ export const SIMILAR_MOTOR_TITLE_NOT_ALLOWED = "Duplicate pump titles are not al
 export const MOTOR_ID_REQUIRED = "Pump is required";
 export const MOTOR_DETAILS_FETCHED = "Pump details fetched successfully";
 export const MOTOR_NAME_EXISTED = "Pump name already exist";
+export const MOTOR_NAME_ALREADY_LOCATION = "Pump name already exists in this location.";
 // Starter Box
 export const STARTER_BOX_ADDED_SUCCESSFULLY = "Device box added successfully";
 export const STARTER_BOX_UPDATED_SUCCESSFULLY = "Device box updated successfully";

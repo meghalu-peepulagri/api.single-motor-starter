@@ -24,7 +24,7 @@ import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, V
 import { validatedRequest } from "../validations/validate-request.js";
 
 import ConflictException from "../exceptions/conflict-exception.js";
-import { checkPhoneUniqueness } from "../services/db/user-services.js";
+import { checkPhoneUniqueness, checkPhoneUniquenessVerify } from "../services/db/user-services.js";
 
 const paramsValidateException = new ParamsValidateException();
 const otpService = new OtpService();
@@ -124,8 +124,8 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
             const validatedPhone = await validatedRequest<ValidatedSignInPhone>("signin-phone", reqBody, LOGIN_VALIDATION_CRITERIA);
 
-            const loginUser = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["phone", "status"], ["=", "!="], [validatedPhone.phone, "ARCHIVED"]);
-            if (!loginUser) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
+            const loginUser = await checkPhoneUniqueness([validatedPhone.phone])
+            if (loginUser === true) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
 
             const otpData = prepareOTPData(validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
@@ -147,8 +147,8 @@ export class AuthHandlers {
 
             const validReqData = await validatedRequest<ValidatedVerifyOtp>("verify-otp", reqBody, VERIFY_OTP_VALIDATION_CRITERIA);
 
-            const user = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["phone", "status"], ["=", "!="], [validReqData.phone, "ARCHIVED"]);
-            if (!user) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
+            const user = await checkPhoneUniquenessVerify([validReqData.phone])
+            if (user === true) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
 
             const otpData: NewOtp[] = await otpService.fetchOtp({ phone: validReqData.phone });
             const now = moment.utc();
@@ -165,21 +165,21 @@ export class AuthHandlers {
             }
 
             const validOtp = otp as Required<NewOtp>;
-            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
+            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user[0].id);
 
-            const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
+            const { access_token, refresh_token } = await genJWTTokensForUser(user[0].id);
             const { password, ...userDetails } = updatedUser;
 
             const data = { user_details: userDetails, access_token, refresh_token };
 
             if (validReqData.fcm_token) {
                 const fcmToken = validReqData.fcm_token;
-                const existingToken = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user.id]);
+                const existingToken = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user[0].id]);
 
                 if (!existingToken) {
-                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["user_id"], ["="], [user.id]);
+                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["user_id"], ["="], [user[0].id]);
                     if (!checkOtherDevice || checkOtherDevice.device_token !== fcmToken) {
-                        await saveSingleRecord<DeviceTokensTable>(deviceTokens, { device_token: fcmToken, user_id: user.id });
+                        await saveSingleRecord<DeviceTokensTable>(deviceTokens, { device_token: fcmToken, user_id: user[0].id });
                     }
                 }
             }
