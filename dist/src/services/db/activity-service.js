@@ -14,6 +14,7 @@ export class ActivityService {
         return {
             user_id: data.userId || null,
             performed_by: data.performedBy,
+            field_name: null,
             action: data.action,
             entity_type: data.entityType,
             entity_id: data.entityId || null,
@@ -40,6 +41,8 @@ export class ActivityService {
         }
         catch (error) {
             logger.error("Failed to save activity logs to DB", error);
+            console.error("Failed to save activity logs to DB", error);
+            throw error;
         }
     }
     /**

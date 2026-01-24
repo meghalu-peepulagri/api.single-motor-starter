@@ -66,7 +66,6 @@ export class AuthHandlers {
             await db.transaction(async (trx) => {
                 createdUser = await saveSingleRecord<UsersTable>(users, userData, trx);
                 if (!createdUser) return;
-
                 await ActivityService.logActivity({
                     userId: Number(createdUser.id),
                     performedBy: userPayload?.id ?? Number(createdUser.id),
@@ -74,6 +73,7 @@ export class AuthHandlers {
                     entityType: "AUTH",
                     entityId: Number(createdUser.id),
                 }, trx);
+
             });
 
             if (!userPayload && createdUser) {
