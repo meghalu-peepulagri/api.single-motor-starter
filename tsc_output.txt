@@ -1,0 +1,18 @@
+﻿src/database/configuration.ts(4,1): error TS6133: 'dbConfig' is declared but its value is never read.
+src/database/schemas/motors.ts(2,71): error TS6133: 'uniqueIndex' is declared but its value is never read.
+src/handlers/auth-handlers.ts(27,7): error TS6133: 'smsService' is declared but its value is never read.
+src/handlers/location-handlers.ts(6,1): error TS6133: 'motors' is declared but its value is never read.
+src/handlers/location-handlers.ts(85,35): error TS6133: 'trx' is declared but its value is never read.
+src/handlers/location-handlers.ts(111,35): error TS6133: 'trx' is declared but its value is never read.
+src/handlers/motor-handlers.ts(102,28): error TS6133: 'trx' is declared but its value is never read.
+src/handlers/starter-default-settings-handlers.ts(56,13): error TS6133: 'userPayload' is declared but its value is never read.
+src/handlers/starter-handlers.ts(259,13): error TS6133: 'userPayload' is declared but its value is never read.
+src/helpers/motor-helper.ts(1,1): error TS6192: All imports in import declaration are unused.
+src/helpers/motor-helper.ts(3,1): error TS6133: 'motorsRunTime' is declared but its value is never read.
+src/helpers/motor-helper.ts(9,1): error TS6133: 'db' is declared but its value is never read.
+src/helpers/motor-helper.ts(10,1): error TS6133: 'formatDuration' is declared but its value is never read.
+src/helpers/otp-helper.ts(3,25): error TS6133: 'user' is declared but its value is never read.
+src/helpers/starter-helper.ts(1,14): error TS6133: 'ilike' is declared but its value is never read.
+src/services/db/base-db-services.ts(8,1): error TS6133: 'PgTableWithColumns' is declared but its value is never read.
+src/services/db/starter-services.ts(22,38): error TS6133: 'StarterSettingsLimits' is declared but its value is never read.
+src/services/db/starter-services.ts(278,117): error TS6133: 'User' is declared but its value is never read.

@@ -1,0 +1,11 @@
+import factory from "../factory.js";
+import { LocationHandlers } from "../handlers/location-handlers.js";
+import { isAuthorized } from "../middlewares/isAuthorized.js";
+const locationHandlers = new LocationHandlers();
+const locationRoutes = factory.createApp();
+locationRoutes.post("/", isAuthorized, locationHandlers.addLocationHandler);
+locationRoutes.get("/", isAuthorized, locationHandlers.listLocationHandler);
+locationRoutes.get("/basic", isAuthorized, locationHandlers.listBasicLocationHandler);
+locationRoutes.patch("/:id/rename", isAuthorized, locationHandlers.renameLocationHandler);
+locationRoutes.patch("/:id", isAuthorized, locationHandlers.deleteLocationHandler);
+export default locationRoutes;

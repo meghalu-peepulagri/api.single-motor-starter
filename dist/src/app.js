@@ -1,17 +1,20 @@
 import { cors } from "hono/cors";
+import { SERVICE_UP } from "./constants/app-constants.js";
 import { OK } from "./constants/http-status-codes.js";
 import envData from "./env.js";
-import { sendResponse } from "./utils/send-response.js";
-import { SERVICE_UP } from "./constants/app-constants.js";
-import notFound from "./utils/not-found.js";
 import factory from "./factory.js";
+import indexRoute from "./routes/index-routes.js";
+import notFound from "./utils/not-found.js";
 import onError from "./utils/on-error.js";
+import { sendResponse } from "./utils/send-response.js";
+import { apiLogger } from "./middlewares/api-logger.js";
 const appVersion = envData.API_VERSION;
-const app = factory.createApp().basePath(`v${appVersion}`);
+const baseUrl = `/${appVersion}`;
+const app = factory.createApp().basePath(baseUrl);
 app.use("*", cors());
-app.get("/", (c) => {
-    return sendResponse(c, OK, SERVICE_UP);
-});
+app.use(apiLogger);
+app.route("/", indexRoute);
+app.get("/", (c) => sendResponse(c, OK, SERVICE_UP));
 app.get("/error", (c) => {
     c.status(422);
     throw new Error("Test error");

@@ -2,15 +2,15 @@ import type { Context } from "hono";
 
 import { sign, verify } from "hono/jwt";
 import { JwtTokenExpired, JwtTokenInvalid, JwtTokenSignatureMismatched } from "hono/utils/jwt/types";
-
 import type { JWTPayload } from "../types/app-types.js";
 
+import { jwtConfig } from "../config/jwt-config.js";
+import { TOKEN_EXPIRED, TOKEN_REQUIRED, TOKEN_SIGNATURE_MISMATCH } from "../constants/app-constants.js";
+import { users } from "../database/schemas/users.js";
 import ForbiddenException from "../exceptions/forbidden-exception.js";
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
-import { getRecordById, getSingleRecordByMultipleColumnValues } from "../services/db/base-db-services.js";
-import { users, type UsersTable } from "../database/schemas/users.js";
-import { jwtConfig } from "../config/jwtConfig.js";
-import { TOKEN_EXPIRED, TOKEN_REQUIRED, TOKEN_SIGNATURE_MISMATCH, USER_INACTIVE } from "../constants/app-constants.js";
+import { getSingleRecordByMultipleColumnValues } from "../services/db/base-db-services.js";
+import { FORBIDDEN } from "../constants/http-status-phrases.js";
 
 async function genJWTTokens(payload: JWTPayload) {
   const access_token_expiry = Math.floor(Date.now() / 1000) + jwtConfig.expires_in;
@@ -72,10 +72,10 @@ async function getUserDetailsFromToken(c: Context) {
     throw new UnauthorizedException(TOKEN_REQUIRED);
   }
   const decodedPayload = await verifyJWTToken(token);
- const user = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [decodedPayload.sub, "ARCHIVED"]);
-  if (!user)  throw new ForbiddenException(USER_INACTIVE);
-  
-  const { created_at, updated_at, ...userDetails } = user;
+  const user = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [decodedPayload.sub, "ARCHIVED"]);
+  if (!user) throw new ForbiddenException(FORBIDDEN);
+
+  const { password, ...userDetails } = user;
 
   return userDetails;
 }
@@ -84,5 +84,6 @@ export {
   genJWTTokens,
   genJWTTokensForUser,
   getUserDetailsFromToken,
-  verifyJWTToken,
+  verifyJWTToken
 };
+

@@ -1,18 +1,43 @@
-import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 import { safeParseAsync } from "valibot";
-import { getValidationErrors } from "../utils/on-error.js";
-import { vAddUserValidator } from "./schema/user-validations.js";
+import { validationErrors } from "../utils/on-error.js";
+import { vAddField } from "./schema/field-validations.js";
+import { vAddLocation } from "./schema/location-validations.js";
+import { vAddMotorSchedule } from "./schema/motor-schedule-validators.js";
+import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
+import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus } from "./schema/starter-validations.js";
+import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
+import { vUpdateDefaultSettings } from "./schema/default-settings.js";
+import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 const schemaMap = {
-    "signup": vAddUserValidator,
+    "signup": vSignUp,
+    "signin-email": vSignInEmail,
+    "add-location": vAddLocation,
+    "signin-phone": vSignInPhone,
+    "verify-otp": vVerifyOtp,
+    "add-field": vAddField,
+    "add-motor": vAddMotor,
+    "update-motor": vUpdateMotor,
+    "add-starter": vAddStarter,
+    "create-motor-schedule": vAddMotorSchedule,
+    "assign-starter": vAssignStarter,
+    "replace-starter": vReplaceStarter,
+    "assign-starter-web": vAssignStarterWeb,
+    "update-deployed-status": vUpdateDeployedStatus,
+    "assign-location-to-starter": vAssignLocationToStarter,
+    "update-default-settings": vUpdateDefaultSettings,
+    "update-settings-limits": vUpdateDefaultSettings
 };
 export async function validatedRequest(actionType, reqData, errorMessage) {
     const schema = schemaMap[actionType];
     if (!schema) {
         throw new Error(`Schema not registered for activity: ${actionType}`);
     }
-    const validation = await safeParseAsync(schema, reqData);
+    const validation = await safeParseAsync(schema, reqData, {
+        abortPipeEarly: true,
+    });
     if (!validation.success) {
-        throw new UnprocessableEntityException(errorMessage, getValidationErrors(validation.issues));
+        throw new UnprocessableEntityException(errorMessage, validationErrors(validation.issues));
     }
     return validation.output;
 }

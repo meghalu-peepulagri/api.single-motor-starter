@@ -1,8 +1,9 @@
 import { and, asc, count, desc, eq, getTableName, inArray, sql } from "drizzle-orm";
+import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED } from "../../constants/app-constants.js";
+import db from "../../database/configuration.js";
+import BadRequestException from "../../exceptions/bad-request-exception.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
 import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
-import { db } from "../../database/configuration.js";
-import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED, EMPTY_DB_DATA } from "../../constants/app-constants.js";
 async function getRecordById(table, id, columnsToSelect) {
     const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
     const columnInfo = sql.raw(`${getTableName(table)}.id`);
@@ -144,29 +145,20 @@ async function getSingleRecordByMultipleColumnValues(table, columns, relations, 
     }
     return results[0];
 }
-async function saveRecord(table, record) {
-    if (!record) {
-        throw new UnprocessableEntityException(EMPTY_DB_DATA);
-    }
-    const result = await db.insert(table).values(record).returning();
-    if (!Array.isArray(result) || result.length === 0) {
-        throw new UnprocessableEntityException(DB_SAVE_DATA_FAILED);
-    }
-    return result[0];
+async function saveSingleRecord(table, record, trx) {
+    const query = trx ? trx.insert(table).values(record).returning() : db.insert(table).values(record).returning();
+    const recordSaved = await query;
+    return recordSaved[0];
 }
-async function saveRecords(table, records) {
-    if (!records) {
-        throw new UnprocessableEntityException(EMPTY_DB_DATA);
-    }
-    const result = await db.insert(table).values(records).returning();
-    if (!Array.isArray(result) || result.length === 0) {
-        throw new UnprocessableEntityException(DB_SAVE_DATA_FAILED);
-    }
-    return result;
+async function saveRecords(table, records, trx) {
+    const query = trx ? trx.insert(table).values(records).returning() : db.insert(table).values(records).returning();
+    const recordsSaved = await query;
+    return recordsSaved;
 }
-async function updateRecordById(table, id, record) {
+async function updateRecordById(table, id, record, trx) {
     const dataWithTimeStamps = { ...record, updated_at: new Date() };
-    const recordUpdated = await db
+    const queryBuilder = trx || db;
+    const recordUpdated = await queryBuilder
         .update(table)
         .set(dataWithTimeStamps)
         .where(eq(table.id, id))
@@ -176,9 +168,10 @@ async function updateRecordById(table, id, record) {
     }
     return recordUpdated[0];
 }
-async function deleteRecordById(table, id) {
+async function deleteRecordById(table, id, trx) {
     const columnInfo = sql.raw(`${getTableName(table)}.id`);
-    const deletedRecord = await db.delete(table).where(eq(columnInfo, id)).returning();
+    const queryBuilder = trx || db;
+    const deletedRecord = await queryBuilder.delete(table).where(eq(columnInfo, id)).returning();
     return deletedRecord[0];
 }
 async function deleteRecordsByAColumnValue(table, column, value) {
@@ -208,6 +201,16 @@ async function softDeleteRecordById(table, id, record) {
         .where(eq(columnInfo, id))
         .returning();
     return result;
+}
+async function updateRecordByIdWithTrx(table, id, record, trx) {
+    const dataWithTimeStamps = { ...record };
+    const queryBuilder = trx || db;
+    const [updatedRecord] = await queryBuilder
+        .update(table)
+        .set(dataWithTimeStamps)
+        .where(eq(table.id, id))
+        .returning();
+    return updatedRecord;
 }
 async function exportData(table, projection, filters) {
     const initialQuery = db.select(projection).from(table);
@@ -258,7 +261,7 @@ async function updateRecordByColumnValue(table, column, value, record, id) {
     const columnInfo = sql.raw(`${getTableName(table)}.${column}`);
     return await db.update(table).set(dataWithTimeStamps).where(eq(columnInfo, value));
 }
-async function updateRecordByMultipleColumnValues(table, columns, relations, values, record, id) {
+async function updateRecordByMultipleColumnValues(table, columns, relations, values, record, id, trx) {
     const whereQueryData = {
         columns,
         relations,
@@ -266,7 +269,8 @@ async function updateRecordByMultipleColumnValues(table, columns, relations, val
     };
     const dataWithTimeStamps = { id, ...record, updated_at: new Date() };
     const whereConditions = whereQueryData.columns.map((column, index) => eq(sql.raw(`${getTableName(table)}.${String(column)}`), whereQueryData.values[index]));
-    const result = await db.update(table).set(dataWithTimeStamps).where(and(...whereConditions)).returning();
+    const queryBuilder = trx || db;
+    const result = await queryBuilder.update(table).set(dataWithTimeStamps).where(and(...whereConditions)).returning();
     if (!Array.isArray(result)) {
         throw new UnprocessableEntityException(DB_UPDATE_DATA_FAILED);
     }
@@ -280,4 +284,17 @@ async function updateMultipleRecordsByIds(table, ids, record) {
         .returning();
     return updatedRecords.length;
 }
-export { deleteRecordById, deleteRecordsByAColumnValue, deleteRecordsByMultipleColumnValues, exportData, getMultipleRecordsByAColumnValue, getMultipleRecordsByMultipleColumnValues, getPaginatedRecords, getPaginatedRecordsConditionally, getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveRecord, saveRecords, softDeleteRecordById, updateMultipleRecordsByIds, updateRecordByColumnValue, updateRecordById, updateRecordByMultipleColumnValues, };
+export function getTableColumnsWithDefaults(table, defaultCols, extraCols = []) {
+    const tableColumns = Object.keys(table).filter((key) => {
+        const col = table[key];
+        return col && typeof col === "object" && "name" in col && "columnType" in col;
+    });
+    const merged = Array.from(new Set([...defaultCols, ...extraCols]));
+    const invalid = merged.filter(col => !tableColumns.includes(col));
+    if (invalid.length) {
+        throw new BadRequestException(`Invalid column(s): [${invalid.join(", ")}].` +
+            `Valid columns for table [${getTableName(table)}]: [${tableColumns.join(", ")}]`);
+    }
+    return merged;
+}
+export { deleteRecordById, deleteRecordsByAColumnValue, deleteRecordsByMultipleColumnValues, exportData, getMultipleRecordsByAColumnValue, getMultipleRecordsByMultipleColumnValues, getPaginatedRecords, getPaginatedRecordsConditionally, getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, softDeleteRecordById, updateMultipleRecordsByIds, updateRecordByColumnValue, updateRecordById, updateRecordByIdWithTrx, updateRecordByMultipleColumnValues };
