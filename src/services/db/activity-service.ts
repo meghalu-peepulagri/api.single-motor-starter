@@ -298,6 +298,7 @@ export class ActivityService {
       entityId: locationId,
       newData: data
     });
+
     await this.saveActivityLogs([log], trx);
   }
 
