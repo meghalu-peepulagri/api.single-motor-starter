@@ -61,12 +61,12 @@ export async function updateLatestStarterSettingsFlc(starterId, avgCurrent) {
     })
         .where(sql `
         ${starterSettings.starter_id} = ${starterId}
-        AND ${starterSettings.acknowledgement} = true
+        AND ${starterSettings.acknowledgement} = 'TRUE'
         AND ${starterSettings.created_at} = (
           SELECT MAX(created_at)
           FROM starter_settings
           WHERE starter_id = ${starterId}
-          AND acknowledgement = true
+          AND acknowledgement = 'TRUE'
         )
       `);
 }

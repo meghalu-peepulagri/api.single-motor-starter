@@ -169,7 +169,6 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: any, prev
 
   await db.transaction(async (trx) => {
     await saveSingleRecord(starterBoxParameters, insertedData, trx);
-
     const starterBoxUpdates: Record<string, any> = {};
     let trackPowerChange = false;
 
