@@ -1,5 +1,5 @@
 import { eq, ne } from "drizzle-orm";
-import { LOCATION_ADDED, LOCATION_DELETED, LOCATION_NOT_FOUND, LOCATION_VALIDATION_CRITERIA, LOCATIONS_FETCHED } from "../constants/app-constants.js";
+import { LOCATION_ADDED, LOCATION_DELETED, LOCATION_NOT_FOUND, LOCATION_RENAMED, LOCATION_VALIDATION_CRITERIA, LOCATIONS_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { locations } from "../database/schemas/locations.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
@@ -82,7 +82,7 @@ export class LocationHandlers {
                 const updatedLocation = await updateRecordById(locations, locationId, validLocationReq, trx);
                 await ActivityService.writeLocationRenamedLog((c.get("user_payload")).id, locationId, { name: foundedLocation.name }, { name: updatedLocation.name }, trx);
             });
-            return sendResponse(c, 200, LOCATION_ADDED);
+            return sendResponse(c, 200, LOCATION_RENAMED);
         }
         catch (error) {
             console.error("Error at rename location :", error);
