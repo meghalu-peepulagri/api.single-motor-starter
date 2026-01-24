@@ -4,7 +4,7 @@
 -- CREATE TYPE "public"."mode_enum" AS ENUM('MANUAL', 'AUTO');--> statement-breakpoint
 -- CREATE TYPE "public"."device_status" AS ENUM('ASSIGNED', 'DEPLOYED', 'READY', 'TEST');--> statement-breakpoint
 -- CREATE TYPE "public"."starter_type" AS ENUM('SINGLE_STARTER', 'MULTI_STARTER');--> statement-breakpoint
-CREATE TYPE "public"."acknowledgement_enum" AS ENUM('TRUE', 'FALSE');--> statement-breakpoint
+CREATE TYPE "public"."acknowledgement_enum" AS ENUM('TRUE', 'FALSE');--> statement-reakpoint
 CREATE TABLE IF NOT EXISTS "alerts_faults" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"starter_id" integer,
