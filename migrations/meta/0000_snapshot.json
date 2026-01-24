@@ -1,5 +1,5 @@
 {
-  "id": "521888d4-0c3e-48fe-b66b-2dc68928902d",
+  "id": "a5f2b343-5220-4eee-beb9-33edc35dbc7b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -34,7 +34,7 @@
         },
         "alert_description": {
           "name": "alert_description",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": false
         },
@@ -46,7 +46,7 @@
         },
         "fault_description": {
           "name": "fault_description",
-          "type": "text",
+          "type": "varchar",
           "primaryKey": false,
           "notNull": false
         },
@@ -1675,6 +1675,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "temperature": {
+          "name": "temperature",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -2204,6 +2211,90 @@
           "primaryKey": false,
           "notNull": false,
           "default": 0.5
+        },
+        "drf": {
+          "name": "drf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "lrr": {
+          "name": "lrr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "olr": {
+          "name": "olr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "cir": {
+          "name": "cir",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "vflt_under_voltage": {
+          "name": "vflt_under_voltage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vflt_over_voltage": {
+          "name": "vflt_over_voltage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vflt_voltage_imbalance": {
+          "name": "vflt_voltage_imbalance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vflt_phase_failure": {
+          "name": "vflt_phase_failure",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "cflt_dry_run": {
+          "name": "cflt_dry_run",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "cflt_over_current": {
+          "name": "cflt_over_current",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "cflt_output_phase_fail": {
+          "name": "cflt_output_phase_fail",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "cflt_curr_imbalance": {
+          "name": "cflt_curr_imbalance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
         },
         "ug_r": {
           "name": "ug_r",
@@ -2858,20 +2949,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "allflt_en_min": {
-          "name": "allflt_en_min",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "allflt_en_max": {
-          "name": "allflt_en_max",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 1
-        },
         "pr_flt_en_min": {
           "name": "pr_flt_en_min",
           "type": "integer",
@@ -3025,13 +3102,6 @@
           "notNull": false,
           "default": 130
         },
-        "f_dr": {
-          "name": "f_dr",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 10
-        },
         "f_dr_min": {
           "name": "f_dr_min",
           "type": "real",
@@ -3046,13 +3116,6 @@
           "notNull": false,
           "default": 50
         },
-        "f_ol": {
-          "name": "f_ol",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 120
-        },
         "f_ol_min": {
           "name": "f_ol_min",
           "type": "real",
@@ -3066,13 +3129,6 @@
           "primaryKey": false,
           "notNull": false,
           "default": 150
-        },
-        "f_lr": {
-          "name": "f_lr",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 350
         },
         "f_lr_min": {
           "name": "f_lr_min",
@@ -3094,13 +3150,6 @@
           "primaryKey": false,
           "notNull": false,
           "default": 0.5
-        },
-        "f_ci": {
-          "name": "f_ci",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 15
         },
         "f_ci_min": {
           "name": "f_ci_min",
@@ -3312,12 +3361,19 @@
           "notNull": false,
           "default": 9
         },
-        "opf": {
-          "name": "opf",
+        "opf_min": {
+          "name": "opf_min",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0.5
+        },
+        "opf_max": {
+          "name": "opf_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
         },
         "cif_min": {
           "name": "cif_min",
@@ -3333,127 +3389,309 @@
           "notNull": false,
           "default": 1
         },
-        "ug_r": {
-          "name": "ug_r",
-          "type": "integer",
+        "drf_min": {
+          "name": "drf_min",
+          "type": "real",
           "primaryKey": false,
           "notNull": false,
-          "default": 50567
+          "default": 5
         },
-        "ug_y": {
-          "name": "ug_y",
-          "type": "integer",
+        "drf_max": {
+          "name": "drf_max",
+          "type": "real",
           "primaryKey": false,
           "notNull": false,
-          "default": 49867
+          "default": 20
         },
-        "ug_b": {
-          "name": "ug_b",
-          "type": "integer",
+        "irr_min": {
+          "name": "irr_min",
+          "type": "real",
           "primaryKey": false,
           "notNull": false,
-          "default": 51078
+          "default": 10
         },
-        "ip_r": {
-          "name": "ip_r",
-          "type": "integer",
+        "irr_max": {
+          "name": "irr_max",
+          "type": "real",
           "primaryKey": false,
           "notNull": false,
-          "default": 8974
+          "default": 50
         },
-        "ip_y": {
-          "name": "ip_y",
-          "type": "integer",
+        "olr_min": {
+          "name": "olr_min",
+          "type": "real",
           "primaryKey": false,
           "notNull": false,
-          "default": 8974
+          "default": 10
         },
-        "ip_b": {
-          "name": "ip_b",
-          "type": "integer",
+        "olr_max": {
+          "name": "olr_max",
+          "type": "real",
           "primaryKey": false,
           "notNull": false,
-          "default": 8974
+          "default": 50
         },
-        "vg_r": {
-          "name": "vg_r",
+        "cir_min": {
+          "name": "cir_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "cir_max": {
+          "name": "cir_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 50
+        },
+        "ug_r_min": {
+          "name": "ug_r_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ug_r_max": {
+          "name": "ug_r_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "ug_y_min": {
+          "name": "ug_y_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ug_y_max": {
+          "name": "ug_y_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "ug_b_min": {
+          "name": "ug_b_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ug_b_max": {
+          "name": "ug_b_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "ip_r_min": {
+          "name": "ip_r_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ip_r_max": {
+          "name": "ip_r_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "ip_y_min": {
+          "name": "ip_y_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ip_y_max": {
+          "name": "ip_y_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "ip_b_min": {
+          "name": "ip_b_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ip_b_max": {
+          "name": "ip_b_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "vg_r_min": {
+          "name": "vg_r_min",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "vg_y": {
-          "name": "vg_y",
+        "vg_r_max": {
+          "name": "vg_r_max",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "vg_b": {
-          "name": "vg_b",
+        "vg_y_min": {
+          "name": "vg_y_min",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "vo_r": {
-          "name": "vo_r",
+        "vg_y_max": {
+          "name": "vg_y_max",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "vo_y": {
-          "name": "vo_y",
+        "vg_b_min": {
+          "name": "vg_b_min",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "vo_b": {
-          "name": "vo_b",
+        "vg_b_max": {
+          "name": "vg_b_max",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "ig_r": {
-          "name": "ig_r",
+        "vo_r_min": {
+          "name": "vo_r_min",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "ig_y": {
-          "name": "ig_y",
+        "vo_r_max": {
+          "name": "vo_r_max",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "ig_b": {
-          "name": "ig_b",
+        "vo_y_min": {
+          "name": "vo_y_min",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "io_r": {
-          "name": "io_r",
+        "vo_y_max": {
+          "name": "vo_y_max",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "io_y": {
-          "name": "io_y",
+        "vo_b_min": {
+          "name": "vo_b_min",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
           "default": 0
         },
-        "io_b": {
-          "name": "io_b",
+        "vo_b_max": {
+          "name": "vo_b_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ig_r_min": {
+          "name": "ig_r_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ig_r_max": {
+          "name": "ig_r_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "ig_y_min": {
+          "name": "ig_y_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ig_y_max": {
+          "name": "ig_y_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "ig_b_min": {
+          "name": "ig_b_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "ig_b_max": {
+          "name": "ig_b_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 65536
+        },
+        "io_r_min": {
+          "name": "io_r_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_r_max": {
+          "name": "io_r_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_y_min": {
+          "name": "io_y_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_y_max": {
+          "name": "io_y_max",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_b_min": {
+          "name": "io_b_min",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "io_b_max": {
+          "name": "io_b_max",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
@@ -3911,6 +4149,90 @@
           "primaryKey": false,
           "notNull": false,
           "default": 0.5
+        },
+        "drf": {
+          "name": "drf",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 5
+        },
+        "olr": {
+          "name": "olr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "lrr": {
+          "name": "lrr",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "cir": {
+          "name": "cir",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 10
+        },
+        "vflt_under_voltage": {
+          "name": "vflt_under_voltage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vflt_over_voltage": {
+          "name": "vflt_over_voltage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vflt_voltage_imbalance": {
+          "name": "vflt_voltage_imbalance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "vflt_phase_failure": {
+          "name": "vflt_phase_failure",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "cflt_dry_run": {
+          "name": "cflt_dry_run",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "cflt_over_current": {
+          "name": "cflt_over_current",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "cflt_output_phase_fail": {
+          "name": "cflt_output_phase_fail",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "cflt_curr_imbalance": {
+          "name": "cflt_curr_imbalance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
         },
         "ug_r": {
           "name": "ug_r",
@@ -4477,6 +4799,36 @@
           "primaryKey": false,
           "notNull": true
         },
+        "alternate_phone_1": {
+          "name": "alternate_phone_1",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alternate_phone_2": {
+          "name": "alternate_phone_2",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alternate_phone_3": {
+          "name": "alternate_phone_3",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alternate_phone_4": {
+          "name": "alternate_phone_4",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "alternate_phone_5": {
+          "name": "alternate_phone_5",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "user_type": {
           "name": "user_type",
           "type": "user_type",
@@ -4615,6 +4967,86 @@
           "columns": [
             {
               "expression": "phone",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "unique_alt_phone_1_idx": {
+          "name": "unique_alt_phone_1_idx",
+          "columns": [
+            {
+              "expression": "alternate_phone_1",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "unique_alt_phone_2_idx": {
+          "name": "unique_alt_phone_2_idx",
+          "columns": [
+            {
+              "expression": "alternate_phone_2",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "unique_alt_phone_3_idx": {
+          "name": "unique_alt_phone_3_idx",
+          "columns": [
+            {
+              "expression": "alternate_phone_3",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "unique_alt_phone_4_idx": {
+          "name": "unique_alt_phone_4_idx",
+          "columns": [
+            {
+              "expression": "alternate_phone_4",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"users\".\"status\" != 'ARCHIVED'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "unique_alt_phone_5_idx": {
+          "name": "unique_alt_phone_5_idx",
+          "columns": [
+            {
+              "expression": "alternate_phone_5",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

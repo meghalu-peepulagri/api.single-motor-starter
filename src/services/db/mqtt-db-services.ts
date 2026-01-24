@@ -56,13 +56,7 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
     case "HEART_BEAT":
       await heartbeatHandler(payload, topic);
       break;
-    case "ADMIN_CONFIG_DATA_REQUEST_ACK":
-      await adminConfigDataRequestAckHandler(payload, topic);
-      break;
     case "CALIBRATION_ACK":
-      await adminConfigDataRequestAckHandler(payload, topic);
-      break;
-    case "USER_CONFIG_DATA_REQUEST_ACK":
       await adminConfigDataRequestAckHandler(payload, topic);
       break;
     default:

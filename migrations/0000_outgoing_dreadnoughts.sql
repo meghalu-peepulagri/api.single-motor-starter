@@ -1,18 +1,18 @@
-CREATE TYPE "public"."device_token_status" AS ENUM('ACTIVE', 'INACTIVE');--> statement-breakpoint
-CREATE TYPE "public"."schedule_type" AS ENUM('ONE_TIME', 'DAILY', 'WEEKLY');--> statement-breakpoint
-CREATE TYPE "public"."schedule_status" AS ENUM('PENDING', 'RUNNING', 'SCHEDULED', 'COMPLETED', 'FAILED', 'PAUSED', 'CANCELLED', 'RESCHEDULED');--> statement-breakpoint
-CREATE TYPE "public"."mode_enum" AS ENUM('MANUAL', 'AUTO');--> statement-breakpoint
-CREATE TYPE "public"."device_status" AS ENUM('ASSIGNED', 'DEPLOYED', 'READY', 'TEST');--> statement-breakpoint
-CREATE TYPE "public"."starter_type" AS ENUM('SINGLE_STARTER', 'MULTI_STARTER');--> statement-breakpoint
-CREATE TYPE "public"."acknowledgement_enum" AS ENUM('TRUE', 'FALSE');--> statement-breakpoint
+-- CREATE TYPE "public"."device_token_status" AS ENUM('ACTIVE', 'INACTIVE');--> statement-breakpoint
+-- CREATE TYPE "public"."schedule_type" AS ENUM('ONE_TIME', 'DAILY', 'WEEKLY');--> statement-breakpoint
+-- CREATE TYPE "public"."schedule_status" AS ENUM('PENDING', 'RUNNING', 'SCHEDULED', 'COMPLETED', 'FAILED', 'PAUSED', 'CANCELLED', 'RESCHEDULED');--> statement-breakpoint
+-- CREATE TYPE "public"."mode_enum" AS ENUM('MANUAL', 'AUTO');--> statement-breakpoint
+-- CREATE TYPE "public"."device_status" AS ENUM('ASSIGNED', 'DEPLOYED', 'READY', 'TEST');--> statement-breakpoint
+-- CREATE TYPE "public"."starter_type" AS ENUM('SINGLE_STARTER', 'MULTI_STARTER');--> statement-breakpoint
+-- CREATE TYPE "public"."acknowledgement_enum" AS ENUM('TRUE', 'FALSE');--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "alerts_faults" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"starter_id" integer,
 	"motor_id" integer,
 	"alert_code" integer,
-	"alert_description" text,
+	"alert_description" varchar,
 	"fault_code" integer,
-	"fault_description" text,
+	"fault_description" varchar,
 	"timestamp" timestamp,
 	"user_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL
@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS "starter_boxes" (
 	"network_type" varchar DEFAULT 'NUll' NOT NULL,
 	"starter_type" "starter_type" DEFAULT 'SINGLE_STARTER' NOT NULL,
 	"hardware_version" varchar,
+	"temperature" real DEFAULT 0,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"assigned_at" timestamp,
 	"updated_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL
@@ -196,6 +197,18 @@ CREATE TABLE IF NOT EXISTS "starter_default_settings" (
 	"lrf" real DEFAULT 1,
 	"opf" real DEFAULT 0.5,
 	"cif" real DEFAULT 0.5,
+	"drf" real DEFAULT 5,
+	"lrr" real DEFAULT 10,
+	"olr" real DEFAULT 10,
+	"cir" real DEFAULT 10,
+	"vflt_under_voltage" integer DEFAULT 0,
+	"vflt_over_voltage" integer DEFAULT 0,
+	"vflt_voltage_imbalance" integer DEFAULT 0,
+	"vflt_phase_failure" integer DEFAULT 0,
+	"cflt_dry_run" integer DEFAULT 0,
+	"cflt_over_current" integer DEFAULT 0,
+	"cflt_output_phase_fail" integer DEFAULT 0,
+	"cflt_curr_imbalance" integer DEFAULT 0,
 	"ug_r" integer DEFAULT 50567,
 	"ug_y" integer DEFAULT 49867,
 	"ug_b" integer DEFAULT 51078,
@@ -280,8 +293,6 @@ CREATE TABLE IF NOT EXISTS "starter_parameters" (
 CREATE TABLE IF NOT EXISTS "starter_settings_limits" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"starter_id" integer NOT NULL,
-	"allflt_en_min" integer DEFAULT 0,
-	"allflt_en_max" integer DEFAULT 1,
 	"pr_flt_en_min" integer DEFAULT 0,
 	"pr_flt_en_max" integer DEFAULT 65355,
 	"flc_min" real DEFAULT 1,
@@ -304,17 +315,13 @@ CREATE TABLE IF NOT EXISTS "starter_settings_limits" (
 	"paminf_max" real DEFAULT 110,
 	"pamaxf_min" real DEFAULT 125,
 	"pamaxf_max" real DEFAULT 130,
-	"f_dr" real DEFAULT 10,
 	"f_dr_min" real DEFAULT 10,
 	"f_dr_max" real DEFAULT 50,
-	"f_ol" real DEFAULT 120,
 	"f_ol_min" real DEFAULT 120,
 	"f_ol_max" real DEFAULT 150,
-	"f_lr" real DEFAULT 350,
 	"f_lr_min" real DEFAULT 350,
 	"f_lr_max" real DEFAULT 450,
 	"f_opf" real DEFAULT 0.5,
-	"f_ci" real DEFAULT 15,
 	"f_ci_min" real DEFAULT 15,
 	"f_ci_max" real DEFAULT 35,
 	"pfa_min" real DEFAULT 280,
@@ -345,27 +352,54 @@ CREATE TABLE IF NOT EXISTS "starter_settings_limits" (
 	"olf_max" real DEFAULT 9,
 	"lrf_min" real DEFAULT 1,
 	"lrf_max" real DEFAULT 9,
-	"opf" real DEFAULT 0.5,
+	"opf_min" real DEFAULT 0.5,
+	"opf_max" real DEFAULT 1,
 	"cif_min" real DEFAULT 0.5,
 	"cif_max" real DEFAULT 1,
-	"ug_r" integer DEFAULT 50567,
-	"ug_y" integer DEFAULT 49867,
-	"ug_b" integer DEFAULT 51078,
-	"ip_r" integer DEFAULT 8974,
-	"ip_y" integer DEFAULT 8974,
-	"ip_b" integer DEFAULT 8974,
-	"vg_r" real DEFAULT 0,
-	"vg_y" real DEFAULT 0,
-	"vg_b" real DEFAULT 0,
-	"vo_r" real DEFAULT 0,
-	"vo_y" real DEFAULT 0,
-	"vo_b" real DEFAULT 0,
-	"ig_r" real DEFAULT 0,
-	"ig_y" real DEFAULT 0,
-	"ig_b" real DEFAULT 0,
-	"io_r" real DEFAULT 0,
-	"io_y" real DEFAULT 0,
-	"io_b" real DEFAULT 0,
+	"drf_min" real DEFAULT 5,
+	"drf_max" real DEFAULT 20,
+	"irr_min" real DEFAULT 10,
+	"irr_max" real DEFAULT 50,
+	"olr_min" real DEFAULT 10,
+	"olr_max" real DEFAULT 50,
+	"cir_min" real DEFAULT 10,
+	"cir_max" real DEFAULT 50,
+	"ug_r_min" real DEFAULT 1,
+	"ug_r_max" real DEFAULT 65536,
+	"ug_y_min" real DEFAULT 1,
+	"ug_y_max" real DEFAULT 65536,
+	"ug_b_min" real DEFAULT 1,
+	"ug_b_max" real DEFAULT 65536,
+	"ip_r_min" real DEFAULT 1,
+	"ip_r_max" real DEFAULT 65536,
+	"ip_y_min" real DEFAULT 1,
+	"ip_y_max" real DEFAULT 65536,
+	"ip_b_min" real DEFAULT 1,
+	"ip_b_max" real DEFAULT 65536,
+	"vg_r_min" real DEFAULT 0,
+	"vg_r_max" real DEFAULT 0,
+	"vg_y_min" real DEFAULT 0,
+	"vg_y_max" real DEFAULT 0,
+	"vg_b_min" real DEFAULT 0,
+	"vg_b_max" real DEFAULT 0,
+	"vo_r_min" real DEFAULT 0,
+	"vo_r_max" real DEFAULT 0,
+	"vo_y_min" real DEFAULT 0,
+	"vo_y_max" real DEFAULT 0,
+	"vo_b_min" real DEFAULT 0,
+	"vo_b_max" real DEFAULT 0,
+	"ig_r_min" real DEFAULT 1,
+	"ig_r_max" real DEFAULT 65536,
+	"ig_y_min" real DEFAULT 1,
+	"ig_y_max" real DEFAULT 65536,
+	"ig_b_min" real DEFAULT 1,
+	"ig_b_max" real DEFAULT 65536,
+	"io_r_min" real DEFAULT 0,
+	"io_r_max" real DEFAULT 0,
+	"io_y_min" real DEFAULT 0,
+	"io_y_max" real DEFAULT 0,
+	"io_b_min" real DEFAULT 0,
+	"io_b_max" real DEFAULT 0,
 	"r1" integer DEFAULT 0,
 	"r2" integer DEFAULT 0,
 	"off" integer DEFAULT 0,
@@ -429,6 +463,18 @@ CREATE TABLE IF NOT EXISTS "starter_settings" (
 	"lrf" real DEFAULT 1,
 	"opf" real DEFAULT 0.5,
 	"cif" real DEFAULT 0.5,
+	"drf" real DEFAULT 5,
+	"olr" real DEFAULT 10,
+	"lrr" real DEFAULT 10,
+	"cir" real DEFAULT 10,
+	"vflt_under_voltage" integer DEFAULT 0,
+	"vflt_over_voltage" integer DEFAULT 0,
+	"vflt_voltage_imbalance" integer DEFAULT 0,
+	"vflt_phase_failure" integer DEFAULT 0,
+	"cflt_dry_run" integer DEFAULT 0,
+	"cflt_over_current" integer DEFAULT 0,
+	"cflt_output_phase_fail" integer DEFAULT 0,
+	"cflt_curr_imbalance" integer DEFAULT 0,
 	"ug_r" integer DEFAULT 50567,
 	"ug_y" integer DEFAULT 49867,
 	"ug_b" integer DEFAULT 51078,
@@ -497,6 +543,11 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"full_name" varchar NOT NULL,
 	"email" varchar,
 	"phone" varchar NOT NULL,
+	"alternate_phone_1" varchar,
+	"alternate_phone_2" varchar,
+	"alternate_phone_3" varchar,
+	"alternate_phone_4" varchar,
+	"alternate_phone_5" varchar,
 	"user_type" "user_type" DEFAULT 'USER',
 	"password" varchar,
 	"address" varchar,
@@ -509,43 +560,43 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"updated_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
 --> statement-breakpoint
-ALTER TABLE "alerts_faults" ADD CONSTRAINT "alerts_faults_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "alerts_faults" ADD CONSTRAINT "alerts_faults_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "alerts_faults" ADD CONSTRAINT "alerts_faults_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "device_run_time" ADD CONSTRAINT "device_run_time_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "device_run_time" ADD CONSTRAINT "device_run_time_starter_box_id_starter_boxes_id_fk" FOREIGN KEY ("starter_box_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "device_run_time" ADD CONSTRAINT "device_run_time_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "device_tokens" ADD CONSTRAINT "device_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "fields" ADD CONSTRAINT "fields_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "fields" ADD CONSTRAINT "fields_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "gateways" ADD CONSTRAINT "gateways_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "gateways" ADD CONSTRAINT "gateways_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "gateways" ADD CONSTRAINT "gateways_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "locations" ADD CONSTRAINT "locations_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "locations" ADD CONSTRAINT "locations_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "motors_run_time" ADD CONSTRAINT "motors_run_time_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "motors_run_time" ADD CONSTRAINT "motors_run_time_starter_box_id_starter_boxes_id_fk" FOREIGN KEY ("starter_box_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "motors_run_time" ADD CONSTRAINT "motors_run_time_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "motor_schedules" ADD CONSTRAINT "motor_schedules_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "motors" ADD CONSTRAINT "motors_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "motors" ADD CONSTRAINT "motors_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "motors" ADD CONSTRAINT "motors_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_boxes" ADD CONSTRAINT "starter_boxes_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_boxes" ADD CONSTRAINT "starter_boxes_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_boxes" ADD CONSTRAINT "starter_boxes_gateway_id_gateways_id_fk" FOREIGN KEY ("gateway_id") REFERENCES "public"."gateways"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_boxes" ADD CONSTRAINT "starter_boxes_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_parameters" ADD CONSTRAINT "starter_parameters_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_parameters" ADD CONSTRAINT "starter_parameters_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_parameters" ADD CONSTRAINT "starter_parameters_gateway_id_gateways_id_fk" FOREIGN KEY ("gateway_id") REFERENCES "public"."gateways"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_parameters" ADD CONSTRAINT "starter_parameters_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_settings_limits" ADD CONSTRAINT "starter_settings_limits_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_settings" ADD CONSTRAINT "starter_settings_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "starter_settings" ADD CONSTRAINT "starter_settings_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_activity_logs" ADD CONSTRAINT "user_activity_logs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_activity_logs" ADD CONSTRAINT "user_activity_logs_performed_by_users_id_fk" FOREIGN KEY ("performed_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_activity_logs" ADD CONSTRAINT "user_activity_logs_device_id_starter_boxes_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_referred_by_users_id_fk" FOREIGN KEY ("referred_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "alerts_faults" ADD CONSTRAINT "alerts_faults_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "alerts_faults" ADD CONSTRAINT "alerts_faults_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "alerts_faults" ADD CONSTRAINT "alerts_faults_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "device_run_time" ADD CONSTRAINT "device_run_time_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "device_run_time" ADD CONSTRAINT "device_run_time_starter_box_id_starter_boxes_id_fk" FOREIGN KEY ("starter_box_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "device_run_time" ADD CONSTRAINT "device_run_time_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "device_tokens" ADD CONSTRAINT "device_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "fields" ADD CONSTRAINT "fields_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "fields" ADD CONSTRAINT "fields_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "gateways" ADD CONSTRAINT "gateways_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "gateways" ADD CONSTRAINT "gateways_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "gateways" ADD CONSTRAINT "gateways_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "locations" ADD CONSTRAINT "locations_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "locations" ADD CONSTRAINT "locations_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "motors_run_time" ADD CONSTRAINT "motors_run_time_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "motors_run_time" ADD CONSTRAINT "motors_run_time_starter_box_id_starter_boxes_id_fk" FOREIGN KEY ("starter_box_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "motors_run_time" ADD CONSTRAINT "motors_run_time_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "motor_schedules" ADD CONSTRAINT "motor_schedules_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "motors" ADD CONSTRAINT "motors_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "motors" ADD CONSTRAINT "motors_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "motors" ADD CONSTRAINT "motors_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_boxes" ADD CONSTRAINT "starter_boxes_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_boxes" ADD CONSTRAINT "starter_boxes_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_boxes" ADD CONSTRAINT "starter_boxes_gateway_id_gateways_id_fk" FOREIGN KEY ("gateway_id") REFERENCES "public"."gateways"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_boxes" ADD CONSTRAINT "starter_boxes_location_id_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_parameters" ADD CONSTRAINT "starter_parameters_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_parameters" ADD CONSTRAINT "starter_parameters_motor_id_motors_id_fk" FOREIGN KEY ("motor_id") REFERENCES "public"."motors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_parameters" ADD CONSTRAINT "starter_parameters_gateway_id_gateways_id_fk" FOREIGN KEY ("gateway_id") REFERENCES "public"."gateways"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_parameters" ADD CONSTRAINT "starter_parameters_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_settings_limits" ADD CONSTRAINT "starter_settings_limits_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_settings" ADD CONSTRAINT "starter_settings_starter_id_starter_boxes_id_fk" FOREIGN KEY ("starter_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "starter_settings" ADD CONSTRAINT "starter_settings_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "user_activity_logs" ADD CONSTRAINT "user_activity_logs_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "user_activity_logs" ADD CONSTRAINT "user_activity_logs_performed_by_users_id_fk" FOREIGN KEY ("performed_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "user_activity_logs" ADD CONSTRAINT "user_activity_logs_device_id_starter_boxes_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."starter_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "users" ADD CONSTRAINT "users_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+-- ALTER TABLE "users" ADD CONSTRAINT "users_referred_by_users_id_fk" FOREIGN KEY ("referred_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "alerts_faults_starter_motor_time_desc_idx" ON "alerts_faults" USING btree ("starter_id","motor_id","timestamp" desc);--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "alerts_faults_fault_filter_idx" ON "alerts_faults" USING btree ("fault_code","fault_description") WHERE 
       "alerts_faults"."fault_code" IS NOT NULL
@@ -608,4 +659,9 @@ CREATE INDEX IF NOT EXISTS "user_type_idx" ON "users" USING btree ("user_type");
 CREATE INDEX IF NOT EXISTS "user_status_idx" ON "users" USING btree ("status");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "unique_mail_idx" ON "users" USING btree ("email") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "unique_phone_idx" ON "users" USING btree ("phone") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_alt_phone_1_idx" ON "users" USING btree ("alternate_phone_1") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_alt_phone_2_idx" ON "users" USING btree ("alternate_phone_2") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_alt_phone_3_idx" ON "users" USING btree ("alternate_phone_3") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_alt_phone_4_idx" ON "users" USING btree ("alternate_phone_4") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "unique_alt_phone_5_idx" ON "users" USING btree ("alternate_phone_5") WHERE "users"."status" != 'ARCHIVED';--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "valid_user" ON "users" USING btree ("email","phone") WHERE "users"."status" != 'ARCHIVED';

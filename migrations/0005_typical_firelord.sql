@@ -1,1 +1,0 @@
-ALTER TABLE "starter_settings" RENAME COLUMN "llr" TO "lrr";
