@@ -4,7 +4,7 @@ import { isAdmin } from "../middlewares/guards/guardUser.js";
 import { isAuthorized } from "../middlewares/isAuthorized.js";
 const settingsHandlers = new StarterDefaultSettingsHandlers();
 const settingsRoutes = factory.createApp();
-settingsRoutes.get("/default", isAuthorized, isAdmin, settingsHandlers.getStarterDefaultSettingsHandler);
+settingsRoutes.get("/default", isAuthorized, settingsHandlers.getStarterDefaultSettingsHandler);
 settingsRoutes.patch("/default/:id", isAuthorized, isAdmin, settingsHandlers.updateStarterDefaultSettingsHandler);
 settingsRoutes.get("/starter/:starter_id", isAuthorized, settingsHandlers.getAcknowledgedStarterSettingsHandler);
 settingsRoutes.post("/starter/:starter_id", isAuthorized, settingsHandlers.insertStarterSettingHandler);

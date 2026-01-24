@@ -58,6 +58,29 @@ export async function updateLatestStarterSettings(starterId: number, isNewConfig
     );
 }
 
+
+export async function updateLatestStarterSettingsFlc(starterId: number, avgCurrent: number) {
+  if (!starterId) return null;
+
+  return db
+    .update(starterSettings)
+    .set({
+      flc: avgCurrent,
+    })
+    .where(
+      sql`
+        ${starterSettings.starter_id} = ${starterId}
+        AND ${starterSettings.acknowledgement} = true
+        AND ${starterSettings.created_at} = (
+          SELECT MAX(created_at)
+          FROM starter_settings
+          WHERE starter_id = ${starterId}
+          AND acknowledgement = true
+        )
+      `
+    );
+}
+
 export async function getAcknowledgedStarterSettings(starterId: number, columns?: Record<string, boolean>) {
   return db.query.starterSettings.findFirst({
     where: and(

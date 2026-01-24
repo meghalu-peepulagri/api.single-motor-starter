@@ -159,6 +159,7 @@ export const LOCATION_FETCHED = "Location fetched successfully";
 export const LOCATIONS_FETCHED = "Locations fetched successfully";
 export const LOCATION_UPDATED = "Location updated successfully";
 export const LOCATION_DELETED = "Location deleted successfully";
+export const LOCATION_RENAMED = "Location renamed successfully"
 
 // OTP
 export const INVALID_OTP = "Invalid OTP";

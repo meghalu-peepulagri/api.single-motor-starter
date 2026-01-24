@@ -11,9 +11,9 @@ import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-he
 import { logger } from "../../utils/logger.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
-import { saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getRecordsCount, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
-import { updateLatestStarterSettings } from "./settings-services.js";
+import { updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {
@@ -68,10 +68,13 @@ export async function selectTopicAck(topicType, payload, topic) {
 }
 const VALID_MODES = ["AUTO", "MANUAL"];
 export async function updateStates(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
     const { power, prevState, prevMode, locationId, created_by } = extractPreviousData(previousData, motor_id);
     if (!starter_id)
         return null;
+    const parametersCount = await getRecordsCount(starterBoxParameters, [eq(starterBoxParameters.starter_id, starter_id)]);
+    if (parametersCount === 0)
+        updateLatestStarterSettingsFlc(starter_id, avg_current);
     try {
         await db.transaction(async (trx) => {
             await saveSingleRecord(starterBoxParameters, insertedData, trx);
@@ -134,10 +137,13 @@ export async function updateStates(insertedData, previousData) {
     }
 }
 export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp, temp } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp, temp, avg_current } = insertedData;
     const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
+    const parametersCount = await getRecordsCount(starterBoxParameters, [eq(starterBoxParameters.starter_id, starter_id)]);
+    if (parametersCount === 0)
+        updateLatestStarterSettingsFlc(starter_id, avg_current);
     await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
         const starterBoxUpdates = {};

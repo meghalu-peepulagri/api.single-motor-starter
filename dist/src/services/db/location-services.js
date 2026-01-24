@@ -54,7 +54,7 @@ export async function getLocationsList(whereQueryData, orderQueryData) {
         with: {
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
-                orderBy: [desc(motors.created_at)],
+                orderBy: [desc(motors.assigned_at)],
                 columns: {
                     id: true,
                     name: true,
