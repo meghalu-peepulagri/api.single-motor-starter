@@ -1,7 +1,7 @@
 import argon2 from "argon2";
 import type { Context } from "hono";
 import moment from "moment";
-import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, MOBILE_NUMBER_ALREADY_EXIST, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
 import db from "../database/configuration.js";
 import { deviceTokens, type DeviceTokensTable } from "../database/schemas/device-tokens.js";
@@ -12,8 +12,6 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 import { prepareOTPData } from "../helpers/otp-helper.js";
-import { checkInternalPhoneUniqueness } from "../helpers/user-helper.js";
-import { ActivityService } from "../services/db/activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
 import { OtpService } from "../services/db/otp-services.js";
 import { SmsService } from "../services/sms/sms-service.js";
@@ -23,16 +21,12 @@ import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 
-import ConflictException from "../exceptions/conflict-exception.js";
-import { checkPhoneUniqueness, checkPhoneUniquenessVerify } from "../services/db/user-services.js";
-
 const paramsValidateException = new ParamsValidateException();
 const otpService = new OtpService();
 const smsService = new SmsService();
 
 export class AuthHandlers {
-    // TODO : Reduce the code length
-    userRegisterHandler = async (c: Context) => {
+    userRegisterHandlers = async (c: Context) => {
         try {
             const userPayload = c.get("user_payload");
             const reqBody = await c.req.json();
@@ -40,13 +34,6 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
 
             const validUserReq = await validatedRequest<ValidatedSignUpUser>("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
-
-            const allPhones = checkInternalPhoneUniqueness(validUserReq);
-
-            const isPhoneUnique = await checkPhoneUniqueness(allPhones);
-            if (!isPhoneUnique) {
-                throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
-            }
 
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
 
@@ -67,20 +54,22 @@ export class AuthHandlers {
                 createdUser = await saveSingleRecord<UsersTable>(users, userData, trx);
                 if (!createdUser) return;
 
-                await ActivityService.logActivity({
-                    userId: Number(createdUser.id),
-                    performedBy: userPayload?.id ?? Number(createdUser.id),
+                const logData: any = {
+                    user_id: Number(createdUser.id),
                     action: "REGISTERED",
-                    entityType: "AUTH",
-                    entityId: Number(createdUser.id),
-                }, trx);
+                    performed_by: userPayload?.id ?? Number(createdUser.id),
+                    old_data: null,
+                    new_data: null,
+                };
+
+                // await saveSingleRecord(userActivityLogs, logData, trx);
             });
 
             if (!userPayload && createdUser) {
                 const phone = createdUser.phone;
-                const otpData = prepareOTPData(phone, "REGISTERED");
+                const otpData = prepareOTPData(createdUser, phone, "REGISTERED");
                 await otpService.createOTP(otpData);
-                // await smsService.sendSms(phone, otpData.otp, validUserReq.signature_id);
+                await smsService.sendSms(phone, otpData.otp, validUserReq.signature_id);
             }
 
             return sendResponse(c, CREATED, USER_CREATED);
@@ -93,7 +82,7 @@ export class AuthHandlers {
         }
     };
 
-    signInWithEmailHandler = async (c: Context) => {
+    signInWithEmailHandlers = async (c: Context) => {
         try {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
@@ -118,18 +107,18 @@ export class AuthHandlers {
         }
     }
 
-    signInWithPhoneHandler = async (c: Context) => {
+    signInWithPhoneHandlers = async (c: Context) => {
         try {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validatedPhone = await validatedRequest<ValidatedSignInPhone>("signin-phone", reqBody, LOGIN_VALIDATION_CRITERIA);
 
-            const loginUser = await checkPhoneUniqueness([validatedPhone.phone])
-            if (loginUser === true) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
+            const loginUser = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["phone", "status"], ["=", "!="], [validatedPhone.phone, "ARCHIVED"]);
+            if (!loginUser) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
 
-            const otpData = prepareOTPData(validatedPhone.phone, "SIGN_IN_WITH_OTP");
+            const otpData = prepareOTPData(loginUser, validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
-            // await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
+            await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
             return sendResponse(c, CREATED, OTP_SENT);
         } catch (error: any) {
             console.error("Error at sign in with phone :", error);
@@ -140,15 +129,15 @@ export class AuthHandlers {
     }
 
 
-    verifyOtpHandler = async (c: Context) => {
+    verifyOtpHandlers = async (c: Context) => {
         try {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
 
             const validReqData = await validatedRequest<ValidatedVerifyOtp>("verify-otp", reqBody, VERIFY_OTP_VALIDATION_CRITERIA);
 
-            const user = await checkPhoneUniquenessVerify([validReqData.phone])
-            if (user === true) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
+            const user = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["phone", "status"], ["=", "!="], [validReqData.phone, "ARCHIVED"]);
+            if (!user) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
 
             const otpData: NewOtp[] = await otpService.fetchOtp({ phone: validReqData.phone });
             const now = moment.utc();
@@ -165,21 +154,21 @@ export class AuthHandlers {
             }
 
             const validOtp = otp as Required<NewOtp>;
-            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user[0].id);
+            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
 
-            const { access_token, refresh_token } = await genJWTTokensForUser(user[0].id);
+            const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
             const { password, ...userDetails } = updatedUser;
 
             const data = { user_details: userDetails, access_token, refresh_token };
 
             if (validReqData.fcm_token) {
                 const fcmToken = validReqData.fcm_token;
-                const existingToken = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user[0].id]);
+                const existingToken = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user.id]);
 
                 if (!existingToken) {
-                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["user_id"], ["="], [user[0].id]);
+                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["user_id"], ["="], [user.id]);
                     if (!checkOtherDevice || checkOtherDevice.device_token !== fcmToken) {
-                        await saveSingleRecord<DeviceTokensTable>(deviceTokens, { device_token: fcmToken, user_id: user[0].id });
+                        await saveSingleRecord<DeviceTokensTable>(deviceTokens, { device_token: fcmToken, user_id: user.id });
                     }
                 }
             }

@@ -1,15 +1,13 @@
 import type { Context } from "hono";
-import { MOBILE_NUMBER_ALREADY_EXIST, USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
+import { USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { users, type UsersTable } from "../database/schemas/users.js";
-import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { checkInternalPhoneUniqueness, userFilters } from "../helpers/user-helper.js";
-import { ActivityService } from "../services/db/activity-service.js";
-import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
-import { checkPhoneUniqueness, paginatedUsersList } from "../services/db/user-services.js";
+import { userFilters } from "../helpers/user-helper.js";
+import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { paginatedUsersList } from "../services/db/user-services.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -100,19 +98,22 @@ export class UserHandlers {
       paramsValidateException.emptyBodyValidation(reqBody);
       const validUserReq = await validatedRequest<ValidatedSignUpUser>("signup", reqBody, USER_UPDATE_VALIDATION_CRITERIA);
 
-      const allPhones = checkInternalPhoneUniqueness(validUserReq);
-
-      const isPhoneUnique = await checkPhoneUniqueness(allPhones, userId);
-      if (!isPhoneUnique) {
-        throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
-      }
-
       const verifiedUser = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["id", "status"], ["=", "!="], [userId, "ARCHIVED"]);
       if (!verifiedUser) throw new NotFoundException(USER_NOT_FOUND);
 
+      const fieldsToTrack = ["full_name", "phone", "email"] as const;
+      const logs = fieldsToTrack.filter((field) => validUserReq[field] !== verifiedUser[field]).map((field) => ({
+        field_name: field,
+        user_id: userId,
+        action: "UPDATED",
+        performed_by: userPayload.id,
+        old_data: String(verifiedUser[field] ?? ""),
+        new_data: String(validUserReq[field] ?? ""),
+      }));
+
       await db.transaction(async (trx) => {
-        const updatedUser = await updateRecordById<UsersTable>(users, userId, validUserReq, trx);
-        await ActivityService.writeUserUpdatedLog(userId, userPayload.id, verifiedUser, updatedUser, trx);
+        await updateRecordByIdWithTrx<UsersTable>(users, userId, { ...validUserReq }, trx);
+        // if (logs.length) await saveRecords<UserActivityLogsTable>(userActivityLogs, logs, trx);
       })
 
       return sendResponse(c, 201, USER_UPDATED);

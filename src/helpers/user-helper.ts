@@ -17,8 +17,8 @@ export function userFilters(query: any) {
     const search = query.search_string.trim();
 
     whereQueryData.or!.push({
-      columns: ["full_name", "email", "phone", "alternate_phone_1", "alternate_phone_2", "alternate_phone_3", "alternate_phone_4", "alternate_phone_5"],
-      relations: ["contains", "contains", "contains", "contains", "contains", "contains", "contains", "contains"],
+      columns: ["full_name", "email", "phone"],
+      relations: ["contains", "contains", "contains"],
       values: [search, search, search, search, search, search, search, search],
     });
   }
