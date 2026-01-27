@@ -37,10 +37,10 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "unique_alt_phone_5_idx": "Mobile Number already exist.",
   "unique_location_per_user": "Location name already exist.",
   "unique_field_per_user_location": "Field name already exist.",
-  "validate_mac_address": "MAC address already exist.",
+  "validate_mac_address": "Unique ID already exist.",
+  "validate_starter_number": "Starter Number already exist.",
   "validate_pcb_number": "PCB number already exist.",
   "valid_starter_box_name": "Name already exist.",
-  "validate_starter_number": "Starter Number already exist.",
   "unique_motor_alias_name_per_location": "Pump name already exist.",
 };
 
