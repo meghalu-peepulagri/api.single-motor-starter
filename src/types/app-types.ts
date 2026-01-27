@@ -1,4 +1,5 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ValidatedUpdateDefaultSettingsLimits } from "../validations/schema/default-settings-limits.js";
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import type { validatedAddField } from "../validations/schema/field-validations.js";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
@@ -8,10 +9,10 @@ import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAs
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 
 export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedAddStarter | ValidatedMotorSchedule
-  | ValidatedMotorScheduleArray | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings;
+  | ValidatedMotorScheduleArray | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits;
 
 export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "add-starter" | "create-motor-schedule" | "assign-starter" | "replace-starter" |
-  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-settings-limits";
+  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits";
 
 export interface IResp {
   status: ContentfulStatusCode;

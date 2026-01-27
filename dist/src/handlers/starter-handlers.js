@@ -312,6 +312,7 @@ export class StarterHandlers {
             await db.transaction(async (trx) => {
                 updateRecordByIdWithTrx(starterBoxes, starterBox.id, { device_status: validatedReqData.deploy_status }, trx);
                 await ActivityService.logActivity({
+                    userId: userPayload.id,
                     performedBy: userPayload.id,
                     action: "DEPLOY_STATUS_UPDATE",
                     entityType: "STARTER",

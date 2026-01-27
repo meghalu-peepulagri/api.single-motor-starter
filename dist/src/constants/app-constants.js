@@ -284,6 +284,10 @@ export const ADDED_STARTER_SETTINGS = "Starter settings updated successfully";
 export const SETTINGS_LIMITS_FETCHED = "Settings limits fetched successfully";
 export const SETTINGS_LIMITS_UPDATED = "Settings limits updated successfully";
 export const SETTINGS_LIMITS_NOT_FOUND = "Settings limits id not found";
+export const DEFAULT_SETTINGS_LIMITS_FETCHED = "Default settings limits fetched successfully";
+export const DEFAULT_SETTINGS_LIMITS_UPDATED = "Default settings limits updated successfully";
+export const DEFAULT_SETTINGS_LIMITS_NOT_FOUND = "Default settings limits not found";
+export const UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA = "Update default settings limits details provided do not meet the required validation criteria";
 export const ACTIVITY_LOGS_FETCHED = "Activity logs fetched successfully";
 export const SETTINGS_FIELD_NAMES = {
     /* ================= Device Configuration ================= */
