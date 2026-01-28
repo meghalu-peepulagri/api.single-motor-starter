@@ -196,7 +196,10 @@ export class StarterHandlers {
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
             const loweCaseLication = motor.alias_name?.trim().toLocaleLowerCase();
-            const foundMotorName = await getSingleRecordByMultipleColumnValues(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [loweCaseLication, validatedStarterReq.location_id, "ARCHIVED"]);
+            let foundMotorName;
+            if (loweCaseLication) {
+                foundMotorName = await getSingleRecordByMultipleColumnValues(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [loweCaseLication, validatedStarterReq.location_id, "ARCHIVED"]);
+            }
             if (foundMotorName)
                 throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
             await db.transaction(async (trx) => {
@@ -312,6 +315,7 @@ export class StarterHandlers {
             await db.transaction(async (trx) => {
                 updateRecordByIdWithTrx(starterBoxes, starterBox.id, { device_status: validatedReqData.deploy_status }, trx);
                 await ActivityService.logActivity({
+                    userId: userPayload.id,
                     performedBy: userPayload.id,
                     action: "DEPLOY_STATUS_UPDATE",
                     entityType: "STARTER",
