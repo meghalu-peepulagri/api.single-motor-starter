@@ -196,7 +196,10 @@ export class StarterHandlers {
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
             const loweCaseLication = motor.alias_name?.trim().toLocaleLowerCase();
-            const foundMotorName = await getSingleRecordByMultipleColumnValues(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [loweCaseLication, validatedStarterReq.location_id, "ARCHIVED"]);
+            let foundMotorName;
+            if (loweCaseLication) {
+                foundMotorName = await getSingleRecordByMultipleColumnValues(motors, ["alias_name", "location_id", "status"], ["LOWER", "=", "!="], [loweCaseLication, validatedStarterReq.location_id, "ARCHIVED"]);
+            }
             if (foundMotorName)
                 throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
             await db.transaction(async (trx) => {

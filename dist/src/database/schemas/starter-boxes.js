@@ -42,8 +42,8 @@ export const starterBoxes = pgTable("starter_boxes", {
     index("starter_box_power_idx").on(table.power),
     uniqueIndex("valid_starter_box_name").on(sql `lower(${table.name})`).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("validate_mac_address").on(sql `lower(${table.mac_address})`).where(sql `${table.status} != 'ARCHIVED'`),
-    uniqueIndex("validate_pcb_number").on(sql `lower(${table.pcb_number})`).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("validate_starter_number").on(sql `lower(${table.starter_number})`).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("validate_pcb_number").on(sql `lower(${table.pcb_number})`).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
 export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => ({
     user: one(users, {
