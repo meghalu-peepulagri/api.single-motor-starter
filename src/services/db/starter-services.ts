@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, lte, ne, notInArray, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
+import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
@@ -9,7 +10,7 @@ import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../../da
 import { starterSettings, type StarterSettingsTable } from "../../database/schemas/starter-settings.js";
 import { users, type User } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
-import { buildAnalyticsFilter } from "../../helpers/motor-helper.js";
+import { buildAnalyticsFilter, formatAnalyticsData } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareHardWareVersion, prepareStmAtmelSettingsData } from "../../helpers/settings-helpers.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
@@ -268,27 +269,52 @@ export async function replaceStarterWithTransaction(motor: Motor, starter: Start
   }
 }
 
-export async function getStarterAnalytics(starterId: number, fromDate: string, toDate: string, parameter: string, motorId?: number | undefined) {
+export async function getStarterAnalytics(
+  starterId: number,
+  fromDate: string,
+  toDate: string,
+  parameter: string,
+  motorId?: number | undefined
+) {
   const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
-  const { selectedFieldsMain } = buildAnalyticsFilter(parameter);
+  const { selectedFieldsMain, selectedFieldsBench } = buildAnalyticsFilter(parameter);
 
   const startOfDayDate = new Date(startOfDayUTC);
   const endOfDayDate = new Date(endOfDayUTC);
 
-  const filters = [
+  // Build filters for main table
+  const filtersMain = [
     eq(starterBoxParameters.starter_id, starterId),
     gte(starterBoxParameters.time_stamp, startOfDayDate.toISOString()),
     lte(starterBoxParameters.time_stamp, endOfDayDate.toISOString()),
-  ]
+  ];
 
-  if (motorId) filters.push(eq(starterBoxParameters.motor_id, +motorId))
+  // Build filters for benched table
+  const filtersBench = [
+    eq(benchedStarterParameters.starter_id, starterId),
+    gte(benchedStarterParameters.time_stamp, startOfDayDate.toISOString()),
+    lte(benchedStarterParameters.time_stamp, endOfDayDate.toISOString()),
+  ];
 
-  return await db
+  if (motorId) {
+    filtersMain.push(eq(starterBoxParameters.motor_id, +motorId));
+    filtersBench.push(eq(benchedStarterParameters.motor_id, +motorId));
+  }
+
+  const data = await db
     .select(selectedFieldsMain)
     .from(starterBoxParameters)
-    .where(and(...filters))
+    .where(and(...filtersMain))
+    .unionAll(
+      db
+        .select(selectedFieldsBench)
+        .from(benchedStarterParameters)
+        .where(and(...filtersBench))
+    )
     .orderBy(asc(starterBoxParameters.time_stamp));
-};
+
+  return formatAnalyticsData(data, parameter);
+}
 
 
 export async function getStarterRunTime(starterId: number, fromDate: string, toDate: string, motorId?: number, powerState?: string) {
@@ -452,4 +478,3 @@ export async function updateStarterStatus(starterIds: number[]) {
     activeStarterIds: activeStarterIds.map(row => row.id),
   };
 };
-
