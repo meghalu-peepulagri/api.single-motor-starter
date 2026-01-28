@@ -334,6 +334,7 @@ export async function motorControlAckHandler(message: any, topic: string) {
         );
       }
 
+
       // Always log ACK (changed or not)
       await ActivityService.writeMotorAckLogs(motor.created_by || 0, motor.id,
         { state: prevState, mode: mode_description },
