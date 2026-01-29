@@ -1,20 +1,25 @@
 import admin from "firebase-admin";
 import { FirebaseMessagingError, getMessaging } from "firebase-admin/messaging";
-import { deviceTokens, type DeviceTokensTable } from "../../database/schemas/device-tokens.js";
-import { getSingleRecordByMultipleColumnValues, updateRecordById } from "../db/base-db-services.js";
+import { deviceTokens, type DeviceToken, type DeviceTokensTable } from "../../database/schemas/device-tokens.js";
+import { getMultipleRecordsByMultipleColumnValues, getSingleRecordByMultipleColumnValues, updateRecordById } from "../db/base-db-services.js";
+import fcmConfig from "../../config/fcm-confgi.js";
 
 admin.initializeApp({
-  credential: admin.credential.cert(`${process.cwd()}/fcm-config.js`),
-  projectId: "iot-stater",
+  credential: admin.credential.cert({
+    clientEmail: fcmConfig.fcm_client_email,
+    privateKey: fcmConfig.fcm_primary_key,
+    projectId: fcmConfig.fcm_project_id,
+  }),
 });
 
-async function sendNotificationForADevice(token: string, title: string, body: string, actionId: string) {
+export async function sendNotificationForADevice(token: string, title: string, body: string, actionId: string) {
   try {
     const message = {
       notification: { title },
       data: { title, body, motor_id: actionId },
       token,
     };
+    console.log("message", message);
     return await getMessaging().sendEach([message]);
   }
   catch (error: unknown) {
@@ -32,7 +37,7 @@ async function sendNotificationForADevice(token: string, title: string, body: st
   }
 }
 
-async function sendNotificationsForMultipleDevices(tokens: string[], title: string, body: string, actionId: string) {
+export async function sendNotificationsForMultipleDevices(tokens: string[], title: string, body: string, actionId: string) {
   try {
     const message = {
       notification: { title },
@@ -56,8 +61,21 @@ async function handleInvalidDeviceToken(token: string) {
   }
 }
 
+export async function sendUserNotification(userId: number, title: string, message: string, id: number) {
 
-export { sendNotificationForADevice, sendNotificationsForMultipleDevices };
+  const tokensData = await getMultipleRecordsByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["user_id", "status"], ["=", "="], [userId, "ACTIVE"], ["device_token"]) as unknown as Pick<DeviceToken, "device_token">[];
+
+  if (!tokensData || tokensData.length === 0) return;
+  const tokens = tokensData.map(t => t.device_token);
+
+  if (tokens.length > 1) {
+    await sendNotificationsForMultipleDevices(tokens, title, message, id.toString());
+  } else {
+    await sendNotificationForADevice(tokens[0], title, message, id.toString());
+  }
+}
+
+
 
 
 

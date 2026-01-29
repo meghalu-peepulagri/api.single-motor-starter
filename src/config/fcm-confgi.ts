@@ -1,6 +1,6 @@
 import envData from "../env.js";
 
-export const fcmConfig = {
+const fcmConfig = {
   fcm_primary_key: envData.FCM_PRIMERY_KEY!,
   fcm_type: envData.FCM_TYPE!,
   fcm_project_id: envData.FCM_PROJECT_ID!,
@@ -12,4 +12,6 @@ export const fcmConfig = {
   fcm_auth_provider_x509_cert_url: envData.FCM_AUTH_PROVIDER_X509_CERT_URL!,
   fcm_client_x509_cert_url: envData.FCM_CLIENT_X509_CERT_URL!,
   fcm_universe_domain: envData.FCM_UNIVERSE_DOMAIN!,
-} 
+}
+
+export default fcmConfig;

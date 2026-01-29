@@ -16,7 +16,7 @@ import { starterFilters } from "../helpers/starter-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount } from "../services/db/alerts-services.js";
 import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
-import { getMotorRunTime, updateMotorStateByStarterIds } from "../services/db/motor-services.js";
+import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors, updateStarterStatus } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
@@ -203,7 +203,7 @@ export class StarterHandlers {
             if (foundMotorName)
                 throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
             await db.transaction(async (trx) => {
-                const { updatedMotor, updatedStarter } = await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id, trx);
+                const { updatedMotor, updatedStarter } = await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id);
                 await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx);
             });
             return sendResponse(c, 201, STARTER_REPLACED_SUCCESSFULLY);
@@ -285,10 +285,8 @@ export class StarterHandlers {
             if (starterBox.device_status !== "DEPLOYED")
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
-                const { updatedStarter, updatedMotor } = await assignStarterWebWithTransaction(starterBox, validatedReqData, userPayload, trx);
-                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
-                    user_id: updatedStarter.user_id
-                }, trx);
+                const { updatedStarter } = await assignStarterWebWithTransaction(starterBox, validatedReqData);
+                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, { user_id: updatedStarter.user_id }, trx);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
         }
@@ -421,8 +419,7 @@ export class StarterHandlers {
         try {
             const timeStamp = new Date(new Date().getTime() - 5 * 60 * 1000); // 5 minutes below
             const uniqueStarterData = await getUniqueStarterIdsWithInTime(timeStamp);
-            const updatedStarterStatus = await updateStarterStatus(uniqueStarterData);
-            updateMotorStateByStarterIds(updatedStarterStatus);
+            await updateStarterStatusWithTransaction(uniqueStarterData);
             return sendResponse(c, 200, STARTER_BOX_STATUS_UPDATED);
         }
         catch (error) {

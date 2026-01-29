@@ -1,18 +1,23 @@
 import admin from "firebase-admin";
 import { FirebaseMessagingError, getMessaging } from "firebase-admin/messaging";
 import { deviceTokens } from "../../database/schemas/device-tokens.js";
-import { getSingleRecordByMultipleColumnValues, updateRecordById } from "../db/base-db-services.js";
+import { getMultipleRecordsByMultipleColumnValues, getSingleRecordByMultipleColumnValues, updateRecordById } from "../db/base-db-services.js";
+import fcmConfig from "../../config/fcm-confgi.js";
 admin.initializeApp({
-    credential: admin.credential.cert(`${process.cwd()}/fcm-config.js`),
-    projectId: "iot-stater",
+    credential: admin.credential.cert({
+        clientEmail: fcmConfig.fcm_client_email,
+        privateKey: fcmConfig.fcm_primary_key,
+        projectId: fcmConfig.fcm_project_id,
+    }),
 });
-async function sendNotificationForADevice(token, title, body, actionId) {
+export async function sendNotificationForADevice(token, title, body, actionId) {
     try {
         const message = {
             notification: { title },
             data: { title, body, motor_id: actionId },
             token,
         };
+        console.log("message", message);
         return await getMessaging().sendEach([message]);
     }
     catch (error) {
@@ -29,7 +34,7 @@ async function sendNotificationForADevice(token, title, body, actionId) {
         throw error;
     }
 }
-async function sendNotificationsForMultipleDevices(tokens, title, body, actionId) {
+export async function sendNotificationsForMultipleDevices(tokens, title, body, actionId) {
     try {
         const message = {
             notification: { title },
@@ -50,4 +55,15 @@ async function handleInvalidDeviceToken(token) {
         await updateRecordById(deviceTokens, tokenRecord.id, { status: "INACTIVE" });
     }
 }
-export { sendNotificationForADevice, sendNotificationsForMultipleDevices };
+export async function sendUserNotification(userId, title, message, id) {
+    const tokensData = await getMultipleRecordsByMultipleColumnValues(deviceTokens, ["user_id", "status"], ["=", "="], [userId, "ACTIVE"], ["device_token"]);
+    if (!tokensData || tokensData.length === 0)
+        return;
+    const tokens = tokensData.map(t => t.device_token);
+    if (tokens.length > 1) {
+        await sendNotificationsForMultipleDevices(tokens, title, message, id.toString());
+    }
+    else {
+        await sendNotificationForADevice(tokens[0], title, message, id.toString());
+    }
+}

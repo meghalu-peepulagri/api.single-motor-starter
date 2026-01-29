@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, pgTable, real, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { integer, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 export const starterDefaultSettings = pgTable("starter_default_settings", {
     id: serial("id").primaryKey(),
     // ================= Device Configuration (35 fields) =================

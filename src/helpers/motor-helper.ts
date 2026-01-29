@@ -1,12 +1,12 @@
-import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { ALREADY_SCHEDULED_EXISTS } from "../constants/app-constants.js";
 
-import type { MotorsTable } from "../database/schemas/motors.js";
+import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
+import type { Motor, MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import type { arrayOfMotorInputType } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
-import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
+import { motorState } from "./control-helpers.js";
 
 
 
@@ -163,7 +163,7 @@ export function extractPreviousData(previousData: any, motorId: number) {
   const locationId = motor.location_id ?? null;
   const created_by = motor.created_by ?? null;
 
-  return { power, prevState, prevMode, locationId, created_by };
+  return { power, prevState, prevMode, locationId, created_by, motor };
 }
 
 export async function checkMotorScheduleConflict(validatedReqData: any, existingMotorSchedule: any) {
@@ -191,13 +191,41 @@ export async function checkMotorScheduleConflict(validatedReqData: any, existing
   }
 }
 
-export const parseDurationToSeconds = (duration: string): number => {
-  if (!duration) return 0;
+//prepare motor control notification
+export function prepareMotorStateControlNotificationData(motor: Motor, newState: number, mode_description: string): { userId: number; title: string; message: string; motorId: number } | null {
+  // Prepare notification message
+  const messageContent = (newState === 0 || newState === 1)
+    ? `Pump state updated to '${motorState(Number(newState))}' with mode '${mode_description}' successfully`
+    : `Pump state not updated due to '${motorState(Number(newState))}'`;
 
-  const match = duration.match(/(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*sec/);
-  if (!match) return 0;
+  // Check if user exists (allow 0 as valid user ID)
+  if (motor.created_by !== null && motor.created_by !== undefined) {
+    return {
+      userId: motor.created_by,
+      title: "Pump State Update",
+      message: messageContent,
+      motorId: motor.id
+    };
+  }
 
-  const [, h, m, s] = match.map(Number);
-  return h * 3600 + m * 60 + s;
-};
+  return null;
+}
 
+export function prepareMotorModeControlNotificationData(motor: Motor, mode_description: string): { userId: number; title: string; message: string; motorId: number } | null {
+  // Prepare notification message
+  const messageContent = (mode_description === "MANUAL" || mode_description === "AUTO")
+    ? `Pump mode updated from '${motor.mode}' to '${mode_description}' successfully`
+    : `Pump mode not updated due to '${mode_description}'`;
+
+  // Check if user exists (allow 0 as valid user ID)
+  if (motor.created_by !== null && motor.created_by !== undefined) {
+    return {
+      userId: motor.created_by,
+      title: "Pump Mode Update",
+      message: messageContent,
+      motorId: motor.id
+    };
+  }
+
+  return null;
+}

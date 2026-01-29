@@ -5,10 +5,11 @@ import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { controlMode } from "../../helpers/control-helpers.js";
-import { extractPreviousData } from "../../helpers/motor-helper.js";
+import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import { logger } from "../../utils/logger.js";
+import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getRecordsCount, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
@@ -56,6 +57,9 @@ export async function selectTopicAck(topicType, payload, topic) {
         case "CALIBRATION_ACK":
             await adminConfigDataRequestAckHandler(payload, topic);
             break;
+        case "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK":
+            await deviceSerialNumberAllocationAckHandler(payload, topic);
+            break;
         default:
             return null;
     }
@@ -63,14 +67,14 @@ export async function selectTopicAck(topicType, payload, topic) {
 const VALID_MODES = ["AUTO", "MANUAL"];
 export async function updateStates(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
-    const { power, prevState, prevMode, locationId, created_by } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
     if (!starter_id)
         return null;
     const parametersCount = await getRecordsCount(starterBoxParameters, [eq(starterBoxParameters.starter_id, starter_id)]);
     if (parametersCount === 0)
         updateLatestStarterSettingsFlc(starter_id, avg_current);
     try {
-        await db.transaction(async (trx) => {
+        const notificationData = await db.transaction(async (trx) => {
             await saveSingleRecord(starterBoxParameters, insertedData, trx);
             const starterBoxUpdates = {};
             let trackPowerChange = false;
@@ -123,7 +127,20 @@ export async function updateStates(insertedData, previousData) {
             if (alert_code || fault) {
                 await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
             }
+            const notificationDataState = prepareMotorStateControlNotificationData(motor, motor_state, mode_description);
+            const notificationDataMode = prepareMotorModeControlNotificationData(motor, mode_description);
+            const notificationData = { notificationDataState, notificationDataMode };
+            return notificationData;
         });
+        // Send notification after transaction completes
+        if (notificationData.notificationDataState) {
+            const stateNotoificatioData = notificationData.notificationDataState;
+            await sendUserNotification(stateNotoificatioData.userId, stateNotoificatioData.title, stateNotoificatioData.message, stateNotoificatioData.motorId);
+        }
+        if (notificationData.notificationDataMode) {
+            const modeNotificationData = notificationData.notificationDataMode;
+            await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId);
+        }
     }
     catch (error) {
         console.error("Error updating states in live data ack Go1:", error);
@@ -132,13 +149,13 @@ export async function updateStates(insertedData, previousData) {
 }
 export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp, temp, avg_current } = insertedData;
-    const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, prevMode, locationId, motor } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     const parametersCount = await getRecordsCount(starterBoxParameters, [eq(starterBoxParameters.starter_id, starter_id)]);
     if (parametersCount === 0)
         updateLatestStarterSettingsFlc(starter_id, avg_current);
-    await db.transaction(async (trx) => {
+    const notificationData = await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
         const starterBoxUpdates = {};
         let trackPowerChange = false;
@@ -180,14 +197,26 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         if (shouldTrackMotorRuntime) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
         }
+        const notificationDataState = prepareMotorStateControlNotificationData(motor, motor_state, mode_description);
+        const notificationDataMode = prepareMotorModeControlNotificationData(motor, mode_description);
+        const notificationData = { notificationDataState, notificationDataMode };
+        return notificationData;
     });
+    if (notificationData.notificationDataState) {
+        const stateNotoificatioData = notificationData.notificationDataState;
+        await sendUserNotification(stateNotoificatioData.userId, stateNotoificatioData.title, stateNotoificatioData.message, stateNotoificatioData.motorId);
+    }
+    if (notificationData.notificationDataMode) {
+        const modeNotificationData = notificationData.notificationDataMode;
+        await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId);
+    }
 }
 export async function updateDevicePowerONAndMotorStateOFF(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp, temp } = insertedData;
-    const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, prevMode, locationId, motor } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
-    await db.transaction(async (trx) => {
+    const notificationData = await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, insertedData, trx);
         const starterBoxUpdates = {};
         let trackPowerChange = false;
@@ -219,14 +248,19 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
         if (shouldTrackMotorRuntime) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
         }
+        const notificationData = prepareMotorStateControlNotificationData(motor, motor_state, mode_description);
+        return notificationData;
     });
+    if (notificationData) {
+        await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId);
+    }
 }
 export async function updateDevicePowerAndMotorStateOFF(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp } = insertedData;
-    const { power, prevState, prevMode, locationId } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, prevMode, locationId, motor } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
-    await db.transaction(async (trx) => {
+    const notificationData = await db.transaction(async (trx) => {
         if (power_present !== power && power_present === 1 || power_present === 0) {
             await updateRecordByIdWithTrx(starterBoxes, starter_id, { power: power_present }, trx);
             await trackDeviceRunTime({ starter_id, motor_id, location_id: locationId, previous_power_state: power, new_power_state: power_present, motor_state, mode_description, time_stamp }, trx);
@@ -241,7 +275,11 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         if (shouldTrackMotorRuntime) {
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
         }
+        return prepareMotorModeControlNotificationData(motor, mode_description);
     });
+    if (notificationData) {
+        await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId);
+    }
 }
 // Motor control ack
 export async function motorControlAckHandler(message, topic) {
@@ -264,24 +302,24 @@ export async function motorControlAckHandler(message, topic) {
         const prevState = motor.state;
         const newState = message.D;
         const stateChanged = newState !== prevState;
-        await db.transaction(async (trx) => {
+        const notificationData = await db.transaction(async (trx) => {
             // Update motor state ONLY if changed
             if (stateChanged && (newState === 0 || newState === 1)) {
                 await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor.id));
-                await trackMotorRunTime({
-                    starter_id, motor_id,
-                    location_id,
-                    previous_state: prevState,
-                    new_state: newState,
-                    mode_description,
-                }, trx);
+                await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
             }
             // Always log ACK (changed or not)
             await ActivityService.writeMotorAckLogs(motor.created_by || 0, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+            return prepareMotorStateControlNotificationData(motor, newState, mode_description);
         });
+        // Send notification after transaction completes
+        if (notificationData) {
+            await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId);
+        }
     }
     catch (error) {
         logger.error("Error at motor control ack handler", error);
+        console.error("Error at motor control ack handler", error);
         throw error;
     }
 }
@@ -304,9 +342,14 @@ export async function motorModeChangeAckHandler(message, topic) {
             }
             await ActivityService.writeMotorAckLogs(motor.created_by || 0, motor.id, { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, validMac.id);
         });
+        const messageContent = (mode === "AUTO" || mode === "MANUAL") ? `Pump mode updated from ${motor.mode} to ${mode} successfully` : `Pump mode not updated due to ${mode}`;
+        if (motor.created_by) {
+            await sendUserNotification(motor.created_by, "Pump Mode Update", messageContent, motor.id);
+        }
     }
     catch (error) {
         logger.error("Error at motor mode change ack handler", error);
+        console.error("Error at motor mode change ack handler", error);
         throw error;
     }
 }
@@ -325,6 +368,22 @@ export async function heartbeatHandler(message, topic) {
     }
     catch (error) {
         console.error("Error at heartbeat topic handler:", error);
+        throw error;
+    }
+}
+export async function deviceSerialNumberAllocationAckHandler(message, topic) {
+    try {
+        const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+        if (!validMac?.id) {
+            console.error(`Any starter found with given MAC [${topic}]`);
+            return null;
+        }
+        ;
+        if (message.D === 1)
+            await updateRecordById(starterBoxes, validMac.id, { device_status: "DEPLOYED" });
+    }
+    catch (error) {
+        console.error("Error at device serial number allocation ack handler:", error);
         throw error;
     }
 }

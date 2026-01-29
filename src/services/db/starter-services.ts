@@ -12,7 +12,6 @@ import { users, type User } from "../../database/schemas/users.js";
 import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter, formatAnalyticsData } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
-import { prepareHardWareVersion, prepareStmAtmelSettingsData } from "../../helpers/settings-helpers.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
@@ -21,53 +20,24 @@ import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updat
 import { getStarterDefaultSettings } from "./settings-services.js";
 
 
-export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType,
-  userPayload: User, externalTrx?: any
-) {
+export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
   const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload);
   const defaultSettings = await getStarterDefaultSettings();
   const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
 
-  let createdStarter: StarterBox | null = null;
-  let preparedSettingsData: any = null;
-  let preparedHardwareData: any = null;
-
-  const action = async (trx: any) => {
+  await db.transaction(async (trx: any) => {
     const starter = await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData, trx);
     await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
 
-    const settings = await saveSingleRecord<StarterSettingsTable>(starterSettings,
+    await saveSingleRecord<StarterSettingsTable>(starterSettings,
       { starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE", ...defaultSettingsData },
       trx
     );
 
-    preparedSettingsData = prepareStmAtmelSettingsData(starter, settings);
-    preparedHardwareData = prepareHardWareVersion(starter);
     await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
 
-    createdStarter = starter;
     return starter;
-  };
-
-  const starter = externalTrx ? await action(externalTrx) : await db.transaction(action);
-  if (!starter) return null;
-
-  // if (preparedHardwareData) {
-  //   publishMultipleTimesInBackground(preparedHardwareData, starter);
-  // }
-
-  // if (preparedSettingsData && starter.mac_address) {
-  //   setImmediate(async () => {
-  //     try {
-  //       await publishMultipleTimesInBackground(preparedSettingsData, starter);
-  //     } catch (error: any) {
-  //       // TODO: Only logging for catch unnecessary improve
-  //       logger.error(`[STARTER ADD] Background settings publish crashed starterId=${starter.id}`, error);
-  //     }
-  //   });
-  // }
-
-  return starter;
+  });
 }
 
 
@@ -255,18 +225,13 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
 }
 
 
-export async function replaceStarterWithTransaction(motor: Motor, starter: StarterBox, locationId: number, externalTrx?: any) {
+export async function replaceStarterWithTransaction(motor: Motor, starter: StarterBox, locationId: number) {
   const action = async (trx: any) => {
     const updatedMotor = await updateRecordById(motors, motor.id, { location_id: locationId }, trx);
     const updatedStarter = await updateRecordById(starterBoxes, starter.id, { location_id: locationId }, trx);
     return { updatedMotor, updatedStarter };
   };
-
-  if (externalTrx) {
-    return await action(externalTrx);
-  } else {
-    return await db.transaction(action);
-  }
+  return await db.transaction(action);
 }
 
 export async function getStarterAnalytics(
@@ -347,24 +312,19 @@ export async function getStarterRunTime(starterId: number, fromDate: string, toD
     .orderBy(asc(deviceRunTime.start_time));
 }
 
-export async function assignStarterWebWithTransaction(starterDetails: StarterBox, requestBody: { user_id: number }, User: User, externalTrx?: any) {
+export async function assignStarterWebWithTransaction(starterDetails: StarterBox, requestBody: { user_id: number }) {
   const existingMotor = await getSingleRecordByAColumnValue<MotorsTable>(motors, "starter_id", "=", starterDetails.id);
   const assignedAt = new Date();
 
   const action = async (trx: any) => {
     const updatedStarter = await updateRecordById(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED", assigned_at: assignedAt }, trx);
-    const updatedMotor = existingMotor
-      ? await updateRecordById(motors, existingMotor.id, { created_by: requestBody.user_id, assigned_at: assignedAt }, trx)
-      : null;
+    const updatedMotor = existingMotor ? await updateRecordById(motors, existingMotor.id, { created_by: requestBody.user_id, assigned_at: assignedAt }, trx) : null;
     return { updatedStarter, updatedMotor };
   };
 
-  if (externalTrx) {
-    return await action(externalTrx);
-  } else {
-    return await db.transaction(action);
-  }
+  return await db.transaction(action);
 }
+
 export async function starterConnectedMotors(starterId: number) {
   return await db.query.starterBoxes.findFirst({
     where: and(

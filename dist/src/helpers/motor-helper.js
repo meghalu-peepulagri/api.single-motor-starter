@@ -1,8 +1,8 @@
-import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { ALREADY_SCHEDULED_EXISTS } from "../constants/app-constants.js";
+import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 import ConflictException from "../exceptions/conflict-exception.js";
-import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
+import { motorState } from "./control-helpers.js";
 export function checkDuplicateMotorTitles(motors) {
     if (!Array.isArray(motors))
         return [];
@@ -135,7 +135,7 @@ export function extractPreviousData(previousData, motorId) {
     const prevMode = motor.mode ?? null;
     const locationId = motor.location_id ?? null;
     const created_by = motor.created_by ?? null;
-    return { power, prevState, prevMode, locationId, created_by };
+    return { power, prevState, prevMode, locationId, created_by, motor };
 }
 export async function checkMotorScheduleConflict(validatedReqData, existingMotorSchedule) {
     if (!existingMotorSchedule)
@@ -155,12 +155,36 @@ export async function checkMotorScheduleConflict(validatedReqData, existingMotor
         throw new ConflictException("Schedule overlaps with an existing schedule");
     }
 }
-export const parseDurationToSeconds = (duration) => {
-    if (!duration)
-        return 0;
-    const match = duration.match(/(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*sec/);
-    if (!match)
-        return 0;
-    const [, h, m, s] = match.map(Number);
-    return h * 3600 + m * 60 + s;
-};
+//prepare motor control notification
+export function prepareMotorStateControlNotificationData(motor, newState, mode_description) {
+    // Prepare notification message
+    const messageContent = (newState === 0 || newState === 1)
+        ? `Pump state updated to '${motorState(Number(newState))}' with mode '${mode_description}' successfully`
+        : `Pump state not updated due to '${motorState(Number(newState))}'`;
+    // Check if user exists (allow 0 as valid user ID)
+    if (motor.created_by !== null && motor.created_by !== undefined) {
+        return {
+            userId: motor.created_by,
+            title: "Pump State Update",
+            message: messageContent,
+            motorId: motor.id
+        };
+    }
+    return null;
+}
+export function prepareMotorModeControlNotificationData(motor, mode_description) {
+    // Prepare notification message
+    const messageContent = (mode_description === "MANUAL" || mode_description === "AUTO")
+        ? `Pump mode updated from '${motor.mode}' to '${mode_description}' successfully`
+        : `Pump mode not updated due to '${mode_description}'`;
+    // Check if user exists (allow 0 as valid user ID)
+    if (motor.created_by !== null && motor.created_by !== undefined) {
+        return {
+            userId: motor.created_by,
+            title: "Pump Mode Update",
+            message: messageContent,
+            motorId: motor.id
+        };
+    }
+    return null;
+}
