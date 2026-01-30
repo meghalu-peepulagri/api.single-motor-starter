@@ -9,7 +9,7 @@ const userTypeValidator = v.pipe(v.string(USER_TYPE_REQUIRED), v.transform(value
 const locationTitleValidator = v.pipe(v.string(TITLE_MUST_BE_STRING), v.transform(value => value.trim()), v.nonEmpty(TITLE_REQUIRED), v.regex(/^[A-Z ]+$/i, LOCATION_NAME_INVALID), v.minLength(3, LOCATION_NAME_MIN_LEN));
 const otpValidator = v.pipe(v.string(OTP_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(OTP_REQUIRED), v.regex(/^\d+$/, INVALID_OTP), v.regex(/^\d{4}$/, INVALID_OTP_LENGTH));
 export const idValidator = v.pipe(v.number(ID_NUMBER), v.minValue(1, ID_INVALID));
-const motorNameValidator = v.pipe(v.string(MOTOR_NAME), v.transform(value => value.trim()), v.nonEmpty(MOTOR_REQUIRED), v.regex(/^[A-Z].*$/i, MOTOR_NAME_STARTS_LETTER), v.minLength(3, MOTOR_MIN_LENGTH));
+const motorNameValidator = v.pipe(v.string(MOTOR_NAME), v.transform(value => value.trim()), v.nonEmpty(MOTOR_REQUIRED), v.regex(/^[A-Z].*$/i, MOTOR_NAME_STARTS_LETTER), v.regex(/^[A-Za-z0-9 ]+$/, "Pump name not allowed special characters"), v.minLength(3, MOTOR_MIN_LENGTH));
 const hpValidator = v.pipe(v.number(HP_REQUIRED), v.minValue(1, HP_MIN), v.maxValue(30, HP_MAX));
 export const fieldNameValidator = v.pipe(v.string(FIELD_NAME_MUST_STRING), v.transform(value => value.trim()), v.nonEmpty(FIELD_NAME_REQUIRED), v.regex(/^[A-Z ]+$/i, FIELD_NAME_INVALID), v.minLength(3, FIELD_NAME_MIN_LEN));
 function requiredNumber(errorMessage) {
