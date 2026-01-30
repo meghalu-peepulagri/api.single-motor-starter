@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
+import { deviceTemperature } from "../../database/schemas/device-temperature.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
@@ -16,7 +17,6 @@ import { getRecordsCount, saveSingleRecord, updateRecordById, updateRecordByIdWi
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
-import { deviceTemperature } from "../../database/schemas/device-temperature.js";
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {
     switch (groupId) {
@@ -76,7 +76,7 @@ export async function updateStates(insertedData, previousData) {
         updateLatestStarterSettingsFlc(starter_id, avg_current);
     try {
         const notificationData = await db.transaction(async (trx) => {
-            await saveSingleRecord(starterBoxParameters, { ...insertedData, temperature: temp }, trx);
+            await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
             await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
             const starterBoxUpdates = {};
             let trackPowerChange = false;
@@ -158,7 +158,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
     if (parametersCount === 0)
         updateLatestStarterSettingsFlc(starter_id, avg_current);
     const notificationData = await db.transaction(async (trx) => {
-        await saveSingleRecord(starterBoxParameters, insertedData, trx);
+        await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
         const starterBoxUpdates = {};
         let trackPowerChange = false;
         if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {
@@ -219,7 +219,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
     if (!starter_id || !motor_id)
         return null;
     const notificationData = await db.transaction(async (trx) => {
-        await saveSingleRecord(starterBoxParameters, insertedData, trx);
+        await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
         const starterBoxUpdates = {};
         let trackPowerChange = false;
         if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {

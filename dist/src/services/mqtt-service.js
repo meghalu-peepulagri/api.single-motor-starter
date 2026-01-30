@@ -62,7 +62,14 @@ export class MqttService {
                     logger.warn("Empty or invalid string message received. Skipping processing.", { topic });
                     return;
                 }
-                message = JSON.parse(message);
+                try {
+                    message = JSON.parse(message);
+                }
+                catch (parseError) {
+                    logger.error("JSON Parse Error: Malformed message received", { topic, messageSnippet: message.substring(0, 500) });
+                    console.error("JSON Parse Error: Malformed message received", { topic, messageSnippet: message.substring(0, 500) });
+                    return;
+                }
             }
             const parsedMessage = message;
             switch (true) {
@@ -76,6 +83,7 @@ export class MqttService {
         }
         catch (error) {
             logger.error("Error while processing MQTT message", error);
+            console.error("Error while processing MQTT message", error);
             throw error;
         }
     };

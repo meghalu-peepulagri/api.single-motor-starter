@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
+import { deviceTemperature, type DeviceTemperatureTable } from "../../database/schemas/device-temperature.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
@@ -8,6 +9,7 @@ import { controlMode } from "../../helpers/control-helpers.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
+import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
 import { logger } from "../../utils/logger.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
@@ -16,10 +18,9 @@ import { getRecordsCount, saveSingleRecord, updateRecordById, updateRecordByIdWi
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
-import { deviceTemperature, type DeviceTemperatureTable } from "../../database/schemas/device-temperature.js";
 
 // Live data
-export async function saveLiveDataTopic(insertedData: any, groupId: string, previousData: any) {
+export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId: string, previousData: previousPreparedLiveData) {
   switch (groupId) {
     case "G01": //  Live data topic
       await updateStates(insertedData, previousData);
@@ -74,7 +75,7 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
 const VALID_MODES = ["AUTO", "MANUAL"] as const;
 type ValidMode = typeof VALID_MODES[number];
 
-export async function updateStates(insertedData: any, previousData: any) {
+export async function updateStates(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
 
@@ -86,7 +87,7 @@ export async function updateStates(insertedData: any, previousData: any) {
 
   try {
     const notificationData = await db.transaction(async (trx) => {
-      await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, { ...insertedData, temperature: temp }, trx);
+      await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
       await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
 
       const starterBoxUpdates: Record<string, any> = {};
@@ -175,7 +176,7 @@ export async function updateStates(insertedData: any, previousData: any) {
   }
 }
 
-export async function updateDevicePowerAndMotorStateToON(insertedData: any, previousData: any) {
+export async function updateDevicePowerAndMotorStateToON(insertedData: preparedLiveData, previousData: any) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp, temp, avg_current } = insertedData;
   const { power, prevState, prevMode, locationId, motor } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
@@ -184,7 +185,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: any, prev
   if (parametersCount === 0) updateLatestStarterSettingsFlc(starter_id, avg_current)
 
   const notificationData = await db.transaction(async (trx) => {
-    await saveSingleRecord(starterBoxParameters, insertedData, trx);
+    await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
     const starterBoxUpdates: Record<string, any> = {};
     let trackPowerChange = false;
 
@@ -257,13 +258,13 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: any, prev
 }
 
 
-export async function updateDevicePowerONAndMotorStateOFF(insertedData: any, previousData: any) {
+export async function updateDevicePowerONAndMotorStateOFF(insertedData: preparedLiveData, previousData: any) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, time_stamp, temp } = insertedData;
   const { power, prevState, prevMode, locationId, motor } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
   const notificationData = await db.transaction(async (trx) => {
-    await saveSingleRecord(starterBoxParameters, insertedData, trx);
+    await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
     const starterBoxUpdates: Record<string, any> = {};
     let trackPowerChange = false;
 

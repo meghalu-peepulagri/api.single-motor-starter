@@ -212,3 +212,57 @@ export type RequireAtLeastOne<T, Keys extends keyof T = keyof T> =
   & {
     [K in Keys]-?: Required<Pick<T, K>> & Partial<Pick<T, Exclude<Keys, K>>>
   }[Keys];
+
+export type preparedLiveData = {
+  payload_version: number;
+  packet_number: number;
+  line_voltage_r: number;
+  line_voltage_y: number;
+  line_voltage_b: number;
+  avg_voltage: number;
+  current_r: number;
+  current_y: number;
+  current_b: number;
+  avg_current: number;
+  power_present: number;
+  motor_mode: number;
+  motor_state: number;
+  mode_description: string;
+  motor_description: string;
+  alert_code: number;
+  alert_description: string;
+  fault: number;
+  fault_description: string;
+  last_on_code: number;
+  last_on_description: string;
+  last_off_code: number;
+  last_off_description: string;
+  group_id: number;
+  temp: number;
+  time_stamp: string;
+  payload_valid: boolean;
+  payload_errors: string[];
+  starter_id: number;
+  gateway_id: number;
+  user_id: number;
+  motor_id: number,
+};
+
+export type previousPreparedLiveData = {
+  power: number;
+  created_by: number;
+  id: number;
+  user_id: number | null;
+  gateway_id: number | null;
+  signal_quality: number;
+  network_type: string;
+  motors: {
+    created_by: number | null;
+    id: number;
+    name: string;
+    mode: "AUTO" | "MANUAL"
+    location_id: number | null;
+    hp: string;
+    state: number;
+  }[];
+}
