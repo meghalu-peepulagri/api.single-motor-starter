@@ -16,6 +16,7 @@ starterRoutes.get("/latest-pcb-number", isAuthorized, motorHandlers.getLatestPcb
 starterRoutes.get("/:id/run-time", isAuthorized, motorHandlers.starterRunTimeHandler);
 starterRoutes.get("/:id/analytics", isAuthorized, motorHandlers.starterAnalyticsHandler);
 starterRoutes.get("/:id/motors", isAuthorized, motorHandlers.starterConnectedMotorsHandler);
+starterRoutes.get("/:id/temperature", isAuthorized, motorHandlers.getTemperatureHandler);
 starterRoutes.get("/:starter_id/motors/:motor_id/alerts-faults", isAuthorized, motorHandlers.getConsecutiveAlertsFaultsHandler);
 starterRoutes.patch("/:id/deploy-status", isAuthorized, motorHandlers.updateDeployStatusHandler);
 starterRoutes.patch("/:id/details", isAuthorized, motorHandlers.updateStarterDetailsHandler);
