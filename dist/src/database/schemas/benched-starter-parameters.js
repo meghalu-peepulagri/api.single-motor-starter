@@ -44,6 +44,7 @@ export const benchedStarterParameters = pgTable("benched_starter_parameters", {
     payload_valid: boolean("payload_valid").notNull().default(false),
     payload_errors: jsonb('payload_errors').notNull().default(sql `'[]'::jsonb`),
     group_id: varchar("group_id"),
+    temperature: real("temperature").default(0),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [

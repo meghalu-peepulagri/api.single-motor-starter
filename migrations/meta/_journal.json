@@ -29,6 +29,13 @@
       "when": 1769594513670,
       "tag": "0003_stale_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1769765017089,
+      "tag": "0004_wet_sheva_callister",
+      "breakpoints": true
     }
   ]
 }

@@ -79,6 +79,7 @@ export const starterDefaultSettings = pgTable("starter_default_settings", {
     r1: integer("r1").default(0),
     r2: integer("r2").default(0),
     off: integer("off").default(0),
+    limit: real("limit").default(25),
     // ================= MQTT Configuration (8 fields) =================
     ca_fn: varchar("ca_fn", { length: 100 }).default(""),
     bkr_adrs: varchar("bkr_adrs", { length: 100 }).default(""),

@@ -116,6 +116,8 @@ export const StarterDefaultSettingsLimits = pgTable("starter_default_settings_li
     io_y_max: real("io_y_max").default(0),
     io_b_min: real("io_b_min").default(0),
     io_b_max: real("io_b_max").default(0),
+    limit_min: real("limit_min").default(0),
+    limit_max: real("limit_max").default(150),
     // ================= PT100/PT1000 Calibrations =================
     r1: integer("r1").default(0),
     r2: integer("r2").default(0),

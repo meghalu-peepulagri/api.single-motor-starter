@@ -16,6 +16,7 @@ import { getRecordsCount, saveSingleRecord, updateRecordById, updateRecordByIdWi
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
+import { deviceTemperature, type DeviceTemperatureTable } from "../../database/schemas/device-temperature.js";
 
 // Live data
 export async function saveLiveDataTopic(insertedData: any, groupId: string, previousData: any) {
@@ -85,7 +86,8 @@ export async function updateStates(insertedData: any, previousData: any) {
 
   try {
     const notificationData = await db.transaction(async (trx) => {
-      await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, insertedData, trx);
+      await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, { ...insertedData, temperature: temp }, trx);
+      await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
 
       const starterBoxUpdates: Record<string, any> = {};
       let trackPowerChange = false;

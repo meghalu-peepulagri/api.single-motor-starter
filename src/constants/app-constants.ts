@@ -414,6 +414,7 @@ export const SETTINGS_FIELD_NAMES = {
   r1: "RTD resistance R1",
   r2: "RTD resistance R2",
   off: "RTD temperature offset",
+  limit: "Temperature limit",
 
   /* ================= MQTT Configuration ================= */
 

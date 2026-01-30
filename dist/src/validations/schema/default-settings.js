@@ -76,6 +76,7 @@ export const vUpdateDefaultSettings = v.object({
     r1: integerOnly("r1"),
     r2: integerOnly("r2"),
     off: integerOnly("off"),
+    limit: realOnly("limit"),
     /* ================= MQTT Configuration ================= */
     ca_fn: requiredText("ca_fn"),
     bkr_adrs: requiredText("bkr_adrs"),
