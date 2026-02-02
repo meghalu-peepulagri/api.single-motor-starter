@@ -198,9 +198,9 @@ export const optionalText = (field, options) => {
     return baseValidation;
 };
 /**
- * Phone number array validation with strict 10-digit requirement:
+ * Phone number array validation with flexible digit requirement:
  * - Handles null/undefined values by converting to empty array
- * - Each phone number must be exactly 10 digits
+ * - Each phone number must be maximum 10 digits with no minimum limit
  * - Cannot contain empty or whitespace-only entries
  * - Only numeric digits allowed (0-9)
  * - Automatic trimming of whitespace
@@ -240,7 +240,7 @@ export const phoneNumberArray = (field, options) => {
             // Remove all non-digit characters (spaces, hyphens, parentheses, etc.)
             return phoneStr.replace(/\D/g, '');
         });
-    }), v.check((arr) => arr.every((phone) => phone.length > 0), `${SETTINGS_FIELD_NAMES[field]} cannot contain empty mobile numbers`), v.check((arr) => arr.every((phone) => /^\d+$/.test(phone)), `${SETTINGS_FIELD_NAMES[field]} must contain only numeric digits (0-9)`), v.check((arr) => arr.every((phone) => phone.length === 10), `${SETTINGS_FIELD_NAMES[field]} - invalid mobile number (must be exactly 10 digits)`), v.transform((arr) => {
+    }), v.check((arr) => arr.every((phone) => phone.length > 0), `${SETTINGS_FIELD_NAMES[field]} cannot contain empty mobile numbers`), v.check((arr) => arr.every((phone) => /^\d+$/.test(phone)), `${SETTINGS_FIELD_NAMES[field]} must contain only numeric digits (0-9)`), v.check((arr) => arr.every((phone) => phone.length <= 10), `${SETTINGS_FIELD_NAMES[field]} - invalid mobile number (must be maximum 10 digits)`), v.transform((arr) => {
         // Remove duplicates if not allowed
         if (!allowDuplicates) {
             return Array.from(new Set(arr));

@@ -53,7 +53,7 @@ export class StarterDefaultSettingsHandlers {
                 await updateRecordById(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
                 // Add activity log if needed (currently not in service, but let's be consistent)
                 await ActivityService.logActivity({
-                    performedBy: userPayload.id, // System or current user if available
+                    performedBy: userPayload.id,
                     action: "DEFAULT_SETTINGS_UPDATED",
                     entityType: "SETTING",
                     entityId: Number(defaultSettingData.id),
