@@ -32,7 +32,7 @@ export function starterFilters(query: any, user: any) {
     } else {
       filters.push(
         sql`(
-          ${starterBoxes.pcb_number} ILIKE ${s} OR
+          ${starterBoxes.starter_number} ILIKE ${s} OR
           EXISTS (
             SELECT 1
             FROM ${motors} AS m
