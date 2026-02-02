@@ -5,7 +5,7 @@ import { deviceTemperature, type DeviceTemperatureTable } from "../../database/s
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
-import { controlMode } from "../../helpers/control-helpers.js";
+import { controlMode, getFaultDescription, getAlertDescription } from "../../helpers/control-helpers.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
@@ -156,18 +156,49 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
 
       const notificationDataState = prepareMotorStateControlNotificationData(motor, motor_state, mode_description);
       const notificationDataMode = prepareMotorModeControlNotificationData(motor, mode_description);
-      const notificationData = { notificationDataState, notificationDataMode };
+
+      // Prepare alert and fault notifications
+      let notificationDataAlert = null;
+      let notificationDataFault = null;
+
+      if (created_by && alert_description && motor_id) {
+        notificationDataAlert = {
+          userId: created_by, title: "Alert Detected",
+          message: alert_description, motorId: motor_id
+        };
+      }
+
+      if (fault_description && created_by && motor_id) {
+        notificationDataFault = {
+          userId: created_by, title: "Fault Detected",
+          message: fault_description, motorId: motor_id
+        };
+      }
+
+      const notificationData = { notificationDataState, notificationDataMode, notificationDataAlert, notificationDataFault };
       return notificationData;
     });
 
     // Send notification after transaction completes
+    // state notification
     if (notificationData.notificationDataState) {
       const stateNotoificatioData = notificationData.notificationDataState;
       await sendUserNotification(stateNotoificatioData.userId, stateNotoificatioData.title, stateNotoificatioData.message, stateNotoificatioData.motorId);
     }
+    // mode notification
     if (notificationData.notificationDataMode) {
       const modeNotificationData = notificationData.notificationDataMode;
       await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId);
+    }
+    // alert notification
+    if (notificationData.notificationDataAlert) {
+      const alertNotificationData = notificationData.notificationDataAlert;
+      await sendUserNotification(alertNotificationData.userId, alertNotificationData.title, alertNotificationData.message, alertNotificationData.motorId);
+    }
+    // fault notification
+    if (notificationData.notificationDataFault) {
+      const faultNotificationData = notificationData.notificationDataFault;
+      await sendUserNotification(faultNotificationData.userId, faultNotificationData.title, faultNotificationData.message, faultNotificationData.motorId);
     }
 
   } catch (error: any) {
@@ -186,6 +217,8 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
 
   const notificationData = await db.transaction(async (trx) => {
     await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+    await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
+
     const starterBoxUpdates: Record<string, any> = {};
     let trackPowerChange = false;
 
@@ -265,6 +298,8 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
 
   const notificationData = await db.transaction(async (trx) => {
     await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+    await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
+
     const starterBoxUpdates: Record<string, any> = {};
     let trackPowerChange = false;
 
@@ -316,6 +351,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: any, previ
   if (!starter_id || !motor_id) return null;
 
   const notificationData = await db.transaction(async (trx) => {
+    await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
     const starterBoxUpdates: Record<string, any> = {};
     let trackPowerChange = false;
 

@@ -1,6 +1,4 @@
 import * as v from "valibot";
-import { integerOnly, realOnly } from "../../helpers/settings-helpers.js";
-import { SETTINGS_FIELD_NAMES } from "../../constants/app-constants.js";
 
 /**
  * Enhanced validation for settings limits with comprehensive checks:

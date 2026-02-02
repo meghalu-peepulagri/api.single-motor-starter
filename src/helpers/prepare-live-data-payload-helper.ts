@@ -6,6 +6,7 @@ import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.j
 export function prepareLiveDataPayload(validatedData: any, starterData: any) {
   if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
     logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
+    console.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
     return null;
   };
 
