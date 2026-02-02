@@ -110,22 +110,96 @@ export const enable01 = (field) => v.pipe(v.union([v.number(), v.string()], `${S
 }), v.check((val) => typeof val === 'number', `${SETTINGS_FIELD_NAMES[field]} must be a number type (0 or 1)`), v.check((val) => val === 0 || val === 1, `${SETTINGS_FIELD_NAMES[field]} must be exactly 0 or 1`));
 /**
  * Required text validation with comprehensive checks:
- * - Type must be string (not number, null, undefined, etc.)
- * - Cannot be empty or only whitespace
+ * - Type must be string (not number, etc.)
+ * - Handles null/undefined values by converting to empty string
+ * - For required fields (default): minLength >= 1, will fail with "cannot be empty" message
+ * - For optional fields: set minLength: 0 to allow empty/null values
  * - Maximum length validation
  * - Trims whitespace automatically
  */
 export const requiredText = (field, options) => {
     const minLength = options?.minLength ?? 1;
     const maxLength = options?.maxLength ?? VALIDATION_CONSTRAINTS.STRING_MAX_LENGTH;
-    const baseValidation = v.pipe(v.string(`${SETTINGS_FIELD_NAMES[field]} must be a text string`), v.transform((val) => val.trim()), v.check((val) => val.length >= minLength, `${SETTINGS_FIELD_NAMES[field]} cannot be empty or contain only whitespace`), v.check((val) => val.length <= maxLength, `${SETTINGS_FIELD_NAMES[field]} must be ${maxLength} characters or less`));
+    const baseValidation = v.pipe(v.union([v.string(), v.null(), v.undefined()], `${SETTINGS_FIELD_NAMES[field]} must be a text string`), v.transform((val) => {
+        // Handle null/undefined values - convert to empty string
+        if (val === null || val === undefined) {
+            return '';
+        }
+        // Handle string values
+        if (typeof val === 'string') {
+            return val.trim();
+        }
+        throw new Error(`${SETTINGS_FIELD_NAMES[field]} must be a text string, received ${typeof val}`);
+    }), v.check((val) => val.length >= minLength, minLength === 0
+        ? `${SETTINGS_FIELD_NAMES[field]} must be a valid text string`
+        : `${SETTINGS_FIELD_NAMES[field]} cannot be empty or contain only whitespace`), v.check((val) => val.length <= maxLength, `${SETTINGS_FIELD_NAMES[field]} must be ${maxLength} characters or less`));
     if (options?.pattern) {
-        return v.pipe(baseValidation, v.check((val) => options.pattern.test(val), options.patternMessage || `${SETTINGS_FIELD_NAMES[field]} format is invalid`));
+        return v.pipe(baseValidation, v.check((val) => {
+            // Skip pattern validation for empty strings (when minLength is 0)
+            if (minLength === 0 && val === '') {
+                return true;
+            }
+            return options.pattern.test(val);
+        }, options.patternMessage || `${SETTINGS_FIELD_NAMES[field]} format is invalid`));
+    }
+    return baseValidation;
+};
+/**
+ * Optional text validation for truly optional fields:
+ * - Accepts string, null, or undefined
+ * - Converts null/undefined to null (not empty string)
+ * - Trims whitespace from strings
+ * - Converts empty strings (after trim) to null for DB insertion
+ * - Pattern validation only applies when value is not null/empty
+ * - Use this for optional fields that should be NULL in database when empty
+ *
+ * Examples:
+ * - Input: null → Output: null
+ * - Input: undefined → Output: null
+ * - Input: "" → Output: null
+ * - Input: "   " → Output: null (trimmed to empty, then null)
+ * - Input: "valid text" → Output: "valid text" (trimmed)
+ */
+export const optionalText = (field, options) => {
+    const maxLength = options?.maxLength ?? VALIDATION_CONSTRAINTS.STRING_MAX_LENGTH;
+    const baseValidation = v.pipe(v.union([v.string(), v.null(), v.undefined()], `${SETTINGS_FIELD_NAMES[field]} must be a text string or null`), v.transform((val) => {
+        // Handle null/undefined values - keep as null
+        if (val === null || val === undefined) {
+            return null;
+        }
+        // Handle string values
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            // Convert empty strings to null for DB insertion
+            if (trimmed === '') {
+                return null;
+            }
+            return trimmed;
+        }
+        throw new Error(`${SETTINGS_FIELD_NAMES[field]} must be a text string or null, received ${typeof val}`);
+    }), v.check((val) => {
+        // Null values are always valid for optional fields
+        if (val === null) {
+            return true;
+        }
+        // Non-null values must not exceed maxLength
+        return val.length <= maxLength;
+    }, `${SETTINGS_FIELD_NAMES[field]} must be ${maxLength} characters or less`));
+    if (options?.pattern) {
+        return v.pipe(baseValidation, v.check((val) => {
+            // Null values are always valid - skip pattern validation
+            if (val === null) {
+                return true;
+            }
+            // Non-null values must match pattern
+            return options.pattern.test(val);
+        }, options.patternMessage || `${SETTINGS_FIELD_NAMES[field]} format is invalid`));
     }
     return baseValidation;
 };
 /**
  * Phone number array validation with strict 10-digit requirement:
+ * - Handles null/undefined values by converting to empty array
  * - Each phone number must be exactly 10 digits
  * - Cannot contain empty or whitespace-only entries
  * - Only numeric digits allowed (0-9)
@@ -136,7 +210,21 @@ export const requiredText = (field, options) => {
 export const phoneNumberArray = (field, options) => {
     const maxArraySize = options?.maxArraySize ?? 10; // Maximum 10 phone numbers
     const allowDuplicates = options?.allowDuplicates ?? false;
-    return v.optional(v.pipe(v.array(v.union([v.string(), v.number()], `${SETTINGS_FIELD_NAMES[field]} must contain valid mobile numbers`), `${SETTINGS_FIELD_NAMES[field]} must be an array`), v.check((arr) => Array.isArray(arr), `${SETTINGS_FIELD_NAMES[field]} must be an array of mobile numbers`), v.check((arr) => arr.length <= maxArraySize, `${SETTINGS_FIELD_NAMES[field]} cannot contain more than ${maxArraySize} mobile numbers`), v.transform((arr) => {
+    return v.pipe(v.union([v.array(v.union([v.string(), v.number()])), v.null(), v.undefined()], `${SETTINGS_FIELD_NAMES[field]} must be an array of mobile numbers`), v.transform((val) => {
+        // Handle null/undefined values - convert to empty array
+        if (val === null || val === undefined) {
+            return [];
+        }
+        // Ensure it's an array
+        if (!Array.isArray(val)) {
+            throw new Error(`${SETTINGS_FIELD_NAMES[field]} must be an array`);
+        }
+        return val;
+    }), v.check((arr) => arr.length <= maxArraySize, `${SETTINGS_FIELD_NAMES[field]} cannot contain more than ${maxArraySize} mobile numbers`), v.transform((arr) => {
+        // If empty array, return it as is
+        if (arr.length === 0) {
+            return [];
+        }
         // Convert all items to strings and trim whitespace, remove non-digits
         return arr.map((item) => {
             let phoneStr = '';
@@ -158,7 +246,7 @@ export const phoneNumberArray = (field, options) => {
             return Array.from(new Set(arr));
         }
         return arr;
-    })));
+    }));
 };
 export const prepareStmAtmelSettingsData = (starter, settings) => {
     if (!starter?.pcb_number || !starter?.mac_address || !settings)

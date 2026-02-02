@@ -36,6 +36,27 @@
       "when": 1769765017089,
       "tag": "0004_wet_sheva_callister",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770034932443,
+      "tag": "0005_unknown_piledriver",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770035099189,
+      "tag": "0006_known_mach_iv",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770036595841,
+      "tag": "0007_yummy_ironclad",
+      "breakpoints": true
     }
   ]
 }

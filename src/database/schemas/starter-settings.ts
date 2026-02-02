@@ -98,17 +98,17 @@ export const starterSettings = pgTable("starter_settings", {
   limit: real("limit").default(25),
 
   // ================= MQTT Configuration (8 fields) =================
-  ca_fn: varchar("ca_fn", { length: 100 }).default(""),
-  bkr_adrs: varchar("bkr_adrs", { length: 100 }).default(""),
-  sn: varchar("sn", { length: 50 }).default(""),
-  usrn: varchar("usrn", { length: 50 }).default(""),
-  pswd: varchar("pswd", { length: 50 }).default(""),
-  prd_url: varchar("prd_url", { length: 100 }).default(""),
+  ca_fn: varchar("ca_fn", { length: 100 }).default("NULL"),
+  bkr_adrs: varchar("bkr_adrs", { length: 100 }).default("NULL"),
+  sn: varchar("sn", { length: 50 }).default("NULL"),
+  usrn: varchar("usrn", { length: 50 }).default("NULL"),
+  pswd: varchar("pswd", { length: 50 }).default("NULL"),
+  prd_url: varchar("prd_url").default("NULL"),
   port: integer("port").default(1883),
   crt_en: integer("crt_en").default(2048),
 
   // ================= IVRS Configuration (3 fields) =================
-  sms_pswd: varchar("sms_pswd", { length: 20 }).default(""),
+  sms_pswd: varchar("sms_pswd", { length: 20 }).default("NULL"),
   c_lang: integer("c_lang").default(1),
   auth_num: varchar("auth_num", { length: 10 }).array(),
 
