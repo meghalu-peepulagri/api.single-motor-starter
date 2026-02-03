@@ -204,6 +204,7 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
           state: true,
           mode: true,
           alias_name: true,
+          test_run_status: true,
         },
         with: {
           location: {
