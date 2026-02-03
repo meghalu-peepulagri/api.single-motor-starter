@@ -1,4 +1,4 @@
-import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
@@ -140,6 +140,31 @@ export class MotorHandlers {
         }
         catch (error) {
             console.error("Error at get all motors :", error);
+            throw error;
+        }
+    };
+    updateMotorTestRunStatusHandler = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const motorId = +c.req.param("id");
+            paramsValidateException.validateId(motorId, "motor id");
+            const motorPayload = await c.req.json();
+            paramsValidateException.emptyBodyValidation(motorPayload);
+            const validMotorReq = await validatedRequest("update-motor-test-run-status", motorPayload, MOTOR_VALIDATION_CRITERIA);
+            const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+            if (!motor)
+                throw new NotFoundException(MOTOR_NOT_FOUND);
+            await db.transaction(async (trx) => {
+                await updateRecordById(motors, motor.id, { test_run_status: validMotorReq.test_run_status }, trx);
+                await ActivityService.writeMotorTestRunStatusUpdatedLog(userPayload.id, motor.id, motor.test_run_status, validMotorReq.test_run_status, trx, motor.starter_id || undefined);
+            });
+            return sendResponse(c, 200, MOTOR_TEST_RUN_STATUS_UPDATED);
+        }
+        catch (error) {
+            console.error("Error at update motor test run status:", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
             throw error;
         }
     };

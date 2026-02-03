@@ -8,4 +8,5 @@ motorRoutes.get("/", isAuthorized, motorHandlers.getAllMotorsHandler);
 motorRoutes.get("/:id", isAuthorized, motorHandlers.getSingleMotorHandler);
 motorRoutes.patch("/:id", isAuthorized, motorHandlers.updateMotorHandler);
 motorRoutes.delete("/:id", isAuthorized, motorHandlers.deleteMotorHandler);
+motorRoutes.patch("/:id/test-run-status", isAuthorized, motorHandlers.updateMotorTestRunStatusHandler);
 export default motorRoutes;

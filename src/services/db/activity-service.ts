@@ -127,6 +127,30 @@ export class ActivityService {
   }
 
   /**
+   * Logs motor test run status update event
+   */
+  static async writeMotorTestRunStatusUpdatedLog(
+    userId: number,
+    motorId: number,
+    oldStatus: string | null,
+    newStatus: string,
+    trx?: any,
+    deviceId?: number
+  ) {
+    const log = prepareActionLog({
+      userId,
+      action: "MOTOR_TEST_RUN_STATUS_UPDATED",
+      entityType: "MOTOR",
+      entityId: motorId,
+      deviceId,
+      oldData: { test_run_status: oldStatus },
+      newData: { test_run_status: newStatus },
+      message: `Test run status updated from '${oldStatus || 'N/A'}' to '${newStatus}'`
+    });
+    await this.saveActivityLogs([log], trx);
+  }
+
+  /**
    * Logs motor state/mode sync from MQTT
    */
   static async writeMotorSyncLogs(userId: number, motorId: number, oldData: { state?: number; mode?: string }, newData: { state?: number; mode?: string }, trx?: any, deviceId?: number) {
