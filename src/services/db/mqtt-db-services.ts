@@ -2,10 +2,10 @@ import { eq } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../../database/schemas/device-temperature.js";
-import { motors } from "../../database/schemas/motors.js";
+import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
-import { controlMode, getFaultDescription, getAlertDescription } from "../../helpers/control-helpers.js";
+import { controlMode } from "../../helpers/control-helpers.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
@@ -14,7 +14,7 @@ import { logger } from "../../utils/logger.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
-import { getRecordsCount, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
@@ -82,8 +82,9 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
   const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
   if (!starter_id) return null;
 
-  const parametersCount = await getRecordsCount(starterBoxParameters, [eq(starterBoxParameters.starter_id, starter_id)])
-  if (parametersCount === 0) updateLatestStarterSettingsFlc(starter_id, avg_current)
+  const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "IN_TEST"], ["test_run_status"]);
+  console.log('isInTestRun: ', isInTestRun);
+  if (isInTestRun !== null) await updateLatestStarterSettingsFlc(starter_id, avg_current)
 
   try {
     const notificationData = await db.transaction(async (trx) => {
@@ -212,8 +213,9 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
   const { power, prevState, prevMode, locationId, motor } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
-  const parametersCount = await getRecordsCount(starterBoxParameters, [eq(starterBoxParameters.starter_id, starter_id)])
-  if (parametersCount === 0) updateLatestStarterSettingsFlc(starter_id, avg_current)
+  const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "IN_TEST"], ["test_run_status"]);
+  console.log('isInTestRun: ', isInTestRun);
+  if (isInTestRun !== null) await updateLatestStarterSettingsFlc(starter_id, avg_current);
 
   const notificationData = await db.transaction(async (trx) => {
     await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);

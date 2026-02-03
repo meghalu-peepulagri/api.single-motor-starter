@@ -52,6 +52,8 @@ export async function updateLatestStarterSettings(starterId, isNewConfigurationS
       `);
 }
 export async function updateLatestStarterSettingsFlc(starterId, avgCurrent) {
+    console.log('avgCurrent: ', avgCurrent);
+    console.log('starterId: ', starterId);
     if (!starterId)
         return null;
     return db
