@@ -157,6 +157,8 @@ export async function checkMotorScheduleConflict(validatedReqData, existingMotor
 }
 //prepare motor control notification
 export function prepareMotorStateControlNotificationData(motor, newState, mode_description) {
+    const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
+    const title = newState === 0 || newState === 1 ? `${pumpName} Pump State Updated` : `${pumpName} Pump State Failed to Update`;
     // Prepare notification message
     const messageContent = (newState === 0 || newState === 1)
         ? `Pump state updated to '${motorState(Number(newState))}' with mode '${mode_description}' successfully`
@@ -165,7 +167,7 @@ export function prepareMotorStateControlNotificationData(motor, newState, mode_d
     if (motor.created_by !== null && motor.created_by !== undefined) {
         return {
             userId: motor.created_by,
-            title: "Pump State Update",
+            title: title,
             message: messageContent,
             motorId: motor.id
         };
@@ -173,6 +175,8 @@ export function prepareMotorStateControlNotificationData(motor, newState, mode_d
     return null;
 }
 export function prepareMotorModeControlNotificationData(motor, mode_description) {
+    const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
+    const title = mode_description === "MANUAL" || mode_description === "AUTO" ? `${pumpName} Pump Mode Updated` : `${pumpName} Pump Mode Failed to Update`;
     // Prepare notification message
     const messageContent = (mode_description === "MANUAL" || mode_description === "AUTO")
         ? `Pump mode updated from '${motor.mode}' to '${mode_description}' successfully`
@@ -181,7 +185,7 @@ export function prepareMotorModeControlNotificationData(motor, mode_description)
     if (motor.created_by !== null && motor.created_by !== undefined) {
         return {
             userId: motor.created_by,
-            title: "Pump Mode Update",
+            title: title,
             message: messageContent,
             motorId: motor.id
         };

@@ -160,6 +160,7 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
 
       const notificationDataState = prepareMotorStateControlNotificationData(motor, motor_state, mode_description);
       const notificationDataMode = prepareMotorModeControlNotificationData(motor, mode_description);
+      const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
 
       // Prepare alert and fault notifications
       let notificationDataAlert = null;
@@ -167,14 +168,14 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
 
       if (created_by && alert_description && motor_id) {
         notificationDataAlert = {
-          userId: created_by, title: "Alert Detected",
+          userId: created_by, title: `${pumpName} Alert Detected`,
           message: alert_description, motorId: motor_id
         };
       }
 
       if (fault_description && created_by && motor_id) {
         notificationDataFault = {
-          userId: created_by, title: "Fault Detected",
+          userId: created_by, title: `${pumpName} Fault Detected`,
           message: fault_description, motorId: motor_id
         };
       }

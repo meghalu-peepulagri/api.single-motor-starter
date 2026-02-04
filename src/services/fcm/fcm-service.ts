@@ -19,7 +19,6 @@ export async function sendNotificationForADevice(token: string, title: string, b
       data: { title, body, motor_id: actionId },
       token,
     };
-    console.log("message", message);
     return await getMessaging().sendEach([message]);
   }
   catch (error: unknown) {
