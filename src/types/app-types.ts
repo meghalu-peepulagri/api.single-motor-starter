@@ -255,7 +255,7 @@ export type previousPreparedLiveData = {
   user_id: number | null;
   gateway_id: number | null;
   signal_quality: number;
-  network_type: string;
+  network_type: string | null;
   motors: {
     created_by: number | null;
     id: number;

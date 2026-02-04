@@ -78,6 +78,13 @@
       "when": 1770180217885,
       "tag": "0010_heavy_the_initiative",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1770198730729,
+      "tag": "0011_violet_killmonger",
+      "breakpoints": true
     }
   ]
 }

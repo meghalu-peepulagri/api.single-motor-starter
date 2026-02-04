@@ -106,6 +106,7 @@ export const USER_LOGOUT = "Logout successfully";
 export const REFEREED_BY_REQUIRED = "Refereed by is invalid";
 export const MOBILE_NUMBER_ALREADY_EXIST = "Mobile number already exist";
 export const MOBILE_NUMBER_UNIQUE = "Mobile numbers cannot be the same";
+export const LOGGED_OUT = "User logged out successfully";
 // Token  
 export const TOKEN_REQUIRED = "Access token is required";
 export const TOKEN_EXPIRED = "Session is expired";

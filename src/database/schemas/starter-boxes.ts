@@ -25,7 +25,7 @@ export const starterBoxes = pgTable("starter_boxes", {
   gateway_id: integer("gateway_id").references(() => gateways.id),
   location_id: integer("location_id").references(() => locations.id),
   signal_quality: integer("signal_quality").notNull().default(0),
-  network_type: varchar("network_type").notNull().default("NUll"),
+  network_type: varchar("network_type"),
   starter_type: starterType().notNull().default("SINGLE_STARTER"),
   hardware_version: varchar("hardware_version"),
   temperature: real("temperature").default(0),
