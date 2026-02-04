@@ -29,6 +29,8 @@ export const starterBoxes = pgTable("starter_boxes", {
   starter_type: starterType().notNull().default("SINGLE_STARTER"),
   hardware_version: varchar("hardware_version"),
   temperature: real("temperature").default(0),
+  limit: real("limit"),
+  deployed_at: timestamp("deployed_at"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   assigned_at: timestamp("assigned_at"),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),

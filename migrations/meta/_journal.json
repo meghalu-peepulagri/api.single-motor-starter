@@ -71,6 +71,13 @@
       "when": 1770124221225,
       "tag": "0009_melted_sharon_carter",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770180217885,
+      "tag": "0010_heavy_the_initiative",
+      "breakpoints": true
     }
   ]
 }

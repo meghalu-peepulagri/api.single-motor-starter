@@ -345,8 +345,16 @@ export class StarterHandlers {
       const starterBox = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "device_status", "status"]);
       if (!starterBox) throw new BadRequestException(STARTER_BOX_NOT_FOUND);
 
+      const updateData: Record<string, any> = { device_status: validatedReqData.deploy_status };
+
+      if (validatedReqData.deploy_status === "DEPLOYED") {
+        updateData.deployed_at = new Date();
+      } else if (validatedReqData.deploy_status === "ASSIGNED") {
+        updateData.assigned_at = new Date();
+      }
+
       await db.transaction(async (trx) => {
-        updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBox.id, { device_status: validatedReqData.deploy_status }, trx);
+        await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterBox.id, updateData, trx);
 
         await ActivityService.logActivity({
           userId: userPayload.id,

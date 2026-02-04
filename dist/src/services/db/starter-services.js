@@ -279,6 +279,8 @@ export async function starterConnectedMotors(starterId) {
             signal_quality: true,
             network_type: true,
             device_status: true,
+            assigned_at: true,
+            deployed_at: true,
         },
         with: {
             motors: {

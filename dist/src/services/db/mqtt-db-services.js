@@ -13,7 +13,7 @@ import { logger } from "../../utils/logger.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
-import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
@@ -60,6 +60,9 @@ export async function selectTopicAck(topicType, payload, topic) {
             break;
         case "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK":
             await deviceSerialNumberAllocationAckHandler(payload, topic);
+            break;
+        case "TEMPERATURE_THRESHOLD_SETTING":
+            await adminConfigDataRequestAckHandler(payload, topic);
             break;
         default:
             return null;
@@ -456,7 +459,7 @@ export async function adminConfigDataRequestAckHandler(message, topic) {
         await updateLatestStarterSettings(validMac.id, message.D);
     }
     catch (error) {
-        console.error("Error at heartbeat topic handler:", error);
+        console.error("Error at admin config ack handler:", error);
         throw error;
     }
 }
