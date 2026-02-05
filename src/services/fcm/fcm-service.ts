@@ -12,11 +12,11 @@ admin.initializeApp({
   }),
 });
 
-export async function sendNotificationForADevice(token: string, title: string, body: string, actionId: string) {
+export async function sendNotificationForADevice(token: string, title: string, body: string, actionId: string, starterId: number) {
   try {
     const message = {
       notification: { title },
-      data: { title, body, motor_id: actionId },
+      data: { title, body, motor_id: actionId, starter_id: String(starterId) },
       token,
     };
     return await getMessaging().sendEach([message]);
@@ -36,11 +36,11 @@ export async function sendNotificationForADevice(token: string, title: string, b
   }
 }
 
-export async function sendNotificationsForMultipleDevices(tokens: string[], title: string, body: string, actionId: string) {
+export async function sendNotificationsForMultipleDevices(tokens: string[], title: string, body: string, actionId: string, starterId: number) {
   try {
     const message = {
       notification: { title },
-      data: { title, body, motor_id: actionId },
+      data: { title, body, motor_id: actionId, starter_id: String(starterId) },
       tokens, // Send to multiple devices
     };
     return await getMessaging().sendEachForMulticast(message);
@@ -60,7 +60,7 @@ async function handleInvalidDeviceToken(token: string) {
   }
 }
 
-export async function sendUserNotification(userId: number, title: string, message: string, id: number) {
+export async function sendUserNotification(userId: number, title: string, message: string, id: number, starterId: number) {
 
   const tokensData = await getMultipleRecordsByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["user_id", "status"], ["=", "="], [userId, "ACTIVE"], ["device_token"]) as unknown as Pick<DeviceToken, "device_token">[];
 
@@ -68,13 +68,8 @@ export async function sendUserNotification(userId: number, title: string, messag
   const tokens = tokensData.map(t => t.device_token);
 
   if (tokens.length > 1) {
-    await sendNotificationsForMultipleDevices(tokens, title, message, id.toString());
+    await sendNotificationsForMultipleDevices(tokens, title, message, id.toString(), starterId);
   } else {
-    await sendNotificationForADevice(tokens[0], title, message, id.toString());
+    await sendNotificationForADevice(tokens[0], title, message, id.toString(), starterId);
   }
 }
-
-
-
-
-

@@ -156,38 +156,43 @@ export async function checkMotorScheduleConflict(validatedReqData, existingMotor
     }
 }
 //prepare motor control notification
-export function prepareMotorStateControlNotificationData(motor, newState, mode_description) {
+export function prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id) {
     const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
-    const title = newState === 0 || newState === 1 ? `${pumpName} Pump State Updated` : `${pumpName} Pump State Failed to Update`;
+    const title = newState === 1
+        ? `Pump ${pumpName} state turned ON${mode_description ? ` with mode ${mode_description}` : ""}`
+        : newState === 0
+            ? `Pump ${pumpName} state turned OFF${mode_description ? ` with mode ${mode_description}` : ""}`
+            : `Pump ${pumpName} state Unable to update due to: ${motorState(Number(newState))}`;
     // Prepare notification message
-    const messageContent = (newState === 0 || newState === 1)
-        ? `Pump state updated to '${motorState(Number(newState))}' with mode '${mode_description}' successfully`
-        : `Pump state not updated due to '${motorState(Number(newState))}'`;
+    const messageContent = (newState === 0 || newState === 1) ? `State updated to '${motorState(Number(newState))}' with mode '${mode_description}'` : `State not updated due to '${motorState(Number(newState))}'`;
     // Check if user exists (allow 0 as valid user ID)
     if (motor.created_by !== null && motor.created_by !== undefined) {
         return {
             userId: motor.created_by,
             title: title,
             message: messageContent,
-            motorId: motor.id
+            motorId: motor.id,
+            starterId: starter_id
         };
     }
     return null;
 }
-export function prepareMotorModeControlNotificationData(motor, mode_description) {
+export function prepareMotorModeControlNotificationData(motor, mode_description, starter_id) {
     const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
-    const title = mode_description === "MANUAL" || mode_description === "AUTO" ? `${pumpName} Pump Mode Updated` : `${pumpName} Pump Mode Failed to Update`;
+    const title = mode_description === "MANUAL" || mode_description === "AUTO" ? `Pump ${pumpName} mode updated to from ${motor.mode} to ${mode_description}`
+        : `Pump ${pumpName} Mode not updated due to ${mode_description}`;
     // Prepare notification message
     const messageContent = (mode_description === "MANUAL" || mode_description === "AUTO")
-        ? `Pump mode updated from '${motor.mode}' to '${mode_description}' successfully`
-        : `Pump mode not updated due to '${mode_description}'`;
+        ? `Mode updated from '${motor.mode}' to '${mode_description}'`
+        : `Mode not updated due to '${mode_description}'`;
     // Check if user exists (allow 0 as valid user ID)
     if (motor.created_by !== null && motor.created_by !== undefined) {
         return {
             userId: motor.created_by,
             title: title,
             message: messageContent,
-            motorId: motor.id
+            motorId: motor.id,
+            starterId: starter_id
         };
     }
     return null;

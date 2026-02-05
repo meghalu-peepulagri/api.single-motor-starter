@@ -15,6 +15,8 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { ActivityService } from "../services/db/activity-service.js";
+import { prepareMotorStateControlNotificationData, prepareMotorModeControlNotificationData } from "../helpers/motor-helper.js";
+import { sendUserNotification } from "../services/fcm/fcm-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorHandlers {
     addMotorHandler = async (c) => {
@@ -64,7 +66,7 @@ export class MotorHandlers {
             const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
             if (existedMotor)
                 throw new ConflictException(MOTOR_NAME_EXISTED);
-            await db.transaction(async (trx) => {
+            const notificationData = await db.transaction(async (trx) => {
                 const updatePayload = { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() };
                 if (validMotorReq.state !== undefined)
                     updatePayload.state = validMotorReq.state;
@@ -72,7 +74,20 @@ export class MotorHandlers {
                     updatePayload.mode = validMotorReq.mode;
                 const updatedMotor = await updateRecordById(motors, motorId, updatePayload, trx);
                 await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId, { name: motor.alias_name, hp: motor.hp, state: motor.state, mode: motor.mode }, { name: updatedMotor.alias_name, hp: updatedMotor.hp, state: updatedMotor.state, mode: updatedMotor.mode }, trx, motor.starter_id || undefined);
+                const starterId = motor.starter_id || 0;
+                const hasStateChanged = updatedMotor.state !== undefined && updatedMotor.state !== motor.state;
+                const hasModeChanged = updatedMotor.mode !== undefined && updatedMotor.mode !== motor.mode;
+                const mode = updatedMotor.mode || motor.mode || "";
+                const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, updatedMotor.state, mode, starterId) : null;
+                const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, updatedMotor.mode, starterId) : null;
+                return { notificationDataState, notificationDataMode };
             });
+            if (notificationData.notificationDataState) {
+                await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
+            }
+            if (notificationData.notificationDataMode) {
+                await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+            }
             return sendResponse(c, 200, MOTOR_UPDATED);
         }
         catch (error) {
