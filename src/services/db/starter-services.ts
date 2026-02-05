@@ -344,6 +344,7 @@ export async function starterConnectedMotors(starterId: number) {
       device_status: true,
       assigned_at: true,
       deployed_at: true,
+      device_allocation: true,
     },
     with: {
       motors: {

@@ -485,4 +485,28 @@ export class StarterHandlers {
             throw error;
         }
     };
+    updateDeviceAllocationHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("id");
+            const body = await c.req.json();
+            const allocationStatus = body.allocation_status;
+            paramsValidateException.validateId(starterId, "Device id");
+            if (!allocationStatus || (allocationStatus !== "true" && allocationStatus !== "false")) {
+                throw new BadRequestException("Invalid allocation status. It should be 'true' or 'false'.");
+            }
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            await updateRecordById(starterBoxes, starterId, { device_allocation: allocationStatus });
+            return sendResponse(c, 200, "Device allocation status updated successfully");
+        }
+        catch (error) {
+            console.error("Error at update device allocation status :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            console.error("Error at update device allocation status :", error);
+            throw error;
+        }
+    };
 }

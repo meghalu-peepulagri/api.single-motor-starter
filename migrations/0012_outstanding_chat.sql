@@ -1,0 +1,1 @@
+ALTER TABLE "starter_boxes" ADD COLUMN "device_allocation" varchar;
