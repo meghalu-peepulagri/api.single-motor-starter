@@ -1,17 +1,18 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ValidatedUpdateDefaultSettingsLimits } from "../validations/schema/default-settings-limits.js";
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import type { validatedAddField } from "../validations/schema/field-validations.js";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../validations/schema/motor-schedule-validators.js";
-import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
+import type { validatedAddMotor, validatedUpdateMotor, validatedUpdateMotorTestRunStatus } from "../validations/schema/motor-validations.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 
-export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedAddStarter | ValidatedMotorSchedule
-  | ValidatedMotorScheduleArray | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings;
+export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
+  | ValidatedMotorScheduleArray | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits;
 
-export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "add-starter" | "create-motor-schedule" | "assign-starter" | "replace-starter" |
-  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-settings-limits";
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "assign-starter" | "replace-starter" |
+  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits";
 
 export interface IResp {
   status: ContentfulStatusCode;
@@ -211,3 +212,57 @@ export type RequireAtLeastOne<T, Keys extends keyof T = keyof T> =
   & {
     [K in Keys]-?: Required<Pick<T, K>> & Partial<Pick<T, Exclude<Keys, K>>>
   }[Keys];
+
+export type preparedLiveData = {
+  payload_version: number;
+  packet_number: number;
+  line_voltage_r: number;
+  line_voltage_y: number;
+  line_voltage_b: number;
+  avg_voltage: number;
+  current_r: number;
+  current_y: number;
+  current_b: number;
+  avg_current: number;
+  power_present: number;
+  motor_mode: number;
+  motor_state: number;
+  mode_description: string;
+  motor_description: string;
+  alert_code: number;
+  alert_description: string;
+  fault: number;
+  fault_description: string;
+  last_on_code: number;
+  last_on_description: string;
+  last_off_code: number;
+  last_off_description: string;
+  group_id: number;
+  temp: number;
+  time_stamp: string;
+  payload_valid: boolean;
+  payload_errors: string[];
+  starter_id: number;
+  gateway_id: number;
+  user_id: number;
+  motor_id: number,
+};
+
+export type previousPreparedLiveData = {
+  power: number;
+  created_by: number;
+  id: number;
+  user_id: number | null;
+  gateway_id: number | null;
+  signal_quality: number;
+  network_type: string | null;
+  motors: {
+    created_by: number | null;
+    id: number;
+    name: string;
+    mode: "AUTO" | "MANUAL"
+    location_id: number | null;
+    hp: string;
+    state: number;
+  }[];
+}

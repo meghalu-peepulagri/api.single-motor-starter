@@ -193,7 +193,8 @@ export function prepareActionLog(data) {
         entityId: data.entityId,
         deviceId: data.deviceId,
         oldData: data.oldData,
-        newData: data.newData
+        newData: data.newData,
+        message: data.message
     });
 }
 /**

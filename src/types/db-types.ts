@@ -11,14 +11,17 @@ import type { Motor, MotorsTable } from "../database/schemas/motors.js";
 import type { Otp, OtpTable } from "../database/schemas/otp.js";
 import type { StarterBox, StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import type { StarterDefaultSettings, StarterDefaultSettingsTable } from "../database/schemas/starter-default-settings.js";
+import type { StarterDefaultSettingsLimits, StarterDefaultSettingsLimitsTable } from "../database/schemas/starter-default-settings-limits.js";
 import type { StarterBoxParameters, StarterBoxParametersTable } from "../database/schemas/starter-parameters.js";
 import type { StarterSettingsLimits, StarterSettingsLimitsTable } from "../database/schemas/starter-settings-limits.js";
 import type { StarterSettings, StarterSettingsTable } from "../database/schemas/starter-settings.js";
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import type { User, UsersTable } from "../database/schemas/users.js";
+import type { DeviceTemperature, DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
-  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable | StarterBoxParametersTable;
+  MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable | StarterDefaultSettingsLimitsTable
+  | StarterBoxParametersTable | DeviceTemperatureTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User :
@@ -38,7 +41,8 @@ export type DBRecord<T extends DBTable> =
   T extends StarterDefaultSettingsTable ? StarterDefaultSettings :
   T extends StarterSettingsLimitsTable ? StarterSettingsLimits :
   T extends StarterSettingsTable ? StarterSettings :
-  T extends StarterSettingsLimitsTable ? StarterSettingsLimits :
+  T extends StarterDefaultSettingsLimitsTable ? StarterDefaultSettingsLimits :
+  T extends DeviceTemperatureTable ? DeviceTemperature :
   never;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;

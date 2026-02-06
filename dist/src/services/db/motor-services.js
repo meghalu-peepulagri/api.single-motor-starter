@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
@@ -339,11 +339,6 @@ export async function getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId
         records,
     };
 }
-export async function updateMotorStateByStarterIds(starterIds) {
-    await db.update(motors).set({ status: "INACTIVE" }).where(and(inArray(motors.starter_id, starterIds.inactiveStarterIds), (ne(motors.status, "ARCHIVED"))));
-    await db.update(motors).set({ status: "ACTIVE" }).where(and(inArray(motors.starter_id, starterIds.activeStarterIds), ne(motors.status, "ARCHIVED")));
-}
-;
 export async function getMotorTotalRunOnTime(starterId, fromDate, toDate, motorId) {
     const fromDateObj = new Date(fromDate);
     const toDateObj = new Date(toDate).toISOString();
@@ -357,4 +352,42 @@ export async function getMotorTotalRunOnTime(starterId, fromDate, toDate, motorI
     return {
         total_run_on_time: formatDuration(totalSeconds * 1000),
     };
+}
+export async function updateStarterStatusWithTransaction(starterIds) {
+    const action = async (trx) => {
+        // Update starters to INACTIVE
+        const inActiveStarterIds = await trx
+            .update(starterBoxes)
+            .set({ status: "INACTIVE", signal_quality: 0 })
+            .where(and(notInArray(starterBoxes.id, starterIds), eq(starterBoxes.status, "ACTIVE")))
+            .returning({ id: starterBoxes.id });
+        // Update starters to ACTIVE
+        const activeStarterIds = await trx
+            .update(starterBoxes)
+            .set({ status: "ACTIVE", signal_quality: 10 })
+            .where(and(inArray(starterBoxes.id, starterIds), eq(starterBoxes.status, "INACTIVE")))
+            .returning({ id: starterBoxes.id });
+        const inactiveIds = inActiveStarterIds.map((row) => row.id);
+        const activeIds = activeStarterIds.map((row) => row.id);
+        // Update motors to INACTIVE
+        if (inactiveIds.length > 0) {
+            await trx
+                .update(motors)
+                .set({ status: "INACTIVE" })
+                .where(and(inArray(motors.starter_id, inactiveIds), ne(motors.status, "ARCHIVED")));
+        }
+        // Update motors to ACTIVE
+        if (activeIds.length > 0) {
+            await trx
+                .update(motors)
+                .set({ status: "ACTIVE" })
+                .where(and(inArray(motors.starter_id, activeIds), ne(motors.status, "ARCHIVED")));
+        }
+        return {
+            inactiveStarterIds: inactiveIds,
+            activeStarterIds: activeIds,
+        };
+    };
+    const result = await db.transaction(action);
+    return result;
 }

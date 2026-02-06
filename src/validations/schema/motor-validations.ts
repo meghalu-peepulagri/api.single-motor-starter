@@ -15,6 +15,10 @@ export const vUpdateMotor = v.object({
   mode: v.optional(v.picklist(["MANUAL", "AUTO"])),
 });
 
+export const vUpdateMotorTestRunStatus = v.object({
+  test_run_status: v.picklist(["IN_TEST", "COMPLETED", "FAILED"], "Test run status must be one of: IN_TEST, COMPLETED, or FAILED"),
+});
 
 export type validatedAddMotor = v.InferOutput<typeof vAddMotor>;
 export type validatedUpdateMotor = v.InferOutput<typeof vUpdateMotor>;
+export type validatedUpdateMotorTestRunStatus = v.InferOutput<typeof vUpdateMotorTestRunStatus>;

@@ -1,0 +1,1 @@
+ALTER TABLE "device_temperature" ADD COLUMN "limit" real;

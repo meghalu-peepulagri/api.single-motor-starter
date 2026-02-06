@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
+import { deviceTemperature } from "../database/schemas/device-temperature.js";
 import { gateways } from "../database/schemas/gateways.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
@@ -15,9 +16,9 @@ import { getPaginationData, getPaginationOffParams } from "../helpers/pagination
 import { starterFilters } from "../helpers/starter-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount } from "../services/db/alerts-services.js";
-import { getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
-import { getMotorRunTime, updateMotorStateByStarterIds } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors, updateStarterStatus } from "../services/db/starter-services.js";
+import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
+import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -111,7 +112,6 @@ export class StarterHandlers {
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
-            console.error("Error at assign starter :", error);
             throw error;
         }
     };
@@ -203,7 +203,7 @@ export class StarterHandlers {
             if (foundMotorName)
                 throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
             await db.transaction(async (trx) => {
-                const { updatedMotor, updatedStarter } = await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id, trx);
+                const { updatedMotor, updatedStarter } = await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id);
                 await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx);
             });
             return sendResponse(c, 201, STARTER_REPLACED_SUCCESSFULLY);
@@ -285,10 +285,8 @@ export class StarterHandlers {
             if (starterBox.device_status !== "DEPLOYED")
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
-                const { updatedStarter, updatedMotor } = await assignStarterWebWithTransaction(starterBox, validatedReqData, userPayload, trx);
-                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
-                    user_id: updatedStarter.user_id
-                }, trx);
+                const { updatedStarter } = await assignStarterWebWithTransaction(starterBox, validatedReqData);
+                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, { user_id: updatedStarter.user_id }, trx);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
         }
@@ -312,8 +310,15 @@ export class StarterHandlers {
             const starterBox = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "device_status", "status"]);
             if (!starterBox)
                 throw new BadRequestException(STARTER_BOX_NOT_FOUND);
+            const updateData = { device_status: validatedReqData.deploy_status };
+            if (validatedReqData.deploy_status === "DEPLOYED") {
+                updateData.deployed_at = new Date();
+            }
+            else if (validatedReqData.deploy_status === "ASSIGNED") {
+                updateData.assigned_at = new Date();
+            }
             await db.transaction(async (trx) => {
-                updateRecordByIdWithTrx(starterBoxes, starterBox.id, { device_status: validatedReqData.deploy_status }, trx);
+                await updateRecordByIdWithTrx(starterBoxes, starterBox.id, updateData, trx);
                 await ActivityService.logActivity({
                     userId: userPayload.id,
                     performedBy: userPayload.id,
@@ -421,8 +426,7 @@ export class StarterHandlers {
         try {
             const timeStamp = new Date(new Date().getTime() - 5 * 60 * 1000); // 5 minutes below
             const uniqueStarterData = await getUniqueStarterIdsWithInTime(timeStamp);
-            const updatedStarterStatus = await updateStarterStatus(uniqueStarterData);
-            updateMotorStateByStarterIds(updatedStarterStatus);
+            await updateStarterStatusWithTransaction(uniqueStarterData);
             return sendResponse(c, 200, STARTER_BOX_STATUS_UPDATED);
         }
         catch (error) {
@@ -440,6 +444,68 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at get latest PCB number :", error);
+            throw error;
+        }
+    };
+    getTemperatureHandler = async (c) => {
+        try {
+            const query = c.req.query();
+            const starterId = +c.req.param("id");
+            const motor_id = +query.motor_id;
+            paramsValidateException.validateId(starterId, "Device id");
+            if (motor_id)
+                paramsValidateException.validateId(motor_id, "Motor id");
+            const { fromDateUTC, toDateUTC } = parseQueryDates(query);
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            const where = { columns: ["device_id"], relations: ["="], values: [starter.id] };
+            if (motor_id) {
+                where.columns.push("motor_id");
+                where.relations.push("=");
+                where.values.push(motor_id);
+            }
+            if (fromDateUTC) {
+                where.columns.push("time_stamp");
+                where.relations.push(">=");
+                where.values.push(fromDateUTC);
+            }
+            if (toDateUTC) {
+                where.columns.push("time_stamp");
+                where.relations.push("<=");
+                where.values.push(toDateUTC);
+            }
+            const orderBy = { columns: ["created_at"], values: ["asc"] };
+            const columns = ["id", "device_id", "temperature", "time_stamp"];
+            const temperature = await getRecordsConditionally(deviceTemperature, where, columns, orderBy);
+            return sendResponse(c, 200, TEMPERATURE_FETCHED, temperature);
+        }
+        catch (error) {
+            console.error("Error at get temperature :", error);
+            throw error;
+        }
+    };
+    updateDeviceAllocationHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("id");
+            const body = await c.req.json();
+            const allocationStatus = body.allocation_status;
+            paramsValidateException.validateId(starterId, "Device id");
+            if (!allocationStatus || (allocationStatus !== "true" && allocationStatus !== "false")) {
+                throw new BadRequestException("Invalid allocation status. It should be 'true' or 'false'.");
+            }
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            await updateRecordById(starterBoxes, starterId, { device_allocation: allocationStatus });
+            return sendResponse(c, 200, "Device allocation status updated successfully");
+        }
+        catch (error) {
+            console.error("Error at update device allocation status :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            console.error("Error at update device allocation status :", error);
             throw error;
         }
     };
