@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motors, type MotorsTable, type NewMotor } from "../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
@@ -14,9 +14,11 @@ import { getMotorWithStarterDetails } from "../services/db/motor-starter-service
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
-import type { validatedAddMotor, validatedUpdateMotor } from "../validations/schema/motor-validations.js";
+import type { validatedAddMotor, validatedUpdateMotor, validatedUpdateMotorTestRunStatus } from "../validations/schema/motor-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { ActivityService } from "../services/db/activity-service.js";
+import { prepareMotorStateControlNotificationData, prepareMotorModeControlNotificationData } from "../helpers/motor-helper.js";
+import { sendUserNotification } from "../services/fcm/fcm-service.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -74,7 +76,7 @@ export class MotorHandlers {
       const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
       if (existedMotor) throw new ConflictException(MOTOR_NAME_EXISTED);
 
-      await db.transaction(async (trx) => {
+      const notificationData = await db.transaction(async (trx) => {
         const updatePayload: any = { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() };
         if (validMotorReq.state !== undefined) updatePayload.state = validMotorReq.state;
         if (validMotorReq.mode !== undefined) updatePayload.mode = validMotorReq.mode;
@@ -86,7 +88,23 @@ export class MotorHandlers {
           trx,
           motor.starter_id || undefined
         );
+
+        const starterId = motor.starter_id || 0;
+        const hasStateChanged = updatedMotor.state !== undefined && updatedMotor.state !== motor.state;
+        const hasModeChanged = updatedMotor.mode !== undefined && updatedMotor.mode !== motor.mode;
+        const mode = updatedMotor.mode || motor.mode || "";
+
+        const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, updatedMotor.state, mode, starterId) : null;
+        const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, updatedMotor.mode, starterId) : null;
+        return { notificationDataState, notificationDataMode };
       })
+
+      if (notificationData.notificationDataState) {
+        await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
+      }
+      if (notificationData.notificationDataMode) {
+        await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+      }
 
       return sendResponse(c, 200, MOTOR_UPDATED);
     } catch (error: any) {
@@ -157,6 +175,42 @@ export class MotorHandlers {
       return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motors);
     } catch (error: any) {
       console.error("Error at get all motors :", error);
+      throw error;
+    }
+  }
+
+  updateMotorTestRunStatusHandler = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const motorId = +c.req.param("id");
+      paramsValidateException.validateId(motorId, "motor id");
+
+      const motorPayload = await c.req.json();
+      paramsValidateException.emptyBodyValidation(motorPayload);
+
+      const validMotorReq = await validatedRequest<validatedUpdateMotorTestRunStatus>("update-motor-test-run-status", motorPayload, MOTOR_VALIDATION_CRITERIA);
+
+      const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+      if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
+
+      await db.transaction(async trx => {
+        await updateRecordById<MotorsTable>(motors, motor.id, { test_run_status: validMotorReq.test_run_status }, trx);
+        await ActivityService.writeMotorTestRunStatusUpdatedLog(
+          userPayload.id,
+          motor.id,
+          motor.test_run_status,
+          validMotorReq.test_run_status,
+          trx,
+          motor.starter_id || undefined
+        );
+      });
+
+      return sendResponse(c, 200, MOTOR_TEST_RUN_STATUS_UPDATED);
+    } catch (error: any) {
+      console.error("Error at update motor test run status:", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
       throw error;
     }
   }

@@ -77,8 +77,10 @@ const motorNameValidator = v.pipe(
   v.transform(value => value.trim()),
   v.nonEmpty(MOTOR_REQUIRED),
   v.regex(/^[A-Z].*$/i, MOTOR_NAME_STARTS_LETTER),
+  v.regex(/^[A-Za-z0-9 ]+$/, "Pump name not allowed special characters"),
   v.minLength(3, MOTOR_MIN_LENGTH),
 );
+
 
 const hpValidator = v.pipe(
   v.number(HP_REQUIRED),

@@ -2,9 +2,9 @@ import { DEVICE_SCHEMA } from "../constants/app-constants.js";
 import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import type { RetryOptions } from "../types/app-types.js";
+import { logger } from "../utils/logger.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
-import { logger } from "../utils/logger.js";
 
 
 export async function liveDataHandler(parsedMessage: any, topic: string) {

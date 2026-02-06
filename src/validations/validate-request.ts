@@ -6,10 +6,11 @@ import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vAddMotorSchedule } from "./schema/motor-schedule-validators.js";
-import { vAddMotor, vUpdateMotor } from "./schema/motor-validations.js";
+import { vAddMotor, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
 import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
+import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
@@ -21,6 +22,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "add-field": vAddField,
   "add-motor": vAddMotor,
   "update-motor": vUpdateMotor,
+  "update-motor-test-run-status": vUpdateMotorTestRunStatus,
   "add-starter": vAddStarter,
   "create-motor-schedule": vAddMotorSchedule,
   "assign-starter": vAssignStarter,
@@ -29,7 +31,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "update-deployed-status": vUpdateDeployedStatus,
   "assign-location-to-starter": vAssignLocationToStarter,
   "update-default-settings": vUpdateDefaultSettings,
-  "update-settings-limits": vUpdateDefaultSettings
+  "update-default-settings-limits": vUpdateDefaultSettingsLimits
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(

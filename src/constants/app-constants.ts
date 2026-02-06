@@ -1,4 +1,3 @@
-import { realOnly } from "../helpers/settings-helpers.js";
 
 export const DEF_422 = "Validation Failed";
 export const DEF_404 = "Data Not Found";
@@ -37,10 +36,10 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "unique_alt_phone_5_idx": "Mobile Number already exist.",
   "unique_location_per_user": "Location name already exist.",
   "unique_field_per_user_location": "Field name already exist.",
-  "validate_mac_address": "MAC address already exist.",
+  "validate_mac_address": "Unique ID already exist.",
+  "validate_starter_number": "Starter Number already exist.",
   "validate_pcb_number": "PCB number already exist.",
   "valid_starter_box_name": "Name already exist.",
-  "validate_starter_number": "Starter Number already exist.",
   "unique_motor_alias_name_per_location": "Pump name already exist.",
 };
 
@@ -115,6 +114,7 @@ export const USER_LOGOUT = "Logout successfully";
 export const REFEREED_BY_REQUIRED = "Refereed by is invalid"
 export const MOBILE_NUMBER_ALREADY_EXIST = "Mobile number already exist";
 export const MOBILE_NUMBER_UNIQUE = "Mobile numbers cannot be the same";
+export const LOGGED_OUT = "User logged out successfully";
 
 
 // Token  
@@ -203,6 +203,7 @@ export const MOTOR_ID_REQUIRED = "Pump is required";
 export const MOTOR_DETAILS_FETCHED = "Pump details fetched successfully";
 export const MOTOR_NAME_EXISTED = "Pump name already exist";
 export const MOTOR_NAME_ALREADY_LOCATION = "Pump name already exists in this location."
+export const MOTOR_TEST_RUN_STATUS_UPDATED = "Pump test run status updated successfully";
 
 
 // Starter Box
@@ -271,6 +272,7 @@ export const STARTER_BOX_STATUS_UPDATED = "Device status updated successfully";
 export const PCB_SERIAL_NUMBER_REQUIRED = "PCB/Starter Number is required";
 export const MIN_3_CHARACTERS_REQUIRED = "PCB/Starter Number has min 3 characters";
 export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched successfully";
+export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
 
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
@@ -313,6 +315,10 @@ export const ADDED_STARTER_SETTINGS = "Starter settings updated successfully";
 export const SETTINGS_LIMITS_FETCHED = "Settings limits fetched successfully";
 export const SETTINGS_LIMITS_UPDATED = "Settings limits updated successfully";
 export const SETTINGS_LIMITS_NOT_FOUND = "Settings limits id not found";
+export const DEFAULT_SETTINGS_LIMITS_FETCHED = "Default settings limits fetched successfully";
+export const DEFAULT_SETTINGS_LIMITS_UPDATED = "Default settings limits updated successfully";
+export const DEFAULT_SETTINGS_LIMITS_NOT_FOUND = "Default settings limits not found";
+export const UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA = "Update default settings limits details provided do not meet the required validation criteria";
 
 export const ACTIVITY_LOGS_FETCHED = "Activity logs fetched successfully";
 
@@ -411,6 +417,7 @@ export const SETTINGS_FIELD_NAMES = {
   r1: "RTD resistance R1",
   r2: "RTD resistance R2",
   off: "RTD temperature offset",
+  limit: "Temperature limit",
 
   /* ================= MQTT Configuration ================= */
 

@@ -1,4 +1,4 @@
-import { MOBILE_NUMBER_ALREADY_EXIST, USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
+import { LOGGED_OUT, MOBILE_NUMBER_ALREADY_EXIST, USER_DETAILS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { users } from "../database/schemas/users.js";
 import ConflictException from "../exceptions/conflict-exception.js";
@@ -7,12 +7,13 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { checkInternalPhoneUniqueness, userFilters } from "../helpers/user-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { getRecordsConditionally, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
+import { deleteRecordById, getRecordsConditionally, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
 import { checkPhoneUniqueness, paginatedUsersList } from "../services/db/user-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { deviceTokens } from "../database/schemas/device-tokens.js";
 const paramsValidateException = new ParamsValidateException();
 export class UserHandlers {
     listUsersHandler = async (c) => {
@@ -111,6 +112,21 @@ export class UserHandlers {
             handleForeignKeyViolationError(error);
             console.error("Error at update user details :", error);
             throw error;
+        }
+    };
+    userLogOutHandler = async (c) => {
+        try {
+            const id = +c.req.param("id");
+            const reqData = await c.req.json();
+            const tokenData = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], [reqData.fcm_token, id], ["eq", "eq"], ["id"]);
+            if (!tokenData)
+                throw new NotFoundException(USER_NOT_FOUND);
+            await deleteRecordById(deviceTokens, tokenData.id);
+            return sendResponse(c, 200, LOGGED_OUT);
+        }
+        catch (err) {
+            console.error("Error at logout", err.message);
+            throw err;
         }
     };
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "starter_boxes" ALTER COLUMN "device_allocation" SET DEFAULT 'false';

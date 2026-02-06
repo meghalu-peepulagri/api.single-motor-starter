@@ -173,23 +173,26 @@ export const starterSettingsLimits = pgTable("starter_settings_limits", {
   io_b_min: real("io_b_min").default(0),
   io_b_max: real("io_b_max").default(0),
 
+  limit_min: real("limit_min").default(0),
+  limit_max: real("limit_max").default(150),
+
   // ================= PT100/PT1000 Calibrations =================
   r1: integer("r1").default(0),
   r2: integer("r2").default(0),
   off: integer("off").default(0),
 
   // ================= MQTT Configuration =================
-  ca_fn: varchar("ca_fn", { length: 100 }),
-  bkr_adrs: varchar("bkr_adrs", { length: 100 }),
-  sn: varchar("sn", { length: 50 }),
-  usrn: varchar("usrn", { length: 50 }),
-  pswd: varchar("pswd", { length: 50 }),
-  prd_url: varchar("prd_url", { length: 100 }),
+  ca_fn: varchar("ca_fn", { length: 100 }).default("NULL"),
+  bkr_adrs: varchar("bkr_adrs", { length: 100 }).default("NULL"),
+  sn: varchar("sn", { length: 50 }).default("NULL"),
+  usrn: varchar("usrn", { length: 50 }).default("NULL"),
+  pswd: varchar("pswd", { length: 50 }).default("NULL"),
+  prd_url: varchar("prd_url").default("NULL"),
   port: integer("port").default(1883),
   crt_en: integer("crt_en").default(2048),
 
   // ================= IVRS Configuration =================
-  sms_pswd: varchar("sms_pswd", { length: 20 }),
+  sms_pswd: varchar("sms_pswd", { length: 20 }).default("NULL"),
   c_lang: integer("c_lang").default(1),
   auth_num: varchar("auth_num", { length: 15 }).array(),
 

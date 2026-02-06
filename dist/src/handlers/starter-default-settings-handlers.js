@@ -1,7 +1,8 @@
-import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_LIMITS_FETCHED, DEFAULT_SETTINGS_LIMITS_NOT_FOUND, DEFAULT_SETTINGS_LIMITS_UPDATED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { starterDefaultSettings } from "../database/schemas/starter-default-settings.js";
+import { StarterDefaultSettingsLimits } from "../database/schemas/starter-default-settings-limits.js";
 import { starterSettingsLimits } from "../database/schemas/starter-settings-limits.js";
 import { starterSettings } from "../database/schemas/starter-settings.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -52,7 +53,7 @@ export class StarterDefaultSettingsHandlers {
                 await updateRecordById(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
                 // Add activity log if needed (currently not in service, but let's be consistent)
                 await ActivityService.logActivity({
-                    performedBy: userPayload.id, // System or current user if available
+                    performedBy: userPayload.id,
                     action: "DEFAULT_SETTINGS_UPDATED",
                     entityType: "SETTING",
                     entityId: Number(defaultSettingData.id),
@@ -218,6 +219,62 @@ export class StarterDefaultSettingsHandlers {
         }
         catch (error) {
             console.error("Error at get starter setting details in Mobile:", error);
+            throw error;
+        }
+    };
+    getStarterDefaultSettingsLimitsHandler = async (c) => {
+        try {
+            const defaultSettingsLimits = await getRecordsConditionally(StarterDefaultSettingsLimits, undefined, undefined);
+            if (!defaultSettingsLimits || defaultSettingsLimits.length === 0) {
+                throw new BadRequestException(DEFAULT_SETTINGS_LIMITS_NOT_FOUND);
+            }
+            return sendResponse(c, 200, DEFAULT_SETTINGS_LIMITS_FETCHED, defaultSettingsLimits[0]);
+        }
+        catch (error) {
+            console.error("Error at get starter default settings limits:", error);
+            throw error;
+        }
+    };
+    updateStarterDefaultSettingsLimitsHandler = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const defaultSettingLimitsId = +c.req.param("id");
+            const reqBody = await c.req.json();
+            const validatedBody = await validatedRequest("update-default-settings-limits", reqBody, UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA);
+            const defaultSettingLimitsData = await getRecordById(StarterDefaultSettingsLimits, defaultSettingLimitsId);
+            if (!defaultSettingLimitsData) {
+                throw new BadRequestException(DEFAULT_SETTINGS_LIMITS_NOT_FOUND);
+            }
+            const { id, created_at, updated_at, ...rest } = defaultSettingLimitsData;
+            const changedOldData = {};
+            const changedNewData = {};
+            // Track changes
+            for (const key of Object.keys(validatedBody)) {
+                const oldValue = rest[key];
+                const newValue = validatedBody[key];
+                if (newValue !== undefined && oldValue !== newValue) {
+                    changedOldData[key] = oldValue;
+                    changedNewData[key] = newValue;
+                }
+            }
+            // Update in transaction with activity log
+            await db.transaction(async (trx) => {
+                await updateRecordById(StarterDefaultSettingsLimits, defaultSettingLimitsId, validatedBody, trx);
+                // Log activity
+                await ActivityService.logActivity({
+                    performedBy: userPayload.id,
+                    action: "DEFAULT_SETTINGS_LIMITS_UPDATED",
+                    entityType: "SETTING",
+                    entityId: defaultSettingLimitsId,
+                    oldData: changedOldData,
+                    newData: changedNewData,
+                }, trx);
+            });
+            return sendResponse(c, 200, DEFAULT_SETTINGS_LIMITS_UPDATED);
+        }
+        catch (error) {
+            console.error("Error at update starter default settings limits:", error);
+            handleJsonParseError(error);
             throw error;
         }
     };

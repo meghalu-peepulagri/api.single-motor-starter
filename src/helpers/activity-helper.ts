@@ -239,12 +239,13 @@ export function prepareDeletionLog(data: {
  */
 export function prepareActionLog(data: {
   userId: number;
-  action: "MOTOR_ADDED" | "STARTER_ASSIGNED" | "LOCATION_REPLACED" | "LOCATION_ADDED" | "LOCATION_RENAMED";
+  action: "MOTOR_ADDED" | "STARTER_ASSIGNED" | "LOCATION_REPLACED" | "LOCATION_ADDED" | "LOCATION_RENAMED" | "MOTOR_TEST_RUN_STATUS_UPDATED";
   entityType: "MOTOR" | "STARTER" | "LOCATION";
   entityId: number;
   deviceId?: number;
   oldData?: any;
   newData?: any;
+  message?: string;
 }): NewUserActivityLog {
   return ActivityService.prepareActivityLog({
     performedBy: data.userId,
@@ -253,7 +254,8 @@ export function prepareActionLog(data: {
     entityId: data.entityId,
     deviceId: data.deviceId,
     oldData: data.oldData,
-    newData: data.newData
+    newData: data.newData,
+    message: data.message
   });
 }
 

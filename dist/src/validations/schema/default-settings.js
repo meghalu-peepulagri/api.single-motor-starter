@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import { enable01, integerOnly, realOnly, requiredText } from "../../helpers/settings-helpers.js";
+import { enable01, integerOnly, realOnly, optionalText, phoneNumberArray } from "../../helpers/settings-helpers.js";
 export const vUpdateDefaultSettings = v.object({
     /* ================= Device Configuration ================= */
     allflt_en: enable01("allflt_en"),
@@ -76,18 +76,19 @@ export const vUpdateDefaultSettings = v.object({
     r1: integerOnly("r1"),
     r2: integerOnly("r2"),
     off: integerOnly("off"),
+    limit: realOnly("limit"),
     /* ================= MQTT Configuration ================= */
-    ca_fn: requiredText("ca_fn"),
-    bkr_adrs: requiredText("bkr_adrs"),
-    usrn: requiredText("usrn"),
-    pswd: requiredText("pswd"),
-    prd_url: requiredText("prd_url"),
+    ca_fn: optionalText("ca_fn"),
+    bkr_adrs: optionalText("bkr_adrs"),
+    usrn: optionalText("usrn"),
+    pswd: optionalText("pswd"),
+    prd_url: optionalText("prd_url"),
     port: integerOnly("port"),
     crt_en: integerOnly("crt_en"),
     /* ================= IVRS Configuration ================= */
-    sms_pswd: requiredText("sms_pswd"),
+    sms_pswd: optionalText("sms_pswd"),
     c_lang: integerOnly("c_lang"),
-    auth_num: v.optional(v.array(v.string())),
+    auth_num: phoneNumberArray("auth_num"), // Optional array with phone number validation
     /* ================= Frequency Configuration ================= */
     dft_liv_f: integerOnly("dft_liv_f"),
     h_liv_f: integerOnly("h_liv_f"),

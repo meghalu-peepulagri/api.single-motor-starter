@@ -25,10 +25,13 @@ export const starterBoxes = pgTable("starter_boxes", {
   gateway_id: integer("gateway_id").references(() => gateways.id),
   location_id: integer("location_id").references(() => locations.id),
   signal_quality: integer("signal_quality").notNull().default(0),
-  network_type: varchar("network_type").notNull().default("NUll"),
+  network_type: varchar("network_type"),
   starter_type: starterType().notNull().default("SINGLE_STARTER"),
   hardware_version: varchar("hardware_version"),
   temperature: real("temperature").default(0),
+  limit: real("limit"),
+  deployed_at: timestamp("deployed_at"),
+  device_allocation: varchar("device_allocation").default("false"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   assigned_at: timestamp("assigned_at"),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
@@ -45,8 +48,8 @@ export const starterBoxes = pgTable("starter_boxes", {
 
   uniqueIndex("valid_starter_box_name").on(sql`lower(${table.name})`).where(sql`${table.status} != 'ARCHIVED'`),
   uniqueIndex("validate_mac_address").on(sql`lower(${table.mac_address})`).where(sql`${table.status} != 'ARCHIVED'`),
-  uniqueIndex("validate_pcb_number").on(sql`lower(${table.pcb_number})`).where(sql`${table.status} != 'ARCHIVED'`),
   uniqueIndex("validate_starter_number").on(sql`lower(${table.starter_number})`).where(sql`${table.status} != 'ARCHIVED'`),
+  uniqueIndex("validate_pcb_number").on(sql`lower(${table.pcb_number})`).where(sql`${table.status} != 'ARCHIVED'`),
 ]);
 
 export type StarterBox = typeof starterBoxes.$inferSelect;
