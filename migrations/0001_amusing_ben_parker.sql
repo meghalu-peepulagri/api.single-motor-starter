@@ -135,4 +135,4 @@ CREATE TABLE "starter_default_settings_limits" (
 --> statement-breakpoint
 ALTER TABLE "user_activity_logs" ALTER COLUMN "old_data" SET DATA TYPE varchar;--> statement-breakpoint
 ALTER TABLE "user_activity_logs" ALTER COLUMN "new_data" SET DATA TYPE varchar;--> statement-breakpoint
-ALTER TABLE "user_activity_logs" ADD COLUMN "field_name" varchar;
+-- ALTER TABLE "user_activity_logs" ADD COLUMN "field_name" varchar;
