@@ -16,6 +16,7 @@ import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
+import test from "node:test";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     const defaultSettings = await getStarterDefaultSettings();
@@ -113,6 +114,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     state: true,
                     mode: true,
                     alias_name: true,
+                    test_run_status: true,
                 },
                 with: {
                     location: {

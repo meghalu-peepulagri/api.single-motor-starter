@@ -18,6 +18,7 @@ import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
+import test from "node:test";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
@@ -139,6 +140,7 @@ export async function paginatedStarterList(
           state: true,
           mode: true,
           alias_name: true,
+          test_run_status: true,
         },
         with: {
           location: {
