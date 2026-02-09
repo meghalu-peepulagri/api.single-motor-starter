@@ -74,8 +74,8 @@ export async function updateStates(insertedData, previousData) {
     const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
     if (!starter_id)
         return null;
-    const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "IN_TEST"], ["test_run_status"]);
-    if (isInTestRun && isInTestRun.test_run_status === "IN_TEST")
+    const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
+    if (isInTestRun && isInTestRun.test_run_status === "PROCESSING")
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
     try {
         const notificationData = await db.transaction(async (trx) => {
@@ -188,8 +188,8 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
     const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
-    const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "IN_TEST"], ["test_run_status"]);
-    if (isInTestRun && isInTestRun.test_run_status === "IN_TEST")
+    const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
+    if (isInTestRun && isInTestRun.test_run_status === "PROCESSING")
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
     const notificationData = await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);

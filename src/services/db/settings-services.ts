@@ -60,8 +60,6 @@ export async function updateLatestStarterSettings(starterId: number, isNewConfig
 
 
 export async function updateLatestStarterSettingsFlc(starterId: number, avgCurrent: number) {
-  console.log('avgCurrent: ', avgCurrent);
-  console.log('starterId: ', starterId);
   if (!starterId) return null;
 
   return db
