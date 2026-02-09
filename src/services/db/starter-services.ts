@@ -139,6 +139,7 @@ export async function paginatedStarterList(
           state: true,
           mode: true,
           alias_name: true,
+          test_run_status: true,
         },
         with: {
           location: {
