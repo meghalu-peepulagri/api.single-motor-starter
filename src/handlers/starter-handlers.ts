@@ -442,14 +442,16 @@ export class StarterHandlers {
             pcb_number: starter.pcb_number,
             starter_number: starter.starter_number,
             mac_address: starter.mac_address,
-            gateway_id: starter.gateway_id
+            gateway_id: starter.gateway_id,
+            device_mobile_number: starter.device_mobile_number
           },
           {
             name: updatedStarter.name,
             pcb_number: updatedStarter.pcb_number,
             starter_number: updatedStarter.starter_number,
             mac_address: updatedStarter.mac_address,
-            gateway_id: updatedStarter.gateway_id
+            gateway_id: updatedStarter.gateway_id,
+            device_mobile_number: updatedStarter.device_mobile_number
           },
           trx
         );

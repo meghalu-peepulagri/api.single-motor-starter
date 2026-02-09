@@ -283,6 +283,7 @@ export async function starterConnectedMotors(starterId) {
             assigned_at: true,
             deployed_at: true,
             device_allocation: true,
+            device_mobile_number: true,
         },
         with: {
             motors: {
