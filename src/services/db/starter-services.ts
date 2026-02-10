@@ -126,6 +126,7 @@ export async function paginatedStarterList(
       device_status: true,
       signal_quality: true,
       network_type: true,
+      device_mobile_number: true,
     },
     with: {
       user: {

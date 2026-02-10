@@ -583,7 +583,7 @@ export const publishMultipleTimesInBackground = async (
       publishData(devicePayload, starterDetails);
 
       const ackReceived = await waitForAck(
-        ackIdentifiers,
+        ackIdentifiers, 
         ackWaitTimes[i],
         isAckValid
       );
