@@ -135,7 +135,8 @@ export function extractPreviousData(previousData, motorId) {
     const prevMode = motor.mode ?? null;
     const locationId = motor.location_id ?? null;
     const created_by = motor.created_by ?? null;
-    return { power, prevState, prevMode, locationId, created_by, motor };
+    const device_created_by = previousData?.created_by;
+    return { power, prevState, prevMode, locationId, created_by, motor, device_created_by };
 }
 export async function checkMotorScheduleConflict(validatedReqData, existingMotorSchedule) {
     if (!existingMotorSchedule)

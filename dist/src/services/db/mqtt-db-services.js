@@ -71,11 +71,11 @@ export async function selectTopicAck(topicType, payload, topic) {
 const VALID_MODES = ["AUTO", "MANUAL"];
 export async function updateStates(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
-    const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
     if (!starter_id)
         return null;
-    const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "IN_TEST"], ["test_run_status"]);
-    if (isInTestRun && isInTestRun.test_run_status === "IN_TEST")
+    const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
+    if (isInTestRun && isInTestRun.test_run_status === "PROCESSING")
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
     try {
         const notificationData = await db.transaction(async (trx) => {
@@ -127,7 +127,7 @@ export async function updateStates(insertedData, previousData) {
                 }
             }
             const alertsFaultsRecord = {
-                starter_id, motor_id: motor_id || null, user_id: created_by || null, alert_code: alert_code ? Number(alert_code) : null,
+                starter_id, motor_id: motor_id || null, user_id: created_by || device_created_by, alert_code: alert_code ? Number(alert_code) : null,
                 alert_description: alert_description ? String(alert_description) : null, fault_code: fault ? Number(fault) : null,
                 fault_description: fault_description ? String(fault_description) : null, timestamp: new Date(time_stamp)
             };
@@ -187,11 +187,11 @@ export async function updateStates(insertedData, previousData) {
 }
 export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
-    const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
-    const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "IN_TEST"], ["test_run_status"]);
-    if (isInTestRun && isInTestRun.test_run_status === "IN_TEST")
+    const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
+    if (isInTestRun && isInTestRun.test_run_status === "PROCESSING")
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
     const notificationData = await db.transaction(async (trx) => {
         await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
@@ -261,7 +261,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
 }
 export async function updateDevicePowerONAndMotorStateOFF(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp } = insertedData;
-    const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     const notificationData = await db.transaction(async (trx) => {
@@ -301,7 +301,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
             await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
         }
         const alertsFaultsRecord = {
-            starter_id, motor_id: motor_id || null, user_id: created_by || null, alert_code: alert_code ? Number(alert_code) : null,
+            starter_id, motor_id: motor_id || null, user_id: created_by || device_created_by, alert_code: alert_code ? Number(alert_code) : null,
             alert_description: alert_description ? String(alert_description) : null, fault_code: fault ? Number(fault) : null,
             fault_description: fault_description ? String(fault_description) : null, timestamp: new Date(time_stamp)
         };
@@ -317,7 +317,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
 }
 export async function updateDevicePowerAndMotorStateOFF(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp } = insertedData;
-    const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
+    const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     const notificationData = await db.transaction(async (trx) => {

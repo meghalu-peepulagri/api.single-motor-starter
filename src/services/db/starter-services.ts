@@ -5,6 +5,7 @@ import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
+import { StarterDefaultSettingsLimits } from "../../database/schemas/starter-default-settings-limits.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
 import { starterSettings, type StarterSettingsTable } from "../../database/schemas/starter-settings.js";
@@ -24,18 +25,19 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
   const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload);
   const defaultSettings = await getStarterDefaultSettings();
   const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
+  const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
+  const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
 
   await db.transaction(async (trx: any) => {
     const starter = await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData, trx);
     await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
 
     await saveSingleRecord<StarterSettingsTable>(starterSettings,
-      { starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE", ...defaultSettingsData },
+      { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" },
       trx
     );
 
-    await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
-
+    await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
     return starter;
   });
 }
@@ -124,6 +126,7 @@ export async function paginatedStarterList(
       device_status: true,
       signal_quality: true,
       network_type: true,
+      device_mobile_number: true,
     },
     with: {
       user: {
@@ -139,6 +142,7 @@ export async function paginatedStarterList(
           state: true,
           mode: true,
           alias_name: true,
+          test_run_status: true,
         },
         with: {
           location: {
@@ -345,6 +349,7 @@ export async function starterConnectedMotors(starterId: number) {
       assigned_at: true,
       deployed_at: true,
       device_allocation: true,
+      device_mobile_number: true,
     },
     with: {
       motors: {
