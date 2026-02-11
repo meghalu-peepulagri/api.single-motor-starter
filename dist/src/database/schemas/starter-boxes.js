@@ -30,6 +30,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     limit: real("limit"),
     deployed_at: timestamp("deployed_at"),
     device_allocation: varchar("device_allocation").default("false"),
+    synced_settings_status: varchar("synced_settings_status").default("false"),
     device_mobile_number: varchar("device_mobile_number"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     assigned_at: timestamp("assigned_at"),

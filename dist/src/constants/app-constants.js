@@ -250,6 +250,7 @@ export const PCB_SERIAL_NUMBER_REQUIRED = "PCB/Starter Number is required";
 export const MIN_3_CHARACTERS_REQUIRED = "PCB/Starter Number has min 3 characters";
 export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched successfully";
 export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
+export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
