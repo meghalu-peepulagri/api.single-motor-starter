@@ -563,12 +563,25 @@ const validateSettingsAck = (payload: any, expectedSequence: number) => {
   );
 };
 
+// Track which starters are currently publishing
+const publishingMap = new Map<number, boolean>();
+
 export const publishMultipleTimesInBackground = async (
   devicePayload: any,
   starterDetails: StarterBox
 ): Promise<void> => {
+  // If already publishing for this starter, skip
+  if (publishingMap.get(starterDetails.id)) {
+    logger.warn(
+      `Publishing already in progress for starter ${starterDetails.id}, skipping this request.`
+    );
+    return;
+  }
+
+  publishingMap.set(starterDetails.id, true); // mark as publishing
+
   const totalAttempts = 3;
-  const ackWaitTimes = [3000, 5000, 5000];
+  const ackWaitTimesInSeconds = [10, 10, 3]; // seconds
 
   const isAckValid = (payload: any) =>
     validateSettingsAck(payload, devicePayload.S);
@@ -578,29 +591,46 @@ export const publishMultipleTimesInBackground = async (
     starterDetails.mac_address,
   ].filter(Boolean);
 
-  for (let i = 0; i < totalAttempts; i++) {
-    try {
+  try {
+    for (let i = 0; i < totalAttempts; i++) {
+      const now = new Date().toISOString();
+      logger.info(
+        `[${now}] Publishing attempt ${i + 1} started for starter ${starterDetails.id}`
+      );
+      logger.info(
+        `[${now}] Waiting for ACK for ${ackWaitTimesInSeconds[i]} seconds`
+      );
+
+      // publish the data
       publishData(devicePayload, starterDetails);
 
+      // wait for ACK (convert to milliseconds)
       const ackReceived = await waitForAck(
-        ackIdentifiers, 
-        ackWaitTimes[i],
+        ackIdentifiers,
+        ackWaitTimesInSeconds[i] * 1000,
         isAckValid
       );
 
       if (ackReceived) {
-        return; // stop retries on ACK
+        const ackTime = new Date().toISOString();
+        logger.info(
+          `[${ackTime}] ACK received on attempt ${i + 1} for starter ${starterDetails.id}`
+        );
+        return; // stop retries
       }
 
-    } catch (error) {
-      logger.error(
-        `Attempt ${i + 1} failed for starter ${starterDetails.id}`,
-        error
+      const noAckTime = new Date().toISOString();
+      logger.warn(
+        `[${noAckTime}] ⚠️ No ACK received on attempt ${i + 1} for starter ${starterDetails.id}, retrying...`
       );
     }
-  }
 
-  logger.error(
-    `[Failure] All ${totalAttempts} retry attempts failed for starter id : ${starterDetails.id}. pcb : ${starterDetails.pcb_number}, mac : ${starterDetails.mac_address}`
-  );
+    const finalTime = new Date().toISOString();
+    logger.error(
+      `[${finalTime}] [Failure] All ${totalAttempts} retry attempts failed for starter id: ${starterDetails.id}, pcb: ${starterDetails.pcb_number}, mac: ${starterDetails.mac_address}`
+    );
+  } finally {
+    // mark as not publishing
+    publishingMap.delete(starterDetails.id);
+  }
 };

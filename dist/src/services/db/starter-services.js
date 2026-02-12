@@ -65,7 +65,11 @@ export async function getStarterByMacWithMotor(mac) {
             gateway_id: true,
             power: true,
             signal_quality: true,
-            network_type: true
+            network_type: true,
+            synced_settings_status: true,
+            device_status: true,
+            mac_address: true,
+            pcb_number: true,
         },
         with: {
             motors: {

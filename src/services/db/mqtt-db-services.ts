@@ -16,7 +16,7 @@ import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
-import { updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
+import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
 
 // Live data
@@ -542,6 +542,8 @@ export async function heartbeatHandler(message: any, topic: string) {
     const validNetwork = getValidNetwork(message.D.nwt);
     if (validMac.signal_quality !== strength || validMac.network_type !== message.D.nwt) await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { signal_quality: strength, network_type: validNetwork, status: status });
 
+    if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
+
   } catch (error: any) {
     console.error("Error at heartbeat topic handler:", error);
     throw error;
@@ -585,6 +587,7 @@ export async function adminConfigDataRequestAckHandler(message: any, topic: stri
     }
 
     await updateLatestStarterSettings(validMac.id, message.D);
+    if (validMac && validMac.synced_settings_status === "false") await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
   } catch (error: any) {
     console.error("Error at admin config ack handler:", error);
     throw error;
