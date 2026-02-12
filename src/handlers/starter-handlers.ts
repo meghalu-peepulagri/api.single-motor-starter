@@ -565,7 +565,7 @@ export class StarterHandlers {
     try {
       const starterId = +c.req.param("id");
       const body = await c.req.json();
-      const syncStatus = body.sync_status;
+      const syncStatus = body.synced_settings_status;
       paramsValidateException.validateId(starterId, "Device id");
       if (!syncStatus || (syncStatus !== "true" && syncStatus !== "false")) {
         throw new BadRequestException("Invalid sync status. It should be 'true' or 'false'.");

@@ -529,3 +529,25 @@ export async function updateStarterStatusWithTransaction(starterIds: number[]) {
   const result = await db.transaction(action);
   return result;
 }
+
+export async function getMotorBasedStarterDetails(motorId: number) {
+  try {
+    const motorDetails = await db.query.motors.findFirst({
+      where: eq(motors.id, motorId),
+      columns: {},
+      with: {
+        starter: {
+          columns: {
+            id: true,
+            assigned_at: true,
+          },
+        },
+      },
+    });
+
+    return motorDetails;
+  } catch (error) {
+    console.error("Error fetching motor-based starter details:", error);
+    throw error;
+  }
+}
