@@ -168,19 +168,18 @@ export async function syncQuery(batchSize) {
 export async function publishDeviceSettings(starter) {
     try {
         const ackSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"]);
-        // 2. If no settings found, throw or return
+        // If no settings found, throw or return
         if (!ackSettings) {
             console.warn(`No ACK settings found for starter ${starter.id}`);
             return;
         }
         const preparedPayload = prepareDeviceConfigurationPayload(ackSettings);
         const formattedPayload = { T: 4, S: randomSequenceNumber(), ...preparedPayload };
-        const { id: _, ...ackWithoutId } = ackSettings;
-        const mergedSettings = { ...ackWithoutId, ...preparedPayload.D.dvc_c };
-        // 5. Save to DB and publish in background
+        const { id: _, is_new_configuration_saved, created_at, updated_at, starter_id, ...ackWithoutId } = ackSettings;
+        // Save to DB and publish in background
         setImmediate(async () => {
             try {
-                await saveSingleRecord(starterSettings, { ...mergedSettings, is_new_configuration_saved: 0, starter_id: starter.id });
+                await saveSingleRecord(starterSettings, { ...ackWithoutId, is_new_configuration_saved: 0, starter_id: starter.id });
                 await publishMultipleTimesInBackground(formattedPayload, starter);
             }
             catch (error) {

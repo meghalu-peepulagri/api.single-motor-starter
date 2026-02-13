@@ -18,6 +18,7 @@ import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordBy
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
+import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 
 // Live data
 export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId: string, previousData: previousPreparedLiveData) {
@@ -573,28 +574,79 @@ export function publishData(preparedData: any, starterData: StarterBox) {
   mqttServiceInstance.publish(topic, payload);
 }
 
-export async function adminConfigDataRequestAckHandler(message: any, topic: string) {
-  try {
-    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-    if (!validMac?.id) {
-      console.error(`Any starter found with given MAC [${topic}]`)
-      return null;
-    };
+// export async function adminConfigDataRequestAckHandler(message: any, topic: string) {
+//   try {
+//     const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+//     if (!validMac?.id) {
+//       console.error(`Any starter found with given MAC [${topic}]`)
+//       return null;
+//     };
 
-    if (message.D === undefined || message.D === null || !validMac.id || (message.D !== 0 && message.D !== 1)) {
-      console.error(`Invalid message data in admin config ack [${message.D}]`);
+//     if (message.D === undefined || message.D === null || !validMac.id || (message.D !== 0 && message.D !== 1)) {
+//       console.error(`Invalid message data in admin config ack [${message.D}]`);
+//       return null;
+//     }
+
+//     await updateLatestStarterSettings(validMac.id, message.D);
+//     if (validMac && validMac.synced_settings_status === "false") await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
+//   } catch (error: any) {
+//     console.error("Error at admin config ack handler:", error);
+//     throw error;
+//   }
+// }
+
+export async function adminConfigDataRequestAckHandler(
+  message: any,
+  topic: string
+) {
+  try {
+    const macFromTopic = topic.split("/")[1];
+
+    const validMac = await getStarterByMacWithMotor(macFromTopic);
+
+    if (!validMac?.id) {
+      console.error(`No starter found with given MAC [${topic}]`);
       return null;
     }
 
+    if (
+      message.D === undefined ||
+      message.D === null ||
+      (message.D !== 0 && message.D !== 1)
+    ) {
+      console.error(
+        `Invalid message data in admin config ack [${message.D}]`
+      );
+      return null;
+    }
+
+    //  Resolve ACK to stop retries
+    const pendingAck = pendingAckMap.get(macFromTopic);
+
+    if (pendingAck) {
+      pendingAck.resolve(true);
+      pendingAckMap.delete(macFromTopic);
+    }
+
+    // Update DB
     await updateLatestStarterSettings(validMac.id, message.D);
-    if (validMac && validMac.synced_settings_status === "false") await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
+
+    if (
+      validMac &&
+      validMac.synced_settings_status === "false"
+    ) {
+      await updateRecordById<StarterBoxTable>(
+        starterBoxes,
+        validMac.id,
+        { synced_settings_status: "true" }
+      );
+    }
+
   } catch (error: any) {
     console.error("Error at admin config ack handler:", error);
     throw error;
   }
 }
-
-
 
 
 export const waitForAck = (

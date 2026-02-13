@@ -1,10 +1,11 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import type { StarterBox } from "../database/schemas/starter-boxes.js";
-import { publishData, waitForAck } from "../services/db/mqtt-db-services.js";
+import { publishData } from "../services/db/mqtt-db-services.js";
 import { logger } from "../utils/logger.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 import { ACK_TYPES } from "./packet-types-helper.js";
+import { pendingAckMap, publishingMap } from "./ack-tracker-hepler.js";
 
 
 /**
@@ -563,14 +564,11 @@ const validateSettingsAck = (payload: any, expectedSequence: number) => {
   );
 };
 
-// Track which starters are currently publishing
-const publishingMap = new Map<number, boolean>();
-
 export const publishMultipleTimesInBackground = async (
   devicePayload: any,
   starterDetails: StarterBox
 ): Promise<void> => {
-  // If already publishing for this starter, skip
+  // Prevent duplicate publishing
   if (publishingMap.get(starterDetails.id)) {
     logger.warn(
       `Publishing already in progress for starter ${starterDetails.id}, skipping this request.`
@@ -578,37 +576,35 @@ export const publishMultipleTimesInBackground = async (
     return;
   }
 
-  publishingMap.set(starterDetails.id, true); // mark as publishing
+  publishingMap.set(starterDetails.id, true);
 
   const totalAttempts = 3;
-  const ackWaitTimesInSeconds = [10, 10, 3]; // seconds
-
-  const isAckValid = (payload: any) =>
-    validateSettingsAck(payload, devicePayload.S);
+  const ackWaitTimesInSeconds = [10, 10, 3];
 
   const ackIdentifiers = [
     starterDetails.pcb_number,
     starterDetails.mac_address,
-  ].filter(Boolean);
+  ].filter(Boolean) as string[];
 
   try {
     for (let i = 0; i < totalAttempts; i++) {
       const now = new Date().toISOString();
+
       logger.info(
         `[${now}] Publishing attempt ${i + 1} started for starter ${starterDetails.id}`
       );
+
+      // Publish Data
+      publishData(devicePayload, starterDetails);
+
       logger.info(
         `[${now}] Waiting for ACK for ${ackWaitTimesInSeconds[i]} seconds`
       );
 
-      // publish the data
-      publishData(devicePayload, starterDetails);
-
-      // wait for ACK (convert to milliseconds)
+      // Wait for ACK
       const ackReceived = await waitForAck(
         ackIdentifiers,
-        ackWaitTimesInSeconds[i] * 1000,
-        isAckValid
+        ackWaitTimesInSeconds[i] * 1000
       );
 
       if (ackReceived) {
@@ -616,21 +612,58 @@ export const publishMultipleTimesInBackground = async (
         logger.info(
           `[${ackTime}] ACK received on attempt ${i + 1} for starter ${starterDetails.id}`
         );
-        return; // stop retries
+        return; // Stop retries immediately
       }
 
-      const noAckTime = new Date().toISOString();
       logger.warn(
-        `[${noAckTime}] ⚠️ No ACK received on attempt ${i + 1} for starter ${starterDetails.id}, retrying...`
+        `[${new Date().toISOString()}] No ACK received on attempt ${i + 1
+        } for starter ${starterDetails.id}, retrying...`
       );
     }
 
-    const finalTime = new Date().toISOString();
     logger.error(
-      `[${finalTime}] [Failure] All ${totalAttempts} retry attempts failed for starter id: ${starterDetails.id}, pcb: ${starterDetails.pcb_number}, mac: ${starterDetails.mac_address}`
+      `[${new Date().toISOString()}] All ${totalAttempts} retry attempts failed for starter id: ${starterDetails.id
+      }, pcb: ${starterDetails.pcb_number}, mac: ${starterDetails.mac_address
+      }`
+    );
+  } catch (error) {
+    logger.error(
+      `Error during publishing for starter ${starterDetails.id}:`,
+      error
     );
   } finally {
-    // mark as not publishing
     publishingMap.delete(starterDetails.id);
   }
+};
+
+const waitForAck = (
+  identifiers: string[],
+  timeout: number
+): Promise<boolean> => {
+  return new Promise((resolve) => {
+    let timeoutRef: NodeJS.Timeout;
+
+    const cleanup = () => {
+      identifiers.forEach((id) => pendingAckMap.delete(id));
+      clearTimeout(timeoutRef);
+    };
+
+    // Register resolvers for MAC / PCB
+    identifiers.forEach((id) => {
+      if (!id) return;
+
+      pendingAckMap.set(id, {
+        resolve: (value: boolean) => {
+          cleanup();
+          resolve(value);
+        },
+      });
+    });
+
+    // Timeout fallback
+    timeoutRef = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeout);
+  });
 };
