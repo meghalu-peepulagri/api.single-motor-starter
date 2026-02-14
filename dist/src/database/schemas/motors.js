@@ -5,7 +5,7 @@ import { locations } from "./locations.js";
 import { starterBoxes } from "./starter-boxes.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { users } from "./users.js";
-export const testRunStatusEnum = pgEnum("test_run_status", ["IN_TEST", "COMPLETED", "FAILED"]);
+export const testRunStatusEnum = pgEnum("test_run_status", ["IN_TEST", "COMPLETED", "FAILED", "PROCESSING"]);
 export const modeEnum = pgEnum("mode_enum", ["MANUAL", "AUTO"]);
 // 1 = MANUAL, 0 = AUTO
 export const motors = pgTable("motors", {

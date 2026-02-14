@@ -266,3 +266,8 @@ export type previousPreparedLiveData = {
     state: number;
   }[];
 }
+
+export type motorBasedStarterDetails = {
+  id: number;
+  assigned_at: Date | null;
+}

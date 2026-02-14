@@ -1,10 +1,11 @@
 import * as v from "valibot";
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import type { StarterBox } from "../database/schemas/starter-boxes.js";
-import { publishData, waitForAck } from "../services/db/mqtt-db-services.js";
+import { publishData } from "../services/db/mqtt-db-services.js";
 import { logger } from "../utils/logger.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 import { ACK_TYPES } from "./packet-types-helper.js";
+import { pendingAckMap, publishingMap } from "./ack-tracker-hepler.js";
 
 
 /**
@@ -567,40 +568,102 @@ export const publishMultipleTimesInBackground = async (
   devicePayload: any,
   starterDetails: StarterBox
 ): Promise<void> => {
-  const totalAttempts = 3;
-  const ackWaitTimes = [3000, 5000, 5000];
+  // Prevent duplicate publishing
+  if (publishingMap.get(starterDetails.id)) {
+    logger.warn(
+      `Publishing already in progress for starter ${starterDetails.id}, skipping this request.`
+    );
+    return;
+  }
 
-  const isAckValid = (payload: any) =>
-    validateSettingsAck(payload, devicePayload.S);
+  publishingMap.set(starterDetails.id, true);
+
+  const totalAttempts = 3;
+  const ackWaitTimesInSeconds = [10, 10, 3];
 
   const ackIdentifiers = [
     starterDetails.pcb_number,
     starterDetails.mac_address,
-  ].filter(Boolean);
+  ].filter(Boolean) as string[];
 
-  for (let i = 0; i < totalAttempts; i++) {
-    try {
+  try {
+    for (let i = 0; i < totalAttempts; i++) {
+      const now = new Date().toISOString();
+
+      logger.info(
+        `[${now}] Publishing attempt ${i + 1} started for starter ${starterDetails.id}`
+      );
+
+      // Publish Data
       publishData(devicePayload, starterDetails);
 
+      logger.info(
+        `[${now}] Waiting for ACK for ${ackWaitTimesInSeconds[i]} seconds`
+      );
+
+      // Wait for ACK
       const ackReceived = await waitForAck(
         ackIdentifiers,
-        ackWaitTimes[i],
-        isAckValid
+        ackWaitTimesInSeconds[i] * 1000
       );
 
       if (ackReceived) {
-        return; // stop retries on ACK
+        const ackTime = new Date().toISOString();
+        logger.info(
+          `[${ackTime}] ACK received on attempt ${i + 1} for starter ${starterDetails.id}`
+        );
+        return; // Stop retries immediately
       }
 
-    } catch (error) {
-      logger.error(
-        `Attempt ${i + 1} failed for starter ${starterDetails.id}`,
-        error
+      logger.warn(
+        `[${new Date().toISOString()}] No ACK received on attempt ${i + 1
+        } for starter ${starterDetails.id}, retrying...`
       );
     }
-  }
 
-  logger.error(
-    `[Failure] All ${totalAttempts} retry attempts failed for starter id : ${starterDetails.id}. pcb : ${starterDetails.pcb_number}, mac : ${starterDetails.mac_address}`
-  );
+    logger.error(
+      `[${new Date().toISOString()}] All ${totalAttempts} retry attempts failed for starter id: ${starterDetails.id
+      }, pcb: ${starterDetails.pcb_number}, mac: ${starterDetails.mac_address
+      }`
+    );
+  } catch (error) {
+    logger.error(
+      `Error during publishing for starter ${starterDetails.id}:`,
+      error
+    );
+  } finally {
+    publishingMap.delete(starterDetails.id);
+  }
+};
+
+const waitForAck = (
+  identifiers: string[],
+  timeout: number
+): Promise<boolean> => {
+  return new Promise((resolve) => {
+    let timeoutRef: NodeJS.Timeout;
+
+    const cleanup = () => {
+      identifiers.forEach((id) => pendingAckMap.delete(id));
+      clearTimeout(timeoutRef);
+    };
+
+    // Register resolvers for MAC / PCB
+    identifiers.forEach((id) => {
+      if (!id) return;
+
+      pendingAckMap.set(id, {
+        resolve: (value: boolean) => {
+          cleanup();
+          resolve(value);
+        },
+      });
+    });
+
+    // Timeout fallback
+    timeoutRef = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeout);
+  });
 };

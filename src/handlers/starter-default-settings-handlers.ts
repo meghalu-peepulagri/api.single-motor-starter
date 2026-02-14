@@ -173,13 +173,14 @@ export class StarterDefaultSettingsHandlers {
     try {
       const settingId = +c.req.param("id");
       const body = await c.req.json();
+      const { id, starter_id, created_at, updated_at, ...rest } = body;
 
       const foundedSettingId = await getRecordById<StarterSettingsLimitsTable>(starterSettingsLimits, settingId);
       if (!foundedSettingId) throw new BadRequestException(SETTINGS_LIMITS_NOT_FOUND);
 
-      await updateRecordById<StarterSettingsLimitsTable>(starterSettingsLimits, settingId, body);
+      await updateRecordById<StarterSettingsLimitsTable>(starterSettingsLimits, foundedSettingId.id, rest);
       return sendResponse(c, 200, SETTINGS_LIMITS_UPDATED);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error at updateStarterSettingsLimits:", error);
       throw error;
     }

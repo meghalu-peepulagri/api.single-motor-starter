@@ -13,5 +13,5 @@ export const vUpdateMotor = v.object({
     mode: v.optional(v.picklist(["MANUAL", "AUTO"])),
 });
 export const vUpdateMotorTestRunStatus = v.object({
-    test_run_status: v.picklist(["IN_TEST", "COMPLETED", "FAILED"], "Test run status must be one of: IN_TEST, COMPLETED, or FAILED"),
+    test_run_status: v.picklist(["IN_TEST", "COMPLETED", "FAILED", "PROCESSING"], "Test run status must be one of: IN_TEST, COMPLETED, or FAILED"),
 });

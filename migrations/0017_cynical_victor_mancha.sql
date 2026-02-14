@@ -1,0 +1,1 @@
+ALTER TABLE "starter_boxes" ADD COLUMN "synced_settings_status" varchar DEFAULT 'false';

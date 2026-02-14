@@ -37,6 +37,7 @@ export const UNIQUE_INDEX_MESSAGES = {
     "validate_pcb_number": "PCB number already exist.",
     "valid_starter_box_name": "Name already exist.",
     "unique_motor_alias_name_per_location": "Pump name already exist.",
+    "validate_device_mobile_number": "Mobile number already exist.",
 };
 export const FOREIGN_KEY_MESSAGES = {
     "locations_user_id_users_id_fk": "User not found.",
@@ -107,6 +108,10 @@ export const REFEREED_BY_REQUIRED = "Refereed by is invalid";
 export const MOBILE_NUMBER_ALREADY_EXIST = "Mobile number already exist";
 export const MOBILE_NUMBER_UNIQUE = "Mobile numbers cannot be the same";
 export const LOGGED_OUT = "User logged out successfully";
+export const SIM_NUMBER_REQUIRED = "Sim Number is required";
+export const INVALID_SIM_NUMBER = "Invalid Sim Number(digits only)";
+export const INVALID_SIM = "Invalid Sim Number";
+export const INVALID_SIM_NUMBER_VALID_LENGTH = "Invalid Sim Number (10 digits required)";
 // Token  
 export const TOKEN_REQUIRED = "Access token is required";
 export const TOKEN_EXPIRED = "Session is expired";
@@ -249,6 +254,7 @@ export const PCB_SERIAL_NUMBER_REQUIRED = "PCB/Starter Number is required";
 export const MIN_3_CHARACTERS_REQUIRED = "PCB/Starter Number has min 3 characters";
 export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched successfully";
 export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
+export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";

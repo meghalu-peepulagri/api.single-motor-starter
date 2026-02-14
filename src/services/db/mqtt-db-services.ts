@@ -16,8 +16,9 @@ import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
-import { updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
+import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
+import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 
 // Live data
 export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId: string, previousData: previousPreparedLiveData) {
@@ -83,11 +84,11 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
 
-  const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
   if (!starter_id) return null;
 
-  const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "IN_TEST"], ["test_run_status"]);
-  if (isInTestRun && isInTestRun.test_run_status === "IN_TEST") await updateLatestStarterSettingsFlc(starter_id, avg_current)
+  const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
+  if (isInTestRun && isInTestRun.test_run_status === "PROCESSING") await updateLatestStarterSettingsFlc(starter_id, avg_current)
 
   try {
     const notificationData = await db.transaction(async (trx) => {
@@ -145,13 +146,11 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
             mode_description, time_stamp, previous_power_state: power, new_power_state: power_present
           }, trx);
         }
-        if (created_by) {
-          await ActivityService.writeMotorSyncLogs(created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx, starter_id);
-        }
+        await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx, starter_id);
       }
 
       const alertsFaultsRecord = {
-        starter_id, motor_id: motor_id || null, user_id: created_by || null, alert_code: alert_code ? Number(alert_code) : null,
+        starter_id, motor_id: motor_id || null, user_id: created_by || device_created_by, alert_code: alert_code ? Number(alert_code) : null,
         alert_description: alert_description ? String(alert_description) : null, fault_code: fault ? Number(fault) : null,
         fault_description: fault_description ? String(fault_description) : null, timestamp: new Date(time_stamp)
       };
@@ -218,14 +217,14 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
   }
 }
 
-export async function updateDevicePowerAndMotorStateToON(insertedData: preparedLiveData, previousData: any) {
+export async function updateDevicePowerAndMotorStateToON(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
-  const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
-  const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "IN_TEST"], ["test_run_status"]);
-  if (isInTestRun && isInTestRun.test_run_status === "IN_TEST") await updateLatestStarterSettingsFlc(starter_id, avg_current);
+  const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
+  if (isInTestRun && isInTestRun.test_run_status === "PROCESSING") await updateLatestStarterSettingsFlc(starter_id, avg_current);
 
   const notificationData = await db.transaction(async (trx) => {
     await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
@@ -272,14 +271,12 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
         await updateRecordByIdWithTrx(motors, motor_id, updateData, trx);
       }
 
-      if (created_by) {
-        await ActivityService.writeMotorSyncLogs(created_by, motor_id,
-          { state: prevState, mode: prevMode },
-          { state: motor_state, mode: mode_description },
-          trx,
-          starter_id
-        );
-      }
+      await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id,
+        { state: prevState, mode: prevMode },
+        { state: motor_state, mode: mode_description },
+        trx,
+        starter_id
+      );
     }
 
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
@@ -317,10 +314,10 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
 }
 
 
-export async function updateDevicePowerONAndMotorStateOFF(insertedData: preparedLiveData, previousData: any) {
+export async function updateDevicePowerONAndMotorStateOFF(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp } = insertedData;
-  const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
   const notificationData = await db.transaction(async (trx) => {
@@ -355,9 +352,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
         await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
       }
     }
-    if (created_by) {
-      await ActivityService.writeMotorSyncLogs(created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: prevMode }, trx, starter_id);
-    }
+    await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: prevMode }, trx, starter_id);
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
     const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
     const hasStateChanged = typeof motor_state === "number" && motor_state !== prevState;
@@ -367,7 +362,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
     }
 
     const alertsFaultsRecord = {
-      starter_id, motor_id: motor_id || null, user_id: created_by || null, alert_code: alert_code ? Number(alert_code) : null,
+      starter_id, motor_id: motor_id || null, user_id: created_by || device_created_by, alert_code: alert_code ? Number(alert_code) : null,
       alert_description: alert_description ? String(alert_description) : null, fault_code: fault ? Number(fault) : null,
       fault_description: fault_description ? String(fault_description) : null, timestamp: new Date(time_stamp)
     };
@@ -386,10 +381,10 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
 }
 
 
-export async function updateDevicePowerAndMotorStateOFF(insertedData: any, previousData: any) {
+export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp } = insertedData;
-  const { power, prevState, prevMode, locationId, created_by, motor } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
   const notificationData = await db.transaction(async (trx) => {
@@ -417,12 +412,10 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: any, previ
     }
 
     if (VALID_MODES.includes(mode_description as ValidMode) && mode_description !== prevMode && motor_id) {
-      await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description }, trx);
+      await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description as ValidMode }, trx);
     }
 
-    if (created_by) {
-      await ActivityService.writeMotorSyncLogs(created_by, motor_id, { mode: prevMode }, { mode: mode_description }, trx, starter_id);
-    }
+    await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { mode: prevMode }, { mode: mode_description }, trx, starter_id);
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
     const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
     const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
@@ -486,10 +479,7 @@ export async function motorControlAckHandler(message: any, topic: string) {
       }
 
       // Always log ACK (changed or not)
-      if (motor.created_by) {
-        await ActivityService.writeMotorAckLogs(motor.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
-      }
-
+      await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
       return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id) : null;
 
     });
@@ -524,15 +514,8 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
         }
       }
 
-      if (motor.created_by) {
-        await ActivityService.writeMotorAckLogs(motor.created_by, motor.id,
-          { mode: motor.mode },
-          { mode: mode },
-          "MOTOR_MODE_ACK",
-          trx,
-          validMac.id
-        );
-      }
+      await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id,
+        { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, validMac.id);
     });
 
     const modeChanged = mode !== motor.mode;
@@ -559,6 +542,8 @@ export async function heartbeatHandler(message: any, topic: string) {
     const { strength, status } = getValidStrength(message.D.s_q);
     const validNetwork = getValidNetwork(message.D.nwt);
     if (validMac.signal_quality !== strength || validMac.network_type !== message.D.nwt) await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { signal_quality: strength, network_type: validNetwork, status: status });
+
+    if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
 
   } catch (error: any) {
     console.error("Error at heartbeat topic handler:", error);
@@ -589,20 +574,54 @@ export function publishData(preparedData: any, starterData: StarterBox) {
   mqttServiceInstance.publish(topic, payload);
 }
 
-export async function adminConfigDataRequestAckHandler(message: any, topic: string) {
-  try {
-    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-    if (!validMac?.id) {
-      console.error(`Any starter found with given MAC [${topic}]`)
-      return null;
-    };
 
-    if (message.D === undefined || message.D === null || !validMac.id || (message.D !== 0 && message.D !== 1)) {
-      console.error(`Invalid message data in admin config ack [${message.D}]`);
+export async function adminConfigDataRequestAckHandler(
+  message: any,
+  topic: string
+) {
+  try {
+    const macFromTopic = topic.split("/")[1];
+
+    const validMac = await getStarterByMacWithMotor(macFromTopic);
+
+    if (!validMac?.id) {
+      console.error(`No starter found with given MAC [${topic}]`);
       return null;
     }
 
+    if (
+      message.D === undefined ||
+      message.D === null ||
+      (message.D !== 0 && message.D !== 1)
+    ) {
+      console.error(
+        `Invalid message data in admin config ack [${message.D}]`
+      );
+      return null;
+    }
+
+    //  Resolve ACK to stop retries
+    const pendingAck = pendingAckMap.get(macFromTopic);
+
+    if (pendingAck) {
+      pendingAck.resolve(true);
+      pendingAckMap.delete(macFromTopic);
+    }
+
+    // Update DB
     await updateLatestStarterSettings(validMac.id, message.D);
+
+    if (
+      validMac &&
+      validMac.synced_settings_status === "false"
+    ) {
+      await updateRecordById<StarterBoxTable>(
+        starterBoxes,
+        validMac.id,
+        { synced_settings_status: "true" }
+      );
+    }
+
   } catch (error: any) {
     console.error("Error at admin config ack handler:", error);
     throw error;
