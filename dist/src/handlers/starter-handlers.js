@@ -59,13 +59,16 @@ export class StarterHandlers {
             paramsValidateException.validateId(starterId, "Starter id");
             paramsValidateException.validateId(motorId, "Motor id");
             const { page, pageSize, offset } = getPaginationOffParams(query);
+            const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
+            console.log('assignedAt: ', assignedAt);
             // Fetch consecutive grouped data
+            const assignedAtDate = assignedAt?.assigned_at ?? null;
             const data = type === "fault"
-                ? await getConsecutiveFaultsPaginated(starterId, motorId, offset, pageSize)
-                : await getConsecutiveAlertsPaginated(starterId, motorId, offset, pageSize);
+                ? await getConsecutiveFaultsPaginated(starterId, motorId, offset, pageSize, assignedAtDate)
+                : await getConsecutiveAlertsPaginated(starterId, motorId, offset, pageSize, assignedAtDate);
             const message = type === "fault" ? "Faults fetched successfully" : "Alerts fetched successfully";
             // Get total count from service
-            const totalRecords = await getConsecutiveGroupsCount(starterId, motorId, type);
+            const totalRecords = await getConsecutiveGroupsCount(starterId, motorId, type, assignedAtDate);
             const paginationInfo = getPaginationData(page, pageSize, totalRecords);
             const response = {
                 pagination: paginationInfo,

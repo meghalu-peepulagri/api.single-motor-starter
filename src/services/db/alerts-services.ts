@@ -7,7 +7,8 @@ export async function getConsecutiveGroupsPaginated(
   motorId: number,
   offset: number,
   limit: number,
-  type: "alert" | "fault"
+  type: "alert" | "fault",
+  assigned_at: Date | null = null
 ) {
   const codeColumn = type === "alert" ? "alert_code" : "fault_code";
   const descColumn = type === "alert" ? "alert_description" : "fault_description";
@@ -43,6 +44,7 @@ export async function getConsecutiveGroupsPaginated(
         AND ${sql.raw(codeColumn)} <> 0
         AND ${sql.raw(descColumn)} IS NOT NULL
         AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
+        ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
     ) t
     GROUP BY
       starter_id,
@@ -61,20 +63,21 @@ export async function getConsecutiveGroupsPaginated(
 
 
 // Backwards compatibility wrappers - now call the consolidated function
-export async function getConsecutiveAlertsPaginated(starterId: number, motorId: number, offset: number, limit: number) {
-  return getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, 'alert');
+export async function getConsecutiveAlertsPaginated(starterId: number, motorId: number, offset: number, limit: number, assigned_at: Date | null = null) {
+  return getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, 'alert', assigned_at);
 }
 
 
-export async function getConsecutiveFaultsPaginated(starterId: number, motorId: number, offset: number, limit: number) {
-  return getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, 'fault');
+export async function getConsecutiveFaultsPaginated(starterId: number, motorId: number, offset: number, limit: number, assigned_at: Date | null = null) {
+  return getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, 'fault', assigned_at);
 }
 
 
 export async function getConsecutiveGroupsCount(
   starterId: number,
   motorId: number,
-  type: "alert" | "fault"
+  type: "alert" | "fault",
+  assigned_at: Date | null = null
 ) {
   const codeColumn = type === "alert" ? "alert_code" : "fault_code";
   const descColumn = type === "alert" ? "alert_description" : "fault_description";
@@ -107,6 +110,7 @@ export async function getConsecutiveGroupsCount(
           AND ${sql.raw(codeColumn)} <> 0
           AND ${sql.raw(descColumn)} IS NOT NULL
           AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
+          ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
       ) t
     ) grouped
   `;
