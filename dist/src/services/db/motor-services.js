@@ -82,6 +82,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
                     signal_quality: true,
                     power: true,
                     network_type: true,
+                    starter_number: true,
                 },
                 with: {
                     starterParameters: {
