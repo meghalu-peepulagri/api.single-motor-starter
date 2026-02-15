@@ -110,7 +110,7 @@ export class StarterDefaultSettingsHandlers {
       }
 
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettings>("update-default-settings",
-        body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
+        body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);        
 
       // const cleanedBody = removeEmptyObjectsDeep(validatedBody);
       // if (!Object.keys(cleanedBody).length) {
@@ -144,7 +144,8 @@ export class StarterDefaultSettingsHandlers {
       // }
 
       await db.transaction(async (trx) => {
-        await saveSingleRecord<StarterSettingsTable>(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
+       const  saved = await saveSingleRecord<StarterSettingsTable>(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
+       console.log('saved: ', saved);
         // Handle activity logging for settings update
         // await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, { ...oldSettings, ...cleanedBody }, trx);
       });
@@ -175,6 +176,7 @@ export class StarterDefaultSettingsHandlers {
       const body = await c.req.json();
       const { id, starter_id, created_at, updated_at, ...rest } = body;
 
+  
       const foundedSettingId = await getRecordById<StarterSettingsLimitsTable>(starterSettingsLimits, settingId);
       if (!foundedSettingId) throw new BadRequestException(SETTINGS_LIMITS_NOT_FOUND);
 
