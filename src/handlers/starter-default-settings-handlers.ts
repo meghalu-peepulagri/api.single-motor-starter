@@ -144,8 +144,7 @@ export class StarterDefaultSettingsHandlers {
       // }
 
       await db.transaction(async (trx) => {
-       const  saved = await saveSingleRecord<StarterSettingsTable>(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
-       console.log('saved: ', saved);
+       await saveSingleRecord<StarterSettingsTable>(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
         // Handle activity logging for settings update
         // await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, { ...oldSettings, ...cleanedBody }, trx);
       });

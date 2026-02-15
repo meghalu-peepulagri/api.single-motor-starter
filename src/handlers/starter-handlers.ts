@@ -68,7 +68,6 @@ export class StarterHandlers {
 
       const { page, pageSize, offset } = getPaginationOffParams(query);
       const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
-      console.log('assignedAt: ', assignedAt);
 
       // Fetch consecutive grouped data
       const assignedAtDate = assignedAt?.assigned_at ?? null;
