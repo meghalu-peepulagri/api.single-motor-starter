@@ -531,4 +531,35 @@ export class StarterHandlers {
             throw error;
         }
     };
+    starterCountBasedOnStatusHandler = async (c) => {
+        try {
+            const notArchived = ne(starterBoxes.status, "ARCHIVED");
+            const baseFilters = [notArchived];
+            const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
+                getRecordsCount(starterBoxes, [...baseFilters]),
+                getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.status, "ACTIVE")]),
+                getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.power, 1)]),
+                getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.power, 0)]),
+                getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "READY")]),
+                getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "TEST")]),
+                getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "DEPLOYED")]),
+                getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "ASSIGNED")]),
+            ]);
+            return sendResponse(c, 200, "Starter count fetched successfully", {
+                total_devices: totalDevices,
+                active_count: activeCount,
+                power_on_count: powerOnCount,
+                power_off_count: powerOffCount,
+                ready_count: readyCount,
+                test_count: testCount,
+                deployed_count: deployedCount,
+                assigned_count: assignedCount,
+            });
+        }
+        catch (error) {
+            logger.info("Error at starter count based on status :", error);
+            console.error("Error at starter count based on status :", error);
+            throw error;
+        }
+    };
 }

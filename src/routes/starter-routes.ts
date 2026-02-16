@@ -10,6 +10,7 @@ starterRoutes.post("/", isAuthorized, starterHandlers.addStarterBoxHandler);
 
 starterRoutes.get("/mobile", isAuthorized, starterHandlers.starterListMobileHandler);
 starterRoutes.get("/web/all", isAuthorized, isSuperAdminOrAdmin, starterHandlers.starterListWebHandler);
+starterRoutes.get("/dashboard-counts", isAuthorized, starterHandlers.starterCountBasedOnStatusHandler);
 
 starterRoutes.patch("/assign", isAuthorized, starterHandlers.assignStarterMobileHandler);
 starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWebHandler);
