@@ -1,0 +1,1 @@
+ALTER TABLE "starter_boxes" ADD COLUMN "allocation_status_count" integer DEFAULT 0;

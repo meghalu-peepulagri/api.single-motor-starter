@@ -1,9 +1,8 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, index, integer, jsonb, pgTable, serial, timestamp, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
 import { userActivityLogs } from "./user-activity-logs.js";
 import { fields } from "./fields.js";
-
 
 export const users = pgTable("users", {
     id: serial("id").primaryKey().notNull(),
@@ -22,7 +21,6 @@ export const users = pgTable("users", {
     password: varchar("password"),
     address: varchar("address"),
     status: statusEnum().default("ACTIVE"),
-
 
     created_by: integer("created_by").references((): AnyPgColumn => users.id).default(sql`NULL`),
     referred_by: integer("referred_by").references((): AnyPgColumn => users.id).default(sql`NULL`),

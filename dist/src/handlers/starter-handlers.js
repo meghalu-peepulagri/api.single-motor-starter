@@ -10,6 +10,7 @@ import { users } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
+import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
@@ -151,34 +152,27 @@ export class StarterHandlers {
         try {
             const userPayload = c.get("user_payload");
             const starterId = +c.req.param("id");
+            const isUser = userPayload.user_type === "USER";
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            if (userPayload.user_type === "ADMIN" && starter.device_status !== "READY" && starter.device_status !== "TEST") {
+                throw new UnauthorizedException("Unauthorized");
+            }
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
-            let message = "";
-            const activityLogs = [];
             await db.transaction(async (trx) => {
-                if (userPayload.user_type === "USER") {
+                if (isUser) {
                     await updateRecordById(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
                     await saveSingleRecord(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
                 }
-                if (userPayload.user_type === "ADMIN") {
-                    await updateRecordById(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
+                else {
+                    await updateRecordById(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
                 }
                 if (motor) {
                     await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
                 }
-                if (activityLogs.length > 0) {
-                    await ActivityService.writeBatchDeletionLogs(activityLogs, trx);
-                }
             });
-            if (userPayload.user_type === "USER") {
-                message = STARTER_REMOVED_SUCCESS;
-            }
-            else {
-                message = STARTER_BOX_DELETED_SUCCESSFULLY;
-            }
-            return sendResponse(c, 200, message);
+            return sendResponse(c, 200, isUser ? STARTER_REMOVED_SUCCESS : STARTER_BOX_DELETED_SUCCESSFULLY);
         }
         catch (error) {
             console.error("Error at delete starter :", error);
@@ -491,17 +485,22 @@ export class StarterHandlers {
     };
     updateDeviceAllocationHandler = async (c) => {
         try {
+            const userPayload = c.get("user_payload");
             const starterId = +c.req.param("id");
-            const body = await c.req.json();
-            const allocationStatus = body.allocation_status;
+            const { allocation_status: allocationStatus } = await c.req.json();
             paramsValidateException.validateId(starterId, "Device id");
-            if (!allocationStatus || (allocationStatus !== "true" && allocationStatus !== "false")) {
+            if (allocationStatus !== "true" && allocationStatus !== "false") {
                 throw new BadRequestException("Invalid allocation status. It should be 'true' or 'false'.");
             }
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
-            await updateRecordById(starterBoxes, starterId, { device_allocation: allocationStatus });
+            const currentCount = starter.allocation_status_count ?? 0;
+            if (userPayload.user_type !== "SUPER_ADMIN" && allocationStatus === "true" && starter.device_allocation === "false" && currentCount === 1) {
+                throw new UnauthorizedException("Unauthorized");
+            }
+            const newCount = (allocationStatus === "true" && starter.device_allocation === "false") ? currentCount + 1 : currentCount;
+            await updateRecordById(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount });
             return sendResponse(c, 200, "Device allocation status updated successfully");
         }
         catch (error) {
@@ -509,7 +508,6 @@ export class StarterHandlers {
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
-            console.error("Error at update device allocation status :", error);
             throw error;
         }
     };
