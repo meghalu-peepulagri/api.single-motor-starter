@@ -60,7 +60,6 @@ export class StarterHandlers {
             paramsValidateException.validateId(motorId, "Motor id");
             const { page, pageSize, offset } = getPaginationOffParams(query);
             const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
-            console.log('assignedAt: ', assignedAt);
             // Fetch consecutive grouped data
             const assignedAtDate = assignedAt?.assigned_at ?? null;
             const data = type === "fault"

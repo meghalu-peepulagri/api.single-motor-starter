@@ -12,8 +12,10 @@ import * as v from "valibot";
 /**
  * Validation helper for real numbers in limits (non-negative, max 2 decimals)
  */
-const realLimitValue = (fieldName: string) =>
-  v.pipe(
+const realLimitValue = (fieldName: string, options?: { decimalPlaces?: number }) => {
+  const dp = options?.decimalPlaces ?? 2;
+  const factor = Math.pow(10, dp);
+  return v.pipe(
     v.union([v.number(), v.string()], `${fieldName} must be a valid number`),
     v.transform((val) => {
       if (typeof val === 'string') {
@@ -44,15 +46,15 @@ const realLimitValue = (fieldName: string) =>
     v.check(
       (val) => {
         const decimalCount = val.toString().split('.')[1]?.length || 0;
-        return decimalCount <= 2;
+        return decimalCount <= dp;
       },
-      `${fieldName} can have maximum 2 decimal places`
+      `${fieldName} can have maximum ${dp} decimal places`
     ),
     v.transform((val) => {
-      // Round to 2 decimal places
-      return Math.round(val * 100) / 100;
+      return Math.round(val * factor) / factor;
     })
   );
+};
 
 /**
  * Validation helper for integer values in limits (non-negative)
@@ -220,12 +222,12 @@ const baseSchema = v.object({
   ip_b_max: realLimitValue("Current gain B max"),
 
   // ================= ADC Calibrations =================
-  vg_r_min: realLimitValue("Voltage gain R (ADC) min"),
-  vg_r_max: realLimitValue("Voltage gain R (ADC) max"),
-  vg_y_min: realLimitValue("Voltage gain Y (ADC) min"),
-  vg_y_max: realLimitValue("Voltage gain Y (ADC) max"),
-  vg_b_min: realLimitValue("Voltage gain B (ADC) min"),
-  vg_b_max: realLimitValue("Voltage gain B (ADC) max"),
+  vg_r_min: realLimitValue("Voltage gain R (ADC) min", { decimalPlaces: 5 }),
+  vg_r_max: realLimitValue("Voltage gain R (ADC) max", { decimalPlaces: 5 }),
+  vg_y_min: realLimitValue("Voltage gain Y (ADC) min", { decimalPlaces: 5 }),
+  vg_y_max: realLimitValue("Voltage gain Y (ADC) max", { decimalPlaces: 5 }),
+  vg_b_min: realLimitValue("Voltage gain B (ADC) min", { decimalPlaces: 5 }),
+  vg_b_max: realLimitValue("Voltage gain B (ADC) max", { decimalPlaces: 5 }),
 
   vo_r_min: realLimitValue("Voltage offset R (ADC) min"),
   vo_r_max: realLimitValue("Voltage offset R (ADC) max"),
@@ -234,12 +236,12 @@ const baseSchema = v.object({
   vo_b_min: realLimitValue("Voltage offset B (ADC) min"),
   vo_b_max: realLimitValue("Voltage offset B (ADC) max"),
 
-  ig_r_min: realLimitValue("Current gain R (ADC) min"),
-  ig_r_max: realLimitValue("Current gain R (ADC) max"),
-  ig_y_min: realLimitValue("Current gain Y (ADC) min"),
-  ig_y_max: realLimitValue("Current gain Y (ADC) max"),
-  ig_b_min: realLimitValue("Current gain B (ADC) min"),
-  ig_b_max: realLimitValue("Current gain B (ADC) max"),
+  ig_r_min: realLimitValue("Current gain R (ADC) min", { decimalPlaces: 5 }),
+  ig_r_max: realLimitValue("Current gain R (ADC) max", { decimalPlaces: 5 }),
+  ig_y_min: realLimitValue("Current gain Y (ADC) min", { decimalPlaces: 5 }),
+  ig_y_max: realLimitValue("Current gain Y (ADC) max", { decimalPlaces: 5 }),
+  ig_b_min: realLimitValue("Current gain B (ADC) min", { decimalPlaces: 5 }),
+  ig_b_max: realLimitValue("Current gain B (ADC) max", { decimalPlaces: 5 }),
 
   io_r_min: realLimitValue("Current offset R (ADC) min"),
   io_r_max: realLimitValue("Current offset R (ADC) max"),
