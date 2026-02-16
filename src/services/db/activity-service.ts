@@ -211,14 +211,16 @@ export class ActivityService {
       pcb_number: string | null;
       starter_number: string | null;
       mac_address: string | null;
-      gateway_id: number | null
+      gateway_id: number | null,
+      device_mobile_number?: string | null;
     },
     newData: {
       name?: string | null;
       pcb_number?: string | null;
       starter_number?: string | null;
       mac_address?: string | null;
-      gateway_id?: number | null
+      gateway_id?: number | null,
+      device_mobile_number?: string | null;
     },
     trx?: Transaction
   ) {

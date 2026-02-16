@@ -5,6 +5,7 @@ import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { StarterDefaultSettingsLimits } from "../../database/schemas/starter-default-settings-limits.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { starterSettingsLimits } from "../../database/schemas/starter-settings-limits.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
@@ -20,11 +21,13 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload) 
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     const defaultSettings = await getStarterDefaultSettings();
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
+    const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
+    const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
     await db.transaction(async (trx) => {
         const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
         await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
-        await saveSingleRecord(starterSettings, { starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE", ...defaultSettingsData }, trx);
-        await saveSingleRecord(starterSettingsLimits, { starter_id: Number(starter.id) }, trx);
+        await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
+        await saveSingleRecord(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
         return starter;
     });
 }
@@ -62,7 +65,11 @@ export async function getStarterByMacWithMotor(mac) {
             gateway_id: true,
             power: true,
             signal_quality: true,
-            network_type: true
+            network_type: true,
+            synced_settings_status: true,
+            device_status: true,
+            mac_address: true,
+            pcb_number: true,
         },
         with: {
             motors: {
@@ -98,6 +105,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             device_status: true,
             signal_quality: true,
             network_type: true,
+            device_mobile_number: true,
         },
         with: {
             user: {
@@ -113,6 +121,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     state: true,
                     mode: true,
                     alias_name: true,
+                    test_run_status: true,
                 },
                 with: {
                     location: {
@@ -282,6 +291,8 @@ export async function starterConnectedMotors(starterId) {
             assigned_at: true,
             deployed_at: true,
             device_allocation: true,
+            device_mobile_number: true,
+            synced_settings_status: true,
         },
         with: {
             motors: {

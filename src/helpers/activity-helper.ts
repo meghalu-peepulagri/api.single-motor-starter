@@ -1,13 +1,14 @@
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import type { NewUserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import { ActivityService } from "../services/db/activity-service.js";
+import type { motorBasedStarterDetails } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { motorState } from "./control-helpers.js";
 
 /**
  * Helper to filter activity logs
  */
-export function activityFilters(query: any, user: any) {
+export function activityFilters(query: any, user: any, deviceAssignedAt: motorBasedStarterDetails) {
   const whereQueryData: WhereQueryData<UserActivityLogsTable> = {
     columns: [],
     relations: [],
@@ -40,6 +41,12 @@ export function activityFilters(query: any, user: any) {
     whereQueryData.columns.push("performed_by");
     whereQueryData.relations.push("=");
     whereQueryData.values.push(query.performed_by);
+  }
+
+  if (query.is_assigned === "true") {
+    whereQueryData.columns.push("created_at");
+    whereQueryData.relations.push(">=");
+    whereQueryData.values.push(deviceAssignedAt.assigned_at);
   }
 
   if (query.action === "ON" || query.action === "OFF") {

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "validate_device_mobile_number" ON "starter_boxes" USING btree (lower("device_mobile_number")) WHERE "starter_boxes"."status" != 'ARCHIVED';

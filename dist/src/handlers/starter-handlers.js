@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
 import { gateways } from "../database/schemas/gateways.js";
@@ -59,13 +59,15 @@ export class StarterHandlers {
             paramsValidateException.validateId(starterId, "Starter id");
             paramsValidateException.validateId(motorId, "Motor id");
             const { page, pageSize, offset } = getPaginationOffParams(query);
+            const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
             // Fetch consecutive grouped data
+            const assignedAtDate = assignedAt?.assigned_at ?? null;
             const data = type === "fault"
-                ? await getConsecutiveFaultsPaginated(starterId, motorId, offset, pageSize)
-                : await getConsecutiveAlertsPaginated(starterId, motorId, offset, pageSize);
+                ? await getConsecutiveFaultsPaginated(starterId, motorId, offset, pageSize, assignedAtDate)
+                : await getConsecutiveAlertsPaginated(starterId, motorId, offset, pageSize, assignedAtDate);
             const message = type === "fault" ? "Faults fetched successfully" : "Alerts fetched successfully";
             // Get total count from service
-            const totalRecords = await getConsecutiveGroupsCount(starterId, motorId, type);
+            const totalRecords = await getConsecutiveGroupsCount(starterId, motorId, type, assignedAtDate);
             const paginationInfo = getPaginationData(page, pageSize, totalRecords);
             const response = {
                 pagination: paginationInfo,
@@ -402,13 +404,15 @@ export class StarterHandlers {
                     pcb_number: starter.pcb_number,
                     starter_number: starter.starter_number,
                     mac_address: starter.mac_address,
-                    gateway_id: starter.gateway_id
+                    gateway_id: starter.gateway_id,
+                    device_mobile_number: starter.device_mobile_number
                 }, {
                     name: updatedStarter.name,
                     pcb_number: updatedStarter.pcb_number,
                     starter_number: updatedStarter.starter_number,
                     mac_address: updatedStarter.mac_address,
-                    gateway_id: updatedStarter.gateway_id
+                    gateway_id: updatedStarter.gateway_id,
+                    device_mobile_number: updatedStarter.device_mobile_number
                 }, trx);
             });
             return sendResponse(c, 201, STARTER_DETAILS_UPDATED);
@@ -506,6 +510,26 @@ export class StarterHandlers {
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
             console.error("Error at update device allocation status :", error);
+            throw error;
+        }
+    };
+    updateSettingsSyncStatusHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("id");
+            const body = await c.req.json();
+            const syncStatus = body.synced_settings_status;
+            paramsValidateException.validateId(starterId, "Device id");
+            if (!syncStatus || (syncStatus !== "true" && syncStatus !== "false")) {
+                throw new BadRequestException("Invalid sync status. It should be 'true' or 'false'.");
+            }
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            await updateRecordById(starterBoxes, starterId, { synced_settings_status: syncStatus });
+            return sendResponse(c, 201, SETTINGS_SYNC_STATUS_UPDATED);
+        }
+        catch (error) {
+            console.error("Error at update settings sync status :", error);
             throw error;
         }
     };

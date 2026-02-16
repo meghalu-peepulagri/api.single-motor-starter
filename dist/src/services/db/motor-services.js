@@ -64,6 +64,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
             mode: true,
             state: true,
             alias_name: true,
+            test_run_status: true,
         },
         with: {
             location: {
@@ -81,6 +82,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
                     signal_quality: true,
                     power: true,
                     network_type: true,
+                    starter_number: true,
                 },
                 with: {
                     starterParameters: {
@@ -390,4 +392,25 @@ export async function updateStarterStatusWithTransaction(starterIds) {
     };
     const result = await db.transaction(action);
     return result;
+}
+export async function getMotorBasedStarterDetails(motorId) {
+    try {
+        const motorDetails = await db.query.motors.findFirst({
+            where: eq(motors.id, motorId),
+            columns: {},
+            with: {
+                starter: {
+                    columns: {
+                        id: true,
+                        assigned_at: true,
+                    },
+                },
+            },
+        });
+        return motorDetails;
+    }
+    catch (error) {
+        console.error("Error fetching motor-based starter details:", error);
+        throw error;
+    }
 }

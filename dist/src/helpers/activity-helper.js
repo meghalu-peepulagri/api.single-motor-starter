@@ -4,7 +4,7 @@ import { motorState } from "./control-helpers.js";
 /**
  * Helper to filter activity logs
  */
-export function activityFilters(query, user) {
+export function activityFilters(query, user, deviceAssignedAt) {
     const whereQueryData = {
         columns: [],
         relations: [],
@@ -34,6 +34,11 @@ export function activityFilters(query, user) {
         whereQueryData.columns.push("performed_by");
         whereQueryData.relations.push("=");
         whereQueryData.values.push(query.performed_by);
+    }
+    if (query.is_assigned === "true") {
+        whereQueryData.columns.push("created_at");
+        whereQueryData.relations.push(">=");
+        whereQueryData.values.push(deviceAssignedAt.assigned_at);
     }
     if (query.action === "ON" || query.action === "OFF") {
         // Filter by message containing ON or OFF

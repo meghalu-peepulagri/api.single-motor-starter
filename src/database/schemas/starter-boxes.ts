@@ -32,6 +32,8 @@ export const starterBoxes = pgTable("starter_boxes", {
   limit: real("limit"),
   deployed_at: timestamp("deployed_at"),
   device_allocation: varchar("device_allocation").default("false"),
+  synced_settings_status: varchar("synced_settings_status").default("false"),
+  device_mobile_number: varchar("device_mobile_number"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   assigned_at: timestamp("assigned_at"),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
@@ -50,6 +52,7 @@ export const starterBoxes = pgTable("starter_boxes", {
   uniqueIndex("validate_mac_address").on(sql`lower(${table.mac_address})`).where(sql`${table.status} != 'ARCHIVED'`),
   uniqueIndex("validate_starter_number").on(sql`lower(${table.starter_number})`).where(sql`${table.status} != 'ARCHIVED'`),
   uniqueIndex("validate_pcb_number").on(sql`lower(${table.pcb_number})`).where(sql`${table.status} != 'ARCHIVED'`),
+  uniqueIndex("validate_device_mobile_number").on(sql`lower(${table.device_mobile_number})`).where(sql`${table.status} != 'ARCHIVED'`),
 ]);
 
 export type StarterBox = typeof starterBoxes.$inferSelect;
