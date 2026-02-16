@@ -66,9 +66,9 @@ export class UserHandlers {
             const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
             const searchString = query.search_string?.trim() || "";
             const whereQueryData = {
-                columns: ["status", "user_type"],
-                relations: ["!=", "!="],
-                values: ["ARCHIVED", "ADMIN"],
+                columns: ["status", "user_type", "user_type"],
+                relations: ["!=", "!=", "!="],
+                values: ["ARCHIVED", "ADMIN", "SUPER_ADMIN"],
             };
             if (searchString) {
                 whereQueryData.columns.push("full_name");

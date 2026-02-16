@@ -8,7 +8,7 @@ import { getUserDetailsFromToken } from "../../utils/jwt-utils.js";
 
 const isAdmin = createMiddleware(async (c: Context, next) => {
   const userPayload = await getUserDetailsFromToken(c);
-  if (userPayload.user_type === "ADMIN") {
+  if (userPayload.user_type === "ADMIN" || userPayload.user_type === "SUPER_ADMIN") {
     await next();
   }
   else {
@@ -29,7 +29,15 @@ const isUser = createMiddleware(async (c: Context, next) => {
 
 const isUserOrAdmin = createMiddleware(async (c: Context, next) => {
   const userPayload = await getUserDetailsFromToken(c);
-  if (userPayload.user_type === "USER" || userPayload.user_type === "ADMIN") {
+  if (userPayload.user_type === "USER" || userPayload.user_type === "ADMIN" || userPayload.user_type === "SUPER_ADMIN") {
+    await next();
+  }
+  else { throw new ForbiddenException(FORBIDDEN); }
+});
+
+const isSuperAdminOrAdmin = createMiddleware(async (c: Context, next) => {
+  const userPayload = await getUserDetailsFromToken(c);
+  if (userPayload.user_type === "SUPER_ADMIN" || userPayload.user_type === "ADMIN") {
     await next();
   }
   else { throw new ForbiddenException(FORBIDDEN); }
@@ -39,6 +47,7 @@ const isUserOrAdmin = createMiddleware(async (c: Context, next) => {
 export {
   isAdmin,
   isUser,
-  isUserOrAdmin
+  isUserOrAdmin,
+  isSuperAdminOrAdmin
 };
 

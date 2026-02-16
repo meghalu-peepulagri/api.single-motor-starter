@@ -73,9 +73,9 @@ export class UserHandlers {
 
       const searchString = query.search_string?.trim() || "";
       const whereQueryData: WhereQueryData<UsersTable> = {
-        columns: ["status", "user_type"],
-        relations: ["!=", "!="],
-        values: ["ARCHIVED", "ADMIN"],
+        columns: ["status", "user_type", "user_type"],
+        relations: ["!=", "!=", "!="],
+        values: ["ARCHIVED", "ADMIN", "SUPER_ADMIN"],
       }
 
       if (searchString) {

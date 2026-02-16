@@ -1,14 +1,14 @@
 
 import factory from "../factory.js";
 import { StarterDefaultSettingsHandlers } from "../handlers/starter-default-settings-handlers.js";
-import { isAdmin } from "../middlewares/guards/guardUser.js";
+import { isSuperAdminOrAdmin } from "../middlewares/guards/guardUser.js";
 import { isAuthorized } from "../middlewares/isAuthorized.js";
 
 const settingsHandlers = new StarterDefaultSettingsHandlers();
 const settingsRoutes = factory.createApp();
 
 settingsRoutes.get("/default", isAuthorized, settingsHandlers.getStarterDefaultSettingsHandler);
-settingsRoutes.patch("/default/:id", isAuthorized, isAdmin, settingsHandlers.updateStarterDefaultSettingsHandler);
+settingsRoutes.patch("/default/:id", isAuthorized, isSuperAdminOrAdmin, settingsHandlers.updateStarterDefaultSettingsHandler);
 settingsRoutes.get("/starter/:starter_id", isAuthorized, settingsHandlers.getAcknowledgedStarterSettingsHandler);
 settingsRoutes.post("/starter/:starter_id", isAuthorized, settingsHandlers.insertStarterSettingHandler);
 settingsRoutes.get("/limits/:starter_id", isAuthorized, settingsHandlers.getStarterSettingsLimitsHandler);
@@ -17,6 +17,6 @@ settingsRoutes.get("/ack-history/:starter_id", isAuthorized, settingsHandlers.ge
 settingsRoutes.get("/acknowledged/:starter_id", isAuthorized, settingsHandlers.getStarterSettingDetailsMobileHandler);
 settingsRoutes.get("/limits-mobile/:starter_id", isAuthorized, settingsHandlers.getStarterSettingsLimitsMobileHandler);
 settingsRoutes.get("/default-limits", isAuthorized, settingsHandlers.getStarterDefaultSettingsLimitsHandler);
-settingsRoutes.patch("/default-limits/:id", isAuthorized, isAdmin, settingsHandlers.updateStarterDefaultSettingsLimitsHandler);
+settingsRoutes.patch("/default-limits/:id", isAuthorized, isSuperAdminOrAdmin, settingsHandlers.updateStarterDefaultSettingsLimitsHandler);
 
 export default settingsRoutes;
