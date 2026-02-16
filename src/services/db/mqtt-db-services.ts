@@ -474,7 +474,6 @@ export async function motorControlAckHandler(message: any, topic: string) {
       // Update motor state ONLY if changed
       if (stateChanged && (newState === 0 || newState === 1)) {
         await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor.id));
-
         await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
       }
 
@@ -544,7 +543,6 @@ export async function heartbeatHandler(message: any, topic: string) {
     if (validMac.signal_quality !== strength || validMac.network_type !== message.D.nwt) await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { signal_quality: strength, network_type: validNetwork, status: status });
 
     if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
-
   } catch (error: any) {
     console.error("Error at heartbeat topic handler:", error);
     throw error;
