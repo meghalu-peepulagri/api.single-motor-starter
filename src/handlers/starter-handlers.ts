@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
@@ -592,7 +592,7 @@ export class StarterHandlers {
       const notArchived = ne(starterBoxes.status, "ARCHIVED");
 
       const baseFilters = [notArchived];
-  
+
       const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
         getRecordsCount(starterBoxes, [...baseFilters]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.status, "ACTIVE")]),
@@ -618,6 +618,27 @@ export class StarterHandlers {
     } catch (error: any) {
       logger.info("Error at starter count based on status :", error);
       console.error("Error at starter count based on status :", error);
+      throw error;
+    }
+  }
+
+  deviceResetHandler = async (c: Context) => {
+    try {
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+      const body = await c.req.json();
+      const deviceResetStatus = body.device_reset_status;
+      if (!deviceResetStatus || (deviceResetStatus !== "true" && deviceResetStatus !== "false")) {
+        throw new BadRequestException("Invalid device reset status. It should be 'true' or 'false'.");
+      }
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_reset_status: deviceResetStatus });
+      return sendResponse(c, 200, DEVICE_RESET_SUCCESSFULLY);
+    } catch (error: any) {
+      console.error("Error at device reset handler :", error);
       throw error;
     }
   }

@@ -279,6 +279,7 @@ export const MIN_3_CHARACTERS_REQUIRED = "PCB/Starter Number has min 3 character
 export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched successfully";
 export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
 export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
+export const DEVICE_RESET_SUCCESSFULLY = "Device reset successfully";
 
 // Gateway 
 export const GATEWAY_REQUIRED = "Gateway is required";

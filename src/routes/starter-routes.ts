@@ -28,6 +28,7 @@ starterRoutes.patch("/:id/deploy-status", isAuthorized, starterHandlers.updateDe
 starterRoutes.patch("/:id/details", isAuthorized, starterHandlers.updateStarterDetailsHandler);
 starterRoutes.patch("/:id/allocation", isAuthorized, starterHandlers.updateDeviceAllocationHandler);
 starterRoutes.patch("/:id/settings-sync", isAuthorized, starterHandlers.updateSettingsSyncStatusHandler);
+starterRoutes.patch("/:id/reset", isAuthorized, starterHandlers.deviceResetHandler);
 
 starterRoutes.patch("/:id", isAuthorized, starterHandlers.deleteStarterBoxHandler);
 

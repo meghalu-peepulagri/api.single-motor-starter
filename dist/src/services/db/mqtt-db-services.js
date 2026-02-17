@@ -65,6 +65,9 @@ export async function selectTopicAck(topicType, payload, topic) {
         case "TEMPERATURE_THRESHOLD_SETTING":
             await adminConfigDataRequestAckHandler(payload, topic);
             break;
+        case "DEVICE_RESET_ACK":
+            await deviceResetAckHandler(payload, topic);
+            break;
         default:
             return null;
     }
@@ -480,24 +483,6 @@ export function publishData(preparedData, starterData) {
     const payload = JSON.stringify(preparedData);
     mqttServiceInstance.publish(topic, payload);
 }
-// export async function adminConfigDataRequestAckHandler(message: any, topic: string) {
-//   try {
-//     const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-//     if (!validMac?.id) {
-//       console.error(`Any starter found with given MAC [${topic}]`)
-//       return null;
-//     };
-//     if (message.D === undefined || message.D === null || !validMac.id || (message.D !== 0 && message.D !== 1)) {
-//       console.error(`Invalid message data in admin config ack [${message.D}]`);
-//       return null;
-//     }
-//     await updateLatestStarterSettings(validMac.id, message.D);
-//     if (validMac && validMac.synced_settings_status === "false") await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
-//   } catch (error: any) {
-//     console.error("Error at admin config ack handler:", error);
-//     throw error;
-//   }
-// }
 export async function adminConfigDataRequestAckHandler(message, topic) {
     try {
         const macFromTopic = topic.split("/")[1];
@@ -527,6 +512,28 @@ export async function adminConfigDataRequestAckHandler(message, topic) {
     }
     catch (error) {
         console.error("Error at admin config ack handler:", error);
+        throw error;
+    }
+}
+export async function deviceResetAckHandler(message, topic) {
+    try {
+        const macFromTopic = topic.split("/")[1];
+        const validMac = await getStarterByMacWithMotor(macFromTopic);
+        if (!validMac?.id) {
+            console.error(`No starter found with given MAC [${topic}]`);
+            return null;
+        }
+        if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
+            console.error(`Invalid message data in admin config ack [${message.D}]`);
+            return null;
+        }
+        const updatedFields = { device_reset_status: message.D === 1 ? "true" : "false" };
+        const changedStatus = validMac.device_reset_status !== updatedFields.device_reset_status;
+        if (changedStatus)
+            await updateRecordById(starterBoxes, validMac.id, updatedFields);
+    }
+    catch (error) {
+        console.error("Error at device reset ack topic:", error);
         throw error;
     }
 }

@@ -33,6 +33,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     synced_settings_status: varchar("synced_settings_status").default("false"),
     device_mobile_number: varchar("device_mobile_number"),
     allocation_status_count: integer("allocation_status_count").default(0),
+    device_reset_status: varchar("device_reset_status").default("false"), // need to write in boolean
     created_at: timestamp("created_at").notNull().defaultNow(),
     assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
