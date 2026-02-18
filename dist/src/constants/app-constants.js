@@ -256,7 +256,11 @@ export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched
 export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
 export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
 export const DEVICE_RESET_SUCCESSFULLY = "Device reset successfully";
-// Gateway 
+// Bridge Service
+export const BRIDGE_AGENT_NOT_FOUND = "Agent ID is required";
+export const BRIDGE_AGENT_TRIGGERED = "Agent triggered successfully";
+export const BRIDGE_RESULT_FETCHED = "Bridge result fetched successfully";
+// Gateway
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
 // Motor schedule 

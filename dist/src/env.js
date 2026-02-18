@@ -30,6 +30,7 @@ const VEnvSchema = object({
     FCM_CLIENT_X509_CERT_URL: string(),
     FCM_UNIVERSE_DOMAIN: string(),
     FCM_PRIMERY_KEY: string(),
+    BRIDGE_URL: string(),
 });
 let envData;
 try {

@@ -6,13 +6,12 @@ import { deviceTemperature, type DeviceTemperatureTable } from "../database/sche
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
-import { type NewUserActivityLog } from "../database/schemas/user-activity-logs.js";
 import { users, type User, type UsersTable } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
-import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
+import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-helper.js";
