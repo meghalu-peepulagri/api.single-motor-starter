@@ -202,6 +202,7 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
       power: true,
       signal_quality: true,
       network_type: true,
+      device_allocation: true,
     },
     with: {
       motors: {

@@ -84,7 +84,6 @@ export class StarterDefaultSettingsHandlers {
 
   getAcknowledgedStarterSettingsHandler = async (c: Context) => {
     try {
-
       const starterId = +c.req.param("starter_id");
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);

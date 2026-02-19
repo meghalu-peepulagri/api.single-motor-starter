@@ -38,6 +38,7 @@ export async function getMotorWithStarterDetails(motorId) {
                     signal_quality: true,
                     power: true,
                     network_type: true,
+                    device_allocation: true,
                 },
                 with: {
                     starterParameters: {
