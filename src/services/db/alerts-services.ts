@@ -118,3 +118,176 @@ export async function getConsecutiveGroupsCount(
   const countRes = await db.execute(countQuery);
   return Number((countRes.rows?.[0] as any)?.total_groups ?? 0);
 }
+
+
+export async function getUnifiedLogsPaginated(
+  starterId: number,
+  motorId: number,
+  offset: number,
+  limit: number,
+  assignedAt: Date | null = null
+) {
+  const query = sql`
+    SELECT * FROM (
+      SELECT
+        id,
+        'activity' AS log_type,
+        action,
+        message,
+        NULL::integer AS code,
+        NULL AS description,
+        performed_by,
+        created_at AS timestamp
+      FROM user_activity_logs
+      WHERE entity_id = ${motorId}
+        AND device_id = ${starterId}
+        ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+
+      UNION ALL
+
+      SELECT
+        MAX(id) AS id,
+        'alert' AS log_type,
+        'ALERT' AS action,
+        alert_description AS message,
+        alert_code AS code,
+        alert_description AS description,
+        NULL::integer AS performed_by,
+        MAX(timestamp) AS timestamp
+      FROM (
+        SELECT *,
+          (
+            row_number() OVER (
+              PARTITION BY starter_id, motor_id, alert_code
+              ORDER BY timestamp
+            ) -
+            row_number() OVER (
+              PARTITION BY starter_id, motor_id
+              ORDER BY timestamp
+            )
+          ) AS grp
+        FROM alerts_faults
+        WHERE starter_id = ${starterId}
+          AND motor_id = ${motorId}
+          AND alert_code IS NOT NULL
+          AND alert_code <> 0
+          AND alert_description IS NOT NULL
+          AND alert_description NOT IN ('Unknown Alert', 'No Alert')
+          ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+      ) alert_groups
+      GROUP BY starter_id, motor_id, alert_code, alert_description, grp
+
+      UNION ALL
+
+      SELECT
+        MAX(id) AS id,
+        'fault' AS log_type,
+        'FAULT' AS action,
+        fault_description AS message,
+        fault_code AS code,
+        fault_description AS description,
+        NULL::integer AS performed_by,
+        MAX(timestamp) AS timestamp
+      FROM (
+        SELECT *,
+          (
+            row_number() OVER (
+              PARTITION BY starter_id, motor_id, fault_code
+              ORDER BY timestamp
+            ) -
+            row_number() OVER (
+              PARTITION BY starter_id, motor_id
+              ORDER BY timestamp
+            )
+          ) AS grp
+        FROM alerts_faults
+        WHERE starter_id = ${starterId}
+          AND motor_id = ${motorId}
+          AND fault_code IS NOT NULL
+          AND fault_code <> 0
+          AND fault_description IS NOT NULL
+          AND fault_description NOT IN ('Unknown Fault', 'No Fault')
+          ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+      ) fault_groups
+      GROUP BY starter_id, motor_id, fault_code, fault_description, grp
+    ) unified
+    ORDER BY timestamp DESC
+    LIMIT ${limit}
+    OFFSET ${offset}
+  `;
+
+  const results = await db.execute(query);
+  return results.rows ?? results;
+}
+
+
+export async function getUnifiedLogsCount(
+  starterId: number,
+  motorId: number,
+  assignedAt: Date | null = null
+) {
+  const countQuery = sql`
+    SELECT COUNT(*) AS total FROM (
+      SELECT id
+      FROM user_activity_logs
+      WHERE entity_id = ${motorId}
+        AND device_id = ${starterId}
+        ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+
+      UNION ALL
+
+      SELECT MAX(id) AS id
+      FROM (
+        SELECT *,
+          (
+            row_number() OVER (
+              PARTITION BY starter_id, motor_id, alert_code
+              ORDER BY timestamp
+            ) -
+            row_number() OVER (
+              PARTITION BY starter_id, motor_id
+              ORDER BY timestamp
+            )
+          ) AS grp
+        FROM alerts_faults
+        WHERE starter_id = ${starterId}
+          AND motor_id = ${motorId}
+          AND alert_code IS NOT NULL
+          AND alert_code <> 0
+          AND alert_description IS NOT NULL
+          AND alert_description NOT IN ('Unknown Alert', 'No Alert')
+          ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+      ) alert_groups
+      GROUP BY starter_id, motor_id, alert_code, alert_description, grp
+
+      UNION ALL
+
+      SELECT MAX(id) AS id
+      FROM (
+        SELECT *,
+          (
+            row_number() OVER (
+              PARTITION BY starter_id, motor_id, fault_code
+              ORDER BY timestamp
+            ) -
+            row_number() OVER (
+              PARTITION BY starter_id, motor_id
+              ORDER BY timestamp
+            )
+          ) AS grp
+        FROM alerts_faults
+        WHERE starter_id = ${starterId}
+          AND motor_id = ${motorId}
+          AND fault_code IS NOT NULL
+          AND fault_code <> 0
+          AND fault_description IS NOT NULL
+          AND fault_description NOT IN ('Unknown Fault', 'No Fault')
+          ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+      ) fault_groups
+      GROUP BY starter_id, motor_id, fault_code, fault_description, grp
+    ) unified
+  `;
+
+  const countRes = await db.execute(countQuery);
+  return Number((countRes.rows?.[0] as any)?.total ?? 0);
+}

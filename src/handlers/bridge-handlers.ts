@@ -27,7 +27,7 @@ export class BridgeHandlers {
 
   triggerAndWaitHandler = async (c: Context) => {
     try {
-      const result = await BridgeService.triggerAndWait("e6546916-71eb-437b-a3a4-69866966f101");
+      const result = await BridgeService.triggerAndWait("33cf8aff-a1c8-4d67-aaee-cf84dce21e3c");
       return sendResponse(c, 200, BRIDGE_AGENT_TRIGGERED, result);
     } catch (error: any) {
       logger.error("Error at bridge triggerAndWait :", error);

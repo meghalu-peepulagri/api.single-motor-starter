@@ -1,5 +1,5 @@
 import envData from "../env.js";
 const bridgeConfig = {
-    baseUrl: envData.BRIDGE_URL,
+    baseUrl: "http://localhost:8000",
 };
 export default bridgeConfig;

@@ -24,6 +24,7 @@ starterRoutes.get("/:id/analytics", isAuthorized, starterHandlers.starterAnalyti
 starterRoutes.get("/:id/motors", isAuthorized, starterHandlers.starterConnectedMotorsHandler);
 starterRoutes.get("/:id/temperature", isAuthorized, starterHandlers.getTemperatureHandler);
 starterRoutes.get("/:starter_id/motors/:motor_id/alerts-faults", isAuthorized, starterHandlers.getConsecutiveAlertsFaultsHandler);
+starterRoutes.get("/:starter_id/motors/:motor_id/logs", isAuthorized, starterHandlers.getUnifiedLogsHandler);
 starterRoutes.patch("/:id/deploy-status", isAuthorized, starterHandlers.updateDeployStatusHandler);
 starterRoutes.patch("/:id/details", isAuthorized, starterHandlers.updateStarterDetailsHandler);
 starterRoutes.patch("/:id/allocation", isAuthorized, starterHandlers.updateDeviceAllocationHandler);

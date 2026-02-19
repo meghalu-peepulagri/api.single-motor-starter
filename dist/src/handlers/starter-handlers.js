@@ -15,7 +15,7 @@ import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount } from "../services/db/alerts-services.js";
+import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsPaginated, getUnifiedLogsCount } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
@@ -78,6 +78,33 @@ export class StarterHandlers {
         catch (error) {
             logger.error("Error at getConsecutiveAlertsFaultsHandler :", error);
             console.error("Error at getConsecutiveAlertsFaultsHandler :", error);
+            throw error;
+        }
+    };
+    getUnifiedLogsHandler = async (c) => {
+        try {
+            const query = c.req.query();
+            const starterId = +c.req.param("starter_id");
+            const motorId = +c.req.param("motor_id");
+            paramsValidateException.validateId(starterId, "Starter id");
+            paramsValidateException.validateId(motorId, "Motor id");
+            const { page, pageSize, offset } = getPaginationOffParams(query);
+            const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
+            const assignedAtDate = assignedAt?.assigned_at ?? null;
+            const [data, totalRecords] = await Promise.all([
+                getUnifiedLogsPaginated(starterId, motorId, offset, pageSize, assignedAtDate),
+                getUnifiedLogsCount(starterId, motorId, assignedAtDate),
+            ]);
+            const paginationInfo = getPaginationData(page, pageSize, totalRecords);
+            const response = {
+                pagination: paginationInfo,
+                records: data || [],
+            };
+            return sendResponse(c, 200, "Unified logs fetched successfully", response);
+        }
+        catch (error) {
+            logger.error("Error at getUnifiedLogsHandler :", error);
+            console.error("Error at getUnifiedLogsHandler :", error);
             throw error;
         }
     };
