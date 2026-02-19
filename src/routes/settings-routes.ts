@@ -18,5 +18,6 @@ settingsRoutes.get("/acknowledged/:starter_id", isAuthorized, settingsHandlers.g
 settingsRoutes.get("/limits-mobile/:starter_id", isAuthorized, settingsHandlers.getStarterSettingsLimitsMobileHandler);
 settingsRoutes.get("/default-limits", isAuthorized, settingsHandlers.getStarterDefaultSettingsLimitsHandler);
 settingsRoutes.patch("/default-limits/:id", isAuthorized, isSuperAdminOrAdmin, settingsHandlers.updateStarterDefaultSettingsLimitsHandler);
+settingsRoutes.patch("/starter/:starter_id/acknowledgement-update", isAuthorized, settingsHandlers.updateLatestSettingAckByStarterHandler);
 
 export default settingsRoutes;

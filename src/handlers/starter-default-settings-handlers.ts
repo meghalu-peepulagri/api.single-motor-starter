@@ -17,6 +17,8 @@ import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import type { ValidatedUpdateDefaultSettingsLimits } from "../validations/schema/default-settings-limits.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { logger } from "../utils/logger.js";
+import { sql } from "drizzle-orm";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -110,7 +112,7 @@ export class StarterDefaultSettingsHandlers {
       }
 
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettings>("update-default-settings",
-        body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);        
+        body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
 
       // const cleanedBody = removeEmptyObjectsDeep(validatedBody);
       // if (!Object.keys(cleanedBody).length) {
@@ -144,7 +146,7 @@ export class StarterDefaultSettingsHandlers {
       // }
 
       await db.transaction(async (trx) => {
-       await saveSingleRecord<StarterSettingsTable>(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
+        await saveSingleRecord<StarterSettingsTable>(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
         // Handle activity logging for settings update
         // await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, { ...oldSettings, ...cleanedBody }, trx);
       });
@@ -175,7 +177,7 @@ export class StarterDefaultSettingsHandlers {
       const body = await c.req.json();
       const { id, starter_id, created_at, updated_at, ...rest } = body;
 
-  
+
       const foundedSettingId = await getRecordById<StarterSettingsLimitsTable>(starterSettingsLimits, settingId);
       if (!foundedSettingId) throw new BadRequestException(SETTINGS_LIMITS_NOT_FOUND);
 
@@ -331,4 +333,18 @@ export class StarterDefaultSettingsHandlers {
       throw error;
     }
   };
+
+  updateLatestSettingAckByStarterHandler = async (c: Context) => {
+    try {
+      const starterId = +c.req.param("starter_id");
+      const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id"]);
+      if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
+      await db.update(starterSettings).set({ acknowledgement: "TRUE", updated_at: sql`CURRENT_TIMESTAMP` }).where(sql`${starterSettings.id} = (SELECT ${starterSettings.id} FROM ${starterSettings} WHERE ${starterSettings.starter_id} = ${starterId} AND ${starterSettings.acknowledgement} = 'FALSE' ORDER BY ${starterSettings.created_at} DESC LIMIT 1)`);
+      return sendResponse(c, 200, "Settings updated successfully");
+    } catch (error: any) {
+      logger.error("Error at updating latest starter setting acknowledgement updated_at:", error);
+      console.error("Error at updating latest starter setting acknowledgement updated_at:", error);
+      throw error;
+    }
+  }
 }

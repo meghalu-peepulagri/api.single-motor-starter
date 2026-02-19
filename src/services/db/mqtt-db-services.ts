@@ -60,9 +60,9 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
     case "HEART_BEAT":
       await heartbeatHandler(payload, topic);
       break;
-    case "CALIBRATION_ACK":
-      await adminConfigDataRequestAckHandler(payload, topic);
-      break;
+    // case "CALIBRATION_ACK":
+    //   await adminConfigDataRequestAckHandler(payload, topic);
+    //   break;
     case "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK":
       await deviceSerialNumberAllocationAckHandler(payload, topic);
       break;
@@ -571,7 +571,8 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
 
 export function publishData(preparedData: any, starterData: StarterBox) {
   if (!starterData) return null;
-  const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
+  // const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
+  const macOrPcb = starterData.device_allocation === "false" ? starterData.mac_address : starterData.pcb_number;
   const topic = `peepul/${macOrPcb}/cmd`;
   const payload = JSON.stringify(preparedData);
   mqttServiceInstance.publish(topic, payload);
