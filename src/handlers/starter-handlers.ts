@@ -119,7 +119,7 @@ export class StarterHandlers {
         records: data || [],
       };
 
-      return sendResponse(c, 200, "Unified logs fetched successfully", response);
+      return sendResponse(c, 200, "Logs fetched successfully", response);
     } catch (error: any) {
       logger.error("Error at getUnifiedLogsHandler :", error);
       console.error("Error at getUnifiedLogsHandler :", error);

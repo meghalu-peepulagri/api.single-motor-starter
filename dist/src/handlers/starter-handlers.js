@@ -100,7 +100,7 @@ export class StarterHandlers {
                 pagination: paginationInfo,
                 records: data || [],
             };
-            return sendResponse(c, 200, "Unified logs fetched successfully", response);
+            return sendResponse(c, 200, "Logs fetched successfully", response);
         }
         catch (error) {
             logger.error("Error at getUnifiedLogsHandler :", error);
