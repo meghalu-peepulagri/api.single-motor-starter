@@ -27,6 +27,7 @@ export function starterFilters(query: any, user: any) {
         sql`(
           ${starterBoxes.pcb_number} ILIKE ${s}
           OR ${starterBoxes.starter_number} ILIKE ${s}
+          OR ${starterBoxes.mac_address} ILIKE ${s}
         )`
       );
     } else {
