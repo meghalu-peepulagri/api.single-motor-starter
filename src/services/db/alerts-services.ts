@@ -125,7 +125,8 @@ export async function getUnifiedLogsPaginated(
   motorId: number,
   offset: number,
   limit: number,
-  assignedAt: Date | null = null
+  assignedAt: Date | null = null,
+  actionType: string | null = null
 ) {
   const query = sql`
     SELECT * FROM (
@@ -139,9 +140,10 @@ export async function getUnifiedLogsPaginated(
         performed_by,
         created_at AS timestamp
       FROM user_activity_logs
-      WHERE entity_id = ${motorId}
-        AND device_id = ${starterId}
+      WHERE device_id = ${starterId}
+        AND (entity_type = 'STARTER' OR entity_id = ${motorId})
         ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+        ${actionType ? sql`AND action = ${actionType}` : sql``}
 
       UNION ALL
 
@@ -176,6 +178,7 @@ export async function getUnifiedLogsPaginated(
           ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
       ) alert_groups
       GROUP BY starter_id, motor_id, alert_code, alert_description, grp
+      ${actionType ? sql`HAVING 'ALERT' = ${actionType}` : sql``}
 
       UNION ALL
 
@@ -210,7 +213,9 @@ export async function getUnifiedLogsPaginated(
           ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
       ) fault_groups
       GROUP BY starter_id, motor_id, fault_code, fault_description, grp
+      ${actionType ? sql`HAVING 'FAULT' = ${actionType}` : sql``}
     ) unified
+    WHERE message IS NOT NULL
     ORDER BY timestamp DESC
     LIMIT ${limit}
     OFFSET ${offset}
@@ -224,19 +229,22 @@ export async function getUnifiedLogsPaginated(
 export async function getUnifiedLogsCount(
   starterId: number,
   motorId: number,
-  assignedAt: Date | null = null
+  assignedAt: Date | null = null,
+  actionType: string | null = null
 ) {
   const countQuery = sql`
     SELECT COUNT(*) AS total FROM (
-      SELECT id
+      SELECT id, message
       FROM user_activity_logs
-      WHERE entity_id = ${motorId}
-        AND device_id = ${starterId}
+      WHERE device_id = ${starterId}
+        AND (entity_type = 'STARTER' OR entity_id = ${motorId})
+        AND message IS NOT NULL
         ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+        ${actionType ? sql`AND action = ${actionType}` : sql``}
 
       UNION ALL
 
-      SELECT MAX(id) AS id
+      SELECT MAX(id) AS id, alert_description AS message
       FROM (
         SELECT *,
           (
@@ -259,10 +267,11 @@ export async function getUnifiedLogsCount(
           ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
       ) alert_groups
       GROUP BY starter_id, motor_id, alert_code, alert_description, grp
+      ${actionType ? sql`HAVING 'ALERT' = ${actionType}` : sql``}
 
       UNION ALL
 
-      SELECT MAX(id) AS id
+      SELECT MAX(id) AS id, fault_description AS message
       FROM (
         SELECT *,
           (
@@ -285,6 +294,7 @@ export async function getUnifiedLogsCount(
           ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
       ) fault_groups
       GROUP BY starter_id, motor_id, fault_code, fault_description, grp
+      ${actionType ? sql`HAVING 'FAULT' = ${actionType}` : sql``}
     ) unified
   `;
 

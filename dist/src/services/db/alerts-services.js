@@ -92,7 +92,7 @@ export async function getConsecutiveGroupsCount(starterId, motorId, type, assign
     const countRes = await db.execute(countQuery);
     return Number(countRes.rows?.[0]?.total_groups ?? 0);
 }
-export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit, assignedAt = null) {
+export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit, assignedAt = null, actionType = null) {
     const query = sql `
     SELECT * FROM (
       SELECT
@@ -105,9 +105,10 @@ export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit,
         performed_by,
         created_at AS timestamp
       FROM user_activity_logs
-      WHERE entity_id = ${motorId}
-        AND device_id = ${starterId}
+      WHERE device_id = ${starterId}
+        AND (entity_type = 'STARTER' OR entity_id = ${motorId})
         ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
+        ${actionType ? sql `AND action = ${actionType}` : sql ``}
 
       UNION ALL
 
@@ -142,6 +143,7 @@ export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit,
           ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) alert_groups
       GROUP BY starter_id, motor_id, alert_code, alert_description, grp
+      ${actionType ? sql `HAVING 'ALERT' = ${actionType}` : sql ``}
 
       UNION ALL
 
@@ -176,7 +178,9 @@ export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit,
           ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) fault_groups
       GROUP BY starter_id, motor_id, fault_code, fault_description, grp
+      ${actionType ? sql `HAVING 'FAULT' = ${actionType}` : sql ``}
     ) unified
+    WHERE message IS NOT NULL
     ORDER BY timestamp DESC
     LIMIT ${limit}
     OFFSET ${offset}
@@ -184,18 +188,20 @@ export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit,
     const results = await db.execute(query);
     return results.rows ?? results;
 }
-export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null) {
+export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null, actionType = null) {
     const countQuery = sql `
     SELECT COUNT(*) AS total FROM (
-      SELECT id
+      SELECT id, message
       FROM user_activity_logs
-      WHERE entity_id = ${motorId}
-        AND device_id = ${starterId}
+      WHERE device_id = ${starterId}
+        AND (entity_type = 'STARTER' OR entity_id = ${motorId})
+        AND message IS NOT NULL
         ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
+        ${actionType ? sql `AND action = ${actionType}` : sql ``}
 
       UNION ALL
 
-      SELECT MAX(id) AS id
+      SELECT MAX(id) AS id, alert_description AS message
       FROM (
         SELECT *,
           (
@@ -218,10 +224,11 @@ export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null)
           ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) alert_groups
       GROUP BY starter_id, motor_id, alert_code, alert_description, grp
+      ${actionType ? sql `HAVING 'ALERT' = ${actionType}` : sql ``}
 
       UNION ALL
 
-      SELECT MAX(id) AS id
+      SELECT MAX(id) AS id, fault_description AS message
       FROM (
         SELECT *,
           (
@@ -244,6 +251,7 @@ export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null)
           ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) fault_groups
       GROUP BY starter_id, motor_id, fault_code, fault_description, grp
+      ${actionType ? sql `HAVING 'FAULT' = ${actionType}` : sql ``}
     ) unified
   `;
     const countRes = await db.execute(countQuery);

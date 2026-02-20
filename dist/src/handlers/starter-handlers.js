@@ -88,12 +88,13 @@ export class StarterHandlers {
             const motorId = +c.req.param("motor_id");
             paramsValidateException.validateId(starterId, "Starter id");
             paramsValidateException.validateId(motorId, "Motor id");
+            const actionType = query.action_type || null;
             const { page, pageSize, offset } = getPaginationOffParams(query);
             const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
             const assignedAtDate = assignedAt?.assigned_at ?? null;
             const [data, totalRecords] = await Promise.all([
-                getUnifiedLogsPaginated(starterId, motorId, offset, pageSize, assignedAtDate),
-                getUnifiedLogsCount(starterId, motorId, assignedAtDate),
+                getUnifiedLogsPaginated(starterId, motorId, offset, pageSize, assignedAtDate, actionType),
+                getUnifiedLogsCount(starterId, motorId, assignedAtDate, actionType),
             ]);
             const paginationInfo = getPaginationData(page, pageSize, totalRecords);
             const response = {
