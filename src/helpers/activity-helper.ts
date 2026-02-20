@@ -15,6 +15,11 @@ export function activityFilters(query: any, user: any, deviceAssignedAt?: motorB
     values: [],
   };
 
+  // Only return records where message is not null
+  whereQueryData.columns.push("message");
+  whereQueryData.relations.push("IS NOT NULL");
+  whereQueryData.values.push(null);
+
   if (query.entity_type) {
     whereQueryData.columns.push("entity_type");
     whereQueryData.relations.push("=");

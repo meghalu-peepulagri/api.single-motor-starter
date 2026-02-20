@@ -131,7 +131,7 @@ export async function getUnifiedLogsPaginated(
   const query = sql`
     SELECT * FROM (
       SELECT
-        id,
+        id,ac
         'activity' AS log_type,
         action,
         message,
