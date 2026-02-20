@@ -8,7 +8,7 @@ import { motorState } from "./control-helpers.js";
 /**
  * Helper to filter activity logs
  */
-export function activityFilters(query: any, user: any, deviceAssignedAt: motorBasedStarterDetails) {
+export function activityFilters(query: any, user: any, deviceAssignedAt?: motorBasedStarterDetails) {
   const whereQueryData: WhereQueryData<UserActivityLogsTable> = {
     columns: [],
     relations: [],
@@ -43,7 +43,7 @@ export function activityFilters(query: any, user: any, deviceAssignedAt: motorBa
     whereQueryData.values.push(query.performed_by);
   }
 
-  if (query.is_assigned === "true") {
+  if (query.is_assigned === "true" && deviceAssignedAt) {
     whereQueryData.columns.push("created_at");
     whereQueryData.relations.push(">=");
     whereQueryData.values.push(deviceAssignedAt.assigned_at);
@@ -97,7 +97,8 @@ export function prepareDeviceUpdateLogs(data: {
       entityId: data.entityId,
       deviceId: data.entityId,
       oldData: { name: data.oldData.name },
-      newData: { name: data.newData.name }
+      newData: { name: data.newData.name },
+      message: `Name updated from '${data.oldData.name}' to '${data.newData.name}'`
     }));
   }
 
@@ -109,7 +110,8 @@ export function prepareDeviceUpdateLogs(data: {
       entityId: data.entityId,
       deviceId: data.entityId,
       oldData: { pcb_number: data.oldData.pcb_number },
-      newData: { pcb_number: data.newData.pcb_number }
+      newData: { pcb_number: data.newData.pcb_number },
+      message: `PCB number updated from '${data.oldData.pcb_number}' to '${data.newData.pcb_number}'`
     }));
   }
 
@@ -121,7 +123,8 @@ export function prepareDeviceUpdateLogs(data: {
       entityId: data.entityId,
       deviceId: data.entityId,
       oldData: { starter_number: data.oldData.starter_number },
-      newData: { starter_number: data.newData.starter_number }
+      newData: { starter_number: data.newData.starter_number },
+      message: `Starter number updated from '${data.oldData.starter_number}' to '${data.newData.starter_number}'`
     }));
   }
 
@@ -133,7 +136,8 @@ export function prepareDeviceUpdateLogs(data: {
       entityId: data.entityId,
       deviceId: data.entityId,
       oldData: { mac_address: data.oldData.mac_address },
-      newData: { mac_address: data.newData.mac_address }
+      newData: { mac_address: data.newData.mac_address },
+      message: `MAC address updated from '${data.oldData.mac_address}' to '${data.newData.mac_address}'`
     }));
   }
 
@@ -145,7 +149,8 @@ export function prepareDeviceUpdateLogs(data: {
       entityId: data.entityId,
       deviceId: data.entityId,
       oldData: { gateway_id: data.oldData.gateway_id },
-      newData: { gateway_id: data.newData.gateway_id }
+      newData: { gateway_id: data.newData.gateway_id },
+      message: `Gateway ID updated from '${data.oldData.gateway_id}' to '${data.newData.gateway_id}'`
     }));
   }
 

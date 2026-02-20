@@ -360,48 +360,55 @@ export const publishMultipleTimesInBackground = async (devicePayload, starterDet
     // Prevent duplicate publishing
     if (publishingMap.get(starterDetails.id)) {
         logger.warn(`Publishing already in progress for starter ${starterDetails.id}, skipping this request.`);
-        return;
+        return false;
     }
     publishingMap.set(starterDetails.id, true);
     const totalAttempts = 3;
     const ackWaitTimesInSeconds = [10, 10, 3];
-    const ackIdentifiers = [
-        starterDetails.pcb_number,
-        starterDetails.mac_address,
-    ].filter(Boolean);
+    // Use the SAME identifier that publishData uses for publishing
+    const publishedKey = starterDetails.device_allocation === "false"
+        ? starterDetails.mac_address
+        : starterDetails.pcb_number;
+    if (!publishedKey) {
+        logger.error(`No valid publish key found for starter ${starterDetails.id}`);
+        publishingMap.delete(starterDetails.id);
+        return false;
+    }
     try {
         for (let i = 0; i < totalAttempts; i++) {
-            const now = new Date().toISOString();
-            logger.info(`[${now}] Publishing attempt ${i + 1} started for starter ${starterDetails.id}`);
+            const publishTime = new Date().toISOString();
+            logger.info(`[${publishTime}] Publishing attempt ${i + 1} started for starter ${starterDetails.id}, key: ${publishedKey}, sequence: ${devicePayload.S}`);
             // Publish Data
             publishData(devicePayload, starterDetails);
-            logger.info(`[${now}] Waiting for ACK for ${ackWaitTimesInSeconds[i]} seconds`);
-            // Wait for ACK
-            const ackReceived = await waitForAck(ackIdentifiers, ackWaitTimesInSeconds[i] * 1000);
+            logger.info(`[${publishTime}] Waiting for ACK for ${ackWaitTimesInSeconds[i]} seconds on key: ${publishedKey}, sequence: ${devicePayload.S}`);
+            // Wait for ACK only on the SAME key used for publishing
+            const ackReceived = await waitForAck([publishedKey], ackWaitTimesInSeconds[i] * 1000, devicePayload.S);
             if (ackReceived) {
                 const ackTime = new Date().toISOString();
-                logger.info(`[${ackTime}] ACK received on attempt ${i + 1} for starter ${starterDetails.id}`);
-                return; // Stop retries immediately
+                logger.info(`[${ackTime}] ACK received on attempt ${i + 1} for starter ${starterDetails.id}, key: ${publishedKey}, sequence: ${devicePayload.S}`);
+                return true; // Stop retries, ACK matched
             }
-            logger.warn(`[${new Date().toISOString()}] No ACK received on attempt ${i + 1} for starter ${starterDetails.id}, retrying...`);
+            logger.warn(`[${new Date().toISOString()}] No ACK received on attempt ${i + 1} for starter ${starterDetails.id}, key: ${publishedKey}, sequence: ${devicePayload.S}, retrying...`);
         }
-        logger.error(`[${new Date().toISOString()}] All ${totalAttempts} retry attempts failed for starter id: ${starterDetails.id}, pcb: ${starterDetails.pcb_number}, mac: ${starterDetails.mac_address}`);
+        logger.error(`[${new Date().toISOString()}] All ${totalAttempts} retry attempts failed for starter id: ${starterDetails.id}, published key: ${publishedKey}, sequence: ${devicePayload.S}`);
+        return false;
     }
     catch (error) {
         logger.error(`Error during publishing for starter ${starterDetails.id}:`, error);
+        return false;
     }
     finally {
         publishingMap.delete(starterDetails.id);
     }
 };
-const waitForAck = (identifiers, timeout) => {
+const waitForAck = (identifiers, timeout, sequenceNumber) => {
     return new Promise((resolve) => {
         let timeoutRef;
         const cleanup = () => {
             identifiers.forEach((id) => pendingAckMap.delete(id));
             clearTimeout(timeoutRef);
         };
-        // Register resolvers for MAC / PCB
+        // Register resolvers for MAC / PCB with sequence number
         identifiers.forEach((id) => {
             if (!id)
                 return;
@@ -410,6 +417,7 @@ const waitForAck = (identifiers, timeout) => {
                     cleanup();
                     resolve(value);
                 },
+                sequenceNumber,
             });
         });
         // Timeout fallback

@@ -3,7 +3,8 @@ import db from "../../database/configuration.js";
 import { starterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
 import { DEVICE_SCHEMA } from "../../constants/app-constants.js";
-import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "./base-db-services.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { prepareDeviceConfigurationPayload } from "../../helpers/heart-beat-prepared-payload-helper.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
@@ -181,7 +182,14 @@ export async function publishDeviceSettings(starter) {
         setImmediate(async () => {
             try {
                 await saveSingleRecord(starterSettings, { ...ackWithoutId, is_new_configuration_saved: 0, starter_id: starter.id });
-                await publishMultipleTimesInBackground(formattedPayload, starter);
+                const ackReceived = await publishMultipleTimesInBackground(formattedPayload, starter);
+                if (ackReceived) {
+                    // ACK received with matching MAC/PCB and sequence number, D === 1
+                    await updateLatestStarterSettings(starter.id, 1);
+                    if (starter.synced_settings_status === "false") {
+                        await updateRecordById(starterBoxes, starter.id, { synced_settings_status: "true" });
+                    }
+                }
             }
             catch (error) {
                 logger.error("Publish device settings synced at heartbeat:", error);

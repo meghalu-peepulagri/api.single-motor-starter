@@ -90,6 +90,7 @@ export async function getStarterByMacWithMotor(mac: string) {
       mac_address: true,
       pcb_number: true,
       device_reset_status: true,
+      device_allocation: true,
     },
     with: {
       motors: {
@@ -197,6 +198,7 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
     columns: {
       id: true,
       name: true,
+      mac_address: true,
       pcb_number: true,
       starter_number: true,
       power: true,
