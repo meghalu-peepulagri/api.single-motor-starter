@@ -131,9 +131,10 @@ export async function getUnifiedLogsPaginated(
   const query = sql`
     SELECT * FROM (
       SELECT
-        id,ac
+        id,
         'activity' AS log_type,
         action,
+        entity_type,
         message,
         NULL::integer AS code,
         NULL AS description,
@@ -151,6 +152,7 @@ export async function getUnifiedLogsPaginated(
         MAX(id) AS id,
         'alert' AS log_type,
         'ALERT' AS action,
+        'STARTER' AS entity_type,
         alert_description AS message,
         alert_code AS code,
         alert_description AS description,
@@ -186,6 +188,7 @@ export async function getUnifiedLogsPaginated(
         MAX(id) AS id,
         'fault' AS log_type,
         'FAULT' AS action,
+        'STARTER' AS entity_type,
         fault_description AS message,
         fault_code AS code,
         fault_description AS description,

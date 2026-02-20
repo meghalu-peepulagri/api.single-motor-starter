@@ -566,7 +566,7 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
       return null;
     };
 
-    if (message.D === 1) await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { device_allocation: "true" });
+    if (message.D === 1) await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { device_allocation: "true", allocation_status_count: (validMac.allocation_status_count ?? 0) + 1 });
   } catch (error: any) {
     console.error("Error at device serial number allocation ack handler:", error);
     throw error;

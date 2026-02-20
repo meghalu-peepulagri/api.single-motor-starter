@@ -523,7 +523,7 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             const currentCount = starter.allocation_status_count ?? 0;
-            if (userPayload.user_type !== "SUPER_ADMIN" && allocationStatus === "true" && starter.device_allocation === "false" && currentCount === 1) {
+            if (userPayload.user_type !== "SUPER_ADMIN" && allocationStatus === "true" && starter.device_allocation === "false" && currentCount >= 1) {
                 throw new UnauthorizedException("Unauthorized");
             }
             const newCount = (allocationStatus === "true" && starter.device_allocation === "false") ? currentCount + 1 : currentCount;
