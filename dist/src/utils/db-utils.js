@@ -1,4 +1,4 @@
-import { and, getTableName, inArray, isNull, sql } from "drizzle-orm";
+import { and, getTableName, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import db from "../database/configuration.js";
 function prepareSelectColumnsForQuery(table, columnsToSelect) {
     if (!columnsToSelect) {
@@ -48,6 +48,9 @@ function prepareWhereQueryConditions(table, whereQueryData) {
                 break;
             case "IS NULL":
                 whereQueries.push(isNull(columnInfo));
+                break;
+            case "IS NOT NULL":
+                whereQueries.push(isNotNull(columnInfo));
                 break;
             case "LOWER":
                 whereQueries.push(sql `LOWER(${columnInfo}) = ${value}`);

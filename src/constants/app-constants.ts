@@ -274,13 +274,19 @@ export const LOCATION_ASSIGNED = "Location assigned successfully";
 export const LOCATION_ID_REQUIRED = "Location is required";
 export const STARTER_DETAILS_UPDATED = "Device details updated successfully";
 export const STARTER_BOX_STATUS_UPDATED = "Device status updated successfully";
-export const PCB_SERIAL_NUMBER_REQUIRED = "PCB/Starter Number is required";
-export const MIN_3_CHARACTERS_REQUIRED = "PCB/Starter Number has min 3 characters";
+export const PCB_SERIAL_NUMBER_REQUIRED = "Serial number is required";
+export const MIN_3_CHARACTERS_REQUIRED = "Serial number has min 3 characters";
 export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched successfully";
 export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
 export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
+export const DEVICE_RESET_SUCCESSFULLY = "Device reset successfully";
 
-// Gateway 
+// Bridge Service
+export const BRIDGE_AGENT_NOT_FOUND = "Agent ID is required";
+export const BRIDGE_AGENT_TRIGGERED = "Agent triggered successfully";
+export const BRIDGE_RESULT_FETCHED = "Bridge result fetched successfully";
+
+// Gateway
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
 

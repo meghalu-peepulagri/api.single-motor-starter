@@ -14,19 +14,27 @@ export class ActivityHandlers {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
             const paginationParams = getPaginationOffParams(query);
-            const entityId = Number(query.entity_id);
-            paramsValidateException.validateId(entityId, "entity id");
-            const deviceDetails = await getMotorBasedStarterDetails(entityId);
-            if (!deviceDetails || !deviceDetails.starter) {
-                throw new BadRequestException("Starter details not found");
+            let deviceAssignedAt;
+            if (query.device_id) {
+                // When device_id is provided, use it directly as a filter
+                paramsValidateException.validateId(Number(query.device_id), "device id");
             }
-            const deviceAssignedAt = deviceDetails.starter;
+            else {
+                // Existing flow: require entity_id and look up starter details
+                const entityId = Number(query.entity_id);
+                paramsValidateException.validateId(entityId, "entity id");
+                const deviceDetails = await getMotorBasedStarterDetails(entityId);
+                if (!deviceDetails || !deviceDetails.starter) {
+                    throw new BadRequestException("Starter details not found");
+                }
+                deviceAssignedAt = deviceDetails.starter;
+            }
             const whereQueryData = activityFilters(query, userPayload, deviceAssignedAt);
             const orderByQueryData = {
                 columns: ["created_at"],
                 values: ["desc"],
             };
-            const activities = await getPaginatedRecordsConditionally(userActivityLogs, paginationParams.page, paginationParams.pageSize, orderByQueryData, whereQueryData, ["id", "performed_by", "action", "entity_type", "entity_id", "message", "created_at"]);
+            const activities = await getPaginatedRecordsConditionally(userActivityLogs, paginationParams.page, paginationParams.pageSize, orderByQueryData, whereQueryData, ["id", "performed_by", "action", "entity_type", "entity_id", "device_id", "message", "created_at"]);
             return sendResponse(c, 200, ACTIVITY_LOGS_FETCHED, activities);
         }
         catch (error) {

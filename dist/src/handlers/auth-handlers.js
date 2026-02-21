@@ -39,7 +39,7 @@ export class AuthHandlers {
                 throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
             }
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
-            const isAdmin = userPayload?.user_type === "ADMIN";
+            const isAdmin = userPayload?.user_type === "ADMIN" || userPayload?.user_type === "SUPER_ADMIN";
             const user_verified = isAdmin ? true : false;
             const userData = {
                 ...validUserReq,
