@@ -7,8 +7,10 @@ const userRoutes = factory.createApp();
 
 userRoutes.get("/basic", isAuthorized, userHandlers.usersBasicListHandler);
 userRoutes.get("/profile", isAuthorized, userHandlers.userProfileHandler);
+userRoutes.get("/:id/details", isAuthorized, userHandlers.userDetailsWithLocationsHandler);
 userRoutes.patch("/:id", isAuthorized, userHandlers.updateUserDetailsHandler);
 userRoutes.get("/", isAuthorized, userHandlers.listUsersHandler);
 userRoutes.post("/:id/log-out", userHandlers.userLogOutHandler);
+
 
 export default userRoutes;
