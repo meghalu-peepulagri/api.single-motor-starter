@@ -678,15 +678,8 @@ export async function adminConfigDataRequestAckHandler(
     // Update DB
     await updateLatestStarterSettings(validMac.id, message.D);
 
-    if (
-      validMac &&
-      validMac.synced_settings_status === "false"
-    ) {
-      await updateRecordById<StarterBoxTable>(
-        starterBoxes,
-        validMac.id,
-        { synced_settings_status: "true" }
-      );
+    if (validMac && validMac.synced_settings_status === "false") {
+      await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
     }
 
   } catch (error: any) {

@@ -561,8 +561,7 @@ export async function adminConfigDataRequestAckHandler(message, topic) {
         }
         // Update DB
         await updateLatestStarterSettings(validMac.id, message.D);
-        if (validMac &&
-            validMac.synced_settings_status === "false") {
+        if (validMac && validMac.synced_settings_status === "false") {
             await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
         }
     }
