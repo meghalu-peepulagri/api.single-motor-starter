@@ -470,8 +470,19 @@ export async function deviceSerialNumberAllocationAckHandler(message, topic) {
             return null;
         }
         ;
-        if (message.D === 1)
-            await updateRecordById(starterBoxes, validMac.id, { device_allocation: "true", allocation_status_count: (validMac.allocation_status_count ?? 0) + 1 });
+        if (message.D === 1) {
+            const currentCount = validMac.allocation_status_count ?? 0;
+            const newCount = currentCount + 1;
+            const allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
+            const message_log = newCount === 1 ? "Device Allocated" : "Device Reallocated";
+            const userId = validMac.user_id || validMac.created_by;
+            await db.transaction(async (trx) => {
+                await updateRecordByIdWithTrx(starterBoxes, validMac.id, { device_allocation: "true", allocation_status_count: newCount }, trx);
+                if (userId) {
+                    await ActivityService.writeDeviceAllocationLog(userId, validMac.id, allocationAction, { device_allocation: validMac.device_allocation ?? "false", allocation_status_count: currentCount }, { device_allocation: "true", allocation_status_count: newCount }, message_log, trx);
+                }
+            });
+        }
     }
     catch (error) {
         console.error("Error at device serial number allocation ack handler:", error);

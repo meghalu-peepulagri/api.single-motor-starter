@@ -587,7 +587,32 @@ export class StarterHandlers {
       }
 
       const newCount = (allocationStatus === "true" && starter.device_allocation === "false") ? currentCount + 1 : currentCount;
-      await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount });
+
+      let allocationAction: "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED";
+      let message: string;
+
+      if (allocationStatus === "false") {
+        allocationAction = "DEVICE_DEALLOCATED";
+        message = "Device Deallocated";
+      } else if (newCount === 1) {
+        allocationAction = "DEVICE_ALLOCATED";
+        message = "Device Allocated";
+      } else {
+        allocationAction = "DEVICE_REALLOCATED";
+        message = "Device Reallocated";
+      }
+
+      await db.transaction(async (trx) => {
+        await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount }, trx);
+        await ActivityService.writeDeviceAllocationLog(userPayload.id, starterId,
+          allocationAction,
+          { device_allocation: starter.device_allocation ?? "false", allocation_status_count: currentCount },
+          { device_allocation: allocationStatus, allocation_status_count: newCount },
+          message,
+          trx
+        );
+      });
+
       return sendResponse(c, 200, "Device allocation status updated successfully");
     } catch (error: any) {
       console.error("Error at update device allocation status :", error);

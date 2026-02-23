@@ -527,7 +527,24 @@ export class StarterHandlers {
                 throw new UnauthorizedException("Unauthorized");
             }
             const newCount = (allocationStatus === "true" && starter.device_allocation === "false") ? currentCount + 1 : currentCount;
-            await updateRecordById(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount });
+            let allocationAction;
+            let message;
+            if (allocationStatus === "false") {
+                allocationAction = "DEVICE_DEALLOCATED";
+                message = "Device Deallocated";
+            }
+            else if (newCount === 1) {
+                allocationAction = "DEVICE_ALLOCATED";
+                message = "Device Allocated";
+            }
+            else {
+                allocationAction = "DEVICE_REALLOCATED";
+                message = "Device Reallocated";
+            }
+            await db.transaction(async (trx) => {
+                await updateRecordByIdWithTrx(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount }, trx);
+                await ActivityService.writeDeviceAllocationLog(userPayload.id, starterId, allocationAction, { device_allocation: starter.device_allocation ?? "false", allocation_status_count: currentCount }, { device_allocation: allocationStatus, allocation_status_count: newCount }, message, trx);
+            });
             return sendResponse(c, 200, "Device allocation status updated successfully");
         }
         catch (error) {
