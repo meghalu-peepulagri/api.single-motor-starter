@@ -5,6 +5,7 @@ import { deviceTemperature } from "../../database/schemas/device-temperature.js"
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { controlMode } from "../../helpers/control-helpers.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
@@ -17,7 +18,6 @@ import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordBy
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
-import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {
     switch (groupId) {
@@ -57,13 +57,19 @@ export async function selectTopicAck(topicType, payload, topic) {
             await heartbeatHandler(payload, topic);
             break;
         case "CALIBRATION_ACK":
-            await adminConfigDataRequestAckHandler(payload, topic);
+            await deviceSyncUpdate(payload, topic);
             break;
+        // case "CALIBRATION_ACK":
+        //   await adminConfigDataRequestAckHandler(payload, topic);
+        //   break;
         case "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK":
             await deviceSerialNumberAllocationAckHandler(payload, topic);
             break;
         case "TEMPERATURE_THRESHOLD_SETTING":
             await adminConfigDataRequestAckHandler(payload, topic);
+            break;
+        case "DEVICE_RESET_ACK":
+            await deviceResetAckHandler(payload, topic);
             break;
         default:
             return null;
@@ -463,7 +469,7 @@ export async function deviceSerialNumberAllocationAckHandler(message, topic) {
         }
         ;
         if (message.D === 1)
-            await updateRecordById(starterBoxes, validMac.id, { device_status: "DEPLOYED" });
+            await updateRecordById(starterBoxes, validMac.id, { device_allocation: "true", allocation_status_count: (validMac.allocation_status_count ?? 0) + 1 });
     }
     catch (error) {
         console.error("Error at device serial number allocation ack handler:", error);
@@ -473,10 +479,65 @@ export async function deviceSerialNumberAllocationAckHandler(message, topic) {
 export function publishData(preparedData, starterData) {
     if (!starterData)
         return null;
-    const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
+    // const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
+    const macOrPcb = starterData.device_allocation === "false" ? starterData.mac_address : starterData.pcb_number;
     const topic = `peepul/${macOrPcb}/cmd`;
     const payload = JSON.stringify(preparedData);
     mqttServiceInstance.publish(topic, payload);
+}
+export async function deviceSyncUpdate(message, topic) {
+    const macFromTopic = topic.split("/")[1];
+    try {
+        if (!macFromTopic) {
+            console.error("Invalid topic format: MAC/PCB not found");
+            return null;
+        }
+        if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
+            console.error(`Invalid message data in calibration ack [${message.D}]`);
+            return null;
+        }
+        // Match PCB/MAC and sequence number from pendingAckMap
+        const pendingAck = pendingAckMap.get(macFromTopic);
+        if (!pendingAck) {
+            logger.warn(`No pending ACK found for ${macFromTopic}`);
+            return null;
+        }
+        // Validate sequence number matches
+        if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
+            logger.warn(`Sequence number mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+            return null;
+        }
+        if (message.D === 1) {
+            // ACK success — resolve true so caller proceeds with DB update
+            pendingAck.resolve(true);
+            pendingAckMap.delete(macFromTopic);
+            logger.info(`Calibration ACK success for ${macFromTopic}`);
+            // Update DB: mark settings as acknowledged
+            const validMac = await getStarterByMacWithMotor(macFromTopic);
+            if (validMac?.id) {
+                await updateLatestStarterSettings(validMac.id, message.D);
+                if (validMac.synced_settings_status === "false") {
+                    await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
+                }
+            }
+        }
+        else {
+            // ACK failed (D === 0) — resolve false, do NOT update DB
+            pendingAck.resolve(false);
+            pendingAckMap.delete(macFromTopic);
+            logger.warn(`Calibration ACK failed (D=0) for ${macFromTopic}, skipping DB update`);
+        }
+    }
+    catch (error) {
+        // On error, reject the pending ACK so caller doesn't hang
+        const pendingAck = pendingAckMap.get(macFromTopic);
+        if (pendingAck) {
+            pendingAck.resolve(false);
+            pendingAckMap.delete(macFromTopic);
+        }
+        console.error("Error at device sync update (calibration ack):", error);
+        throw error;
+    }
 }
 export async function adminConfigDataRequestAckHandler(message, topic) {
     try {
@@ -500,13 +561,34 @@ export async function adminConfigDataRequestAckHandler(message, topic) {
         }
         // Update DB
         await updateLatestStarterSettings(validMac.id, message.D);
-        if (validMac &&
-            validMac.synced_settings_status === "false") {
+        if (validMac && validMac.synced_settings_status === "false") {
             await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
         }
     }
     catch (error) {
         console.error("Error at admin config ack handler:", error);
+        throw error;
+    }
+}
+export async function deviceResetAckHandler(message, topic) {
+    try {
+        const macFromTopic = topic.split("/")[1];
+        const validMac = await getStarterByMacWithMotor(macFromTopic);
+        if (!validMac?.id) {
+            console.error(`No starter found with given MAC [${topic}]`);
+            return null;
+        }
+        if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
+            console.error(`Invalid message data in admin config ack [${message.D}]`);
+            return null;
+        }
+        const updatedFields = { device_reset_status: message.D === 1 ? "true" : "false" };
+        const changedStatus = validMac.device_reset_status !== updatedFields.device_reset_status;
+        if (changedStatus)
+            await updateRecordById(starterBoxes, validMac.id, updatedFields);
+    }
+    catch (error) {
+        console.error("Error at device reset ack topic:", error);
         throw error;
     }
 }

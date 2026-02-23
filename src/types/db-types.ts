@@ -51,7 +51,7 @@ export type DBTableColumns<T extends DBTable> = keyof DBRecord<T>;
 
 export type SortDirection = "asc" | "desc";
 
-export type Relations = "=" | "!=" | "<" | "<=" | ">" | ">=" | "ILIKE" | "BETWEEN" | "IN" | "IS NULL" | "contains" | "or" | "LOWER";
+export type Relations = "=" | "!=" | "<" | "<=" | ">" | ">=" | "ILIKE" | "BETWEEN" | "IN" | "IS NULL" | "IS NOT NULL" | "contains" | "or" | "LOWER";
 
 export interface WhereQueryData<T extends DBTable> {
   columns: Array<keyof DBRecord<T>>;

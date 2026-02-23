@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, index, integer, jsonb, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
 import { userActivityLogs } from "./user-activity-logs.js";
 import { fields } from "./fields.js";

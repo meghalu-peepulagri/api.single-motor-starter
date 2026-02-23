@@ -56,6 +56,7 @@ export function findTopicACKByType(payload: any) {
     case 48: return "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK"
     case 49: return "BOOT_MANIFEST_ACK"
     case 50: return "TEMPERATURE_THRESHOLD_SETTING"
+    case 52: return "DEVICE_RESET_ACK"
 
     default: return "UNKNOWN";
   }

@@ -3,8 +3,6 @@ import factory from "../factory.js";
 import { MotorScheduleHandler } from "../handlers/motor-scheduling-handlers.js";
 import { isAuthorized } from "../middlewares/isAuthorized.js";
 
-
-
 const motorScheduleHandler = new MotorScheduleHandler();
 const motorScheduleRoute = factory.createApp();
 

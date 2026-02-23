@@ -13,6 +13,8 @@ import { getAcknowledgedStarterSettings, getStarterDefaultSettings, starterAckno
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { logger } from "../utils/logger.js";
+import { sql } from "drizzle-orm";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettingsHandler = async (c) => {
@@ -276,6 +278,21 @@ export class StarterDefaultSettingsHandlers {
         catch (error) {
             console.error("Error at update starter default settings limits:", error);
             handleJsonParseError(error);
+            throw error;
+        }
+    };
+    updateLatestSettingAckByStarterHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("starter_id");
+            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id"]);
+            if (!starterData)
+                throw new BadRequestException(DEVICE_NOT_FOUND);
+            await db.update(starterSettings).set({ acknowledgement: "TRUE", updated_at: sql `CURRENT_TIMESTAMP` }).where(sql `${starterSettings.id} = (SELECT ${starterSettings.id} FROM ${starterSettings} WHERE ${starterSettings.starter_id} = ${starterId} AND ${starterSettings.acknowledgement} = 'FALSE' ORDER BY ${starterSettings.created_at} DESC LIMIT 1)`);
+            return sendResponse(c, 200, "Settings updated successfully");
+        }
+        catch (error) {
+            logger.error("Error at updating latest starter setting acknowledgement updated_at:", error);
+            console.error("Error at updating latest starter setting acknowledgement updated_at:", error);
             throw error;
         }
     };

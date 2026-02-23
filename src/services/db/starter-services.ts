@@ -89,6 +89,9 @@ export async function getStarterByMacWithMotor(mac: string) {
       device_status: true,
       mac_address: true,
       pcb_number: true,
+      device_reset_status: true,
+      device_allocation: true,
+      allocation_status_count: true,
     },
     with: {
       motors: {
@@ -196,11 +199,13 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
     columns: {
       id: true,
       name: true,
+      mac_address: true,
       pcb_number: true,
       starter_number: true,
       power: true,
       signal_quality: true,
       network_type: true,
+      device_allocation: true,
     },
     with: {
       motors: {
@@ -355,6 +360,8 @@ export async function starterConnectedMotors(starterId: number) {
       device_allocation: true,
       device_mobile_number: true,
       synced_settings_status: true,
+      allocation_status_count: true,
+      device_reset_status: true,
     },
     with: {
       motors: {

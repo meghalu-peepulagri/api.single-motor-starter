@@ -1,22 +1,22 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
-import { type NewUserActivityLog } from "../database/schemas/user-activity-logs.js";
 import { users, type User, type UsersTable } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
+import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { starterFilters } from "../helpers/starter-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount } from "../services/db/alerts-services.js";
+import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsPaginated, getUnifiedLogsCount } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
@@ -90,6 +90,40 @@ export class StarterHandlers {
     } catch (error: any) {
       logger.error("Error at getConsecutiveAlertsFaultsHandler :", error);
       console.error("Error at getConsecutiveAlertsFaultsHandler :", error);
+      throw error;
+    }
+  }
+
+  getUnifiedLogsHandler = async (c: Context) => {
+    try {
+      const query = c.req.query();
+      const starterId = +c.req.param("starter_id");
+      const motorId = +c.req.param("motor_id");
+
+      paramsValidateException.validateId(starterId, "Starter id");
+      paramsValidateException.validateId(motorId, "Motor id");
+
+      const actionType = query.action_type as string || null;
+      const { page, pageSize, offset } = getPaginationOffParams(query);
+      const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
+      const assignedAtDate = assignedAt?.assigned_at ?? null;
+
+      const [data, totalRecords] = await Promise.all([
+        getUnifiedLogsPaginated(starterId, motorId, offset, pageSize, assignedAtDate, actionType),
+        getUnifiedLogsCount(starterId, motorId, assignedAtDate, actionType),
+      ]);
+
+      const paginationInfo = getPaginationData(page, pageSize, totalRecords);
+
+      const response = {
+        pagination: paginationInfo,
+        records: data || [],
+      };
+
+      return sendResponse(c, 200, "Logs fetched successfully", response);
+    } catch (error: any) {
+      logger.error("Error at getUnifiedLogsHandler :", error);
+      console.error("Error at getUnifiedLogsHandler :", error);
       throw error;
     }
   }
@@ -169,37 +203,31 @@ export class StarterHandlers {
     try {
       const userPayload = c.get("user_payload");
       const starterId = +c.req.param("id");
+      const isUser = userPayload.user_type === "USER";
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
-      const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
-      let message = "";
 
-      const activityLogs: NewUserActivityLog[] = [];
+      if (userPayload.user_type === "ADMIN" && starter.device_status !== "READY" && starter.device_status !== "TEST") {
+        throw new UnauthorizedException("Unauthorized");
+      }
+
+      const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+
       await db.transaction(async (trx) => {
-        if (userPayload.user_type === "USER") {
+        if (isUser) {
           await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
           await saveSingleRecord<MotorsTable>(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
+        } else {
+          await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
         }
-        if (userPayload.user_type === "ADMIN") {
-          await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, { user_id: null, status: "ARCHIVED", location_id: null }, trx);
-        }
+
         if (motor) {
           await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
         }
-
-        if (activityLogs.length > 0) {
-          await ActivityService.writeBatchDeletionLogs(activityLogs, trx);
-        }
       });
 
-      if (userPayload.user_type === "USER") {
-        message = STARTER_REMOVED_SUCCESS;
-      } else {
-        message = STARTER_BOX_DELETED_SUCCESSFULLY;
-      }
-
-      return sendResponse(c, 200, message);
+      return sendResponse(c, 200, isUser ? STARTER_REMOVED_SUCCESS : STARTER_BOX_DELETED_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at delete starter :", error);
       throw error;
@@ -540,25 +568,32 @@ export class StarterHandlers {
 
   updateDeviceAllocationHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const starterId = +c.req.param("id");
-      const body = await c.req.json();
-      const allocationStatus = body.allocation_status;
+      const { allocation_status: allocationStatus } = await c.req.json();
       paramsValidateException.validateId(starterId, "Device id");
-      if (!allocationStatus || (allocationStatus !== "true" && allocationStatus !== "false")) {
+
+      if (allocationStatus !== "true" && allocationStatus !== "false") {
         throw new BadRequestException("Invalid allocation status. It should be 'true' or 'false'.");
       }
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
-      await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus });
+      const currentCount = starter.allocation_status_count ?? 0;
+
+      if (userPayload.user_type !== "SUPER_ADMIN" && allocationStatus === "true" && starter.device_allocation === "false" && currentCount >= 1) {
+        throw new UnauthorizedException("Unauthorized");
+      }
+
+      const newCount = (allocationStatus === "true" && starter.device_allocation === "false") ? currentCount + 1 : currentCount;
+      await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount });
       return sendResponse(c, 200, "Device allocation status updated successfully");
     } catch (error: any) {
       console.error("Error at update device allocation status :", error);
       handleJsonParseError(error);
       parseDatabaseError(error);
       handleForeignKeyViolationError(error);
-      console.error("Error at update device allocation status :", error);
       throw error;
     }
   }
@@ -581,6 +616,62 @@ export class StarterHandlers {
 
     } catch (error: any) {
       console.error("Error at update settings sync status :", error);
+      throw error;
+    }
+  }
+
+  starterCountBasedOnStatusHandler = async (c: Context) => {
+    try {
+      const notArchived = ne(starterBoxes.status, "ARCHIVED");
+
+      const baseFilters = [notArchived];
+
+      const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
+        getRecordsCount(starterBoxes, [...baseFilters]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.status, "ACTIVE")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.power, 1)]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.power, 0)]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "READY")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "TEST")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "DEPLOYED")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "ASSIGNED")]),
+      ]);
+
+      return sendResponse(c, 200, "Starter count fetched successfully", {
+        total_devices: totalDevices,
+        active_count: activeCount,
+        power_on_count: powerOnCount,
+        power_off_count: powerOffCount,
+        ready_count: readyCount,
+        test_count: testCount,
+        deployed_count: deployedCount,
+        assigned_count: assignedCount,
+      });
+
+    } catch (error: any) {
+      logger.info("Error at starter count based on status :", error);
+      console.error("Error at starter count based on status :", error);
+      throw error;
+    }
+  }
+
+  deviceResetHandler = async (c: Context) => {
+    try {
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+      const body = await c.req.json();
+      const deviceResetStatus = body.device_reset_status;
+      if (!deviceResetStatus || (deviceResetStatus !== "true" && deviceResetStatus !== "false")) {
+        throw new BadRequestException("Invalid device reset status. It should be 'true' or 'false'.");
+      }
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_reset_status: deviceResetStatus });
+      return sendResponse(c, 200, DEVICE_RESET_SUCCESSFULLY);
+    } catch (error: any) {
+      console.error("Error at device reset handler :", error);
       throw error;
     }
   }

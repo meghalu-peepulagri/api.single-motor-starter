@@ -127,6 +127,20 @@
       "when": 1770818390860,
       "tag": "0017_cynical_victor_mancha",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1771231389120,
+      "tag": "0018_modern_gravity",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1771326114243,
+      "tag": "0019_chunky_crusher_hogan",
+      "breakpoints": true
     }
   ]
 }
