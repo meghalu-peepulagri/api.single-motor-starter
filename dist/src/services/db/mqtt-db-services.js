@@ -395,8 +395,7 @@ export async function motorControlAckHandler(message, topic) {
                 await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
             }
             // Always log ACK (changed or not)
-            if (motor.created_by)
-                await ActivityService.writeMotorAckLogs(motor.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+            await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
             return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id) : null;
         });
         // Send notification after transaction completes
@@ -427,8 +426,7 @@ export async function motorModeChangeAckHandler(message, topic) {
                     await trx.update(motors).set({ mode: mode, updated_at: new Date() }).where(eq(motors.id, motor.id));
                 }
             }
-            if (motor.created_by)
-                await ActivityService.writeMotorAckLogs(motor.created_by, motor.id, { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, validMac.id);
+            await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, validMac.id);
         });
         const modeChanged = mode !== motor.mode;
         const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, validMac.id) : null;
