@@ -225,8 +225,7 @@ export function prepareMotorModeControlNotificationData(motor: any, mode_descrip
 
   // Prepare notification message
   const messageContent = (mode_description === "MANUAL" || mode_description === "AUTO")
-    ? `Mode updated from '${motor.mode}' to '${mode_description}'`
-    : `Mode not updated due to '${mode_description}'`;
+    ? `Mode updated from '${motor.mode}' to '${mode_description}'` : `Mode not updated due to '${mode_description}'`;
 
   // Check if user exists (allow 0 as valid user ID)
   if (motor.created_by !== null && motor.created_by !== undefined) {
