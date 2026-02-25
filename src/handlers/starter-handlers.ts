@@ -587,6 +587,7 @@ export class StarterHandlers {
       }
 
       const newCount = (allocationStatus === "true" && starter.device_allocation === "false") ? currentCount + 1 : currentCount;
+
       await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount });
       return sendResponse(c, 200, "Device allocation status updated successfully");
     } catch (error: any) {

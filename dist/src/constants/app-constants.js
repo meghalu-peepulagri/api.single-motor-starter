@@ -108,6 +108,7 @@ export const REFEREED_BY_REQUIRED = "Refereed by is invalid";
 export const MOBILE_NUMBER_ALREADY_EXIST = "Mobile number already exist";
 export const MOBILE_NUMBER_UNIQUE = "Mobile numbers cannot be the same";
 export const LOGGED_OUT = "User logged out successfully";
+export const USER_DETAILS_WITH_LOCATIONS_FETCHED = "User details with locations fetched successfully";
 export const SIM_NUMBER_REQUIRED = "Sim Number is required";
 export const INVALID_SIM_NUMBER = "Invalid Sim Number(digits only)";
 export const INVALID_SIM = "Invalid Sim Number";
