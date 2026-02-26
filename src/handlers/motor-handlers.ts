@@ -77,7 +77,6 @@ export class MotorHandlers {
       if (existedMotor) throw new ConflictException(MOTOR_NAME_EXISTED);
 
       const device = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [motor.starter_id, "ARCHIVED"]);
-
       const notificationData = await db.transaction(async (trx) => {
         const updatePayload: any = { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() };
         if (validMotorReq.state !== undefined) updatePayload.state = validMotorReq.state;
