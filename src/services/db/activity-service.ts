@@ -355,4 +355,29 @@ export class ActivityService {
     });
     await this.saveActivityLogs([log], trx);
   }
+
+  /**
+   * Logs a device allocation event (Allocated / Deallocated / Reallocated)
+   */
+  static async writeDeviceAllocationLog(
+    userId: number,
+    starterId: number,
+    allocationAction: "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED",
+    oldData: { device_allocation: string; allocation_status_count: number },
+    newData: { device_allocation: string; allocation_status_count: number },
+    message: string,
+    trx?: Transaction
+  ) {
+    const log = prepareActionLog({
+      userId,
+      action: allocationAction,
+      entityType: "STARTER",
+      entityId: starterId,
+      deviceId: starterId,
+      oldData,
+      newData,
+      message
+    });
+    await this.saveActivityLogs([log], trx);
+  }
 }

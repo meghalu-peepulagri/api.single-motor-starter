@@ -256,7 +256,7 @@ export function prepareDeletionLog(data: {
  */
 export function prepareActionLog(data: {
   userId: number;
-  action: "MOTOR_ADDED" | "STARTER_ASSIGNED" | "LOCATION_REPLACED" | "LOCATION_ADDED" | "LOCATION_RENAMED" | "MOTOR_TEST_RUN_STATUS_UPDATED";
+  action: "MOTOR_ADDED" | "STARTER_ASSIGNED" | "LOCATION_REPLACED" | "LOCATION_ADDED" | "LOCATION_RENAMED" | "MOTOR_TEST_RUN_STATUS_UPDATED" | "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED";
   entityType: "MOTOR" | "STARTER" | "LOCATION";
   entityId: number;
   deviceId?: number;
