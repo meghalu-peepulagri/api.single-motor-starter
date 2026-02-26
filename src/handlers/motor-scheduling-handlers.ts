@@ -124,7 +124,6 @@ export class MotorScheduleHandler {
           scheduleId,
           validatedReqData.days_of_week ?? ""
         );
-
         await checkMotorScheduleConflict(validatedReqData, existingMotorSchedule);
       }
 
