@@ -66,6 +66,7 @@ export class MotorHandlers {
             const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
             if (existedMotor)
                 throw new ConflictException(MOTOR_NAME_EXISTED);
+            const device = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [motor.starter_id, "ARCHIVED"]);
             const notificationData = await db.transaction(async (trx) => {
                 const updatePayload = { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() };
                 if (validMotorReq.state !== undefined)
@@ -78,8 +79,9 @@ export class MotorHandlers {
                 const hasStateChanged = updatedMotor.state !== undefined && updatedMotor.state !== motor.state;
                 const hasModeChanged = updatedMotor.mode !== undefined && updatedMotor.mode !== motor.mode;
                 const mode = updatedMotor.mode || motor.mode || "";
-                const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, updatedMotor.state, mode, starterId) : null;
-                const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, updatedMotor.mode, starterId) : null;
+                const starterNumber = device ? device.starter_number : "";
+                const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, updatedMotor.state, mode, starterId, starterNumber) : null;
+                const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, updatedMotor.mode, starterId, starterNumber) : null;
                 return { notificationDataState, notificationDataMode };
             });
             if (notificationData.notificationDataState) {
