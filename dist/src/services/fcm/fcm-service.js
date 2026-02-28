@@ -55,8 +55,6 @@ async function handleInvalidDeviceToken(token) {
     }
 }
 export async function sendUserNotification(userId, title, message, id, starterId) {
-    console.log('message: ', message);
-    console.log('title: ', title);
     const tokensData = await getMultipleRecordsByMultipleColumnValues(deviceTokens, ["user_id", "status"], ["=", "="], [userId, "ACTIVE"], ["device_token"]);
     if (!tokensData || tokensData.length === 0)
         return;

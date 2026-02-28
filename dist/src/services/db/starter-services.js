@@ -304,6 +304,8 @@ export async function starterConnectedMotors(starterId) {
             synced_settings_status: true,
             allocation_status_count: true,
             device_reset_status: true,
+            sim_recharge_expires_at: true,
+            hardware_version: true,
         },
         with: {
             motors: {
