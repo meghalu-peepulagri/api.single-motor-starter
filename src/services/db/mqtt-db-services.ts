@@ -764,7 +764,7 @@ export async function deviceInfoAckHandler(message: any, topic: string) {
       updatedFields.hardware_version = message.D.fw;
     }
 
-    if (message.D.val && message.D.val !== validMac.sim_recharge_expires_at) {
+    if (message.D.val && message.D.val !== validMac.sim_recharge_expires_at && !isNaN(new Date(message.D.val).getTime())) {
       updatedFields.sim_recharge_expires_at = message.D.val;
     }
 
