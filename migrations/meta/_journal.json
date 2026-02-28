@@ -141,6 +141,13 @@
       "when": 1771326114243,
       "tag": "0019_chunky_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1772252541379,
+      "tag": "0020_open_captain_flint",
+      "breakpoints": true
     }
   ]
 }
