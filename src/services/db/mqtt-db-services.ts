@@ -75,6 +75,9 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
     case "DEVICE_RESET_ACK":
       await deviceResetAckHandler(payload, topic);
       break;
+    case "DEVICE_INFO_ACK":
+      await deviceInfoAckHandler(payload, topic);
+      break;
 
     default:
       return null;
@@ -737,6 +740,43 @@ export async function deviceResetAckHandler(message: any, topic: string) {
     if (changedStatus) await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, updatedFields);
   } catch (error: any) {
     console.error("Error at device reset ack topic:", error);
+    throw error;
+  }
+}
+
+export async function deviceInfoAckHandler(message: any, topic: string) {
+  try {
+    const macFromTopic = topic.split("/")[1];
+    const validMac = await getStarterByMacWithMotor(macFromTopic);
+    if (!validMac?.id) {
+      console.error(`No starter found with given MAC [${topic}]`);
+      return null;
+    }
+
+    if (!message.D) {
+      console.error(`Invalid message data in device info ack`);
+      return null;
+    }
+
+    const updatedFields: Record<string, any> = {};
+
+    if (message.D.fw && message.D.fw !== validMac.hardware_version) {
+      updatedFields.hardware_version = message.D.fw;
+    }
+
+    if (message.D.val && message.D.val !== validMac.sim_recharge_expires_at && !isNaN(new Date(message.D.val).getTime())) {
+      updatedFields.sim_recharge_expires_at = message.D.val;
+    }
+
+    if (message.D.sim_num && message.D.sim_num !== validMac.device_mobile_number) {
+      updatedFields.device_mobile_number = message.D.sim_num;
+    }
+
+    if (Object.keys(updatedFields).length > 0) {
+      await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, updatedFields);
+    }
+  } catch (error: any) {
+    console.error("Error at device info ack handler:", error);
     throw error;
   }
 }

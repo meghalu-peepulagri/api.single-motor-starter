@@ -17,6 +17,7 @@ starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWe
 starterRoutes.patch("/assign-location", isAuthorized, starterHandlers.assignLocationToStarterHandler);
 starterRoutes.patch("/replace", isAuthorized, starterHandlers.replaceStarterLocationHandler);
 starterRoutes.patch("/update-status", starterHandlers.markStarterStatusHandler);
+starterRoutes.get("/sim-recharge-expiry-notifications", starterHandlers.simRechargeExpiryNotificationHandler);
 starterRoutes.get("/latest-pcb-number", isAuthorized, starterHandlers.getLatestPcbNumberHandler);
 
 starterRoutes.get("/:id/run-time", isAuthorized, starterHandlers.starterRunTimeHandler);

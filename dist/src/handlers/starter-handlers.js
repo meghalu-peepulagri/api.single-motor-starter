@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
 import { gateways } from "../database/schemas/gateways.js";
@@ -22,6 +22,7 @@ import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStart
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
+import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
@@ -606,6 +607,69 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at device reset handler :", error);
+            throw error;
+        }
+    };
+    simRechargeExpiryNotificationHandler = async (c) => {
+        try {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            // Fetch all assigned starters with motor alias_name via left join
+            const starters = await db.select({
+                id: starterBoxes.id,
+                starter_number: starterBoxes.starter_number,
+                sim_recharge_expires_at: starterBoxes.sim_recharge_expires_at,
+                motor_alias_name: motors.alias_name,
+                motor_created_by: motors.created_by,
+                created_by: starterBoxes.created_by
+            }).from(starterBoxes)
+                .leftJoin(motors, and(eq(motors.starter_id, starterBoxes.id), ne(motors.status, "ARCHIVED")))
+                .where(and(ne(starterBoxes.status, "ARCHIVED"), isNotNull(starterBoxes.sim_recharge_expires_at)));
+            let notificationsSent = 0;
+            for (const starter of starters) {
+                if (!starter.sim_recharge_expires_at || !starter.created_by)
+                    continue;
+                // Parse date format "16 FEB 2025" (case-insensitive)
+                const monthMap = {
+                    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+                    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+                };
+                const parts = starter.sim_recharge_expires_at.trim().split(/\s+/);
+                const day = parseInt(parts[0], 10);
+                const month = monthMap[parts[1]?.toLowerCase()];
+                const year = parseInt(parts[2], 10);
+                const expiryDate = (parts.length === 3 && !isNaN(day) && month !== undefined && !isNaN(year)) ? new Date(year, month, day) : new Date(starter.sim_recharge_expires_at);
+                if (isNaN(expiryDate.getTime())) {
+                    continue;
+                }
+                expiryDate.setHours(0, 0, 0, 0);
+                const diffTime = expiryDate.getTime() - today.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                const deviceName = starter.motor_alias_name ?? starter.starter_number;
+                const userId = starter.motor_created_by ?? starter.created_by;
+                let title = "";
+                let message = "";
+                if (diffDays === 3) {
+                    title = `SIM Recharge Expiring Soon - ${deviceName}`;
+                    message = `Your SIM recharge for device ${deviceName} expires in 3 days (${starter.sim_recharge_expires_at}). Please recharge soon.`;
+                }
+                else if (diffDays === 2) {
+                    title = `SIM Recharge Expiring Soon - ${deviceName}`;
+                    message = `Your SIM recharge for device ${deviceName} expires in 2 days (${starter.sim_recharge_expires_at}). Please recharge soon.`;
+                }
+                else if (diffDays === 1) {
+                    title = `SIM Recharge Expiring Tomorrow - ${deviceName}`;
+                    message = `Your SIM recharge for device ${deviceName} expires tomorrow (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
+                }
+                if (title && userId) {
+                    await sendUserNotification(userId, title, message, starter.id, starter.id);
+                    notificationsSent++;
+                }
+            }
+            return sendResponse(c, 200, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, { notifications_sent: notificationsSent });
+        }
+        catch (error) {
+            console.error("Error at sim recharge expiry notification handler :", error);
             throw error;
         }
     };
