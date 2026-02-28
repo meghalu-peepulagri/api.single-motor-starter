@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, numeric, pgEnum, pgTable, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, numeric, pgEnum, pgTable, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { statusEnum } from "../../constants/enum-types.js";
 import { locations } from "./locations.js";
 import { starterBoxes } from "./starter-boxes.js";
@@ -21,6 +21,7 @@ export const motors = pgTable("motors", {
   starter_id: integer("starter_id").references(() => starterBoxes.id),
   status: statusEnum().default("ACTIVE"),
   test_run_status: testRunStatusEnum().default("IN_TEST"),
+  is_stopped_by_mobile: boolean("is_stopped_by_mobile").default(false),
   created_at: timestamp("created_at").notNull().defaultNow(),
   assigned_at: timestamp("assigned_at"),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),

@@ -1,0 +1,1 @@
+ALTER TABLE "motors" ADD COLUMN "is_stopped_by_mobile" boolean DEFAULT false;
