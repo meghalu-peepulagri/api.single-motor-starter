@@ -82,6 +82,48 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
 
 }
 
+type PublishedTopicTypes = "MOTOR_CONTROL_PUB";
+
+export async function selectTopicPub(topicType: PublishedTopicTypes, payload: unknown, topic: string) {
+  switch (topicType) {
+    case "MOTOR_CONTROL_PUB": {
+      await motorControlPubHandler(payload, topic);
+      break;
+    }
+    default: {
+      const _: never = topicType;
+      return;
+    }
+  }
+}
+
+export async function motorControlPubHandler(payload: unknown, topic: string) {
+  try {
+    const macAddress = topic.split("/")[1];
+    if (!macAddress) {
+      logger.warn("motorControlPubHandler: MAC address not found in topic", { topic });
+      return;
+    }
+
+    if (!payload || typeof payload !== "object" || !("D" in payload)) return;
+
+    const data = payload as { D: unknown };
+    if (data.D !== 0) return; // only track OFF commands
+
+    const validMac = await getStarterByMacWithMotor(macAddress);
+    if (!validMac?.id || !validMac.motors?.length) {
+      logger.warn(`motorControlPubHandler: No starter found for MAC [${macAddress}]`);
+      return;
+    }
+
+    const motor = validMac.motors[0];
+    await updateRecordById<MotorsTable>(motors, motor.id, { is_stopped_by_mobile: true });
+    logger.info(`is_stopped_by_mobile set to true for motor [${motor.id}]`);
+  } catch (error: any) {
+    logger.error("Error in motorControlPubHandler", error);
+    throw error;
+  }
+}
 
 const VALID_MODES = ["AUTO", "MANUAL"] as const;
 type ValidMode = typeof VALID_MODES[number];

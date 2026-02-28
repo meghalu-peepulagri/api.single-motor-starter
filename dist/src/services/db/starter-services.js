@@ -81,11 +81,13 @@ export async function getStarterByMacWithMotor(mac) {
                 columns: {
                     id: true,
                     name: true,
+                    alias_name: true,
                     hp: true,
                     state: true,
                     mode: true,
                     location_id: true,
-                    created_by: true
+                    created_by: true,
+                    is_stopped_by_mobile: true,
                 },
             },
         },

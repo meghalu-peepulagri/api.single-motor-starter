@@ -75,6 +75,44 @@ export async function selectTopicAck(topicType, payload, topic) {
             return null;
     }
 }
+export async function selectTopicPub(topicType, payload, topic) {
+    switch (topicType) {
+        case "MOTOR_CONTROL_PUB": {
+            await motorControlPubHandler(payload, topic);
+            break;
+        }
+        default: {
+            const _ = topicType;
+            return;
+        }
+    }
+}
+export async function motorControlPubHandler(payload, topic) {
+    try {
+        const macAddress = topic.split("/")[1];
+        if (!macAddress) {
+            logger.warn("motorControlPubHandler: MAC address not found in topic", { topic });
+            return;
+        }
+        if (!payload || typeof payload !== "object" || !("D" in payload))
+            return;
+        const data = payload;
+        if (data.D !== 0)
+            return; // only track OFF commands
+        const validMac = await getStarterByMacWithMotor(macAddress);
+        if (!validMac?.id || !validMac.motors?.length) {
+            logger.warn(`motorControlPubHandler: No starter found for MAC [${macAddress}]`);
+            return;
+        }
+        const motor = validMac.motors[0];
+        await updateRecordById(motors, motor.id, { is_stopped_by_mobile: true });
+        logger.info(`is_stopped_by_mobile set to true for motor [${motor.id}]`);
+    }
+    catch (error) {
+        logger.error("Error in motorControlPubHandler", error);
+        throw error;
+    }
+}
 const VALID_MODES = ["AUTO", "MANUAL"];
 export async function updateStates(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;

@@ -62,7 +62,16 @@ export function findTopicACKByType(payload: any) {
   }
 }
 
-
+export function findTopicByPublishType(payload : unknown){
+  if(!payload || typeof payload !== "object" || !( 'T' in payload)){
+    return ;
+  }
+  const type = payload.T;
+  switch(type) {
+    case 1 : return "MOTOR_CONTROL_PUB";
+    default : return null;
+  }
+}
 
 export function getPacketDescription(code: number): string {
   switch (code) {

@@ -5,10 +5,9 @@ const { clientId, brokerUrl, username, password } = mqttConfig;
 import type { MqttClient } from "mqtt";
 
 import mqtt from "mqtt";
-import { findTopicACKByType } from "../helpers/packet-types-helper.js";
-import { selectTopicAck } from "./db/mqtt-db-services.js";
+import { findTopicACKByType, findTopicByPublishType } from "../helpers/packet-types-helper.js";
 import { logger } from "../utils/logger.js";
-import type { preparedLiveData } from "../types/app-types.js";
+import { selectTopicAck, selectTopicPub } from "./db/mqtt-db-services.js";
 
 export class MqttService {
   private client: MqttClient | null = null;
@@ -50,7 +49,8 @@ export class MqttService {
 
     this.client.on("connect", () => {
       this.subscribe([
-        "peepul/+/status"
+        "peepul/+/status",
+        "peepul/+/cmd"
       ]);
     });
 
@@ -92,10 +92,17 @@ export class MqttService {
       const parsedMessage: any = message;
 
       switch (true) {
-        case /^peepul\/[^/]+\/status$/.test(topic):
+        case /^peepul\/[^/]+\/status$/.test(topic): {
           const topicType = findTopicACKByType(parsedMessage);
           await selectTopicAck(topicType, message, topic);
           break;
+        }
+        case /^peepul\/[^/]+\/cmd$/.test(topic): {
+          const topicType = findTopicByPublishType(parsedMessage);
+          if (!topicType) return;
+          await selectTopicPub(topicType, parsedMessage, topic);
+          break;
+        }
 
         default:
           logger.warn("No matching topic handler found.", { topic });

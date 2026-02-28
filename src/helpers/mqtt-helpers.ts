@@ -1,4 +1,7 @@
 import { DEVICE_SCHEMA } from "../constants/app-constants.js";
+import { motors } from "../database/schemas/motors.js";
+import { updateRecordById } from "../services/db/base-db-services.js";
+import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import type { RetryOptions } from "../types/app-types.js";
@@ -37,6 +40,30 @@ export async function liveDataHandler(parsedMessage: any, topic: string) {
 
     // Save final payload
     await saveLiveDataTopic(prepared, prepared.group_id, validMac);
+
+    // Manual override detection: motor stopped (m_s=0) — check who stopped it
+    if (prepared.motor_state === 0) {
+      const motor = validMac.motors?.[0];
+      if (motor) {
+        if (motor.is_stopped_by_mobile === true) {
+          // App commanded stop is confirmed — clear the flag, no notification needed
+          await updateRecordById(motors, motor.id, { is_stopped_by_mobile: false });
+        } else {
+          // Motor stopped but NOT by mobile app → Manual Override
+          const pumpName = motor.alias_name ?? validMac.starter_number;
+          const userId = motor.created_by;
+          if (userId != null) {
+            await sendUserNotification(
+              userId,
+              `Manual Override Detected`,
+              `${pumpName} was stopped manually or externally`,
+              motor.id,
+              validMac.id
+            );
+          }
+        }
+      }
+    }
   }
   catch (err: any) {
     logger.error("Error at live data topic handler", err);

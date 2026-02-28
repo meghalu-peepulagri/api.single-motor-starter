@@ -55,6 +55,16 @@ export function findTopicACKByType(payload) {
         default: return "UNKNOWN";
     }
 }
+export function findTopicByPublishType(payload) {
+    if (!payload || typeof payload !== "object" || !('T' in payload)) {
+        return;
+    }
+    const type = payload.T;
+    switch (type) {
+        case 1: return "MOTOR_CONTROL_PUB";
+        default: return null;
+    }
+}
 export function getPacketDescription(code) {
     switch (code) {
         // ACK TYPES
