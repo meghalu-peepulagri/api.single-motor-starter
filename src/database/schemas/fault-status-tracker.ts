@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, pgEnum, pgTable, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { motors } from "./motors.js";
 import { starterBoxes } from "./starter-boxes.js";
 import { users } from "./users.js";
@@ -24,6 +24,10 @@ export const faultStatusTracker = pgTable("fault_status_tracker", {
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
   index("fst_motor_type_status_idx").on(table.motor_id, table.type, table.status),
+  // Prevent duplicate active/detected records for the same motor + fault bit
+  uniqueIndex("fst_active_fault_unique")
+    .on(table.motor_id, table.type, table.fault_code)
+    .where(sql`${table.status} IN ('DETECTED', 'ACTIVE')`),
 ]);
 
 export type FaultStatusTracker = typeof faultStatusTracker.$inferSelect;

@@ -14,8 +14,16 @@ const FAULT_BITS = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x100, 0x200
 export async function processFaultBitmask(params) {
     const { fault, motor_id, starter_id, user_id, pump_name } = params;
     const now = new Date();
-    // 1 SELECT — fetch all currently tracked faults for this motor
-    const existingRecords = await db.select()
+    // 1 SELECT — only fetch columns actually needed (Fix 1: column projection)
+    const existingRecords = await db.select({
+        id: faultStatusTracker.id,
+        fault_code: faultStatusTracker.fault_code,
+        status: faultStatusTracker.status,
+        first_detected_at: faultStatusTracker.first_detected_at,
+        last_notified_at: faultStatusTracker.last_notified_at,
+        fault_description: faultStatusTracker.fault_description,
+        motor_id: faultStatusTracker.motor_id,
+    })
         .from(faultStatusTracker)
         .where(and(eq(faultStatusTracker.motor_id, motor_id), eq(faultStatusTracker.type, "FAULT"), inArray(faultStatusTracker.status, ["DETECTED", "ACTIVE"])));
     // Early exit: no active faults and nothing tracked — most common case
@@ -26,17 +34,21 @@ export async function processFaultBitmask(params) {
     for (const bit of FAULT_BITS) {
         const existing = existingMap.get(bit) ?? null;
         if ((fault & bit) === bit) {
-            // This fault bit is active — detect or escalate
             writes.push(onFaultActive(bit, existing, { motor_id, starter_id, user_id, pump_name }, now));
         }
         else if (existing) {
-            // This fault bit is gone and we have a tracked record — clear it
             writes.push(onFaultCleared(existing, now));
         }
         // else: bit not active and no record → nothing to do
     }
-    if (writes.length > 0) {
-        await Promise.all(writes);
+    if (writes.length === 0)
+        return;
+    // Promise.allSettled — each bit is independent; one failure must not block others
+    const results = await Promise.allSettled(writes);
+    for (const result of results) {
+        if (result.status === "rejected") {
+            logger.error("[FaultTracker] A fault bit operation failed", result.reason);
+        }
     }
 }
 async function onFaultActive(fault_code, existing, ctx, now) {
@@ -44,13 +56,14 @@ async function onFaultActive(fault_code, existing, ctx, now) {
     try {
         if (!existing) {
             // First time this fault bit seen — start debounce window
+            // onConflictDoNothing prevents duplicate inserts under concurrent packets
             const fault_description = getFaultDescription(fault_code);
             await db.insert(faultStatusTracker).values({
                 motor_id, starter_id, user_id, fault_code, fault_description,
                 type: "FAULT",
                 status: "DETECTED",
                 first_detected_at: now,
-            });
+            }).onConflictDoNothing();
             logger.info(`[FaultTracker] DETECTED: "${fault_description}" for motor ${motor_id}`);
             return;
         }
@@ -58,16 +71,18 @@ async function onFaultActive(fault_code, existing, ctx, now) {
             const ageMs = now.getTime() - new Date(existing.first_detected_at).getTime();
             if (ageMs < DEBOUNCE_MS)
                 return; // still within debounce window
-            // Debounce passed — promote to ACTIVE, send first notification
+            // Debounce passed — send notification first, then promote to ACTIVE
+            // (notification before DB update: if FCM fails, DB stays DETECTED and retries next packet)
             const fault_description = getFaultDescription(fault_code);
-            const suffix = getFaultSuffix(fault_code);
+            if (user_id != null) {
+                // Fix 3: getFaultSuffix only computed when user_id exists (notification will actually be sent)
+                const suffix = getFaultSuffix(fault_code);
+                await sendUserNotification(user_id, `Unstable ${fault_description} Detected at ${pump_name}`, `${fault_description} is persisting for over 2 minutes at ${pump_name} – ${suffix}`, motor_id, starter_id);
+            }
             await db.update(faultStatusTracker)
                 .set({ status: "ACTIVE", notified_at: now, last_notified_at: now, updated_at: now })
                 .where(eq(faultStatusTracker.id, existing.id));
             logger.info(`[FaultTracker] ACTIVE (2min passed): "${fault_description}" for motor ${motor_id}`);
-            if (user_id != null) {
-                await sendUserNotification(user_id, `Unstable ${fault_description} Detected at ${pump_name}`, `${fault_description} is persisting for over 2 minutes at ${pump_name} – ${suffix}`, motor_id, starter_id);
-            }
             return;
         }
         if (existing.status === "ACTIVE") {
@@ -78,16 +93,19 @@ async function onFaultActive(fault_code, existing, ctx, now) {
             const sinceLastMs = now.getTime() - new Date(existing.last_notified_at).getTime();
             if (sinceLastMs < REPEAT_MS)
                 return; // not yet time for repeat
+            // Send repeat notification first, then update last_notified_at
+            // (notification before DB update: if FCM fails, timer stays unchanged and retries next packet)
             const fault_description = getFaultDescription(fault_code);
-            const suffix = getFaultSuffix(fault_code);
             const durationMin = Math.floor((now.getTime() - new Date(existing.first_detected_at).getTime()) / 60000);
+            if (user_id != null) {
+                // Fix 3: getFaultSuffix only computed when user_id exists (notification will actually be sent)
+                const suffix = getFaultSuffix(fault_code);
+                await sendUserNotification(user_id, `${fault_description} ongoing at ${pump_name}`, `${fault_description} active for ${durationMin} minutes at ${pump_name} – ${suffix}`, motor_id, starter_id);
+            }
             await db.update(faultStatusTracker)
                 .set({ last_notified_at: now, updated_at: now })
                 .where(eq(faultStatusTracker.id, existing.id));
             logger.info(`[FaultTracker] REPEAT: "${fault_description}" for motor ${motor_id}, ${durationMin}min`);
-            if (user_id != null) {
-                await sendUserNotification(user_id, `${fault_description} ongoing at ${pump_name}`, `${fault_description} active for ${durationMin} minutes at ${pump_name} – ${suffix}`, motor_id, starter_id);
-            }
         }
     }
     catch (error) {
