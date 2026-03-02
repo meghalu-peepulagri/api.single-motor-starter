@@ -21,6 +21,7 @@ export const motors = pgTable("motors", {
     status: statusEnum().default("ACTIVE"),
     test_run_status: testRunStatusEnum().default("IN_TEST"),
     is_stopped_by_mobile: boolean("is_stopped_by_mobile").default(false),
+    is_started_by_mobile: boolean("is_started_by_mobile").default(false),
     created_at: timestamp("created_at").notNull().defaultNow(),
     assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),

@@ -46,12 +46,13 @@ export async function liveDataHandler(parsedMessage: any, topic: string) {
       const motor = validMac.motors?.[0];
       if (motor) {
         if (motor.is_stopped_by_mobile === true) {
-          // App commanded stop is confirmed — clear the flag, no notification needed
-          await updateRecordById(motors, motor.id, { is_stopped_by_mobile: false });
-        } else {
-          // Motor stopped but NOT by mobile app → Manual Override
+          // Case 1: App commanded stop confirmed — clear both flags, no notification
+          await updateRecordById(motors, motor.id, { is_stopped_by_mobile: false, is_started_by_mobile: false });
+        } else if (motor.is_started_by_mobile === true) {
+          // Case 2: App turned it ON, local person turned it OFF → Manual Override
           const pumpName = motor.alias_name ?? validMac.starter_number;
           const userId = motor.created_by;
+          await updateRecordById(motors, motor.id, { is_started_by_mobile: false });
           if (userId != null) {
             await sendUserNotification(
               userId,
@@ -62,6 +63,7 @@ export async function liveDataHandler(parsedMessage: any, topic: string) {
             );
           }
         }
+        // Case 3: Purely physical (no app involved) — nothing to do
       }
     }
   }

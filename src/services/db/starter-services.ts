@@ -107,6 +107,7 @@ export async function getStarterByMacWithMotor(mac: string) {
           location_id: true,
           created_by: true,
           is_stopped_by_mobile: true,
+          is_started_by_mobile: true,
         },
       },
     },

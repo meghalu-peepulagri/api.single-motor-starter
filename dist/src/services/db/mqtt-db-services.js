@@ -97,16 +97,22 @@ export async function motorControlPubHandler(payload, topic) {
         if (!payload || typeof payload !== "object" || !("D" in payload))
             return;
         const data = payload;
-        if (data.D !== 0)
-            return; // only track OFF commands
+        if (data.D !== 0 && data.D !== 1)
+            return; // only track ON/OFF commands
         const validMac = await getStarterByMacWithMotor(macAddress);
         if (!validMac?.id || !validMac.motors?.length) {
             logger.warn(`motorControlPubHandler: No starter found for MAC [${macAddress}]`);
             return;
         }
         const motor = validMac.motors[0];
-        await updateRecordById(motors, motor.id, { is_stopped_by_mobile: true });
-        logger.info(`is_stopped_by_mobile set to true for motor [${motor.id}]`);
+        if (data.D === 1) {
+            await updateRecordById(motors, motor.id, { is_started_by_mobile: true });
+            logger.info(`is_started_by_mobile set to true for motor [${motor.id}]`);
+        }
+        else {
+            await updateRecordById(motors, motor.id, { is_stopped_by_mobile: true });
+            logger.info(`is_stopped_by_mobile set to true for motor [${motor.id}]`);
+        }
     }
     catch (error) {
         logger.error("Error in motorControlPubHandler", error);
