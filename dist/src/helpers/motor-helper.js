@@ -179,6 +179,27 @@ export function prepareMotorStateControlNotificationData(motor, newState, mode_d
     }
     return null;
 }
+export function preparePowerNotificationData(motor, power_present, previous_power, starter_id, starter_number, created_by, device_created_by) {
+    if (power_present === null || (power_present !== 0 && power_present !== 1))
+        return null;
+    if (previous_power === power_present)
+        return null;
+    const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
+    const title = power_present === 1 ? `Power Restored at ${pumpName}` : `Power Loss at ${pumpName}`;
+    const messageContent = power_present === 1 ? `Power has been restored at ${pumpName}` : `Power loss detected at ${pumpName}`;
+    const userId = created_by ?? device_created_by;
+    if (userId !== null && userId !== undefined) {
+        return {
+            userId,
+            title,
+            message: messageContent,
+            motorId: motor.id,
+            starterId: starter_id,
+            starterNumber: starter_number,
+        };
+    }
+    return null;
+}
 export function prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) {
     const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
     const title = mode_description === "MANUAL" || mode_description === "AUTO" ? `Pump ${pumpName} mode updated to from ${motor.mode} to ${mode_description}`

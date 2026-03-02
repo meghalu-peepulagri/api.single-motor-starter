@@ -7,7 +7,7 @@ import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../datab
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
 import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { controlMode } from "../../helpers/control-helpers.js";
-import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
+import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, preparePowerNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
@@ -177,15 +177,15 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
 
       // Prepare alert and fault notifications only when they exist
-      let notificationDataAlert = null;
+      // let notificationDataAlert = null;
       let notificationDataFault = null;
 
-      if (created_by && alert_description && motor_id && alert_code !== 0) {
-        notificationDataAlert = {
-          userId: created_by, title: `${pumpName} Alert Detected`,
-          message: alert_description, motorId: motor_id, starter_id: starter_id
-        };
-      }
+      // if (created_by && alert_description && motor_id && alert_code !== 0) {
+      //   notificationDataAlert = {
+      //     userId: created_by, title: `${pumpName} Alert Detected`,
+      //     message: alert_description, motorId: motor_id, starter_id: starter_id
+      //   };
+      // }33
 
       if (fault_description && created_by && motor_id && fault !== 0) {
         notificationDataFault = {
@@ -194,11 +194,18 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
         };
       }
 
-      const notificationData = { notificationDataState, notificationDataMode, notificationDataAlert, notificationDataFault };
+      const notificationDataPower = trackPowerChange ? preparePowerNotificationData(motor, power_present, power, starter_id, starter_number, created_by, device_created_by) : null;
+
+      const notificationData = { notificationDataState, notificationDataMode, notificationDataFault, notificationDataPower };
       return notificationData;
     });
 
     // Send notification after transaction completes
+    // power notification
+    if (notificationData.notificationDataPower) {
+      const powerNotificationData = notificationData.notificationDataPower;
+      await sendUserNotification(powerNotificationData.userId, powerNotificationData.title, powerNotificationData.message, powerNotificationData.motorId, powerNotificationData.starterId);
+    }
     // state notification
     if (notificationData.notificationDataState) {
       const stateNotoificatioData = notificationData.notificationDataState;
@@ -210,10 +217,11 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId, modeNotificationData.starterId);
     }
     // alert notification
-    if (notificationData.notificationDataAlert) {
-      const alertNotificationData = notificationData.notificationDataAlert;
-      await sendUserNotification(alertNotificationData.userId, alertNotificationData.title, alertNotificationData.message, alertNotificationData.motorId, alertNotificationData.starter_id);
-    }
+    // if (notificationData.notificationDataAlert) {
+    //   const alertNotificationData = notificationData.notificationDataAlert;
+    //   await sendUserNotification(alertNotificationData.userId, alertNotificationData.title, alertNotificationData.message, alertNotificationData.motorId, alertNotificationData.starter_id);
+    // }
+
     // fault notification
     if (notificationData.notificationDataFault) {
       const faultNotificationData = notificationData.notificationDataFault;
@@ -310,10 +318,14 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
 
     const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id, starter_number) : null;
     const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) : null;
+    const notificationDataPower = hasPowerChanged ? preparePowerNotificationData(motor, power_present, power, starter_id, starter_number, created_by, device_created_by) : null;
 
-    return { notificationDataState, notificationDataMode };
+    return { notificationDataState, notificationDataMode, notificationDataPower };
   });
 
+  if (notificationData.notificationDataPower) {
+    await sendUserNotification(notificationData.notificationDataPower.userId, notificationData.notificationDataPower.title, notificationData.notificationDataPower.message, notificationData.notificationDataPower.motorId, notificationData.notificationDataPower.starterId);
+  }
   if (notificationData.notificationDataState) {
     await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
   }
@@ -381,9 +393,13 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
     }
 
     const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id, starter_number) : null;
-    return { notificationDataState };
+    const notificationDataPower = hasPowerChanged ? preparePowerNotificationData(motor, power_present, power, starter_id, starter_number, created_by, device_created_by) : null;
+    return { notificationDataState, notificationDataPower };
   });
 
+  if (notificationData.notificationDataPower) {
+    await sendUserNotification(notificationData.notificationDataPower.userId, notificationData.notificationDataPower.title, notificationData.notificationDataPower.message, notificationData.notificationDataPower.motorId, notificationData.notificationDataPower.starterId);
+  }
   if (notificationData.notificationDataState) {
     await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
   }
@@ -444,9 +460,13 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 
     const hasModeChanged = mode_description && mode_description !== prevMode;
     const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) : null;
-    return { notificationDataMode };
+    const notificationDataPower = hasPowerChanged ? preparePowerNotificationData(motor, power_present, power, starter_id, starter_number, created_by, device_created_by) : null;
+    return { notificationDataMode, notificationDataPower };
   });
 
+  if (notificationData.notificationDataPower) {
+    await sendUserNotification(notificationData.notificationDataPower.userId, notificationData.notificationDataPower.title, notificationData.notificationDataPower.message, notificationData.notificationDataPower.motorId, notificationData.notificationDataPower.starterId);
+  }
   if (notificationData.notificationDataMode) {
     await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
   }
