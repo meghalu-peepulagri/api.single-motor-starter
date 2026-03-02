@@ -25,6 +25,7 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
+import { NOTIFICATION_ACTION_KEYS } from "../helpers/notification-action-keys.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -742,7 +743,7 @@ export class StarterHandlers {
         }
 
         if (title && userId) {
-          await sendUserNotification(userId, title, message, starter.id, starter.id);
+          await sendUserNotification(userId, title, message, starter.id, starter.id, NOTIFICATION_ACTION_KEYS.INFORMATION);
           notificationsSent++;
         }
       }

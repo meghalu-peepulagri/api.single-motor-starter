@@ -219,7 +219,7 @@ export function prepareMotorStateControlNotificationData(motor: Motor, newState:
   return null;
 }
 
-export function preparePowerNotificationData(motor: any, power_present: number | null, previous_power: number | null, starter_id: number, starter_number: string, created_by: number | null, device_created_by: number | null): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string } | null {
+export function preparePowerNotificationData(motor: any, power_present: number | null, previous_power: number | null, starter_id: number, starter_number: string, created_by: number | null, device_created_by: number | null): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string, pumpName: string, powerState: number } | null {
   if (power_present === null || (power_present !== 0 && power_present !== 1)) return null;
   if (previous_power === power_present) return null;
 
@@ -236,6 +236,8 @@ export function preparePowerNotificationData(motor: any, power_present: number |
       motorId: motor.id,
       starterId: starter_id,
       starterNumber: starter_number,
+      pumpName,
+      powerState: power_present,
     };
   }
 

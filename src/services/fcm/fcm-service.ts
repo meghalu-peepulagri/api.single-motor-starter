@@ -3,6 +3,7 @@ import { FirebaseMessagingError, getMessaging } from "firebase-admin/messaging";
 import { deviceTokens, type DeviceToken, type DeviceTokensTable } from "../../database/schemas/device-tokens.js";
 import { getMultipleRecordsByMultipleColumnValues, getSingleRecordByMultipleColumnValues, updateRecordById } from "../db/base-db-services.js";
 import fcmConfig from "../../config/fcm-confgi.js";
+import type { NotificationActionKey } from "../../helpers/notification-action-keys.js";
 
 admin.initializeApp({
   credential: admin.credential.cert({
@@ -12,11 +13,11 @@ admin.initializeApp({
   }),
 });
 
-export async function sendNotificationForADevice(token: string, title: string, body: string, actionId: string, starterId: number) {
+export async function sendNotificationForADevice(token: string, title: string, body: string, actionId: string, starterId: number, actionKey: NotificationActionKey) {
   try {
     const message = {
       notification: { title },
-      data: { title, body, motor_id: actionId, starter_id: String(starterId) },
+      data: { title, body, motor_id: actionId, starter_id: String(starterId), action_key: String(actionKey) },
       token,
     };
     return await getMessaging().sendEach([message]);
@@ -36,11 +37,11 @@ export async function sendNotificationForADevice(token: string, title: string, b
   }
 }
 
-export async function sendNotificationsForMultipleDevices(tokens: string[], title: string, body: string, actionId: string, starterId: number) {
+export async function sendNotificationsForMultipleDevices(tokens: string[], title: string, body: string, actionId: string, starterId: number, actionKey: NotificationActionKey) {
   try {
     const message = {
       notification: { title },
-      data: { title, body, motor_id: actionId, starter_id: String(starterId) },
+      data: { title, body, motor_id: actionId, starter_id: String(starterId), action_key: String(actionKey) },
       tokens, // Send to multiple devices
     };
     return await getMessaging().sendEachForMulticast(message);
@@ -60,15 +61,15 @@ async function handleInvalidDeviceToken(token: string) {
   }
 }
 
-export async function sendUserNotification(userId: number, title: string, message: string, id: number, starterId: number) {
+export async function sendUserNotification(userId: number, title: string, message: string, id: number, starterId: number, actionKey: NotificationActionKey) {
   const tokensData = await getMultipleRecordsByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["user_id", "status"], ["=", "="], [userId, "ACTIVE"], ["device_token"]) as unknown as Pick<DeviceToken, "device_token">[];
 
   if (!tokensData || tokensData.length === 0) return;
   const tokens = tokensData.map(t => t.device_token);
 
   if (tokens.length > 1) {
-    await sendNotificationsForMultipleDevices(tokens, title, message, id.toString(), starterId);
+    await sendNotificationsForMultipleDevices(tokens, title, message, id.toString(), starterId, actionKey);
   } else {
-    await sendNotificationForADevice(tokens[0], title, message, id.toString(), starterId);
+    await sendNotificationForADevice(tokens[0], title, message, id.toString(), starterId, actionKey);
   }
 }

@@ -6,6 +6,7 @@ import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { bufferConnectivityNotification } from "../../helpers/connectivity-notification-buffer.js";
 import { formatDuration, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
@@ -529,6 +530,73 @@ export async function updateStarterStatusWithTransaction(starterIds: number[]) {
   };
 
   const result = await db.transaction(action);
+
+  // Send offline notifications for devices that just went inactive
+  if (result.inactiveStarterIds.length > 0) {
+    try {
+      const inactiveStarters = await db.query.starterBoxes.findMany({
+        where: and(
+          inArray(starterBoxes.id, result.inactiveStarterIds),
+          ne(starterBoxes.status, "ARCHIVED")
+        ),
+        columns: { id: true, starter_number: true, created_by: true },
+        with: {
+          motors: {
+            where: ne(motors.status, "ARCHIVED"),
+            columns: { id: true, alias_name: true, created_by: true },
+          },
+        },
+      });
+
+      for (const starter of inactiveStarters) {
+        const motor = (starter as any).motors?.[0];
+        if (!motor) continue;
+
+        const userId = motor.created_by || (starter as any).created_by;
+        const pumpName = motor.alias_name ?? (starter as any).starter_number;
+
+        if (userId) {
+          bufferConnectivityNotification(userId, pumpName, false, motor.id, starter.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error sending offline notifications:", error);
+    }
+  }
+
+  // Send online notifications for devices that just came back active
+  if (result.activeStarterIds.length > 0) {
+    try {
+      const activeStarters = await db.query.starterBoxes.findMany({
+        where: and(
+          inArray(starterBoxes.id, result.activeStarterIds),
+          ne(starterBoxes.status, "ARCHIVED")
+        ),
+        columns: { id: true, starter_number: true, created_by: true },
+        with: {
+          motors: {
+            where: ne(motors.status, "ARCHIVED"),
+            columns: { id: true, alias_name: true, created_by: true },
+          },
+        },
+      });
+
+      for (const starter of activeStarters) {
+        const motor = (starter as any).motors?.[0];
+        if (!motor) continue;
+
+        const userId = motor.created_by || (starter as any).created_by;
+        const pumpName = motor.alias_name ?? (starter as any).starter_number;
+
+        if (userId) {
+          bufferConnectivityNotification(userId, pumpName, true, motor.id, starter.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error sending online notifications:", error);
+    }
+  }
+
   return result;
 }
 

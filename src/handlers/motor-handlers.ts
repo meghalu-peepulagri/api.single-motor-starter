@@ -19,6 +19,7 @@ import { validatedRequest } from "../validations/validate-request.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { prepareMotorStateControlNotificationData, prepareMotorModeControlNotificationData } from "../helpers/motor-helper.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
+import { NOTIFICATION_ACTION_KEYS } from "../helpers/notification-action-keys.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -102,10 +103,10 @@ export class MotorHandlers {
       })
 
       if (notificationData.notificationDataState) {
-        await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
+        await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId, NOTIFICATION_ACTION_KEYS.ACTIONED);
       }
       if (notificationData.notificationDataMode) {
-        await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+        await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId, NOTIFICATION_ACTION_KEYS.ACTIONED);
       }
 
       return sendResponse(c, 200, MOTOR_UPDATED);
