@@ -93,6 +93,9 @@ export async function getStarterByMacWithMotor(mac: string) {
       device_allocation: true,
       allocation_status_count: true,
       starter_number: true,
+      hardware_version: true,
+      sim_recharge_expires_at: true,
+      device_mobile_number: true,
     },
     with: {
       motors: {
@@ -366,6 +369,8 @@ export async function starterConnectedMotors(starterId: number) {
       synced_settings_status: true,
       allocation_status_count: true,
       device_reset_status: true,
+      sim_recharge_expires_at: true,
+      hardware_version: true,
     },
     with: {
       motors: {
