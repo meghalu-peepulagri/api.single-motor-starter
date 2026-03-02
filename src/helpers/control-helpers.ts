@@ -94,6 +94,30 @@ export function getFaultDescription(faultCode: number) {
   return faults.length > 0 ? faults.join(", ") : "Unknown Fault";
 }
 
+const faultSuffixes: Record<number, string> = {
+  0x01: "No water flow detected!",
+  0x02: "Motor drawing excess current!",
+  0x04: "Motor shaft may be jammed!",
+  0x08: "Current unbalanced across phases!",
+  0x10: "Too many start attempts!",
+  0x20: "One or more phases missing!",
+  0x40: "Supply voltage too low!",
+  0x80: "Supply voltage too high!",
+  0x100: "Voltage unbalanced across phases!",
+  0x200: "Phase sequence reversed!",
+  0x400: "Supply frequency out of range!",
+  0x1000: "Output phase fault detected!",
+};
+
+export function getFaultSuffix(faultCode: number): string {
+  // Single fault (exactly one bit set) → specific message
+  if (faultCode !== 0 && (faultCode & (faultCode - 1)) === 0) {
+    return faultSuffixes[faultCode] ?? "Motor at risk!";
+  }
+  // Multiple faults active → generic fallback
+  return "Motor at risk!";
+}
+
 export function getAlertDescription(alertCode: number) {
   if (!alertCode || alertCode === 0)
     return "No Alert";

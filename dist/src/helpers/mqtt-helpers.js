@@ -39,22 +39,24 @@ export async function liveDataHandler(parsedMessage, topic) {
         // Manual override detection: motor stopped (m_s=0) — check who stopped it
         if (prepared.motor_state === 0) {
             const motor = validMac.motors?.[0];
-            if (motor) {
-                if (motor.is_stopped_by_mobile === true) {
-                    // Case 1: App commanded stop confirmed — clear both flags, no notification
-                    await updateRecordById(motors, motor.id, { is_stopped_by_mobile: false, is_started_by_mobile: false });
-                }
-                else if (motor.is_started_by_mobile === true) {
-                    // Case 2: App turned it ON, local person turned it OFF → Manual Override
-                    const pumpName = motor.alias_name ?? validMac.starter_number;
-                    const userId = motor.created_by;
-                    await updateRecordById(motors, motor.id, { is_started_by_mobile: false });
-                    if (userId != null) {
-                        await sendUserNotification(userId, `Manual Override Detected`, `${pumpName} was stopped manually or externally`, motor.id, validMac.id);
-                    }
-                }
-                // Case 3: Purely physical (no app involved) — nothing to do
+            if (!motor) {
+                logger.warn("[LiveData] Motor not found for starter", { mac: validMac.mac_address });
             }
+            else if (motor.is_stopped_by_mobile === true) {
+                // Case 1: App commanded stop confirmed — clear both flags, no notification
+                await updateRecordById(motors, motor.id, { is_stopped_by_mobile: false, is_started_by_mobile: false });
+            }
+            else if (motor.is_started_by_mobile === true) {
+                // Case 2: App turned it ON, local person turned it OFF → Manual Override
+                const pumpName = motor.alias_name ?? validMac.starter_number;
+                const userId = motor.created_by;
+                if (userId != null) {
+                    await sendUserNotification(userId, `Manual Override Detected`, `${pumpName} was stopped manually or externally`, motor.id, validMac.id);
+                }
+                // Clear flag after notification — ensures notification is sent before flag reset
+                await updateRecordById(motors, motor.id, { is_started_by_mobile: false });
+            }
+            // Case 3: Purely physical (no app involved) — nothing to do
         }
     }
     catch (err) {

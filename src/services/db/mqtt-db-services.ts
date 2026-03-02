@@ -16,6 +16,7 @@ import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { processFaultBitmask } from "./fault-tracker-service.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
@@ -221,48 +222,24 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) : null;
       const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
 
-      // Prepare alert and fault notifications only when they exist
-      let notificationDataAlert = null;
-      let notificationDataFault = null;
-
-      if (created_by && alert_description && motor_id && alert_code !== 0) {
-        notificationDataAlert = {
-          userId: created_by, title: `${pumpName} Alert Detected`,
-          message: alert_description, motorId: motor_id, starter_id: starter_id
-        };
-      }
-
-      if (fault_description && created_by && motor_id && fault !== 0) {
-        notificationDataFault = {
-          userId: created_by, title: `${pumpName} Fault Detected`,
-          message: fault_description, motorId: motor_id, starter_id: starter_id
-        };
-      }
-
-      const notificationData = { notificationDataState, notificationDataMode, notificationDataAlert, notificationDataFault };
+      const notificationData = { notificationDataState, notificationDataMode };
       return notificationData;
     });
 
     // Send notification after transaction completes
-    // state notification
     if (notificationData.notificationDataState) {
       const stateNotoificatioData = notificationData.notificationDataState;
       await sendUserNotification(stateNotoificatioData.userId, stateNotoificatioData.title, stateNotoificatioData.message, stateNotoificatioData.motorId, stateNotoificatioData.starterId);
     }
-    // mode notification
     if (notificationData.notificationDataMode) {
       const modeNotificationData = notificationData.notificationDataMode;
       await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId, modeNotificationData.starterId);
     }
-    // alert notification
-    if (notificationData.notificationDataAlert) {
-      const alertNotificationData = notificationData.notificationDataAlert;
-      await sendUserNotification(alertNotificationData.userId, alertNotificationData.title, alertNotificationData.message, alertNotificationData.motorId, alertNotificationData.starter_id);
-    }
-    // fault notification
-    if (notificationData.notificationDataFault) {
-      const faultNotificationData = notificationData.notificationDataFault;
-      await sendUserNotification(faultNotificationData.userId, faultNotificationData.title, faultNotificationData.message, faultNotificationData.motorId, faultNotificationData.starter_id);
+
+    // Fault
+    if (motor_id) {
+      const pumpName = motor.alias_name ?? starter_number;
+      await processFaultTracking({ fault, motor_id, starter_id, userId: created_by, pumpName });
     }
 
   } catch (error: any) {
@@ -365,6 +342,9 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
   if (notificationData.notificationDataMode) {
     await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
   }
+
+  const pumpName = motor.alias_name ?? starter_number;
+  await processFaultTracking({ fault, motor_id, starter_id, userId: created_by, pumpName });
 }
 
 
@@ -432,6 +412,9 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
   if (notificationData.notificationDataState) {
     await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
   }
+
+  const pumpName = motor.alias_name ?? starter_number;
+  await processFaultTracking({ fault, motor_id, starter_id, userId: created_by, pumpName });
 }
 
 
@@ -495,8 +478,20 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
   if (notificationData.notificationDataMode) {
     await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
   }
+
+  const pumpName = motor.alias_name ?? starter_number;
+  await processFaultTracking({ fault, motor_id, starter_id, userId: created_by, pumpName });
 }
 
+
+async function processFaultTracking(params: {
+  fault: number;
+  motor_id: number; starter_id: number;
+  userId: number | null; pumpName: string;
+}) {
+  const { fault, motor_id, starter_id, userId, pumpName } = params;
+  await processFaultBitmask({ fault, motor_id, starter_id, user_id: userId, pump_name: pumpName });
+}
 
 // Motor control ack
 export async function motorControlAckHandler(message: any, topic: string) {
