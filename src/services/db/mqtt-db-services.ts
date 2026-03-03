@@ -745,8 +745,9 @@ export async function deviceResetAckHandler(message: any, topic: string) {
 }
 
 export async function deviceInfoAckHandler(message: any, topic: string) {
+  const macFromTopic = topic.split("/")[1];
+  const updatedFields: Record<string, any> = {};
   try {
-    const macFromTopic = topic.split("/")[1];
     const validMac = await getStarterByMacWithMotor(macFromTopic);
     if (!validMac?.id) {
       console.error(`No starter found with given MAC [${topic}]`);
@@ -758,17 +759,20 @@ export async function deviceInfoAckHandler(message: any, topic: string) {
       return null;
     }
 
-    const updatedFields: Record<string, any> = {};
-
     if (message.D.fw && message.D.fw !== validMac.hardware_version) {
       updatedFields.hardware_version = message.D.fw;
     }
 
-    if (message.D.val && message.D.val !== validMac.sim_recharge_expires_at) {
+    const hasValue = (value: any) => value !== undefined && value !== null &&
+      typeof value === "string" && value.trim() !== "";
+
+    // SIM recharge expiration date (validated)
+    if (hasValue(message.D.val) && message.D.val !== validMac.sim_recharge_expires_at) {
       updatedFields.sim_recharge_expires_at = message.D.val;
     }
 
-    if (message.D.sim_num && message.D.sim_num !== validMac.device_mobile_number) {
+    // SIM mobile number (validated)
+    if (hasValue(message.D.sim_num) && message.D.sim_num !== validMac.device_mobile_number) {
       updatedFields.device_mobile_number = message.D.sim_num;
     }
 
@@ -776,8 +780,16 @@ export async function deviceInfoAckHandler(message: any, topic: string) {
       await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, updatedFields);
     }
   } catch (error: any) {
+    if (error?.code === "23505" || error?.cause?.code === "23505") {
+      const duplicateMobile = updatedFields.device_mobile_number;
+      logger.info(`Device Info ACK failed for ${macFromTopic} - Duplicate mobile number: ${duplicateMobile}`);
+      logger.mqtt(`Duplicate SIM number detected during device info ACK | MAC: ${macFromTopic} | Mobile: ${duplicateMobile}`);
+      return;
+    }
+
+    logger.error(`Device Info ACK error for ${macFromTopic}: ${error.message}`);
+    logger.mqtt(`MQTT Device Info ACK error | MAC: ${macFromTopic} | Error: ${error.message}`);
     console.error("Error at device info ack handler:", error);
-    throw error;
   }
 }
 

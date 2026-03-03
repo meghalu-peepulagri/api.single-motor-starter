@@ -608,8 +608,14 @@ export async function deviceResetAckHandler(message, topic) {
     }
 }
 export async function deviceInfoAckHandler(message, topic) {
+<<<<<<< HEAD
     try {
         const macFromTopic = topic.split("/")[1];
+=======
+    const macFromTopic = topic.split("/")[1];
+    const updatedFields = {};
+    try {
+>>>>>>> aaede1e6fcb12099977bfc4f401da126fec56eb8
         const validMac = await getStarterByMacWithMotor(macFromTopic);
         if (!validMac?.id) {
             console.error(`No starter found with given MAC [${topic}]`);
@@ -619,6 +625,7 @@ export async function deviceInfoAckHandler(message, topic) {
             console.error(`Invalid message data in device info ack`);
             return null;
         }
+<<<<<<< HEAD
         const updatedFields = {};
         if (message.D.fw && message.D.fw !== validMac.hardware_version) {
             updatedFields.hardware_version = message.D.fw;
@@ -627,6 +634,19 @@ export async function deviceInfoAckHandler(message, topic) {
             updatedFields.sim_recharge_expires_at = message.D.val;
         }
         if (message.D.sim_num && message.D.sim_num !== validMac.device_mobile_number) {
+=======
+        if (message.D.fw && message.D.fw !== validMac.hardware_version) {
+            updatedFields.hardware_version = message.D.fw;
+        }
+        const hasValue = (value) => value !== undefined && value !== null &&
+            typeof value === "string" && value.trim() !== "";
+        // SIM recharge expiration date (validated)
+        if (hasValue(message.D.val) && message.D.val !== validMac.sim_recharge_expires_at) {
+            updatedFields.sim_recharge_expires_at = message.D.val;
+        }
+        // SIM mobile number (validated)
+        if (hasValue(message.D.sim_num) && message.D.sim_num !== validMac.device_mobile_number) {
+>>>>>>> aaede1e6fcb12099977bfc4f401da126fec56eb8
             updatedFields.device_mobile_number = message.D.sim_num;
         }
         if (Object.keys(updatedFields).length > 0) {
@@ -634,8 +654,20 @@ export async function deviceInfoAckHandler(message, topic) {
         }
     }
     catch (error) {
+<<<<<<< HEAD
         console.error("Error at device info ack handler:", error);
         throw error;
+=======
+        if (error?.code === "23505" || error?.cause?.code === "23505") {
+            const duplicateMobile = updatedFields.device_mobile_number;
+            logger.info(`Device Info ACK failed for ${macFromTopic} - Duplicate mobile number: ${duplicateMobile}`);
+            logger.mqtt(`Duplicate SIM number detected during device info ACK | MAC: ${macFromTopic} | Mobile: ${duplicateMobile}`);
+            return;
+        }
+        logger.error(`Device Info ACK error for ${macFromTopic}: ${error.message}`);
+        logger.mqtt(`MQTT Device Info ACK error | MAC: ${macFromTopic} | Error: ${error.message}`);
+        console.error("Error at device info ack handler:", error);
+>>>>>>> aaede1e6fcb12099977bfc4f401da126fec56eb8
     }
 }
 export const waitForAck = (identifiers, timeoutMs, validator) => {
