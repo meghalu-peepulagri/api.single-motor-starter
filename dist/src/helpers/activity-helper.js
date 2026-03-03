@@ -1,6 +1,25 @@
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { motorState } from "./control-helpers.js";
+function meaningfulStateMessage(state, mode) {
+    if (state === 1) {
+        return mode === "AUTO"
+            ? "The pump is now ON in AUTO mode after power recovery."
+            : "The pump is running in MANUAL mode.";
+    }
+    if (state === 0) {
+        return mode === "AUTO"
+            ? "The pump is OFF in AUTO mode due to power failure."
+            : "The pump is stopped in MANUAL mode.";
+    }
+    return `State not updated due to '${motorState(state)}'`;
+}
+export function meaningfulModeMessage(oldMode, newMode) {
+    if (newMode === "MANUAL" || newMode === "AUTO") {
+        return `Pump switched from ${oldMode} to ${newMode} mode.`;
+    }
+    return `Mode not updated due to '${newMode}'`;
+}
 /**
  * Helper to filter activity logs
  */
@@ -166,7 +185,7 @@ export function prepareMotorUpdateLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: (data.newData.state === 0 || data.newData.state === 1) ? `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'` : `State not updated due to '${motorState(Number(data.newData.state))}'`
+            message: meaningfulStateMessage(Number(data.newData.state), mode)
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== null && data.newData.mode !== data.oldData.mode) {
@@ -178,7 +197,7 @@ export function prepareMotorUpdateLogs(data) {
             deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
-            message: (data.newData.mode === "MANUAL" || data.newData.mode === "AUTO") ? `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'` : `Mode not updated due to '${data.newData.mode}'`
+            message: meaningfulModeMessage(data.oldData.mode, data.newData.mode)
         }));
     }
     return logs;
@@ -226,7 +245,7 @@ export function prepareMotorSyncLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: (data.newData.state === 0 || data.newData.state === 1) ? `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'` : `State not updated due to '${motorState(Number(data.newData.state))}'`
+            message: meaningfulStateMessage(Number(data.newData.state), mode)
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
@@ -238,7 +257,7 @@ export function prepareMotorSyncLogs(data) {
             deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
-            message: (data.newData.mode === "MANUAL" || data.newData.mode === "AUTO") ? `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'` : `Mode not updated due to '${data.newData.mode}'`
+            message: meaningfulModeMessage(data.oldData.mode, data.newData.mode)
         }));
     }
     return logs;
@@ -258,7 +277,7 @@ export function prepareMotorAckLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: (data.newData.state === 0 || data.newData.state === 1) ? `State updated to '${motorState(Number(data.newData.state))}' with mode '${mode}'` : `State not updated due to '${motorState(Number(data.newData.state))}'`
+            message: meaningfulStateMessage(Number(data.newData.state), mode)
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
@@ -270,7 +289,7 @@ export function prepareMotorAckLogs(data) {
             deviceId: data.deviceId,
             oldData: { mode: data.oldData.mode },
             newData: { mode: data.newData.mode },
-            message: (data.newData.mode === "MANUAL" || data.newData.mode === "AUTO") ? `Mode updated from '${data.oldData.mode}' to '${data.newData.mode}'` : `Mode not updated due to '${data.newData.mode}'`
+            message: meaningfulModeMessage(data.oldData.mode, data.newData.mode)
         }));
     }
     return logs;

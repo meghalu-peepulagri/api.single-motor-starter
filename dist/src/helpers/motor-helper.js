@@ -3,6 +3,7 @@ import { benchedStarterParameters } from "../database/schemas/benched-starter-pa
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import { motorState } from "./control-helpers.js";
+import { meaningfulModeMessage } from "./activity-helper.js";
 export function checkDuplicateMotorTitles(motors) {
     if (!Array.isArray(motors))
         return [];
@@ -165,7 +166,20 @@ export function prepareMotorStateControlNotificationData(motor, newState, mode_d
             ? `Pump ${pumpName} state turned OFF${mode_description ? ` with mode ${mode_description}` : ""}`
             : `Pump ${pumpName} state Unable to update due to: ${motorState(Number(newState))}`;
     // Prepare notification message
-    const messageContent = (newState === 0 || newState === 1) ? `State updated to '${motorState(Number(newState))}' with mode '${mode_description}'` : `State not updated due to '${motorState(Number(newState))}'`;
+    let messageContent;
+    if (newState === 1) {
+        messageContent = mode_description === "AUTO"
+            ? "The pump is now ON in AUTO mode after power recovery."
+            : "The pump is running in MANUAL mode.";
+    }
+    else if (newState === 0) {
+        messageContent = mode_description === "AUTO"
+            ? "The pump is OFF in AUTO mode due to power failure."
+            : "The pump is stopped in MANUAL mode.";
+    }
+    else {
+        messageContent = `State not updated due to '${motorState(Number(newState))}'`;
+    }
     // Check if user exists (allow 0 as valid user ID)
     if (motor.created_by !== null && motor.created_by !== undefined) {
         return {
@@ -184,9 +198,7 @@ export function prepareMotorModeControlNotificationData(motor, mode_description,
     const title = mode_description === "MANUAL" || mode_description === "AUTO" ? `Pump ${pumpName} mode updated to from ${motor.mode} to ${mode_description}`
         : `Pump ${pumpName} Mode not updated due to ${mode_description}`;
     // Prepare notification message
-    const messageContent = (mode_description === "MANUAL" || mode_description === "AUTO")
-        ? `Mode updated from '${motor.mode}' to '${mode_description}'`
-        : `Mode not updated due to '${mode_description}'`;
+    const messageContent = meaningfulModeMessage(motor.mode, mode_description);
     // Check if user exists (allow 0 as valid user ID)
     if (motor.created_by !== null && motor.created_by !== undefined) {
         return {
