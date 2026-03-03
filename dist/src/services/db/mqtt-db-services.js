@@ -11,6 +11,7 @@ import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMo
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import { logger } from "../../utils/logger.js";
+import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
@@ -166,26 +167,34 @@ export async function updateStates(insertedData, previousData) {
             const notificationData = { notificationDataState, notificationDataMode, notificationDataAlert, notificationDataFault };
             return notificationData;
         });
-        // Send notification after transaction completes
+        // Send notification after transaction completes (debounced: skip if same notification was sent within 2 minutes)
         // state notification
         if (notificationData.notificationDataState) {
             const stateNotoificatioData = notificationData.notificationDataState;
-            await sendUserNotification(stateNotoificatioData.userId, stateNotoificatioData.title, stateNotoificatioData.message, stateNotoificatioData.motorId, stateNotoificatioData.starterId);
+            if (shouldSendNotification(stateNotoificatioData.motorId, "state", motor_state)) {
+                await sendUserNotification(stateNotoificatioData.userId, stateNotoificatioData.title, stateNotoificatioData.message, stateNotoificatioData.motorId, stateNotoificatioData.starterId);
+            }
         }
         // mode notification
         if (notificationData.notificationDataMode) {
             const modeNotificationData = notificationData.notificationDataMode;
-            await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId, modeNotificationData.starterId);
+            if (shouldSendNotification(modeNotificationData.motorId, "mode", mode_description)) {
+                await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId, modeNotificationData.starterId);
+            }
         }
         // alert notification
         if (notificationData.notificationDataAlert) {
             const alertNotificationData = notificationData.notificationDataAlert;
-            await sendUserNotification(alertNotificationData.userId, alertNotificationData.title, alertNotificationData.message, alertNotificationData.motorId, alertNotificationData.starter_id);
+            if (shouldSendNotification(alertNotificationData.motorId, "alert", alert_code)) {
+                await sendUserNotification(alertNotificationData.userId, alertNotificationData.title, alertNotificationData.message, alertNotificationData.motorId, alertNotificationData.starter_id);
+            }
         }
         // fault notification
         if (notificationData.notificationDataFault) {
             const faultNotificationData = notificationData.notificationDataFault;
-            await sendUserNotification(faultNotificationData.userId, faultNotificationData.title, faultNotificationData.message, faultNotificationData.motorId, faultNotificationData.starter_id);
+            if (shouldSendNotification(faultNotificationData.motorId, "fault", fault)) {
+                await sendUserNotification(faultNotificationData.userId, faultNotificationData.title, faultNotificationData.message, faultNotificationData.motorId, faultNotificationData.starter_id);
+            }
         }
     }
     catch (error) {
@@ -259,10 +268,14 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         return { notificationDataState, notificationDataMode };
     });
     if (notificationData.notificationDataState) {
-        await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
+        if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
+            await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
+        }
     }
     if (notificationData.notificationDataMode) {
-        await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+        if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {
+            await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+        }
     }
 }
 export async function updateDevicePowerONAndMotorStateOFF(insertedData, previousData) {
@@ -316,7 +329,9 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
         return { notificationDataState };
     });
     if (notificationData.notificationDataState) {
-        await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
+        if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
+            await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
+        }
     }
 }
 export async function updateDevicePowerAndMotorStateOFF(insertedData, previousData) {
@@ -367,7 +382,9 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         return { notificationDataMode };
     });
     if (notificationData.notificationDataMode) {
-        await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+        if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {
+            await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+        }
     }
 }
 // Motor control ack
@@ -401,9 +418,11 @@ export async function motorControlAckHandler(message, topic) {
             await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
             return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, validMac.starter_number) : null;
         });
-        // Send notification after transaction completes
+        // Send notification after transaction completes (debounced)
         if (notificationData) {
-            await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, starter_id);
+            if (shouldSendNotification(notificationData.motorId, "state", newState)) {
+                await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, starter_id);
+            }
         }
     }
     catch (error) {
@@ -434,7 +453,9 @@ export async function motorModeChangeAckHandler(message, topic) {
         const modeChanged = mode !== motor.mode;
         const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, validMac.id, validMac.starter_number) : null;
         if (notificationData) {
-            await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
+            if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
+                await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
+            }
         }
     }
     catch (error) {
