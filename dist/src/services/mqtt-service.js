@@ -84,7 +84,6 @@ export class MqttService {
         catch (error) {
             logger.error("Error while processing MQTT message", error);
             console.error("Error while processing MQTT message", error);
-            throw error;
         }
     };
     publish = async (topic, message) => {
