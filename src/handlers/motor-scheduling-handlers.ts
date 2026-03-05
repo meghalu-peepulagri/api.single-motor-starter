@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import {
+  ACKNOWLEDGEMENT_UPDATED,
   ADD_REPEAT_DAYS_VALIDATION_CRITERIA,
   ALL_SCHEDULES_STOPPED,
   ALREADY_SCHEDULED_EXISTS,
@@ -102,8 +103,8 @@ export class MotorScheduleHandler {
         repeat: data.repeat ?? 0,
       };
 
-      await saveSingleRecord<MotorScheduleTable>(motorSchedules, preparedData);
-      return sendResponse(c, 201, SCHEDULED_CREATED);
+      const savedSchedule = await saveSingleRecord<MotorScheduleTable>(motorSchedules, preparedData);
+      return sendResponse(c, 201, SCHEDULED_CREATED, savedSchedule);
     } catch (error: any) {
       console.error("Error at create Motor Schedule:", error.message);
       handleJsonParseError(error);
@@ -330,6 +331,27 @@ export class MotorScheduleHandler {
       return sendResponse(c, 200, REPEAT_DAYS_ADDED, { days_of_week: mergedDays });
     } catch (error: any) {
       console.error("Error at add repeat days:", error.message);
+      throw error;
+    }
+  };
+
+  updateAcknowledgementHandler = async (c: Context) => {
+    try {
+      const scheduleId = +c.req.param("id");
+      paramsValidateException.validateId(scheduleId, "schedule id");
+
+      const existed = await getRecordById<MotorScheduleTable>(
+        motorSchedules, scheduleId, ["id"],
+      );
+      if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, {
+        acknowledgement: 1,
+      });
+
+      return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
+    } catch (error: any) {
+      console.error("Error at update acknowledgement:", error.message);
       throw error;
     }
   };

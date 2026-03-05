@@ -287,6 +287,7 @@ export const SCHEDULE_NOT_FOUND = "Motor schedule id not found";
 export const SCHEDULE_DELETED = "Motor Schedule deleted successfully";
 export const SCHEDULE_STATUS = ["PENDING", "RUNNING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "RESCHEDULED"];
 export const INVALID_SCHEDULED_STATUS = "Invalid schedule status";
+export const ACKNOWLEDGEMENT_UPDATED = "Acknowledgement updated successfully";
 // Cyclic mode validation
 export const CYCLE_ON_MINUTES_REQUIRED = "Cycle ON duration (minutes) is required for CYCLIC mode";
 export const CYCLE_OFF_MINUTES_REQUIRED = "Cycle OFF duration (minutes) is required for CYCLIC mode";

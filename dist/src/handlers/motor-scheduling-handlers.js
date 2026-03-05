@@ -1,4 +1,4 @@
-import { ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, ALREADY_SCHEDULED_EXISTS, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, ALREADY_SCHEDULED_EXISTS, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -45,8 +45,8 @@ export class MotorScheduleHandler {
                 power_loss_recovery: data.power_loss_recovery || false,
                 repeat: data.repeat ?? 0,
             };
-            await saveSingleRecord(motorSchedules, preparedData);
-            return sendResponse(c, 201, SCHEDULED_CREATED);
+            const savedSchedule = await saveSingleRecord(motorSchedules, preparedData);
+            return sendResponse(c, 201, SCHEDULED_CREATED, savedSchedule);
         }
         catch (error) {
             console.error("Error at create Motor Schedule:", error.message);
@@ -229,6 +229,23 @@ export class MotorScheduleHandler {
         }
         catch (error) {
             console.error("Error at add repeat days:", error.message);
+            throw error;
+        }
+    };
+    updateAcknowledgementHandler = async (c) => {
+        try {
+            const scheduleId = +c.req.param("id");
+            paramsValidateException.validateId(scheduleId, "schedule id");
+            const existed = await getRecordById(motorSchedules, scheduleId, ["id"]);
+            if (!existed)
+                throw new BadRequestException(SCHEDULE_NOT_FOUND);
+            updateRecordById(motorSchedules, scheduleId, {
+                acknowledgement: 1,
+            });
+            return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
+        }
+        catch (error) {
+            console.error("Error at update acknowledgement:", error.message);
             throw error;
         }
     };

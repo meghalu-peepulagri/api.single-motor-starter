@@ -29,4 +29,7 @@ motorScheduleRoute.delete("/:id", isAuthorized, motorScheduleHandler.deleteMotor
 // Create a single schedule
 motorScheduleRoute.post("/", isAuthorized, motorScheduleHandler.createMotorScheduleHandler);
 
+// Ack schedule (mark as acknowledged)
+motorScheduleRoute.patch("/:id/ack", isAuthorized, motorScheduleHandler.updateAcknowledgementHandler);
+
 export default motorScheduleRoute;
