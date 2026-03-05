@@ -147,21 +147,20 @@ export async function updateStates(insertedData, previousData) {
             const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id) : null;
             const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
             // Prepare alert and fault notifications only when they exist
-            let notificationDataAlert = null;
             let notificationDataFault = null;
-            if (created_by && alert_description && motor_id && alert_code !== 0) {
-                notificationDataAlert = {
-                    userId: created_by, title: `${pumpName} Alert Detected`,
-                    message: alert_description, motorId: motor_id, starter_id: starter_id
-                };
-            }
+            // if (created_by && alert_description && motor_id && alert_code !== 0) {
+            //   notificationDataAlert = {
+            //     userId: created_by, title: `${pumpName} Alert Detected`,
+            //     message: alert_description, motorId: motor_id, starter_id: starter_id
+            //   };
+            // }
             if (fault_description && created_by && motor_id && fault !== 0) {
                 notificationDataFault = {
                     userId: created_by, title: `${pumpName} Fault Detected`,
                     message: fault_description, motorId: motor_id, starter_id: starter_id
                 };
             }
-            const notificationData = { notificationDataState, notificationDataMode, notificationDataAlert, notificationDataFault };
+            const notificationData = { notificationDataState, notificationDataMode, notificationDataFault };
             return notificationData;
         });
         // Send notification after transaction completes (debounced: skip if same notification sent within 2 min)
@@ -179,13 +178,13 @@ export async function updateStates(insertedData, previousData) {
                 await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starterId);
             }
         }
-        // alert notification
-        if (notificationData.notificationDataAlert) {
-            const d = notificationData.notificationDataAlert;
-            if (shouldSendNotification(d.motorId, "alert", alert_code)) {
-                await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starter_id);
-            }
-        }
+        // alert notification (removed for now)
+        // if (notificationData.notificationDataAlert) {
+        //   const d = notificationData.notificationDataAlert;
+        //   if (shouldSendNotification(d.motorId, "alert", alert_code)) {
+        //     await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starter_id);
+        //   }
+        // }
         // fault notification
         if (notificationData.notificationDataFault) {
             const d = notificationData.notificationDataFault;
