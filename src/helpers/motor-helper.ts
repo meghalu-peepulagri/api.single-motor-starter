@@ -1,8 +1,15 @@
-import { ALREADY_SCHEDULED_EXISTS } from "../constants/app-constants.js";
+import {
+  ALREADY_SCHEDULED_EXISTS,
+  SCHEDULE_DATE_PAST,
+  SCHEDULE_GAP_CONFLICT,
+  SCHEDULE_MIN_ADVANCE,
+  SCHEDULE_OVERLAP_CONFLICT,
+} from "../constants/app-constants.js";
 
 import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
 import type { Motor, MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import type { arrayOfMotorInputType } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
@@ -168,28 +175,139 @@ export function extractPreviousData(previousData: any, motorId: number) {
   return { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number: previousData?.starter_number };
 }
 
-export async function checkMotorScheduleConflict(validatedReqData: any, existingMotorSchedule: any) {
-  if (!existingMotorSchedule)
-    return;
+// =================== SCHEDULE TIME UTILITIES ===================
 
-  const newStart = validatedReqData.output.start_time;
-  const newEnd = validatedReqData.output.end_time;
-  const existStart = existingMotorSchedule.start_time;
-  const existEnd = existingMotorSchedule.end_time;
+/** Convert "HH:mm" to total minutes from midnight */
+export function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
 
-  // Exact match
-  if (newStart === existStart && newEnd === existEnd) {
-    throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
+/**
+ * Check if two time ranges overlap, accounting for midnight crossing.
+ * Each range is [start, end) in "HH:mm" format.
+ * Midnight crossing: start > end means the schedule wraps past midnight.
+ */
+export function doTimeRangesOverlap(
+  startA: string, endA: string,
+  startB: string, endB: string,
+): boolean {
+  const sA = timeToMinutes(startA);
+  const eA = timeToMinutes(endA);
+  const sB = timeToMinutes(startB);
+  const eB = timeToMinutes(endB);
+
+  // Split midnight-crossing ranges into two segments
+  const segmentsA = sA < eA
+    ? [{ s: sA, e: eA }]
+    : [{ s: sA, e: 1440 }, { s: 0, e: eA }];
+
+  const segmentsB = sB < eB
+    ? [{ s: sB, e: eB }]
+    : [{ s: sB, e: 1440 }, { s: 0, e: eB }];
+
+  for (const a of segmentsA) {
+    for (const b of segmentsB) {
+      if (a.s < b.e && b.s < a.e) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if two time ranges are within `gapMinutes` of each other.
+ * Returns true if the gap is LESS than gapMinutes (i.e., too close).
+ */
+export function areTimeRangesTooClose(
+  startA: string, endA: string,
+  startB: string, endB: string,
+  gapMinutes: number = 5,
+): boolean {
+  const sA = timeToMinutes(startA);
+  const eA = timeToMinutes(endA);
+  const sB = timeToMinutes(startB);
+  const eB = timeToMinutes(endB);
+
+  const segmentsA = sA < eA
+    ? [{ s: sA, e: eA }]
+    : [{ s: sA, e: 1440 }, { s: 0, e: eA }];
+
+  const segmentsB = sB < eB
+    ? [{ s: sB, e: eB }]
+    : [{ s: sB, e: 1440 }, { s: 0, e: eB }];
+
+  for (const a of segmentsA) {
+    for (const b of segmentsB) {
+      // Expand segment A by gapMinutes on both sides
+      const expandedAS = Math.max(0, a.s - gapMinutes);
+      const expandedAE = Math.min(1440, a.e + gapMinutes);
+      if (expandedAS < b.e && b.s < expandedAE) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Full conflict check against an array of existing schedules.
+ * Checks for direct overlaps and 5-minute gap violations.
+ */
+export function checkMotorScheduleConflict(
+  newSchedule: { start_time: string; end_time: string },
+  existingSchedules: Array<{ id: number; start_time: string; end_time: string }>,
+): void {
+  if (!existingSchedules || existingSchedules.length === 0) return;
+
+  for (const existing of existingSchedules) {
+    // Check exact match
+    if (newSchedule.start_time === existing.start_time && newSchedule.end_time === existing.end_time) {
+      throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
+    }
+
+    // Check direct overlap
+    if (doTimeRangesOverlap(
+      newSchedule.start_time, newSchedule.end_time,
+      existing.start_time, existing.end_time,
+    )) {
+      throw new ConflictException(SCHEDULE_OVERLAP_CONFLICT);
+    }
+
+    // Check 5-min gap
+    if (areTimeRangesTooClose(
+      newSchedule.start_time, newSchedule.end_time,
+      existing.start_time, existing.end_time,
+      5,
+    )) {
+      throw new ConflictException(SCHEDULE_GAP_CONFLICT);
+    }
+  }
+}
+
+/**
+ * Validate that a schedule is created at least 5 minutes before its start_time.
+ * For ONE_TIME schedules, also validates that schedule_date is not in the past.
+ */
+export function validateScheduleAdvanceTime(
+  startTime: string,
+  scheduleDate?: string | null,
+): void {
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+
+  if (scheduleDate) {
+    if (scheduleDate < todayStr) {
+      throw new BadRequestException(SCHEDULE_DATE_PAST);
+    }
+    if (scheduleDate > todayStr) {
+      return; // future date, no advance-time check needed
+    }
   }
 
-  //  Overlap check (if times intersect at all)
-  // The only case where there is NO conflict is when:
-  const isOverlapping = !(newEnd <= existStart || newStart >= existEnd);
+  // Schedule is for today — check 5-min advance
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = timeToMinutes(startTime);
 
-  if (isOverlapping) {
-    throw new ConflictException(
-      "Schedule overlaps with an existing schedule",
-    );
+  if (startMinutes - nowMinutes < 5) {
+    throw new BadRequestException(SCHEDULE_MIN_ADVANCE);
   }
 }
 

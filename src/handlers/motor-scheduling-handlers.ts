@@ -1,180 +1,391 @@
 import type { Context } from "hono";
-import { ALREADY_SCHEDULED_EXISTS, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, SCHEDULE_DELETED, SCHEDULE_NOT_FOUND, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED } from "../constants/app-constants.js";
+import {
+  ADD_REPEAT_DAYS_VALIDATION_CRITERIA,
+  ALREADY_SCHEDULED_EXISTS,
+  ALL_SCHEDULES_STOPPED,
+  CANNOT_EDIT_RUNNING_SCHEDULE,
+  CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
+  MOTOR_NOT_FOUND,
+  NO_ACTIVE_SCHEDULE,
+  REPEAT_DAYS_ADDED,
+  SCHEDULE_DELETED,
+  SCHEDULE_NOT_FOUND,
+  SCHEDULE_RESTARTED,
+  SCHEDULE_STOPPED,
+  SCHEDULE_UPDATED,
+  SCHEDULED_CREATED,
+  SCHEDULED_LIST_FETCHED,
+  UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
+} from "../constants/app-constants.js";
 import { motorSchedules, type MotorScheduleTable } from "../database/schemas/motor-schedules.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { checkMotorScheduleConflict } from "../helpers/motor-helper.js";
-import { deleteRecordById, getPaginatedRecordsConditionally, getRecordById, getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { getMotorSchedulesWeekly, getMotorSchedulesWeeklyUpdate, getOneTimeMotorSchedules, getOneTimeMotorSchedulesUpdate } from "../services/db/motor-schedules-services.js";
-import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
+import {
+  checkMotorScheduleConflict,
+} from "../helpers/motor-helper.js";
+import {
+  formatMotorScheduleListResponse,
+  formatMotorScheduleResponse,
+  normalizeMotorSchedulePayload,
+  normalizeRepeatDaysPayload,
+} from "../helpers/motor-schedule-payload-helper.js";
+import {
+  deleteRecordById,
+  getRecordById,
+  getSingleRecordByMultipleColumnValues,
+  saveRecords,
+  saveSingleRecord,
+  updateRecordById,
+} from "../services/db/base-db-services.js";
+import {
+  cancelSchedulesByIds,
+  findActiveScheduleById,
+  findAllActiveSchedulesForMotor,
+  findConflictingSchedules,
+  findSchedulesByFilters,
+  getNextScheduleIdForMotor,
+  restartScheduleById,
+  stopScheduleById,
+} from "../services/db/motor-schedules-services.js";
 import { sendResponse } from "../utils/send-response.js";
-import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../validations/schema/motor-schedule-validators.js";
+import type {
+  ValidatedAddRepeatDays,
+  ValidatedMotorSchedule,
+} from "../validations/schema/motor-schedule-validators.js";
 import { validatedRequest } from "../validations/validate-request.js";
-
 
 const paramsValidateException = new ParamsValidateException();
 
 export class MotorScheduleHandler {
-  async createMotorScheduleHandler(c: Context) {
+
+  // =================== CREATE SCHEDULE ===================
+  createMotorScheduleHandler = async (c: Context) => {
     try {
       const reqData = await c.req.json();
-      const validatedReqData = await validatedRequest<ValidatedMotorSchedule>("create-motor-schedule", reqData, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA);
+      const normalizedReqData = normalizeMotorSchedulePayload(reqData);
+      const data = await validatedRequest<ValidatedMotorSchedule>(
+        "create-motor-schedule", normalizedReqData, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
+      );
 
-      const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [validatedReqData.motor_id, "ARCHIVED"], ["id", "title", "pond_id"]);
-      if (!existedMotor) {
-        throw new BadRequestException(MOTOR_NOT_FOUND);
-      }
+      // Verify motor exists and is not archived
+      const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(
+        motors, ["id", "status"], ["=", "!="], [data.motor_id, "ARCHIVED"], ["id"],
+      );
+      if (!existedMotor) throw new BadRequestException(MOTOR_NOT_FOUND);
 
-      let existingMotorSchedule: any = null;
-      if (validatedReqData.schedule_type === "ONE_TIME") {
-        existingMotorSchedule = await getOneTimeMotorSchedules(existedMotor.id, validatedReqData?.schedule_date ?? "", validatedReqData.start_time, validatedReqData.end_time);
-        await checkMotorScheduleConflict(validatedReqData, existingMotorSchedule);
-      }
-      if (validatedReqData.schedule_type === "DAILY" || validatedReqData.schedule_type === "WEEKLY") {
-        existingMotorSchedule = await getMotorSchedulesWeekly(existedMotor.id, validatedReqData.schedule_type, validatedReqData.start_time, validatedReqData.end_time, validatedReqData?.days_of_week || []);
-        await checkMotorScheduleConflict(validatedReqData, existingMotorSchedule);
-      }
+      const scheduleTimestamp = new Date().toISOString();
 
-      const preparedScheduledData = {
-        motor_id: validatedReqData.motor_id,
-        schedule_type: validatedReqData.schedule_type,
-        schedule_date: validatedReqData.schedule_date || null,
-        start_time: validatedReqData.start_time,
-        end_time: validatedReqData.end_time,
-        days_of_week: validatedReqData?.days_of_week || [],
+      // Conflict detection (without schedule_type comparison)
+      const existingSchedules = await findConflictingSchedules(
+        existedMotor.id, scheduleTimestamp, data.days_of_week || [],
+      );
+      checkMotorScheduleConflict(data, existingSchedules);
+
+      // Auto-increment schedule_id per motor
+      const nextScheduleId = await getNextScheduleIdForMotor(data.motor_id);
+
+      // Prepare and save
+      const preparedData = {
+        motor_id: data.motor_id,
+        starter_id: data.starter_id || null,
+        schedule_id: nextScheduleId,
+        schedule_type: data.schedule_type || "TIME_BASED",
+        schedule_date: scheduleTimestamp,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        days_of_week: data.days_of_week || [],
+        runtime_minutes: data.runtime_minutes || null,
+        cycle_on_minutes: data.cycle_on_minutes || null,
+        cycle_off_minutes: data.cycle_off_minutes || null,
+        power_loss_recovery: data.power_loss_recovery || false,
+        repeat: data.repeat ?? 0,
       };
-      const createdScheduleDetails = await saveSingleRecord<MotorScheduleTable>(motorSchedules, preparedScheduledData);
-      return sendResponse(c, 201, SCHEDULED_CREATED, createdScheduleDetails);
-    }
-    catch (error: any) {
-      if (error.code === "23505" && error.constraint === "uniqueMotorSchedule") {
+
+      console.log("preparedData", preparedData);
+      await saveSingleRecord<MotorScheduleTable>(motorSchedules, preparedData);
+      return sendResponse(c, 201, SCHEDULED_CREATED);
+    } catch (error: any) {
+      if (error.code === "23505" && error.constraint === "motor_schedule_unique_idx") {
         throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
       }
-      console.error("Error at create Motor Schedule : ", error.message);
-      throw error;
-    }
-  }
-
-  motorScheduleListHandler = async (c: Context) => {
-    try {
-      const motorId = +c.req.param("motor_id");
-      const query = c.req.query();
-      const page = +(query.page) || 1;
-      const limit = +(query.limit) || 10;
-      paramsValidateException.validateId(motorId, "motor id");
-
-      const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"], ["id"]);
-      if (!existedMotor) {
-        throw new BadRequestException(MOTOR_NOT_FOUND);
-      }
-
-      const whereQueryData: WhereQueryData<MotorScheduleTable> = {
-        columns: ["motor_id"],
-        values: [existedMotor.id],
-        relations: ["="],
-      };
-
-      const orderByQueryData: OrderByQueryData<MotorScheduleTable> = {
-        columns: ["created_at"],
-        values: ["desc"],
-      };
-
-      const projection = ["id", "motor_id", "schedule_type", "schedule_date", "days_of_week", "start_time", "end_time", "acknowledgement", "schedule_status"] as const;
-
-      const motorScheduleList = await getPaginatedRecordsConditionally<MotorScheduleTable>(motorSchedules, page, limit, orderByQueryData, whereQueryData, projection);
-      return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, motorScheduleList);
-    }
-    catch (error: any) {
-      console.error("Error at motor Schedule List : ", error.message);
+      console.error("Error at create Motor Schedule:", error.message);
       throw error;
     }
   };
 
+  // =================== LIST SCHEDULES (with filters) ===================
+  motorScheduleListHandler = async (c: Context) => {
+    try {
+      const query = c.req.query();
+      const page = +(query.page) || 1;
+      const limit = +(query.limit) || 10;
+
+      const filters: { starter_id?: number; motor_id?: number; status?: string } = {};
+
+      if (query.starter_id) {
+        const starterId = +query.starter_id;
+        if (Number.isNaN(starterId) || starterId <= 0) {
+          throw new BadRequestException("Invalid starter id");
+        }
+        filters.starter_id = starterId;
+      }
+
+      if (query.motor_id) {
+        const motorId = +query.motor_id;
+        if (Number.isNaN(motorId) || motorId <= 0) {
+          throw new BadRequestException("Invalid motor id");
+        }
+        filters.motor_id = motorId;
+      }
+
+      if (query.status) {
+        filters.status = query.status;
+      }
+
+      const result = await findSchedulesByFilters(filters, page, limit);
+      return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result));
+    } catch (error: any) {
+      console.error("Error at motor Schedule List:", error.message);
+      throw error;
+    }
+  };
+
+  // =================== EDIT SCHEDULE ===================
   editMotorScheduleHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const reqData = await c.req.json();
-      const validatedReqData = await validatedRequest<ValidatedMotorSchedule>("create-motor-schedule", reqData, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA);
-      const existedMotor = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "motor_id"]);
+      const normalizedReqData = normalizeMotorSchedulePayload(reqData);
+      const data = await validatedRequest<ValidatedMotorSchedule>(
+        "update-motor-schedule", normalizedReqData, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
+      );
 
-      if (!existedMotor) {
-        throw new BadRequestException(SCHEDULE_NOT_FOUND);
+      const existedSchedule = await getRecordById<MotorScheduleTable>(
+        motorSchedules, scheduleId, ["id", "motor_id", "schedule_status"],
+      );
+      if (!existedSchedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      // Cannot edit a RUNNING schedule
+      if ((existedSchedule as any).schedule_status === "RUNNING") {
+        throw new BadRequestException(CANNOT_EDIT_RUNNING_SCHEDULE);
       }
 
-      let existingMotorSchedule: any = null;
+      // Conflict detection (excluding self, without schedule_type comparison)
+      const scheduleTimestamp = new Date().toISOString();
+      const existingSchedules = await findConflictingSchedules(
+        (existedSchedule as any).motor_id, scheduleTimestamp, data.days_of_week || [], scheduleId,
+      );
+      checkMotorScheduleConflict(data, existingSchedules);
 
-      if (validatedReqData.schedule_type === "ONE_TIME") {
-        existingMotorSchedule = await getOneTimeMotorSchedulesUpdate(existedMotor.motor_id, validatedReqData.schedule_date ?? "",
-          validatedReqData.start_time, validatedReqData.end_time, scheduleId
-        );
+      // Update
+      const updateData = {
+        motor_id: data.motor_id,
+        starter_id: data.starter_id || null,
+        schedule_type: data.schedule_type || "TIME_BASED",
+        schedule_date: scheduleTimestamp,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        days_of_week: data.days_of_week || [],
+        runtime_minutes: data.runtime_minutes || null,
+        cycle_on_minutes: data.cycle_on_minutes || null,
+        cycle_off_minutes: data.cycle_off_minutes || null,
+        power_loss_recovery: data.power_loss_recovery ?? false,
+        repeat: data.repeat ?? 0,
+      };
 
-        await checkMotorScheduleConflict(validatedReqData, existingMotorSchedule);
-      }
-
-      if (validatedReqData.schedule_type === "DAILY" || validatedReqData.schedule_type === "WEEKLY") {
-        existingMotorSchedule = await getMotorSchedulesWeeklyUpdate(
-          existedMotor.motor_id,
-          validatedReqData.schedule_type,
-          validatedReqData.start_time,
-          validatedReqData.end_time,
-          scheduleId,
-          validatedReqData.days_of_week ?? ""
-        );
-        await checkMotorScheduleConflict(validatedReqData, existingMotorSchedule);
-      }
-
-      await updateRecordById<MotorScheduleTable>(motorSchedules, existedMotor.id, validatedReqData);
-      return sendResponse(c, 200, SCHEDULE_UPDATED);
+      const updated = await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, updateData);
+      return sendResponse(c, 200, SCHEDULE_UPDATED, formatMotorScheduleResponse(updated));
     } catch (error: any) {
-      console.error("Error at edit motor Schedule : ", error.message);
+      console.error("Error at edit motor Schedule:", error.message);
       throw error;
     }
   };
 
-
+  // =================== DELETE SCHEDULE ===================
   deleteMotorScheduleHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
-      const existedId = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id"]);
-      if (!existedId) {
-        throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      const existed = await getRecordById<MotorScheduleTable>(
+        motorSchedules, scheduleId, ["id", "schedule_status"],
+      );
+      if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      // If schedule is RUNNING, stop it first (no compensation)
+      if ((existed as any).schedule_status === "RUNNING") {
+        await stopScheduleById(scheduleId);
       }
-      await deleteRecordById<MotorScheduleTable>(motorSchedules, existedId.id);
+
+      await deleteRecordById<MotorScheduleTable>(motorSchedules, (existed as any).id);
       return sendResponse(c, 200, SCHEDULE_DELETED);
-    }
-    catch (error: any) {
-      console.error("Error at delete motor Schedule : ", error.message);
+    } catch (error: any) {
+      console.error("Error at delete motor Schedule:", error.message);
       throw error;
     }
   };
 
+  // =================== STOP SINGLE SCHEDULE ===================
+  stopMotorScheduleHandler = async (c: Context) => {
+    try {
+      const scheduleId = +c.req.param("id");
+      paramsValidateException.validateId(scheduleId, "schedule id");
+
+      const activeSchedule = await findActiveScheduleById(scheduleId);
+      if (!activeSchedule) throw new BadRequestException(NO_ACTIVE_SCHEDULE);
+
+      const stopped = await stopScheduleById(scheduleId);
+      return sendResponse(c, 200, SCHEDULE_STOPPED, formatMotorScheduleResponse(stopped?.[0]));
+    } catch (error: any) {
+      console.error("Error at stop motor Schedule:", error.message);
+      throw error;
+    }
+  };
+
+  // =================== RESTART SINGLE SCHEDULE ===================
+  restartMotorScheduleHandler = async (c: Context) => {
+    try {
+      const scheduleId = +c.req.param("id");
+      paramsValidateException.validateId(scheduleId, "schedule id");
+
+      const existed = await getRecordById<MotorScheduleTable>(
+        motorSchedules, scheduleId, ["id", "schedule_status"],
+      );
+      if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      const restarted = await restartScheduleById(scheduleId);
+      return sendResponse(c, 200, SCHEDULE_RESTARTED, formatMotorScheduleResponse(restarted?.[0]));
+    } catch (error: any) {
+      console.error("Error at restart motor Schedule:", error.message);
+      throw error;
+    }
+  };
+
+  // =================== STOP ALL SCHEDULES FOR A MOTOR ===================
+  stopAllMotorSchedulesHandler = async (c: Context) => {
+    try {
+      const motorId = +c.req.param("motor_id");
+      paramsValidateException.validateId(motorId, "motor id");
+
+      const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(
+        motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"], ["id"],
+      );
+      if (!existedMotor) throw new BadRequestException(MOTOR_NOT_FOUND);
+
+      const activeSchedules = await findAllActiveSchedulesForMotor(existedMotor.id);
+      if (!activeSchedules || activeSchedules.length === 0) {
+        throw new BadRequestException(NO_ACTIVE_SCHEDULE);
+      }
+
+      const ids = activeSchedules.map(s => s.id);
+      await cancelSchedulesByIds(ids);
+
+      return sendResponse(c, 200, ALL_SCHEDULES_STOPPED, { cancelled_count: ids.length });
+    } catch (error: any) {
+      console.error("Error at stop all motor Schedules:", error.message);
+      throw error;
+    }
+  };
+
+  // =================== ADD REPEAT DAYS ===================
+  addRepeatDaysHandler = async (c: Context) => {
+    try {
+      const scheduleId = +c.req.param("id");
+      paramsValidateException.validateId(scheduleId, "schedule id");
+
+      const reqData = await c.req.json();
+      const normalizedReqData = normalizeRepeatDaysPayload(reqData);
+      const data = await validatedRequest<ValidatedAddRepeatDays>(
+        "add-repeat-days", normalizedReqData, ADD_REPEAT_DAYS_VALIDATION_CRITERIA,
+      );
+
+      const existed = await getRecordById<MotorScheduleTable>(
+        motorSchedules, scheduleId,
+        ["id", "motor_id", "days_of_week", "start_time", "end_time"],
+      );
+      if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      const schedule = existed as any;
+
+      // Merge existing days with new days (deduplicated and sorted)
+      const existingDays: number[] = schedule.days_of_week || [];
+      const mergedDays = [...new Set([...existingDays, ...data.days_of_week])].sort();
+
+      // Re-check conflicts with expanded days
+      const conflicts = await findConflictingSchedules(
+        schedule.motor_id, null, mergedDays, scheduleId,
+      );
+      checkMotorScheduleConflict(
+        { start_time: schedule.start_time, end_time: schedule.end_time },
+        conflicts,
+      );
+
+      await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, {
+        days_of_week: mergedDays,
+      });
+
+      return sendResponse(c, 200, REPEAT_DAYS_ADDED, { days_of_week: mergedDays });
+    } catch (error: any) {
+      console.error("Error at add repeat days:", error.message);
+      throw error;
+    }
+  };
+
+  // =================== BATCH CREATE FOR POND ===================
   createMotorScheduleForPondHandler = async (c: Context) => {
     try {
       const reqData = await c.req.json();
-      const validatedReqData = await validatedRequest<ValidatedMotorScheduleArray>("create-motor-schedule", reqData, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA);
+      const normalizedReqData = normalizeMotorSchedulePayload(reqData);
+      if (!Array.isArray(normalizedReqData) || normalizedReqData.length === 0) {
+        throw new BadRequestException(CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA);
+      }
 
-      const preparedScheduledData = validatedReqData.map(item => ({
-        pond_id: item.pond_id,
-        motor_id: item.motor_id,
-        schedule_type: item.schedule_type,
-        schedule_date: item.schedule_date || null,
-        days_of_week: item.days_of_week || [],
-        start_time: item.start_time,
-        end_time: item.end_time,
-      }));
-      await saveRecords<MotorScheduleTable>(motorSchedules, preparedScheduledData);
+      const validatedReqData = await Promise.all(normalizedReqData.map((payload) =>
+        validatedRequest<ValidatedMotorSchedule>(
+          "create-motor-schedule", payload, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
+        ),
+      ));
+
+      // Group by motor_id and get next schedule_id for each motor
+      const uniqueMotorIds = [...new Set(validatedReqData.map(item => item.motor_id))];
+      const motorScheduleIdMap = new Map<number, number>();
+      await Promise.all(
+        uniqueMotorIds.map(async (motorId) => {
+          const nextId = await getNextScheduleIdForMotor(motorId);
+          motorScheduleIdMap.set(motorId, nextId);
+        }),
+      );
+
+      const preparedData = validatedReqData.map(item => {
+        const currentId = motorScheduleIdMap.get(item.motor_id)!;
+        motorScheduleIdMap.set(item.motor_id, currentId + 1);
+        return {
+          motor_id: item.motor_id,
+          schedule_id: currentId,
+          schedule_type: item.schedule_type || "TIME_BASED",
+          schedule_date: new Date().toISOString(),
+          days_of_week: item.days_of_week || [],
+          start_time: item.start_time,
+          end_time: item.end_time,
+          runtime_minutes: item.runtime_minutes || null,
+          cycle_on_minutes: item.cycle_on_minutes || null,
+          cycle_off_minutes: item.cycle_off_minutes || null,
+          power_loss_recovery: item.power_loss_recovery || false,
+          repeat: item.repeat ?? 0,
+        };
+      });
+
+      await saveRecords<MotorScheduleTable>(motorSchedules, preparedData);
       return sendResponse(c, 201, SCHEDULED_CREATED);
-    }
-    catch (error: any) {
-      if (error.code === "23505" && error.constraint === "uniqueMotorSchedule") {
+    } catch (error: any) {
+      if (error.code === "23505" && error.constraint === "motor_schedule_unique_idx") {
         throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
       }
-      console.error("Error at create motor Schedule for pond : ", error.message);
+      console.error("Error at create motor Schedule for pond:", error.message);
       throw error;
     }
   };

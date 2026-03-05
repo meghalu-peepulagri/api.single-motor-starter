@@ -266,7 +266,9 @@ export const BRIDGE_RESULT_FETCHED = "Bridge result fetched successfully";
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
 // Motor schedule 
-export const SCHEDULE_TYPES = ["ONE_TIME", "DAILY", "WEEKLY"];
+export const SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"];
+export const SCHEDULE_TYPE_CODES = [1, 2]; // 1 = TIME_BASED, 2 = CYCLIC
+export const DAYS_OF_WEEK_ENUM = [0, 1, 2, 3, 4, 5, 6]; // 0=Sunday ... 6=Saturday
 export const SCHEDULED_CREATED = "Motor schedule created successfully";
 export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with a motor same type & time";
 export const SCHEDULE_TYPE_IS_REQUIRED = "Schedule type is required";
@@ -284,7 +286,36 @@ export const SCHEDULE_NOT_FOUND = "Motor schedule id not found";
 export const SCHEDULE_DELETED = "Motor Schedule deleted successfully";
 export const SCHEDULE_STATUS = ["PENDING", "RUNNING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "RESCHEDULED"];
 export const INVALID_SCHEDULED_STATUS = "Invalid schedule status";
-export const SCHEDULE_STATUS_DAILY_WEEKLY = ["DAILY", "WEEKLY"];
+// Cyclic mode validation
+export const CYCLE_ON_MINUTES_REQUIRED = "Cycle ON duration (minutes) is required for CYCLIC mode";
+export const CYCLE_OFF_MINUTES_REQUIRED = "Cycle OFF duration (minutes) is required for CYCLIC mode";
+export const CYCLE_ON_MINUTES_MIN = "Cycle ON duration must be at least 1 minute";
+export const CYCLE_OFF_MINUTES_MIN = "Cycle OFF duration must be at least 1 minute";
+// Runtime quota
+export const RUNTIME_MINUTES_MIN = "Runtime quota must be at least 1 minute";
+// Time validation
+export const START_TIME_BEFORE_END_TIME = "Start time must be before end time (unless crossing midnight)";
+export const SCHEDULE_MIN_GAP = "Schedule must have at least a 5-minute gap from existing schedules";
+export const SCHEDULE_MIN_ADVANCE = "Schedule must be created at least 5 minutes before start time";
+export const DAYS_OF_WEEK_REQUIRED_FOR_REPEAT = "At least one day must be selected for recurring schedules";
+export const SCHEDULE_DATE_PAST = "Schedule date cannot be in the past";
+// Stop / Stop-all
+export const SCHEDULE_STOPPED = "Motor schedule stopped successfully";
+export const SCHEDULE_RESTARTED = "Motor schedule restarted successfully";
+export const ALL_SCHEDULES_STOPPED = "All active schedules stopped for this motor";
+export const NO_ACTIVE_SCHEDULE = "No active schedule found to stop";
+// Repeat days
+export const REPEAT_DAYS_ADDED = "Repeat days updated successfully";
+export const INVALID_REPEAT_DAYS_UPDATE = "Cannot add repeat days to a date-specific schedule";
+// Conflict detection
+export const SCHEDULE_OVERLAP_CONFLICT = "Schedule overlaps with an existing schedule";
+export const SCHEDULE_GAP_CONFLICT = "Schedule is too close to an existing schedule (minimum 5-minute gap required)";
+// Validation criteria
+export const UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Update motor schedule details provided do not meet the required validation criteria";
+export const ADD_REPEAT_DAYS_VALIDATION_CRITERIA = "Add repeat days details provided do not meet the required validation criteria";
+// Starter ID
+export const STARTER_ID_REQUIRED = "Device is required";
+export const CANNOT_EDIT_RUNNING_SCHEDULE = "Cannot edit a running schedule. Stop it first";
 export const All_USER_TYPES = ["OWNER", "MANAGER", "SUPERVISOR", "USER"];
 export const ALL_ADMIN_TYPES = ["ADMIN", "SUPER_ADMIN"];
 export const ALL_WRITE_TYPES = ["OWNER", "MANAGER"];
