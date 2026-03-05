@@ -1,4 +1,4 @@
-import { ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALREADY_SCHEDULED_EXISTS, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
+import { ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, ALREADY_SCHEDULED_EXISTS, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -6,10 +6,11 @@ import ConflictException from "../exceptions/conflict-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict, } from "../helpers/motor-helper.js";
 import { formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
-import { deleteRecordById, getRecordById, getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, updateRecordById, } from "../services/db/base-db-services.js";
+import { deleteRecordById, getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById, } from "../services/db/motor-schedules-services.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorScheduleHandler {
     // =================== CREATE SCHEDULE ===================
@@ -44,14 +45,14 @@ export class MotorScheduleHandler {
                 power_loss_recovery: data.power_loss_recovery || false,
                 repeat: data.repeat ?? 0,
             };
-            console.log("preparedData", preparedData);
             await saveSingleRecord(motorSchedules, preparedData);
             return sendResponse(c, 201, SCHEDULED_CREATED);
         }
         catch (error) {
-            if (error.code === "23505" && error.constraint === "motor_schedule_unique_idx") {
-                throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
-            }
+            console.error("Error at create Motor Schedule:", error.message);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
             console.error("Error at create Motor Schedule:", error.message);
             throw error;
         }
@@ -228,51 +229,6 @@ export class MotorScheduleHandler {
         }
         catch (error) {
             console.error("Error at add repeat days:", error.message);
-            throw error;
-        }
-    };
-    // =================== BATCH CREATE FOR POND ===================
-    createMotorScheduleForPondHandler = async (c) => {
-        try {
-            const reqData = await c.req.json();
-            const normalizedReqData = normalizeMotorSchedulePayload(reqData);
-            if (!Array.isArray(normalizedReqData) || normalizedReqData.length === 0) {
-                throw new BadRequestException(CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA);
-            }
-            const validatedReqData = await Promise.all(normalizedReqData.map((payload) => validatedRequest("create-motor-schedule", payload, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA)));
-            // Group by motor_id and get next schedule_id for each motor
-            const uniqueMotorIds = [...new Set(validatedReqData.map(item => item.motor_id))];
-            const motorScheduleIdMap = new Map();
-            await Promise.all(uniqueMotorIds.map(async (motorId) => {
-                const nextId = await getNextScheduleIdForMotor(motorId);
-                motorScheduleIdMap.set(motorId, nextId);
-            }));
-            const preparedData = validatedReqData.map(item => {
-                const currentId = motorScheduleIdMap.get(item.motor_id);
-                motorScheduleIdMap.set(item.motor_id, currentId + 1);
-                return {
-                    motor_id: item.motor_id,
-                    schedule_id: currentId,
-                    schedule_type: item.schedule_type || "TIME_BASED",
-                    schedule_date: new Date().toISOString(),
-                    days_of_week: item.days_of_week || [],
-                    start_time: item.start_time,
-                    end_time: item.end_time,
-                    runtime_minutes: item.runtime_minutes || null,
-                    cycle_on_minutes: item.cycle_on_minutes || null,
-                    cycle_off_minutes: item.cycle_off_minutes || null,
-                    power_loss_recovery: item.power_loss_recovery || false,
-                    repeat: item.repeat ?? 0,
-                };
-            });
-            await saveRecords(motorSchedules, preparedData);
-            return sendResponse(c, 201, SCHEDULED_CREATED);
-        }
-        catch (error) {
-            if (error.code === "23505" && error.constraint === "motor_schedule_unique_idx") {
-                throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
-            }
-            console.error("Error at create motor Schedule for pond:", error.message);
             throw error;
         }
     };

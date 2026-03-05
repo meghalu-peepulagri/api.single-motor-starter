@@ -59,9 +59,15 @@ export const vAddMotorSchedule = v.pipe(
       v.regex(/^([01]\d|2[0-3]):([0-5]\d)$/, SCHEDULE_END_TIME_INVALID),
     ),
 
-    days_of_week: v.array(
-      v.union(
-        DAYS_OF_WEEK_ENUM.map((day) => v.literal(day)) as any,
+    days_of_week: v.pipe(
+      v.array(v.number()),
+      v.custom(
+        (val: unknown) => Array.isArray(val) && val.length >= 1,
+        DAYS_OF_WEEK_REQUIRED_FOR_REPEAT,
+      ),
+      v.custom(
+        (val: unknown) =>
+          Array.isArray(val) && val.every((day) => DAYS_OF_WEEK_ENUM.includes(day as any)),
         INVALID_DAYS_WEEK,
       ),
     ),
@@ -132,15 +138,15 @@ export const vUpdateMotorSchedule = vAddMotorSchedule;
 // =================== ADD REPEAT DAYS VALIDATOR ===================
 export const vAddRepeatDays = v.object({
   days_of_week: v.pipe(
-    v.array(
-      v.union(
-        DAYS_OF_WEEK_ENUM.map((day) => v.literal(day)) as any,
-        INVALID_DAYS_WEEK,
-      ),
-    ),
+    v.array(v.number()),
     v.custom(
       (val: unknown) => Array.isArray(val) && val.length >= 1,
       DAYS_OF_WEEK_REQUIRED_FOR_REPEAT,
+    ),
+    v.custom(
+      (val: unknown) =>
+        Array.isArray(val) && val.every((day) => DAYS_OF_WEEK_ENUM.includes(day as any)),
+      INVALID_DAYS_WEEK,
     ),
   ),
 });

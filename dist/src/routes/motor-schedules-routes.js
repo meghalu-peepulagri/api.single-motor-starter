@@ -3,8 +3,6 @@ import { MotorScheduleHandler } from "../handlers/motor-scheduling-handlers.js";
 import { isAuthorized } from "../middlewares/isAuthorized.js";
 const motorScheduleHandler = new MotorScheduleHandler();
 const motorScheduleRoute = factory.createApp();
-// Batch create schedules for a pond
-motorScheduleRoute.post("/pond", isAuthorized, motorScheduleHandler.createMotorScheduleForPondHandler);
 // Stop all active schedules for a motor
 motorScheduleRoute.post("/stop-all/:motor_id", isAuthorized, motorScheduleHandler.stopAllMotorSchedulesHandler);
 // Stop a single active schedule

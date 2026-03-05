@@ -1,5 +1,5 @@
 {
-  "id": "c4e9ec61-b9ae-4970-b17c-626f72189e66",
+  "id": "17806a6e-26a3-44bb-b594-1c6af19adff9",
   "prevId": "22c282b2-8b69-42db-a8e5-b6022bed7215",
   "version": "7",
   "dialect": "postgresql",
@@ -1565,7 +1565,7 @@
         },
         "schedule_type": {
           "name": "schedule_type",
-          "type": "schedule_type",
+          "type": "schedule_mode",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
@@ -1640,6 +1640,13 @@
           "primaryKey": false,
           "notNull": false,
           "default": false
+        },
+        "repeat": {
+          "name": "repeat",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "schedule_status": {
           "name": "schedule_status",
@@ -6702,8 +6709,8 @@
         "RESCHEDULED"
       ]
     },
-    "public.schedule_type": {
-      "name": "schedule_type",
+    "public.schedule_mode": {
+      "name": "schedule_mode",
       "schema": "public",
       "values": [
         "TIME_BASED",

@@ -42,6 +42,7 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "valid_starter_box_name": "Name already exist.",
   "unique_motor_alias_name_per_location": "Pump name already exist.",
   "validate_device_mobile_number": "Mobile number already exist.",
+  "motor_schedule_unique_idx": "Schedule already exists with a pump same type & time",
 };
 
 export const FOREIGN_KEY_MESSAGES: Record<string, string> = {
@@ -298,7 +299,7 @@ export const SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"] as const;
 export const SCHEDULE_TYPE_CODES = [1, 2] as const; // 1 = TIME_BASED, 2 = CYCLIC
 export const DAYS_OF_WEEK_ENUM = [0, 1, 2, 3, 4, 5, 6] as const; // 0=Sunday ... 6=Saturday
 export const SCHEDULED_CREATED = "Motor schedule created successfully";
-export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with a motor same type & time";
+export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with a pump same type & time";
 export const SCHEDULE_TYPE_IS_REQUIRED = "Schedule type is required";
 export const INVALID_SCHEDULED_TYPE = "Invalid schedule type";
 export const SCHEDULE_DATE_REQUIRED = "Schedule date is required";
@@ -328,7 +329,7 @@ export const RUNTIME_MINUTES_MIN = "Runtime quota must be at least 1 minute";
 export const START_TIME_BEFORE_END_TIME = "Start time must be before end time (unless crossing midnight)";
 export const SCHEDULE_MIN_GAP = "Schedule must have at least a 5-minute gap from existing schedules";
 export const SCHEDULE_MIN_ADVANCE = "Schedule must be created at least 5 minutes before start time";
-export const DAYS_OF_WEEK_REQUIRED_FOR_REPEAT = "At least one day must be selected for recurring schedules";
+export const DAYS_OF_WEEK_REQUIRED_FOR_REPEAT = "At least one day must be required";
 export const SCHEDULE_DATE_PAST = "Schedule date cannot be in the past";
 
 // Stop / Stop-all

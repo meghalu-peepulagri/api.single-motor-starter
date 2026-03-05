@@ -7,7 +7,7 @@ export const vAddMotorSchedule = v.pipe(v.object({
     schedule_type: v.pipe(v.string(SCHEDULE_TYPE_IS_REQUIRED), v.nonEmpty(SCHEDULE_TYPE_IS_REQUIRED), v.picklist(SCHEDULE_TYPES, INVALID_SCHEDULED_TYPE)),
     start_time: v.pipe(v.string(SCHEDULE_START_TIME_REQUIRED), v.nonEmpty(SCHEDULE_START_TIME_REQUIRED), v.regex(/^([01]\d|2[0-3]):([0-5]\d)$/, SCHEDULE_START_TIME_INVALID)),
     end_time: v.pipe(v.string(SCHEDULE_END_TIME_REQUIRED), v.nonEmpty(SCHEDULE_END_TIME_REQUIRED), v.regex(/^([01]\d|2[0-3]):([0-5]\d)$/, SCHEDULE_END_TIME_INVALID)),
-    days_of_week: v.array(v.union(DAYS_OF_WEEK_ENUM.map((day) => v.literal(day)), INVALID_DAYS_WEEK)),
+    days_of_week: v.pipe(v.array(v.number()), v.custom((val) => Array.isArray(val) && val.length >= 1, DAYS_OF_WEEK_REQUIRED_FOR_REPEAT), v.custom((val) => Array.isArray(val) && val.every((day) => DAYS_OF_WEEK_ENUM.includes(day)), INVALID_DAYS_WEEK)),
     // TIME_BASED: optional runtime quota in minutes
     runtime_minutes: v.optional(v.pipe(v.number(), v.custom((val) => typeof val === "number" && Number.isInteger(val) && val >= 1, RUNTIME_MINUTES_MIN))),
     // CYCLIC: ON/OFF durations in minutes
@@ -39,7 +39,7 @@ v.custom((data) => {
 export const vUpdateMotorSchedule = vAddMotorSchedule;
 // =================== ADD REPEAT DAYS VALIDATOR ===================
 export const vAddRepeatDays = v.object({
-    days_of_week: v.pipe(v.array(v.union(DAYS_OF_WEEK_ENUM.map((day) => v.literal(day)), INVALID_DAYS_WEEK)), v.custom((val) => Array.isArray(val) && val.length >= 1, DAYS_OF_WEEK_REQUIRED_FOR_REPEAT)),
+    days_of_week: v.pipe(v.array(v.number()), v.custom((val) => Array.isArray(val) && val.length >= 1, DAYS_OF_WEEK_REQUIRED_FOR_REPEAT), v.custom((val) => Array.isArray(val) && val.every((day) => DAYS_OF_WEEK_ENUM.includes(day)), INVALID_DAYS_WEEK)),
 });
 // =================== BATCH CREATE (for pond) ===================
 export const vArrayOfMotorScheduleValidators = v.array(vAddMotorSchedule);
