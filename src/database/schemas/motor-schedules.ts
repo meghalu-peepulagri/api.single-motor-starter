@@ -2,8 +2,21 @@ import { relations, sql } from "drizzle-orm";
 import { boolean, index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { motors } from "./motors.js";
 import { starterBoxes } from "./starter-boxes.js";
+import { statusEnum } from "../../constants/enum-types.js";
+import { users } from "./users.js";
 
-export const scheduleStatusEnum = pgEnum("schedule_status", ["PENDING", "RUNNING", "SCHEDULED", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "RESCHEDULED"]);
+export const scheduleStatusEnum = pgEnum("schedule_status", [
+  "PENDING",     // Created but not yet evaluated
+  "SCHEDULED",   // Waiting for start time
+  "RUNNING",     // Currently running
+  "STOPPED",     // Stopped manually (cmd=1)
+  "COMPLETED",   // Finished successfully
+  "FAILED",      // Device execution failed
+  "CANCELLED",   // Cancelled by user/system
+  "DELETED",      // Deleted (cmd=3)
+  "RESTARTED",    // Restarted (cmd=2)
+]);
+
 export const scheduleTypeEnum = pgEnum("schedule_mode", ["TIME_BASED", "CYCLIC"]);
 
 export const motorSchedules = pgTable("motor_schedules", {
@@ -12,9 +25,9 @@ export const motorSchedules = pgTable("motor_schedules", {
   starter_id: integer("starter_id").references(() => starterBoxes.id),
 
   schedule_type: scheduleTypeEnum().default("TIME_BASED").notNull(), // TIME_BASED, CYCLIC
-  schedule_id: integer("schedule_id").notNull(), // Auto-increment per motor (1, 2, 3... for each motor)
+  schedule_id: integer("schedule_id").notNull(), // Auto-increment per motor 
 
-  schedule_date: varchar("schedule_date"), // specific date for one-time schedule (YYYY-MM-DD)
+  schedule_date: varchar("schedule_date"), // Scheduled at
   days_of_week: integer("days_of_week").array().notNull().default(sql`'{}'::integer[]`), // 0=Sunday, 1=Monday ... 6=Saturday
 
   start_time: varchar("start_time").notNull(), // HH:mm format
@@ -39,8 +52,20 @@ export const motorSchedules = pgTable("motor_schedules", {
   // Repeat the same schedule: 0 = Repeat OFF, 1 = Repeat ON
   repeat: integer("repeat").default(0).notNull(),
 
+  // schedule active or not (for soft delete and future use)
+  enabled: boolean("enabled").default(true).notNull(),
+
   schedule_status: scheduleStatusEnum().default("PENDING").notNull(),
   acknowledgement: integer("acknowledgement").default(0), // 0 = Not Acknowledged, 1 = Acknowledged
+  acknowledged_at: timestamp("acknowledged_at"),
+
+  last_started_at: timestamp("last_started_at"),
+  last_stopped_at: timestamp("last_stopped_at"),
+
+  created_by: integer("created_by").references(() => users.id), // user_id of the creator
+  deleted_by: integer("deleted_by").references(() => users.id), // user_id of who deleted (if applicable)
+
+  status: statusEnum().default("ACTIVE").notNull(),
 
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
