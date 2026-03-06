@@ -207,6 +207,7 @@ export async function findPendingSchedulesForSync() {
             cycle_off_minutes: true,
             repeat: true,
             days_of_week: true,
+            bit_wise_days: true,
             power_loss_recovery: true,
             enabled: true,
         },

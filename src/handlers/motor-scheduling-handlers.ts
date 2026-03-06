@@ -32,7 +32,6 @@ import {
 } from "../helpers/motor-helper.js";
 import {
   buildDeviceSyncPayloads,
-  encodeDaysMask,
   formatMotorScheduleListResponse,
   formatMotorScheduleResponse,
   normalizeMotorSchedulePayload,
@@ -368,7 +367,7 @@ export class MotorScheduleHandler {
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, {
         days_of_week: mergedDays,
-        bit_wise_days: encodeDaysMask(mergedDays),
+        bit_wise_days: (data as any).bit_wise_days ?? 0,
       });
 
       return sendResponse(c, 200, REPEAT_DAYS_ADDED, { days_of_week: mergedDays });

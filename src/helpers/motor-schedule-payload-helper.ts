@@ -197,24 +197,10 @@ export function formatMotorScheduleListResponse(result: any): any {
 const MAX_PAYLOAD_BYTES = 800;
 const MAX_PAYLOADS_PER_DEVICE = 6;
 
-/** Encode days_of_week array [0,2,5] into bitmask: bit0=Sun, bit1=Mon ... bit6=Sat */
-export function encodeDaysMask(days: number[]): number {
-  let mask = 0;
-  for (const day of days) {
-    mask |= (1 << day);
-  }
-  return mask;
-}
-
-/** Convert schedule_type string to numeric code: 1 = TIME_BASED, 2 = CYCLIC */
-function scheduleTypeToCode(type: string): number {
-  return type === "CYCLIC" ? 2 : 1;
-}
-
 /** Format a single schedule record into compact device payload "D" object */
 function toCompactSchedule(record: any): Record<string, any> {
   const isCyclic = record.schedule_type === "CYCLIC";
-  const days = encodeDaysMask(Array.isArray(record.days_of_week) ? record.days_of_week : []);
+  const days = record.bit_wise_days ?? 0;
 
   if (isCyclic) {
     return {

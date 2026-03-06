@@ -201,6 +201,7 @@ export const vAddRepeatDays = v.object({
       INVALID_DAYS_WEEK,
     ),
   ),
+  bit_wise_days: v.optional(v.number()),
 });
 
 // =================== BATCH CREATE (for pond) ===================

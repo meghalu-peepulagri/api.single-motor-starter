@@ -80,6 +80,7 @@ export const vUpdateMotorSchedule = vAddMotorSchedule;
 // =================== ADD REPEAT DAYS VALIDATOR ===================
 export const vAddRepeatDays = v.object({
     days_of_week: v.pipe(v.array(v.number()), v.custom((val) => Array.isArray(val) && val.length >= 1, DAYS_OF_WEEK_REQUIRED_FOR_REPEAT), v.custom((val) => Array.isArray(val) && val.every((day) => DAYS_OF_WEEK_ENUM.includes(day)), INVALID_DAYS_WEEK)),
+    bit_wise_days: v.optional(v.number()),
 });
 // =================== BATCH CREATE (for pond) ===================
 export const vArrayOfMotorScheduleValidators = v.array(vAddMotorSchedule);

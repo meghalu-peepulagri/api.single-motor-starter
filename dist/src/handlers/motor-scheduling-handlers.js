@@ -4,7 +4,7 @@ import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict, } from "../helpers/motor-helper.js";
-import { buildDeviceSyncPayloads, encodeDaysMask, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
+import { buildDeviceSyncPayloads, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findPendingSchedulesForSync, findScheduleByScheduleId, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById, } from "../services/db/motor-schedules-services.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
@@ -257,7 +257,7 @@ export class MotorScheduleHandler {
             checkMotorScheduleConflict({ start_time: schedule.start_time, end_time: schedule.end_time }, conflicts);
             await updateRecordById(motorSchedules, scheduleId, {
                 days_of_week: mergedDays,
-                bit_wise_days: encodeDaysMask(mergedDays),
+                bit_wise_days: data.bit_wise_days ?? 0,
             });
             return sendResponse(c, 200, REPEAT_DAYS_ADDED, { days_of_week: mergedDays });
         }
