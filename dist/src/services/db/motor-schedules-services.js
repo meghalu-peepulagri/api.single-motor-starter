@@ -119,7 +119,7 @@ export async function restartScheduleById(scheduleId) {
  * Find schedules by starter_id, motor_id, and/or status with pagination.
  */
 export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
-    const conditions = [];
+    const conditions = [ne(motorSchedules.status, "ARCHIVED")];
     if (filters.starter_id) {
         conditions.push(eq(motorSchedules.starter_id, filters.starter_id));
     }
@@ -128,6 +128,9 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
     }
     if (filters.status) {
         conditions.push(eq(motorSchedules.schedule_status, filters.status));
+    }
+    if (filters.type) {
+        conditions.push(eq(motorSchedules.schedule_type, filters.type));
     }
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     const countResult = await db

@@ -162,6 +162,13 @@
       "when": 1772708753961,
       "tag": "0022_cute_maximus",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1772719967843,
+      "tag": "0023_fancy_scorpion",
+      "breakpoints": true
     }
   ]
 }

@@ -1,21 +1,21 @@
-import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, ALREADY_SCHEDULED_EXISTS, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
-import ConflictException from "../exceptions/conflict-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict, } from "../helpers/motor-helper.js";
 import { formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
-import { deleteRecordById, getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
+import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById, } from "../services/db/motor-schedules-services.js";
+import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 const paramsValidateException = new ParamsValidateException();
 export class MotorScheduleHandler {
     // =================== CREATE SCHEDULE ===================
     createMotorScheduleHandler = async (c) => {
         try {
+            const userPayload = c.get("user_payload");
             const reqData = await c.req.json();
             const normalizedReqData = normalizeMotorSchedulePayload(reqData);
             const data = await validatedRequest("create-motor-schedule", normalizedReqData, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA);
@@ -44,6 +44,7 @@ export class MotorScheduleHandler {
                 cycle_off_minutes: data.cycle_off_minutes || null,
                 power_loss_recovery: data.power_loss_recovery || false,
                 repeat: data.repeat ?? 0,
+                created_by: userPayload.id,
             };
             const savedSchedule = await saveSingleRecord(motorSchedules, preparedData);
             return sendResponse(c, 201, SCHEDULED_CREATED, savedSchedule);
@@ -123,8 +124,8 @@ export class MotorScheduleHandler {
                 power_loss_recovery: data.power_loss_recovery ?? false,
                 repeat: data.repeat ?? 0,
             };
-            const updated = await updateRecordById(motorSchedules, scheduleId, updateData);
-            return sendResponse(c, 200, SCHEDULE_UPDATED, formatMotorScheduleResponse(updated));
+            await updateRecordById(motorSchedules, scheduleId, updateData);
+            return sendResponse(c, 200, SCHEDULE_UPDATED);
         }
         catch (error) {
             console.error("Error at edit motor Schedule:", error.message);
@@ -134,6 +135,7 @@ export class MotorScheduleHandler {
     // =================== DELETE SCHEDULE ===================
     deleteMotorScheduleHandler = async (c) => {
         try {
+            const userPayload = c.get("user_payload");
             const scheduleId = +c.req.param("id");
             paramsValidateException.validateId(scheduleId, "schedule id");
             const existed = await getRecordById(motorSchedules, scheduleId, ["id", "schedule_status"]);
@@ -143,7 +145,13 @@ export class MotorScheduleHandler {
             if (existed.schedule_status === "RUNNING") {
                 await stopScheduleById(scheduleId);
             }
-            await deleteRecordById(motorSchedules, existed.id);
+            // Soft delete: mark as DELETED with deleted_by user
+            await updateRecordById(motorSchedules, existed.id, {
+                schedule_status: "DELETED",
+                deleted_by: userPayload.id,
+                status: "ARCHIVED",
+                enabled: false,
+            });
             return sendResponse(c, 200, SCHEDULE_DELETED);
         }
         catch (error) {
@@ -239,10 +247,11 @@ export class MotorScheduleHandler {
             const existed = await getRecordById(motorSchedules, scheduleId, ["id"]);
             if (!existed)
                 throw new BadRequestException(SCHEDULE_NOT_FOUND);
-            updateRecordById(motorSchedules, scheduleId, {
+            const updated = await updateRecordById(motorSchedules, scheduleId, {
                 acknowledgement: 1,
+                acknowledged_at: new Date(),
             });
-            return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
+            return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED, updated);
         }
         catch (error) {
             console.error("Error at update acknowledgement:", error.message);

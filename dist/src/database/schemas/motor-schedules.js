@@ -49,6 +49,7 @@ export const motorSchedules = pgTable("motor_schedules", {
     created_by: integer("created_by").references(() => users.id), // user_id of the creator
     deleted_by: integer("deleted_by").references(() => users.id), // user_id of who deleted (if applicable)
     status: statusEnum().default("ACTIVE").notNull(),
+    priority: integer("priority").default(2).notNull(),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, (table) => [
