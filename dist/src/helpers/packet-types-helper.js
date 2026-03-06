@@ -52,6 +52,7 @@ export function findTopicACKByType(payload) {
         case 49: return "BOOT_MANIFEST_ACK";
         case 50: return "TEMPERATURE_THRESHOLD_SETTING";
         case 52: return "DEVICE_RESET_ACK";
+        case 53: return "SCHEDULED_CREATION_ACK";
         default: return "UNKNOWN";
     }
 }

@@ -1,4 +1,4 @@
-import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, PENDING_SCHEDULES_FETCHED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, INVALID_ACK_PAYLOAD, INVALID_ACK_STATUS, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_ACK_FAILED, SCHEDULE_ACK_SUCCESS, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, PENDING_SCHEDULES_FETCHED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -6,7 +6,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { checkMotorScheduleConflict, } from "../helpers/motor-helper.js";
 import { buildDeviceSyncPayloads, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById, } from "../services/db/motor-schedules-services.js";
+import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findPendingSchedulesForSync, findScheduleByScheduleId, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById, } from "../services/db/motor-schedules-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -274,6 +274,46 @@ export class MotorScheduleHandler {
         }
         catch (error) {
             console.error("Error at update acknowledgement:", error.message);
+            throw error;
+        }
+    };
+    // =================== DEVICE SCHEDULE ACK (NO AUTH) ===================
+    schedulingCreationAckHandler = async (c) => {
+        try {
+            const payload = await c.req.json();
+            // Validate payload structure: { T, S, D: { sch_type, id, status } }
+            if (!payload || !payload.D || typeof payload.D !== "object") {
+                throw new BadRequestException(INVALID_ACK_PAYLOAD);
+            }
+            const { id, status } = payload.D;
+            if (typeof id !== "number" || id <= 0) {
+                throw new BadRequestException(INVALID_ACK_PAYLOAD);
+            }
+            if (status !== 0 && status !== 1) {
+                throw new BadRequestException(INVALID_ACK_STATUS);
+            }
+            // Find active schedule by schedule_id (per-motor auto-increment ID)
+            const schedule = await findScheduleByScheduleId(id);
+            if (!schedule)
+                throw new BadRequestException(SCHEDULE_NOT_FOUND);
+            if (status === 1) {
+                // Device acknowledged successfully
+                await updateRecordById(motorSchedules, schedule.id, {
+                    schedule_status: "SCHEDULED",
+                    acknowledgement: 1,
+                    acknowledged_at: new Date(),
+                });
+                return sendResponse(c, 200, SCHEDULE_ACK_SUCCESS, { schedule_id: id, status: "SCHEDULED" });
+            }
+            // Device failed to acknowledge (status === 0)
+            await updateRecordById(motorSchedules, schedule.id, {
+                schedule_status: "FAILED",
+            });
+            return sendResponse(c, 200, SCHEDULE_ACK_FAILED, { schedule_id: id, status: "FAILED" });
+        }
+        catch (error) {
+            console.error("Error at scheduling creation ack:", error.message);
+            handleJsonParseError(error);
             throw error;
         }
     };

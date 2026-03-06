@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
 import { deviceTemperature } from "../../database/schemas/device-temperature.js";
+import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
@@ -74,6 +75,9 @@ export async function selectTopicAck(topicType, payload, topic) {
             break;
         case "DEVICE_INFO_ACK":
             await deviceInfoAckHandler(payload, topic);
+            break;
+        case "SCHEDULING_CREATION_ACK":
+            await schedulingCreationAckHandler(payload, topic);
             break;
         default:
             return null;
@@ -667,6 +671,54 @@ export async function deviceInfoAckHandler(message, topic) {
         logger.error(`Device Info ACK error for ${macFromTopic}: ${error.message}`);
         logger.mqtt(`MQTT Device Info ACK error | MAC: ${macFromTopic} | Error: ${error.message}`);
         console.error("Error at device info ack handler:", error);
+    }
+}
+const ACTIVE_SCHEDULE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED"];
+export async function schedulingCreationAckHandler(message, topic) {
+    try {
+        const macFromTopic = topic.split("/")[1];
+        if (!message?.D || typeof message.D !== "object") {
+            console.error("Invalid scheduling ack payload: missing D object");
+            return null;
+        }
+        const { id: scheduleId, status } = message.D;
+        if (typeof scheduleId !== "number" || scheduleId <= 0) {
+            console.error(`Invalid schedule_id in scheduling ack: ${scheduleId}`);
+            return null;
+        }
+        if (status !== 0 && status !== 1) {
+            console.error(`Invalid status in scheduling ack: ${status}`);
+            return null;
+        }
+        // Find active schedule by schedule_id (per-motor auto-increment ID)
+        const schedule = await db.query.motorSchedules.findFirst({
+            where: and(eq(motorSchedules.schedule_id, scheduleId), inArray(motorSchedules.schedule_status, [...ACTIVE_SCHEDULE_STATUSES]), ne(motorSchedules.status, "ARCHIVED")),
+            columns: { id: true, schedule_id: true },
+        });
+        if (!schedule) {
+            console.error(`No active schedule found with schedule_id=${scheduleId} for ack from ${macFromTopic}`);
+            return null;
+        }
+        if (status === 1) {
+            // Device acknowledged successfully
+            await updateRecordById(motorSchedules, schedule.id, {
+                schedule_status: "SCHEDULED",
+                acknowledgement: 1,
+                acknowledged_at: new Date(),
+            });
+            logger.info(`Schedule ack success: schedule_id=${scheduleId}, db_id=${schedule.id}, from ${macFromTopic}`);
+        }
+        else {
+            // Device failed to acknowledge (status === 0)
+            await updateRecordById(motorSchedules, schedule.id, {
+                schedule_status: "FAILED",
+            });
+            logger.warn(`Schedule ack failed: schedule_id=${scheduleId}, db_id=${schedule.id}, from ${macFromTopic}`);
+        }
+    }
+    catch (error) {
+        console.error("Error at scheduling creation ack handler:", error);
+        throw error;
     }
 }
 export const waitForAck = (identifiers, timeoutMs, validator) => {

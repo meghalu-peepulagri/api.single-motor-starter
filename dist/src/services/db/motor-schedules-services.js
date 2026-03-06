@@ -52,6 +52,21 @@ export async function findConflictingSchedules(motorId, scheduleDate, daysOfWeek
         },
     });
 }
+// =================== FIND BY SCHEDULE_ID (per-motor ID) ===================
+/**
+ * Find an active schedule by its schedule_id (per-motor auto-increment ID).
+ */
+export async function findScheduleByScheduleId(scheduleId) {
+    return await db.query.motorSchedules.findFirst({
+        where: and(eq(motorSchedules.schedule_id, scheduleId), inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]), ne(motorSchedules.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            schedule_id: true,
+            schedule_status: true,
+            acknowledgement: true,
+        },
+    });
+}
 // =================== SCHEDULE LOOKUP QUERIES ===================
 /**
  * Find an active schedule by its ID (for stop operation).

@@ -318,6 +318,10 @@ export const SCHEDULE_DELETED = "Motor Schedule deleted successfully";
 export const SCHEDULE_STATUS = ["PENDING", "SCHEDULED", "RUNNING", "STOPPED", "COMPLETED", "FAILED", "CANCELLED", "DELETED", "RESTARTED"] as const;
 export const INVALID_SCHEDULED_STATUS = "Invalid schedule status";
 export const ACKNOWLEDGEMENT_UPDATED = "Acknowledgement updated successfully";
+export const SCHEDULE_ACK_SUCCESS = "Schedule acknowledged successfully";
+export const SCHEDULE_ACK_FAILED = "Device failed to acknowledge schedule";
+export const INVALID_ACK_PAYLOAD = "Invalid acknowledgement payload";
+export const INVALID_ACK_STATUS = "Invalid acknowledgement status";
 
 // Cyclic mode validation
 export const CYCLE_ON_MINUTES_REQUIRED = "Cycle ON duration (minutes) is required for CYCLIC mode";
