@@ -21,7 +21,8 @@ export const motorSchedules = pgTable("motor_schedules", {
     motor_id: integer("motor_id").notNull().references(() => motors.id),
     starter_id: integer("starter_id").references(() => starterBoxes.id),
     schedule_type: scheduleTypeEnum().default("TIME_BASED").notNull(), // TIME_BASED, CYCLIC
-    schedule_id: integer("schedule_id").notNull(), // Auto-increment per motor 
+    schedule_id: integer("schedule_id").notNull(), // Auto-increment per motor
+    bit_wise_days: integer("bit_wise_days").default(0), // Bitmask of days_of_week: bit0=Sun, bit1=Mon ... bit6=Sat
     schedule_date: varchar("schedule_date"), // Scheduled at
     days_of_week: integer("days_of_week").array().notNull().default(sql `'{}'::integer[]`), // 0=Sunday, 1=Monday ... 6=Saturday
     start_time: varchar("start_time").notNull(), // HH:mm format

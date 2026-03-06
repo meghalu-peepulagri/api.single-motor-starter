@@ -21,6 +21,7 @@ export const vAddMotorSchedule = v.pipe(v.object({
     schedule_status: v.optional(v.picklist(SCHEDULE_STATUS, INVALID_SCHEDULED_STATUS)),
     repeat: v.optional(v.union([v.literal(0), v.literal(1)], "Repeat must be 0 or 1")),
     enabled: v.optional(v.boolean()),
+    bit_wise_days: v.optional(v.number()),
 }), 
 // Cross-field: CYCLIC schedules require cycle_on_minutes and cycle_off_minutes
 v.custom((data) => {

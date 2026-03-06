@@ -177,7 +177,7 @@ export function formatMotorScheduleListResponse(result) {
 const MAX_PAYLOAD_BYTES = 800;
 const MAX_PAYLOADS_PER_DEVICE = 6;
 /** Encode days_of_week array [0,2,5] into bitmask: bit0=Sun, bit1=Mon ... bit6=Sat */
-function encodeDaysMask(days) {
+export function encodeDaysMask(days) {
     let mask = 0;
     for (const day of days) {
         mask |= (1 << day);
@@ -190,22 +190,32 @@ function scheduleTypeToCode(type) {
 }
 /** Format a single schedule record into compact device payload "D" object */
 function toCompactSchedule(record) {
-    const d = {
-        sch_type: scheduleTypeToCode(record.schedule_type),
+    const isCyclic = record.schedule_type === "CYCLIC";
+    const days = encodeDaysMask(Array.isArray(record.days_of_week) ? record.days_of_week : []);
+    if (isCyclic) {
+        return {
+            sch_type: 2,
+            id: record.schedule_id,
+            start: record.start_time,
+            end: record.end_time,
+            on: record.cycle_on_minutes ?? 0,
+            off: record.cycle_off_minutes ?? 0,
+            rep: record.repeat ?? 0,
+            days,
+            en: record.enabled ? 1 : 0,
+        };
+    }
+    return {
+        sch_type: 1,
         id: record.schedule_id,
         start: record.start_time,
         end: record.end_time,
         dur: record.runtime_minutes ?? 0,
         rep: record.repeat ?? 0,
-        days: encodeDaysMask(Array.isArray(record.days_of_week) ? record.days_of_week : []),
+        days,
         pwr_rec: record.power_loss_recovery ? 1 : 0,
         en: record.enabled ? 1 : 0,
     };
-    if (record.schedule_type === "CYCLIC") {
-        d.c_on = record.cycle_on_minutes ?? 0;
-        d.c_off = record.cycle_off_minutes ?? 0;
-    }
-    return d;
 }
 /**
  * Build compact device sync payloads from schedule records.
@@ -225,7 +235,7 @@ export function buildDeviceSyncPayloads(records) {
         list.push(record);
         grouped.set(record.starter_id, list);
     }
-    const allPayloads = [];
+    const result = [];
     for (const [starterId, schedules] of grouped) {
         // Build individual compact items
         const items = schedules.map((sch) => ({
@@ -255,7 +265,7 @@ export function buildDeviceSyncPayloads(records) {
         }
         // Limit to MAX_PAYLOADS_PER_DEVICE chunks per device
         const limitedChunks = chunks.slice(0, MAX_PAYLOADS_PER_DEVICE);
-        allPayloads.push(...limitedChunks);
+        result.push({ starter_id: starterId, chunks: limitedChunks });
     }
-    return allPayloads;
+    return result;
 }

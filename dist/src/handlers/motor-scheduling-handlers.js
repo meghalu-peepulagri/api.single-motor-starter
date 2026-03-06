@@ -4,9 +4,13 @@ import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict, } from "../helpers/motor-helper.js";
-import { buildDeviceSyncPayloads, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
+import { buildDeviceSyncPayloads, encodeDaysMask, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findPendingSchedulesForSync, findScheduleByScheduleId, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById, } from "../services/db/motor-schedules-services.js";
+import { starterBoxes } from "../database/schemas/starter-boxes.js";
+import db from "../database/configuration.js";
+import { inArray } from "drizzle-orm";
+import { publishData } from "../services/db/mqtt-db-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -41,6 +45,7 @@ export class MotorScheduleHandler {
                 start_time: data.start_time,
                 end_time: data.end_time,
                 days_of_week: data.days_of_week || [],
+                bit_wise_days: data.bit_wise_days ?? 0,
                 runtime_minutes: data.runtime_minutes || null,
                 cycle_on_minutes: data.cycle_on_minutes || null,
                 cycle_off_minutes: data.cycle_off_minutes || null,
@@ -137,6 +142,7 @@ export class MotorScheduleHandler {
                 start_time: data.start_time,
                 end_time: data.end_time,
                 days_of_week: data.days_of_week || [],
+                bit_wise_days: data.bit_wise_days ?? 0,
                 runtime_minutes: data.runtime_minutes || null,
                 cycle_on_minutes: data.cycle_on_minutes || null,
                 cycle_off_minutes: data.cycle_off_minutes || null,
@@ -251,6 +257,7 @@ export class MotorScheduleHandler {
             checkMotorScheduleConflict({ start_time: schedule.start_time, end_time: schedule.end_time }, conflicts);
             await updateRecordById(motorSchedules, scheduleId, {
                 days_of_week: mergedDays,
+                bit_wise_days: encodeDaysMask(mergedDays),
             });
             return sendResponse(c, 200, REPEAT_DAYS_ADDED, { days_of_week: mergedDays });
         }
@@ -284,8 +291,25 @@ export class MotorScheduleHandler {
             if (!records || records.length === 0) {
                 return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
             }
-            buildDeviceSyncPayloads(records);
-            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED);
+            const grouped = buildDeviceSyncPayloads(records);
+            // Fetch all starters in a single query
+            const starterIds = grouped.map(g => g.starter_id);
+            const startersData = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, starterIds));
+            const starterMap = new Map(startersData.map(s => [s.id, s]));
+            let totalPublished = 0;
+            for (const { starter_id, chunks } of grouped) {
+                const starterData = starterMap.get(starter_id);
+                if (!starterData) {
+                    console.error(`Starter not found for id=${starter_id}, skipping publish`);
+                    continue;
+                }
+                for (const chunk of chunks) {
+                    publishData(chunk, starterData);
+                    totalPublished++;
+                    console.log(`Published chunk to starter_id=${starter_id}, items=${chunk.length}, bytes=${Buffer.byteLength(JSON.stringify(chunk), "utf8")}`);
+                }
+            }
+            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: grouped.length, payloads_published: totalPublished });
         }
         catch (error) {
             console.error("Error at get pending schedules for sync:", error.message);

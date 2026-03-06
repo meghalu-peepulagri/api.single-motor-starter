@@ -169,6 +169,13 @@
       "when": 1772719967843,
       "tag": "0023_fancy_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1772805063943,
+      "tag": "0024_hot_wasp",
+      "breakpoints": true
     }
   ]
 }
