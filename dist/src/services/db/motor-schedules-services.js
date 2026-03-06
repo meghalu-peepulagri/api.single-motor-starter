@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED"];
@@ -158,4 +158,43 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
         offset,
     });
     return { pagination_info, records };
+}
+// =================== PENDING SCHEDULES FOR DEVICE SYNC ===================
+/**
+ * Fetch unacknowledged, active schedules where schedule_date is within the next 3 days
+ * or repeat=1 (repeat schedules always need syncing).
+ * Groups results by starter_id.
+ */
+export async function findPendingSchedulesForSync() {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const threeDaysLater = new Date(today);
+    threeDaysLater.setDate(today.getDate() + 3);
+    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const threeDaysStr = threeDaysLater.toISOString().split("T")[0];
+    const todayStr = today.toISOString().split("T")[0];
+    return await db.query.motorSchedules.findMany({
+        where: and(eq(motorSchedules.acknowledgement, 0), eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]), sql `(
+        ${motorSchedules.repeat} = 1
+        OR (${motorSchedules.schedule_date} >= ${todayStr} AND ${motorSchedules.schedule_date} <= ${threeDaysStr})
+        OR (${motorSchedules.schedule_date} = ${yesterdayStr} AND ${motorSchedules.start_time} > ${motorSchedules.end_time})
+      )`),
+        columns: {
+            id: true,
+            starter_id: true,
+            schedule_id: true,
+            schedule_type: true,
+            start_time: true,
+            end_time: true,
+            runtime_minutes: true,
+            cycle_on_minutes: true,
+            cycle_off_minutes: true,
+            repeat: true,
+            days_of_week: true,
+            power_loss_recovery: true,
+            enabled: true,
+        },
+        orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.start_time)],
+    });
 }

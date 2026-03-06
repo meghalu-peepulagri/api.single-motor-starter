@@ -15,6 +15,7 @@ import {
   SCHEDULE_STOPPED,
   SCHEDULE_UPDATED,
   SCHEDULED_CREATED,
+  PENDING_SCHEDULES_FETCHED,
   SCHEDULED_LIST_FETCHED,
   UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA
 } from "../constants/app-constants.js";
@@ -26,6 +27,7 @@ import {
   checkMotorScheduleConflict,
 } from "../helpers/motor-helper.js";
 import {
+  buildDeviceSyncPayloads,
   formatMotorScheduleListResponse,
   formatMotorScheduleResponse,
   normalizeMotorSchedulePayload,
@@ -42,6 +44,7 @@ import {
   findActiveScheduleById,
   findAllActiveSchedulesForMotor,
   findConflictingSchedules,
+  findPendingSchedulesForSync,
   findSchedulesByFilters,
   getNextScheduleIdForMotor,
   restartScheduleById,
@@ -380,6 +383,23 @@ export class MotorScheduleHandler {
       return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED, updated);
     } catch (error: any) {
       console.error("Error at update acknowledgement:", error.message);
+      throw error;
+    }
+  };
+
+  // =================== PENDING SCHEDULES FOR DEVICE SYNC (NO AUTH) ===================
+  getPendingSchedulesForSyncHandler = async (c: Context) => {
+    try {
+      const records = await findPendingSchedulesForSync();
+
+      if (!records || records.length === 0) {
+        return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
+      }
+
+      buildDeviceSyncPayloads(records);
+      return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED);
+    } catch (error: any) {
+      console.error("Error at get pending schedules for sync:", error.message);
       throw error;
     }
   };

@@ -5,6 +5,9 @@ import { isAuthorized } from "../middlewares/isAuthorized.js";
 const motorScheduleHandler = new MotorScheduleHandler();
 const motorScheduleRoute = factory.createApp();
 
+// Pending schedules for device sync (no auth)
+motorScheduleRoute.get("/sync/pending", motorScheduleHandler.getPendingSchedulesForSyncHandler);
+
 // Stop all active schedules for a motor
 motorScheduleRoute.post("/stop-all/:motor_id", isAuthorized, motorScheduleHandler.stopAllMotorSchedulesHandler);
 

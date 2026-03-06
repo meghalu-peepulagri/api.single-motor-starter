@@ -1,12 +1,12 @@
-import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, PENDING_SCHEDULES_FETCHED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict, } from "../helpers/motor-helper.js";
-import { formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
+import { buildDeviceSyncPayloads, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById, } from "../services/db/motor-schedules-services.js";
+import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById, } from "../services/db/motor-schedules-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -274,6 +274,21 @@ export class MotorScheduleHandler {
         }
         catch (error) {
             console.error("Error at update acknowledgement:", error.message);
+            throw error;
+        }
+    };
+    // =================== PENDING SCHEDULES FOR DEVICE SYNC (NO AUTH) ===================
+    getPendingSchedulesForSyncHandler = async (c) => {
+        try {
+            const records = await findPendingSchedulesForSync();
+            if (!records || records.length === 0) {
+                return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
+            }
+            buildDeviceSyncPayloads(records);
+            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED);
+        }
+        catch (error) {
+            console.error("Error at get pending schedules for sync:", error.message);
             throw error;
         }
     };

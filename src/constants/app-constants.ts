@@ -311,6 +311,7 @@ export const SCHEDULE_END_TIME_INVALID = "Invalid end time";
 export const INVALID_DAYS_WEEK = "Invalid day of week";
 export const SCHEDULED_LIST_FETCHED = "Motor scheduled list fetches successfully";
 export const SCHEDULE_DETAILS_FETCHED = "Motor schedule details fetched successfully";
+export const PENDING_SCHEDULES_FETCHED = "Pending schedules fetched successfully";
 export const SCHEDULE_UPDATED = "Motor Schedule updated successfully";
 export const SCHEDULE_NOT_FOUND = "Motor schedule id not found";
 export const SCHEDULE_DELETED = "Motor Schedule deleted successfully";

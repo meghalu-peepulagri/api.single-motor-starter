@@ -1,3 +1,4 @@
+import { randomSequenceNumber } from "./mqtt-helpers.js";
 const VALID_SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"];
 function isObject(value) {
     return typeof value === "object" && value !== null;
@@ -171,4 +172,90 @@ export function formatMotorScheduleListResponse(result) {
         ...result,
         records: result.records.map((record) => formatMotorScheduleResponse(record)),
     };
+}
+// =================== COMPACT DEVICE SYNC PAYLOAD ===================
+const MAX_PAYLOAD_BYTES = 800;
+const MAX_PAYLOADS_PER_DEVICE = 6;
+/** Encode days_of_week array [0,2,5] into bitmask: bit0=Sun, bit1=Mon ... bit6=Sat */
+function encodeDaysMask(days) {
+    let mask = 0;
+    for (const day of days) {
+        mask |= (1 << day);
+    }
+    return mask;
+}
+/** Convert schedule_type string to numeric code: 1 = TIME_BASED, 2 = CYCLIC */
+function scheduleTypeToCode(type) {
+    return type === "CYCLIC" ? 2 : 1;
+}
+/** Format a single schedule record into compact device payload "D" object */
+function toCompactSchedule(record) {
+    const d = {
+        sch_type: scheduleTypeToCode(record.schedule_type),
+        id: record.schedule_id,
+        start: record.start_time,
+        end: record.end_time,
+        dur: record.runtime_minutes ?? 0,
+        rep: record.repeat ?? 0,
+        days: encodeDaysMask(Array.isArray(record.days_of_week) ? record.days_of_week : []),
+        pwr_rec: record.power_loss_recovery ? 1 : 0,
+        en: record.enabled ? 1 : 0,
+    };
+    if (record.schedule_type === "CYCLIC") {
+        d.c_on = record.cycle_on_minutes ?? 0;
+        d.c_off = record.cycle_off_minutes ?? 0;
+    }
+    return d;
+}
+/**
+ * Build compact device sync payloads from schedule records.
+ * Groups by starter_id, formats each schedule as compact "D" object,
+ * splits into chunks of max 800 bytes, max 6 payloads per device.
+ *
+ * Returns: Array of { T: starter_id, S: schedule.id, D: {...} }[]
+ * grouped per starter as chunks.
+ */
+export function buildDeviceSyncPayloads(records) {
+    // Group schedules by starter_id
+    const grouped = new Map();
+    for (const record of records) {
+        if (!record.starter_id)
+            continue;
+        const list = grouped.get(record.starter_id) || [];
+        list.push(record);
+        grouped.set(record.starter_id, list);
+    }
+    const allPayloads = [];
+    for (const [starterId, schedules] of grouped) {
+        // Build individual compact items
+        const items = schedules.map((sch) => ({
+            T: 23,
+            S: randomSequenceNumber(),
+            D: toCompactSchedule(sch),
+        }));
+        // Split into chunks that fit within MAX_PAYLOAD_BYTES
+        const chunks = [];
+        let currentChunk = [];
+        let currentSize = 2; // for "[]"
+        for (const item of items) {
+            const itemSize = Buffer.byteLength(JSON.stringify(item), "utf8");
+            const separatorSize = currentChunk.length > 0 ? 1 : 0; // comma
+            if (currentSize + separatorSize + itemSize > MAX_PAYLOAD_BYTES && currentChunk.length > 0) {
+                chunks.push(currentChunk);
+                currentChunk = [item];
+                currentSize = 2 + itemSize;
+            }
+            else {
+                currentChunk.push(item);
+                currentSize += separatorSize + itemSize;
+            }
+        }
+        if (currentChunk.length > 0) {
+            chunks.push(currentChunk);
+        }
+        // Limit to MAX_PAYLOADS_PER_DEVICE chunks per device
+        const limitedChunks = chunks.slice(0, MAX_PAYLOADS_PER_DEVICE);
+        allPayloads.push(...limitedChunks);
+    }
+    return allPayloads;
 }
