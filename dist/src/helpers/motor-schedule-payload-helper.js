@@ -112,13 +112,14 @@ function normalizeSingleSchedulePayload(payload) {
     const scheduleDate = normalizeDate(payload.schedule_date ?? payload.date);
     const powerLossRecovery = to01(payload.power_loss_recovery ?? payload.pwr_rec);
     const enabled = to01(payload.en);
+    const finalStartTime = startTime ?? payload.start_time;
+    const finalEndTime = endTime ?? payload.end_time;
     const normalized = {
         ...payload,
         schedule_type: scheduleType,
         schedule_date: scheduleDate ?? payload.schedule_date,
-        start_time: startTime ?? payload.start_time,
-        end_time: endTime ?? payload.end_time,
-        runtime_minutes: runtimeMinutes ?? payload.runtime_minutes,
+        start_time: finalStartTime,
+        end_time: finalEndTime,
         cycle_on_minutes: cycleOnMinutes ?? payload.cycle_on_minutes,
         cycle_off_minutes: cycleOffMinutes ?? payload.cycle_off_minutes,
         days_of_week: daysOfWeek,

@@ -13,6 +13,8 @@ motorScheduleRoute.post("/restart/:id", isAuthorized, motorScheduleHandler.resta
 motorScheduleRoute.patch("/repeat-days/:id", isAuthorized, motorScheduleHandler.addRepeatDaysHandler);
 // List schedules with filters (?starter_id=&motor_id=&status=&page=&limit=)
 motorScheduleRoute.get("/", isAuthorized, motorScheduleHandler.motorScheduleListHandler);
+// Get single schedule by id
+motorScheduleRoute.get("/:id", isAuthorized, motorScheduleHandler.getMotorScheduleByIdHandler);
 // Update a schedule
 motorScheduleRoute.patch("/:id", isAuthorized, motorScheduleHandler.editMotorScheduleHandler);
 // Delete a schedule

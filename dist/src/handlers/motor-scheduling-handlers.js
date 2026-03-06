@@ -1,4 +1,4 @@
-import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -23,9 +23,11 @@ export class MotorScheduleHandler {
             const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [data.motor_id, "ARCHIVED"], ["id"]);
             if (!existedMotor)
                 throw new BadRequestException(MOTOR_NOT_FOUND);
-            const scheduleTimestamp = new Date().toISOString();
-            // Conflict detection (without schedule_type comparison)
-            const existingSchedules = await findConflictingSchedules(existedMotor.id, scheduleTimestamp, data.days_of_week || []);
+            // Use user-provided schedule_date for one-time schedules, fallback to today
+            const scheduleDate = data.schedule_date || new Date().toISOString().split("T")[0];
+            // Conflict detection: repeat schedules check only days_of_week, one-time checks schedule_date
+            const conflictDate = data.repeat === 1 ? null : scheduleDate;
+            const existingSchedules = await findConflictingSchedules(existedMotor.id, conflictDate, data.days_of_week || []);
             checkMotorScheduleConflict(data, existingSchedules);
             // Auto-increment schedule_id per motor
             const nextScheduleId = await getNextScheduleIdForMotor(data.motor_id);
@@ -35,7 +37,7 @@ export class MotorScheduleHandler {
                 starter_id: data.starter_id || null,
                 schedule_id: nextScheduleId,
                 schedule_type: data.schedule_type || "TIME_BASED",
-                schedule_date: scheduleTimestamp,
+                schedule_date: data.schedule_date,
                 start_time: data.start_time,
                 end_time: data.end_time,
                 days_of_week: data.days_of_week || [],
@@ -45,6 +47,7 @@ export class MotorScheduleHandler {
                 power_loss_recovery: data.power_loss_recovery || false,
                 repeat: data.repeat ?? 0,
                 created_by: userPayload.id,
+                enabled: data.enabled ?? true,
             };
             const savedSchedule = await saveSingleRecord(motorSchedules, preparedData);
             return sendResponse(c, 201, SCHEDULED_CREATED, savedSchedule);
@@ -90,6 +93,21 @@ export class MotorScheduleHandler {
             throw error;
         }
     };
+    // =================== GET SINGLE SCHEDULE ===================
+    getMotorScheduleByIdHandler = async (c) => {
+        try {
+            const scheduleId = +c.req.param("id");
+            paramsValidateException.validateId(scheduleId, "schedule id");
+            const schedule = await getRecordById(motorSchedules, scheduleId);
+            if (!schedule)
+                throw new BadRequestException(SCHEDULE_NOT_FOUND);
+            return sendResponse(c, 200, SCHEDULE_DETAILS_FETCHED, formatMotorScheduleResponse(schedule));
+        }
+        catch (error) {
+            console.error("Error at get motor Schedule by id:", error.message);
+            throw error;
+        }
+    };
     // =================== EDIT SCHEDULE ===================
     editMotorScheduleHandler = async (c) => {
         try {
@@ -105,16 +123,17 @@ export class MotorScheduleHandler {
             if (existedSchedule.schedule_status === "RUNNING") {
                 throw new BadRequestException(CANNOT_EDIT_RUNNING_SCHEDULE);
             }
-            // Conflict detection (excluding self, without schedule_type comparison)
-            const scheduleTimestamp = new Date().toISOString();
-            const existingSchedules = await findConflictingSchedules(existedSchedule.motor_id, scheduleTimestamp, data.days_of_week || [], scheduleId);
+            // Conflict detection: repeat schedules check only days_of_week, one-time checks schedule_date
+            const scheduleDate = data.schedule_date || new Date().toISOString().split("T")[0];
+            const conflictDate = data.repeat === 1 ? null : scheduleDate;
+            const existingSchedules = await findConflictingSchedules(existedSchedule.motor_id, conflictDate, data.days_of_week || [], scheduleId);
             checkMotorScheduleConflict(data, existingSchedules);
             // Update
             const updateData = {
                 motor_id: data.motor_id,
                 starter_id: data.starter_id || null,
                 schedule_type: data.schedule_type || "TIME_BASED",
-                schedule_date: scheduleTimestamp,
+                schedule_date: scheduleDate,
                 start_time: data.start_time,
                 end_time: data.end_time,
                 days_of_week: data.days_of_week || [],

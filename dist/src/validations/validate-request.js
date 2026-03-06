@@ -41,7 +41,14 @@ export async function validatedRequest(actionType, reqData, errorMessage) {
         abortPipeEarly: true,
     });
     if (!validation.success) {
-        throw new UnprocessableEntityException(errorMessage, validationErrors(validation.issues));
+        const fieldErrors = validation.issues.filter((issue) => issue.path && issue.path.length > 0);
+        const crossFieldErrors = validation.issues.filter((issue) => !issue.path || issue.path.length === 0);
+        if (fieldErrors.length > 0) {
+            throw new UnprocessableEntityException(errorMessage, validationErrors(fieldErrors));
+        }
+        if (crossFieldErrors.length > 0) {
+            throw new BadRequestException(crossFieldErrors[0].message);
+        }
     }
     return validation.output;
 }
