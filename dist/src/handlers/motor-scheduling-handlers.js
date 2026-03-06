@@ -277,46 +277,6 @@ export class MotorScheduleHandler {
             throw error;
         }
     };
-    // =================== DEVICE SCHEDULE ACK (NO AUTH) ===================
-    schedulingCreationAckHandler = async (c) => {
-        try {
-            const payload = await c.req.json();
-            // Validate payload structure: { T, S, D: { sch_type, id, status } }
-            if (!payload || !payload.D || typeof payload.D !== "object") {
-                throw new BadRequestException(INVALID_ACK_PAYLOAD);
-            }
-            const { id, status } = payload.D;
-            if (typeof id !== "number" || id <= 0) {
-                throw new BadRequestException(INVALID_ACK_PAYLOAD);
-            }
-            if (status !== 0 && status !== 1) {
-                throw new BadRequestException(INVALID_ACK_STATUS);
-            }
-            // Find active schedule by schedule_id (per-motor auto-increment ID)
-            const schedule = await findScheduleByScheduleId(id);
-            if (!schedule)
-                throw new BadRequestException(SCHEDULE_NOT_FOUND);
-            if (status === 1) {
-                // Device acknowledged successfully
-                await updateRecordById(motorSchedules, schedule.id, {
-                    schedule_status: "SCHEDULED",
-                    acknowledgement: 1,
-                    acknowledged_at: new Date(),
-                });
-                return sendResponse(c, 200, SCHEDULE_ACK_SUCCESS, { schedule_id: id, status: "SCHEDULED" });
-            }
-            // Device failed to acknowledge (status === 0)
-            await updateRecordById(motorSchedules, schedule.id, {
-                schedule_status: "FAILED",
-            });
-            return sendResponse(c, 200, SCHEDULE_ACK_FAILED, { schedule_id: id, status: "FAILED" });
-        }
-        catch (error) {
-            console.error("Error at scheduling creation ack:", error.message);
-            handleJsonParseError(error);
-            throw error;
-        }
-    };
     // =================== PENDING SCHEDULES FOR DEVICE SYNC (NO AUTH) ===================
     getPendingSchedulesForSyncHandler = async (c) => {
         try {
