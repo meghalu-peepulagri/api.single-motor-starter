@@ -135,8 +135,10 @@ export function extractPreviousData(previousData, motorId) {
     const prevMode = motor.mode ?? null;
     const locationId = motor.location_id ?? null;
     const created_by = motor.created_by ?? null;
-    const device_created_by = previousData?.created_by;
-    return { power, prevState, prevMode, locationId, created_by, motor, device_created_by };
+    const device_created_by = previousData?.created_b;
+    const starter_number = previousData.starter_number ?? null;
+    const alias_name = motor.alias_name ?? null;
+    return { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number, alias_name };
 }
 export async function checkMotorScheduleConflict(validatedReqData, existingMotorSchedule) {
     if (!existingMotorSchedule)
@@ -157,8 +159,8 @@ export async function checkMotorScheduleConflict(validatedReqData, existingMotor
     }
 }
 //prepare motor control notification
-export function prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id) {
-    const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
+export function prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, starter_number) {
+    const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
     const title = newState === 1
         ? `Pump ${pumpName} state turned ON${mode_description ? ` with mode ${mode_description}` : ""}`
         : newState === 0
@@ -178,8 +180,8 @@ export function prepareMotorStateControlNotificationData(motor, newState, mode_d
     }
     return null;
 }
-export function prepareMotorModeControlNotificationData(motor, mode_description, starter_id) {
-    const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
+export function prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) {
+    const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
     const title = mode_description === "MANUAL" || mode_description === "AUTO" ? `Pump ${pumpName} mode updated to from ${motor.mode} to ${mode_description}`
         : `Pump ${pumpName} Mode not updated due to ${mode_description}`;
     // Prepare notification message

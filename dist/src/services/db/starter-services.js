@@ -73,6 +73,7 @@ export async function getStarterByMacWithMotor(mac) {
             device_reset_status: true,
             device_allocation: true,
             allocation_status_count: true,
+            starter_number: true,
         },
         with: {
             motors: {
@@ -84,7 +85,8 @@ export async function getStarterByMacWithMotor(mac) {
                     state: true,
                     mode: true,
                     location_id: true,
-                    created_by: true
+                    created_by: true,
+                    alias_name: true,
                 },
             },
         },
