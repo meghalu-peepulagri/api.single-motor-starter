@@ -23,7 +23,8 @@ export const motorSchedules = pgTable("motor_schedules", {
     schedule_type: scheduleTypeEnum().default("TIME_BASED").notNull(), // TIME_BASED, CYCLIC
     schedule_id: integer("schedule_id").notNull(), // Auto-increment per motor
     bit_wise_days: integer("bit_wise_days").default(0), // Bitmask of days_of_week: bit0=Sun, bit1=Mon ... bit6=Sat
-    schedule_date: varchar("schedule_date"), // Scheduled at
+    schedule_start_date: varchar("schedule_start_date"), // Scheduled at
+    schedule_end_date: varchar("schedule_end_date"), // Optional end date for 
     days_of_week: integer("days_of_week").array().notNull().default(sql `'{}'::integer[]`), // 0=Sunday, 1=Monday ... 6=Saturday
     start_time: varchar("start_time").notNull(), // HH:mm format
     end_time: varchar("end_time").notNull(), // HH:mm format

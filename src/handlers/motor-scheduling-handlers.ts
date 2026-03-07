@@ -1,3 +1,4 @@
+import { inArray } from "drizzle-orm";
 import type { Context } from "hono";
 import {
   ACKNOWLEDGEMENT_UPDATED,
@@ -5,13 +6,10 @@ import {
   ALL_SCHEDULES_STOPPED,
   CANNOT_EDIT_RUNNING_SCHEDULE,
   CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
-  INVALID_ACK_PAYLOAD,
-  INVALID_ACK_STATUS,
   MOTOR_NOT_FOUND,
   NO_ACTIVE_SCHEDULE,
+  PENDING_SCHEDULES_FETCHED,
   REPEAT_DAYS_ADDED,
-  SCHEDULE_ACK_FAILED,
-  SCHEDULE_ACK_SUCCESS,
   SCHEDULE_DELETED,
   SCHEDULE_DETAILS_FETCHED,
   SCHEDULE_NOT_FOUND,
@@ -19,12 +17,13 @@ import {
   SCHEDULE_STOPPED,
   SCHEDULE_UPDATED,
   SCHEDULED_CREATED,
-  PENDING_SCHEDULES_FETCHED,
   SCHEDULED_LIST_FETCHED,
   UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA
 } from "../constants/app-constants.js";
+import db from "../database/configuration.js";
 import { motorSchedules, type MotorScheduleTable } from "../database/schemas/motor-schedules.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
+import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import {
@@ -49,15 +48,11 @@ import {
   findAllActiveSchedulesForMotor,
   findConflictingSchedules,
   findPendingSchedulesForSync,
-  findScheduleByScheduleId,
   findSchedulesByFilters,
   getNextScheduleIdForMotor,
   restartScheduleById,
-  stopScheduleById,
+  stopScheduleById
 } from "../services/db/motor-schedules-services.js";
-import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
-import db from "../database/configuration.js";
-import { inArray } from "drizzle-orm";
 import { publishData } from "../services/db/mqtt-db-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -105,7 +100,8 @@ export class MotorScheduleHandler {
         starter_id: data.starter_id || null,
         schedule_id: nextScheduleId,
         schedule_type: data.schedule_type || "TIME_BASED",
-        schedule_date: data.schedule_date,
+        schedule_start_date: data.schedule_date,
+        schedule_end_date: data.schedule_end_date || null,
         start_time: data.start_time,
         end_time: data.end_time,
         days_of_week: data.days_of_week || [],
@@ -219,7 +215,7 @@ export class MotorScheduleHandler {
         motor_id: data.motor_id,
         starter_id: data.starter_id || null,
         schedule_type: data.schedule_type || "TIME_BASED",
-        schedule_date: scheduleDate,
+        schedule_start_date: scheduleDate,
         start_time: data.start_time,
         end_time: data.end_time,
         days_of_week: data.days_of_week || [],

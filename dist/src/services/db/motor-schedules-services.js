@@ -31,7 +31,7 @@ export async function findConflictingSchedules(motorId, scheduleDate, daysOfWeek
     // Build date/day filter: match by exact date OR overlapping days
     const dateOrDayConditions = [];
     if (scheduleDate) {
-        dateOrDayConditions.push(eq(motorSchedules.schedule_date, scheduleDate));
+        dateOrDayConditions.push(eq(motorSchedules.schedule_start_date, scheduleDate));
     }
     if (daysOfWeek.length > 0) {
         dateOrDayConditions.push(sql `${motorSchedules.days_of_week} && ARRAY[${sql.join(daysOfWeek.map(d => sql `${d}`), sql `,`)}]::integer[]`);
@@ -47,7 +47,7 @@ export async function findConflictingSchedules(motorId, scheduleDate, daysOfWeek
             id: true,
             start_time: true,
             end_time: true,
-            schedule_date: true,
+            schedule_start_date: true,
             days_of_week: true,
         },
     });
@@ -192,8 +192,8 @@ export async function findPendingSchedulesForSync() {
     return await db.query.motorSchedules.findMany({
         where: and(eq(motorSchedules.acknowledgement, 0), eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]), sql `(
         ${motorSchedules.repeat} = 1
-        OR (${motorSchedules.schedule_date} >= ${todayStr} AND ${motorSchedules.schedule_date} <= ${threeDaysStr})
-        OR (${motorSchedules.schedule_date} = ${yesterdayStr} AND ${motorSchedules.start_time} > ${motorSchedules.end_time})
+        OR (${motorSchedules.schedule_start_date} >= ${todayStr} AND ${motorSchedules.schedule_start_date} <= ${threeDaysStr})
+        OR (${motorSchedules.schedule_start_date} = ${yesterdayStr} AND ${motorSchedules.start_time} > ${motorSchedules.end_time})
       )`),
         columns: {
             id: true,
