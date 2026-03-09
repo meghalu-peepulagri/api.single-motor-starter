@@ -183,13 +183,6 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       // Prepare alert and fault notifications only when they exist
       let notificationDataFault = null;
 
-      // if (created_by && alert_description && motor_id && alert_code !== 0) {
-      //   notificationDataAlert = {
-      //     userId: created_by, title: `${pumpName} Alert Detected`,
-      //     message: alert_description, motorId: motor_id, starter_id: starter_id
-      //   };
-      // }
-
       if (fault_description && created_by && motor_id && fault !== 0) {
         notificationDataFault = {
           userId: created_by, title: `${pumpName} Fault Detected`,
@@ -217,13 +210,6 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       }
     }
     
-    // alert notification
-    // if (notificationData.notificationDataAlert) {
-    //   const alertNotificationData = notificationData.notificationDataAlert;
-    //   if (shouldSendNotification(alertNotificationData.motorId, "alert", alert_code)) {
-    //     await sendUserNotification(alertNotificationData.userId, alertNotificationData.title, alertNotificationData.message, alertNotificationData.motorId, alertNotificationData.starter_id);
-    //   }
-    // }
 
     // fault notification
     if (notificationData.notificationDataFault) {
