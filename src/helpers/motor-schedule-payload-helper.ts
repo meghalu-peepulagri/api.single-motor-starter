@@ -118,7 +118,8 @@ function normalizeSingleSchedulePayload(payload: Record<string, any>): Record<st
   const cycleOnMinutes = toInteger(payload.cycle_on_minutes ?? payload.on);
   const cycleOffMinutes = toInteger(payload.cycle_off_minutes ?? payload.off);
   const daysOfWeek = normalizeDays(payload.days_of_week ?? payload.days) ?? [];
-  const scheduleDate = normalizeDate(payload.schedule_date ?? payload.date);
+  const scheduleStartDate = normalizeDate(payload.schedule_start_date ?? payload.schedule_date ?? payload.date);
+  const scheduleEndDate = normalizeDate(payload.schedule_end_date);
 
   const powerLossRecovery = to01(payload.power_loss_recovery ?? payload.pwr_rec);
   const enabled = to01(payload.en);
@@ -129,7 +130,8 @@ function normalizeSingleSchedulePayload(payload: Record<string, any>): Record<st
   const normalized: Record<string, any> = {
     ...payload,
     schedule_type: scheduleType,
-    schedule_date: scheduleDate ?? payload.schedule_date,
+    schedule_start_date: scheduleStartDate ?? payload.schedule_start_date,
+    schedule_end_date: scheduleEndDate ?? payload.schedule_end_date ?? null,
     start_time: finalStartTime,
     end_time: finalEndTime,
     cycle_on_minutes: cycleOnMinutes ?? payload.cycle_on_minutes,

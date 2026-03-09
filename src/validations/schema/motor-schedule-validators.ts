@@ -11,10 +11,11 @@ import {
   MOTOR_ID_REQUIRED,
   REPEAT_REQUIRES_CYCLE,
   RUNTIME_MINUTES_MIN,
-  SCHEDULE_DATE_FORMAT,
   SCHEDULE_DATE_REQUIRED_FOR_ONE_TIME,
   SCHEDULE_END_TIME_INVALID,
   SCHEDULE_END_TIME_REQUIRED,
+  SCHEDULE_START_DATE_FORMAT,
+  SCHEDULE_END_DATE_FORMAT,
   SCHEDULE_START_TIME_INVALID,
   SCHEDULE_START_TIME_REQUIRED,
   SCHEDULE_STATUS,
@@ -22,6 +23,8 @@ import {
   SCHEDULE_TYPES,
   START_TIME_BEFORE_END_TIME,
   SCHEDULE_DATE_PAST,
+  SCHEDULE_END_DATE_PAST,
+  SCHEDULE_END_DATE_BEFORE_START,
   STARTER_ID_REQUIRED
 } from "../../constants/app-constants.js";
 import { enable01 } from "../../helpers/settings-helpers.js";
@@ -37,7 +40,7 @@ export const vAddMotorSchedule = v.pipe(
       ),
     ),
 
-    starter_id: v.optional(
+    starter_id: v.nullish(
       v.pipe(
         v.number(STARTER_ID_REQUIRED),
         v.custom(
@@ -66,7 +69,7 @@ export const vAddMotorSchedule = v.pipe(
     ),
 
     // Optional for one-time date-based schedules; required for repeat schedules
-    days_of_week: v.optional(
+    days_of_week: v.nullish(
       v.pipe(
         v.array(v.number()),
         v.custom(
@@ -77,16 +80,24 @@ export const vAddMotorSchedule = v.pipe(
       ),
     ),
 
-    // One-time schedule date (YYYY-MM-DD)
-    schedule_date: v.optional(
+    // Schedule start date (YYYY-MM-DD)
+    schedule_start_date: v.nullish(
       v.pipe(
         v.string(),
-        v.regex(/^\d{4}-\d{2}-\d{2}$/, SCHEDULE_DATE_FORMAT),
+        v.regex(/^\d{4}-\d{2}-\d{2}$/, SCHEDULE_START_DATE_FORMAT),
+      ),
+    ),
+
+    // Schedule end date (YYYY-MM-DD)
+    schedule_end_date: v.nullish(
+      v.pipe(
+        v.string(),
+        v.regex(/^\d{4}-\d{2}-\d{2}$/, SCHEDULE_END_DATE_FORMAT),
       ),
     ),
 
     // TIME_BASED: optional runtime quota in minutes
-    runtime_minutes: v.optional(
+    runtime_minutes: v.nullish(
       v.pipe(
         v.number(),
         v.custom(
@@ -97,7 +108,7 @@ export const vAddMotorSchedule = v.pipe(
     ),
 
     // CYCLIC: ON/OFF durations in minutes
-    cycle_on_minutes: v.optional(
+    cycle_on_minutes: v.nullish(
       v.pipe(
         v.number(),
         v.custom(
@@ -107,7 +118,7 @@ export const vAddMotorSchedule = v.pipe(
       ),
     ),
 
-    cycle_off_minutes: v.optional(
+    cycle_off_minutes: v.nullish(
       v.pipe(
         v.number(),
         v.custom(
@@ -117,12 +128,12 @@ export const vAddMotorSchedule = v.pipe(
       ),
     ),
 
-    power_loss_recovery: v.optional(v.boolean()),
+    power_loss_recovery: v.nullish(v.boolean()),
 
-    schedule_status: v.optional(v.picklist(SCHEDULE_STATUS, INVALID_SCHEDULED_STATUS)),
-    repeat: v.optional(v.union([v.literal(0), v.literal(1)], "Repeat must be 0 or 1")),
-    enabled: v.optional(v.boolean()),
-    bit_wise_days: v.optional(v.number()),
+    schedule_status: v.nullish(v.picklist(SCHEDULE_STATUS, INVALID_SCHEDULED_STATUS)),
+    repeat: v.nullish(v.union([v.literal(0), v.literal(1)], "Repeat must be 0 or 1")),
+    enabled: v.nullish(v.boolean()),
+    bit_wise_days: v.nullish(v.number()),
   }),
 
   // Cross-field: CYCLIC schedules require cycle_on_minutes and cycle_off_minutes
@@ -149,25 +160,41 @@ export const vAddMotorSchedule = v.pipe(
     return true;
   }, REPEAT_REQUIRES_CYCLE),
 
-  // Cross-field: one-time schedules (repeat=0 or not set) need either schedule_date or days_of_week
+  // Cross-field: one-time schedules (repeat=0 or not set) need either schedule_start_date or days_of_week
   v.custom((data: any) => {
     if (!data.repeat || data.repeat === 0) {
-      // Must have schedule_date or days_of_week with at least one day
-      const hasDate = !!data.schedule_date;
+      const hasDate = !!data.schedule_start_date;
       const hasDays = Array.isArray(data.days_of_week) && data.days_of_week.length >= 1;
       return hasDate || hasDays;
     }
     return true;
   }, SCHEDULE_DATE_REQUIRED_FOR_ONE_TIME),
 
-  // Cross-field: schedule_date must not be in the past
+  // Cross-field: schedule_start_date must not be in the past
   v.custom((data: any) => {
-    if (data.schedule_date) {
+    if (data.schedule_start_date) {
       const today = new Date().toISOString().split("T")[0];
-      return data.schedule_date >= today;
+      return data.schedule_start_date >= today;
     }
     return true;
   }, SCHEDULE_DATE_PAST),
+
+  // Cross-field: schedule_end_date must not be in the past
+  v.custom((data: any) => {
+    if (data.schedule_end_date) {
+      const today = new Date().toISOString().split("T")[0];
+      return data.schedule_end_date >= today;
+    }
+    return true;
+  }, SCHEDULE_END_DATE_PAST),
+
+  // Cross-field: schedule_end_date must be on or after schedule_start_date
+  v.custom((data: any) => {
+    if (data.schedule_start_date && data.schedule_end_date) {
+      return data.schedule_end_date >= data.schedule_start_date;
+    }
+    return true;
+  }, SCHEDULE_END_DATE_BEFORE_START),
 
   // Cross-field: start_time must not equal end_time
   v.custom((data: any) => {
@@ -201,7 +228,7 @@ export const vAddRepeatDays = v.object({
       INVALID_DAYS_WEEK,
     ),
   ),
-  bit_wise_days: v.optional(v.number()),
+  bit_wise_days: v.nullish(v.number()),
 });
 
 // =================== BATCH CREATE (for pond) ===================
