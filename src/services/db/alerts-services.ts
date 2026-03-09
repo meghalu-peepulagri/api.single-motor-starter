@@ -126,20 +126,24 @@ export function buildActivityActionFilter(logTypes: string[]) {
   const includeModeChange = logTypes.includes("mode");
   const includeAllActivity = logTypes.includes("activity");
 
-  // If "activity" is present, no action filter needed (return all activities)
-  if (includeAllActivity) return sql``;
+  // If only "activity" is present with no specific sub-types, return all activities
+  if (includeAllActivity && !includeOn && !includeOff && !includeModeChange) return sql``;
 
   // Build OR conditions for specific activity sub-types
   const conditions: ReturnType<typeof sql>[] = [];
 
   if (includeOn) {
-    conditions.push(sql`(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND message ILIKE '%ON%')`);
+    conditions.push(sql`(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND new_data::text LIKE '%"state":1%')`);
   }
   if (includeOff) {
-    conditions.push(sql`(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND message ILIKE '%OFF%')`);
+    conditions.push(sql`(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND new_data::text LIKE '%"state":0%')`);
   }
   if (includeModeChange) {
     conditions.push(sql`(action IN ('MOTOR_MODE_SYNC', 'MOTOR_MODE_ACK', 'MOTOR_MODE_UPDATED'))`);
+  }
+  if (includeAllActivity) {
+    // "activity" combined with specific sub-types: include everything else too
+    conditions.push(sql`(action NOT IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK', 'MOTOR_MODE_SYNC', 'MOTOR_MODE_ACK', 'MOTOR_MODE_UPDATED'))`);
   }
 
   if (conditions.length === 0) return null; // no activity sub-types requested
