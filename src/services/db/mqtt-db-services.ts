@@ -87,11 +87,14 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
 const VALID_MODES = ["AUTO", "MANUAL"] as const;
 type ValidMode = typeof VALID_MODES[number];
 
+// Track last known fault code per motor to detect fault-cleared transitions
+const lastFaultCodeMap = new Map<number, number>();
+
 export async function updateStates(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
 
-  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id) return null;
 
   const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
@@ -170,19 +173,12 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       const hasStateChanged = typeof motor_state === "number" && motor_state !== prevState;
       const hasModeChanged = mode_description && mode_description !== prevMode;
 
-      const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id) : null;
-      const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id) : null;
-      const pumpName = motor.alias_name === undefined || motor.alias_name === null ? motor.name : motor.alias_name;
+      const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id, starter_number) : null;
+      const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) : null;
+      const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
 
       // Prepare alert and fault notifications only when they exist
       let notificationDataFault = null;
-
-      // if (created_by && alert_description && motor_id && alert_code !== 0) {
-      //   notificationDataAlert = {
-      //     userId: created_by, title: `${pumpName} Alert Detected`,
-      //     message: alert_description, motorId: motor_id, starter_id: starter_id
-      //   };
-      // }
 
       if (fault_description && created_by && motor_id && fault !== 0) {
         notificationDataFault = {
@@ -191,7 +187,22 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
         };
       }
 
-      const notificationData = { notificationDataState, notificationDataMode, notificationDataFault };
+      let notificationDataFaultCleared = null;
+      const prevFaultCode = motor_id ? lastFaultCodeMap.get(motor_id) : undefined;
+      if (fault === 0 && prevFaultCode !== undefined && prevFaultCode !== 0 && created_by && motor_id) {
+        notificationDataFaultCleared = {
+          userId: created_by, title: `${pumpName} Faults Cleared`,
+          message: `${pumpName} has no more faults`,
+          motorId: motor_id, starter_id: starter_id
+        };
+      }
+
+      // Update last known fault code for this motor
+      if (motor_id && fault !== null && fault !== undefined) {
+        lastFaultCodeMap.set(motor_id, fault);
+      }
+
+      const notificationData = { notificationDataState, notificationDataMode, notificationDataFault, notificationDataFaultCleared };
       return notificationData;
     });
 
@@ -210,19 +221,19 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
         await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starterId);
       }
     }
-
-    // alert notification (removed for now)
-    // if (notificationData.notificationDataAlert) {
-    //   const d = notificationData.notificationDataAlert;
-    //   if (shouldSendNotification(d.motorId, "alert", alert_code)) {
-    //     await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starter_id);
-    //   }
-    // }
-
+    
     // fault notification
     if (notificationData.notificationDataFault) {
       const d = notificationData.notificationDataFault;
       if (shouldSendNotification(d.motorId, "fault", fault)) {
+        await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starter_id);
+      }
+    }
+
+    // fault cleared notification
+    if (notificationData.notificationDataFaultCleared) {
+      const d = notificationData.notificationDataFaultCleared;
+      if (shouldSendNotification(d.motorId, "fault", "cleared")) {
         await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starter_id);
       }
     }
@@ -236,7 +247,7 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
 export async function updateDevicePowerAndMotorStateToON(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
-  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
   const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
@@ -315,8 +326,8 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
       await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
     }
 
-    const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id) : null;
-    const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id) : null;
+    const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id, starter_number) : null;
+    const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) : null;
 
     return { notificationDataState, notificationDataMode };
   });
@@ -339,7 +350,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
 export async function updateDevicePowerONAndMotorStateOFF(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp } = insertedData;
-  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
   const notificationData = await db.transaction(async (trx) => {
@@ -393,7 +404,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
       await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
     }
 
-    const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id) : null;
+    const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id, starter_number) : null;
     return { notificationDataState };
   });
 
@@ -409,7 +420,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
 export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp } = insertedData;
-  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by } = extractPreviousData(previousData, motor_id);
+  const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
   const notificationData = await db.transaction(async (trx) => {
@@ -459,7 +470,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
     }
 
     const hasModeChanged = mode_description && mode_description !== prevMode;
-    const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id) : null;
+    const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) : null;
     return { notificationDataMode };
   });
 
@@ -507,7 +518,7 @@ export async function motorControlAckHandler(message: any, topic: string) {
 
       // Always log ACK (changed or not)
       await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
-      return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id) : null;
+      return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, validMac.starter_number) : null;
 
     });
 
@@ -548,7 +559,7 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
     });
 
     const modeChanged = mode !== motor.mode;
-    const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, validMac.id) : null;
+    const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, validMac.id, validMac.starter_number) : null;
 
     if (notificationData) {
       if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
