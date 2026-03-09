@@ -80,7 +80,7 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
     case "DEVICE_INFO_ACK":
       await deviceInfoAckHandler(payload, topic);
       break;
-     case "SCHEDULING_CREATION_ACK":
+    case "SCHEDULING_CREATION_ACK":
       await schedulingCreationAckHandler(payload, topic);
       break;
     default:
@@ -209,7 +209,6 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
         await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId, modeNotificationData.starterId);
       }
     }
-    
 
     // fault notification
     if (notificationData.notificationDataFault) {
