@@ -136,7 +136,6 @@ export class UserHandlers {
             const id = +c.req.param("id");
             const reqData = await c.req.json();
             const tokenData = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], ["=", "="], [reqData.fcm_token, id], ["id"]);
-            console.log('tokenData: ', tokenData);
             if (!tokenData)
                 throw new NotFoundException(USER_NOT_FOUND);
             await deleteRecordById(deviceTokens, tokenData.id);
