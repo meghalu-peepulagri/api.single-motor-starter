@@ -50,7 +50,7 @@ export async function findConflictingSchedules(
 
   if (daysOfWeek.length > 0) {
     dateOrDayConditions.push(
-      sql`${motorSchedules.days_of_week} && ARRAY[${sql.join(daysOfWeek.map(d => sql`${d}`), sql`,`)}]::integer[]`,
+      sql`${motorSchedules.days_of_week} && ARRAY[${sql.join(daysOfWeek.map(d => sql`${d}`), sql`,`)}]::int[]`,
     );
   }
 

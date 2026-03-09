@@ -34,7 +34,7 @@ export async function findConflictingSchedules(motorId, scheduleDate, daysOfWeek
         dateOrDayConditions.push(eq(motorSchedules.schedule_start_date, scheduleDate));
     }
     if (daysOfWeek.length > 0) {
-        dateOrDayConditions.push(sql `${motorSchedules.days_of_week} && ARRAY[${sql.join(daysOfWeek.map(d => sql `${d}`), sql `,`)}]::integer[]`);
+        dateOrDayConditions.push(sql `${motorSchedules.days_of_week} && ARRAY[${sql.join(daysOfWeek.map(d => sql `${d}`), sql `,`)}]::int[]`);
     }
     if (dateOrDayConditions.length > 0) {
         conditions.push(dateOrDayConditions.length === 1
