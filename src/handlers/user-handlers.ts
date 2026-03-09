@@ -149,7 +149,7 @@ export class UserHandlers {
     try {
       const id = +c.req.param("id");
       const reqData = await c.req.json();
-      const tokenData = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], [reqData.fcm_token, id], ["eq", "eq"], ["id"]);
+      const tokenData = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [reqData.fcm_token, id], ["id"]);
 
       if (!tokenData)
         throw new NotFoundException(USER_NOT_FOUND);
