@@ -50,40 +50,40 @@ export function motorState(code: number) {
   }
 }
 
-const faultCodes = {
-  "0x01": "Dry Run Fault",
-  "0x02": "Overload Fault",
-  "0x04": "Locked Rotor Fault",
-  "0x08": "Current Imbalance Fault",
-  "0x10": "Frequent Start Fault",
-  "0x20": "Phase Failure Fault",
-  "0x40": "Low Voltage Fault",
-  "0x80": "High Voltage Fault",
-  "0x100": "Voltage Imbalance Fault",
-  "0x200": "Phase Reversal Fault",
-  "0x400": "Frequency deviation Fault",
-  "0x1000": "Output phase Fault",
+const faultCodes: Record<string, { short: string; detailed: string }> = {
+  "0x01": { short: "Dry Run", detailed: "Dry Run Protection Detected - No water flow detected." },
+  "0x02": { short: "Overload", detailed: "Overload Threshold Detected - Check pump load." },
+  "0x04": { short: "Locked Rotor", detailed: "Locked Rotor Detected - Motor not rotating." },
+  "0x08": { short: "Current Imbalance", detailed: "Current Imbalance Detected - Uneven current distribution detected." },
+  "0x10": { short: "Frequent Start", detailed: "Frequent Start Detected - Too many start attempts." },
+  "0x20": { short: "Phase Failure", detailed: "Phase Failure Detected - Check phase connections." },
+  "0x40": { short: "Low Voltage", detailed: "Low Voltage Detected - Check power supply." },
+  "0x80": { short: "High Voltage", detailed: "High Voltage Detected - Verify voltage levels." },
+  "0x100": { short: "Voltage Imbalance", detailed: "Voltage Imbalance Detected - Uneven voltage detected across phases." },
+  "0x200": { short: "Phase Reversal", detailed: "Phase Reversal Detected - Check phase wiring sequence." },
+  "0x400": { short: "Frequency Deviation", detailed: "Frequency Deviation Detected - Check power frequency." },
+  "0x1000": { short: "Output Phase", detailed: "Output Phase Fault Detected - Check output connections." },
 };
 // 4095 get all codes
-const alertCodes = {
-  "0x01": "Dry Run Alert",
-  "0x02": "Overload Alert",
-  "0x04": "Locked Rotor Alert",
-  "0x08": "Current Imbalance Alert",
-  "0x10": "Frequent Start Alert",
-  "0x20": "Phase Failure Alert",
-  "0x40": "Low Voltage Alert",
-  "0x80": "High Voltage Alert",
-  "0x100": "Voltage Imbalance Alert",
-  "0x200": "Phase Reversal Alert",
-  "0x400": "Frequency deviation Alert",
-  "0x1000": "Output phase Alert",
+const alertCodes: Record<string, { short: string; detailed: string }> = {
+  "0x01": { short: "Dry Run", detailed: "Dry Run Alert - No water flow detected." },
+  "0x02": { short: "Overload", detailed: "Overload Alert - Check pump load." },
+  "0x04": { short: "Locked Rotor", detailed: "Locked Rotor Alert - Motor not rotating." },
+  "0x08": { short: "Current Imbalance", detailed: "Current Imbalance Alert - Uneven current distribution detected." },
+  "0x10": { short: "Frequent Start", detailed: "Frequent Start Alert - Too many start attempts." },
+  "0x20": { short: "Phase Failure", detailed: "Phase Failure Alert - Check phase connections." },
+  "0x40": { short: "Low Voltage", detailed: "Low Voltage Alert - Check power supply." },
+  "0x80": { short: "High Voltage", detailed: "High Voltage Alert - Verify voltage levels." },
+  "0x100": { short: "Voltage Imbalance", detailed: "Voltage Imbalance Alert - Uneven voltage detected across phases." },
+  "0x200": { short: "Phase Reversal", detailed: "Phase Reversal Alert - Check phase wiring sequence." },
+  "0x400": { short: "Frequency Deviation", detailed: "Frequency Deviation Alert - Check power frequency." },
+  "0x1000": { short: "Output Phase", detailed: "Output Phase Alert - Check output connections." },
 };
 
 export function getFaultDescription(faultCode: number) {
   if (!faultCode || faultCode === 0)
     return "No Fault";
-  const faults: any[] = [];
+  const faults: { short: string; detailed: string }[] = [];
   for (const [hexCode, description] of Object.entries(faultCodes)) {
     const bit = Number.parseInt(hexCode, 16);
     if ((faultCode & bit) === bit) {
@@ -91,18 +91,23 @@ export function getFaultDescription(faultCode: number) {
     }
   }
 
-  return faults.length > 0 ? faults.join(", ") : "Unknown Fault";
+  if (faults.length === 0) return "Unknown Fault";
+  if (faults.length === 1) return faults[0].detailed;
+  return `${faults.map(f => f.short).join(", ")} Faults Detected – Please check the motor.`;
 }
 
 export function getAlertDescription(alertCode: number) {
   if (!alertCode || alertCode === 0)
     return "No Alert";
-  const alerts: any[] = [];
+  const alerts: { short: string; detailed: string }[] = [];
   for (const [hexCode, description] of Object.entries(alertCodes)) {
     const bit = Number.parseInt(hexCode, 16);
     if ((alertCode & bit) === bit) {
       alerts.push(description);
     }
   }
-  return alerts.length > 0 ? alerts.join(", ") : "Unknown Alert";
+
+  if (alerts.length === 0) return "Unknown Alert";
+  if (alerts.length === 1) return alerts[0].detailed;
+  return `${alerts.map(a => a.short).join(", ")} Alerts Detected – Please check the motor.`;
 }
