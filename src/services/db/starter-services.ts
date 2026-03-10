@@ -107,7 +107,8 @@ export async function getStarterByMacWithMotor(mac: string) {
           state: true,
           mode: true,
           location_id: true,
-          created_by: true
+          created_by: true,
+          alias_name: true,
         },
       },
     },
