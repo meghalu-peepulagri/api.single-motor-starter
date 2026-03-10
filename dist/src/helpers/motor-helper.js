@@ -198,24 +198,56 @@ export function areTimeRangesTooClose(startA, endA, startB, endB, gapMinutes = 5
     return false;
 }
 /**
+ * Check if a new schedule's date/days actually overlap with an existing schedule.
+ * - For one-time schedules (repeat=0): must share the same schedule_start_date
+ * - For repeat schedules (repeat=1): must share at least one common day_of_week
+ */
+function hasDateOrDayOverlap(newSchedule, existing) {
+    const isNewRepeat = (newSchedule.repeat ?? 0) === 1;
+    if (isNewRepeat) {
+        // Repeat schedule: conflict only if they share at least one common day
+        const newDays = newSchedule.days_of_week || [];
+        const existingDays = existing.days_of_week || [];
+        if (newDays.length === 0 || existingDays.length === 0)
+            return true; // no day info, assume conflict
+        return newDays.some(d => existingDays.includes(d));
+    }
+    // One-time schedule: conflict only if same schedule_start_date
+    const newDate = newSchedule.schedule_start_date;
+    const existingDate = existing.schedule_start_date;
+    if (!newDate || !existingDate)
+        return true; // no date info, assume conflict
+    return newDate === existingDate;
+}
+/**
  * Full conflict check against an array of existing schedules.
- * Checks for direct overlaps and 5-minute gap violations.
+ * Checks date/day overlap first, then time overlaps and 5-minute gap violations.
  */
 export function checkMotorScheduleConflict(newSchedule, existingSchedules) {
     if (!existingSchedules || existingSchedules.length === 0)
         return;
     for (const existing of existingSchedules) {
+        // Skip if no date/day overlap
+        if (!hasDateOrDayOverlap(newSchedule, existing))
+            continue;
+        const conflictInfo = {
+            conflicting_schedule_id: existing.id,
+            existing_start_time: existing.start_time,
+            existing_end_time: existing.end_time,
+            existing_date: existing.schedule_start_date || null,
+            existing_days: existing.days_of_week || [],
+        };
         // Check exact match
         if (newSchedule.start_time === existing.start_time && newSchedule.end_time === existing.end_time) {
-            throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
+            throw new ConflictException(`${ALREADY_SCHEDULED_EXISTS} (${existing.start_time} - ${existing.end_time})`, conflictInfo);
         }
         // Check direct overlap
         if (doTimeRangesOverlap(newSchedule.start_time, newSchedule.end_time, existing.start_time, existing.end_time)) {
-            throw new ConflictException(SCHEDULE_OVERLAP_CONFLICT);
+            throw new ConflictException(`${SCHEDULE_OVERLAP_CONFLICT} (conflicts with ${existing.start_time} - ${existing.end_time})`, conflictInfo);
         }
         // Check 5-min gap
         if (areTimeRangesTooClose(newSchedule.start_time, newSchedule.end_time, existing.start_time, existing.end_time, 5)) {
-            throw new ConflictException(SCHEDULE_GAP_CONFLICT);
+            throw new ConflictException(`${SCHEDULE_GAP_CONFLICT} (too close to ${existing.start_time} - ${existing.end_time})`, conflictInfo);
         }
     }
 }

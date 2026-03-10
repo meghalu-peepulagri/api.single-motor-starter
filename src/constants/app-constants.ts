@@ -299,7 +299,7 @@ export const SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"] as const;
 export const SCHEDULE_TYPE_CODES = [1, 2] as const; // 1 = TIME_BASED, 2 = CYCLIC
 export const DAYS_OF_WEEK_ENUM = [0, 1, 2, 3, 4, 5, 6] as const; // 0=Sunday ... 6=Saturday
 export const SCHEDULED_CREATED = "Motor schedule created successfully";
-export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with a pump same type & time";
+export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with same time";
 export const SCHEDULE_TYPE_IS_REQUIRED = "Schedule type is required";
 export const INVALID_SCHEDULED_TYPE = "Invalid schedule type";
 export const SCHEDULE_DATE_REQUIRED = "Schedule date is required";
@@ -360,8 +360,8 @@ export const REPEAT_DAYS_ADDED = "Repeat days updated successfully";
 export const INVALID_REPEAT_DAYS_UPDATE = "Cannot add repeat days to a date-specific schedule";
 
 // Conflict detection
-export const SCHEDULE_OVERLAP_CONFLICT = "Schedule overlaps with an existing schedule";
-export const SCHEDULE_GAP_CONFLICT = "Schedule is too close to an existing schedule (minimum 5-minute gap required)";
+export const SCHEDULE_OVERLAP_CONFLICT = "Schedule time overlaps with an existing schedule";
+export const SCHEDULE_GAP_CONFLICT = "Minimum 5-minute gap required between schedules";
 
 // Validation criteria
 export const UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Update motor schedule details provided do not meet the required validation criteria";
