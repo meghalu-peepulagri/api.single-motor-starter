@@ -96,6 +96,20 @@ export function getFaultDescription(faultCode: number) {
   return `${faults.map(f => f.short).join(", ")} Faults Detected – Please check the motor.`;
 }
 
+export function getFaultNotificationMessage(faultCode: number) {
+  if (!faultCode || faultCode === 0) return "No Fault";
+  const faults: { short: string }[] = [];
+  for (const [hexCode, description] of Object.entries(faultCodes)) {
+    const bit = Number.parseInt(hexCode, 16);
+    if ((faultCode & bit) === bit) {
+      faults.push(description);
+    }
+  }
+  if (faults.length === 0) return "Unknown Fault";
+  if (faults.length === 1) return `${faults[0].short} Fault Detected`;
+  return `${faults.map(f => f.short).join(", ")} Faults Detected`;
+}
+
 export function getAlertDescription(alertCode: number) {
   if (!alertCode || alertCode === 0)
     return "No Alert";
@@ -110,4 +124,19 @@ export function getAlertDescription(alertCode: number) {
   if (alerts.length === 0) return "Unknown Alert";
   if (alerts.length === 1) return alerts[0].detailed;
   return `${alerts.map(a => a.short).join(", ")} Alerts Detected – Please check the motor.`;
+
+}
+
+export function getAlertNotificationMessage(alertCode: number) {
+  if (!alertCode || alertCode === 0) return "No Alert";
+  const alerts: { short: string }[] = [];
+  for (const [hexCode, description] of Object.entries(alertCodes)) {
+    const bit = Number.parseInt(hexCode, 16);
+    if ((alertCode & bit) === bit) {
+      alerts.push(description);
+    }
+  }
+  if (alerts.length === 0) return "Unknown Alert";
+  if (alerts.length === 1) return `${alerts[0].short} Alert Detected`;
+  return `${alerts.map(a => a.short).join(", ")} Alerts Detected`;
 }

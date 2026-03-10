@@ -11,7 +11,7 @@ function buildKey(motorId: number, type: string): string {
  */
 export function shouldSendNotification(
   motorId: number,
-  type: "state" | "mode" | "alert" | "fault",
+  type: "state" | "mode" | "alert" | "fault" | "fault_cleared",
   value: string | number
 ): boolean {
   const key = buildKey(motorId, type);

@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
 import { deviceTemperature } from "../../database/schemas/device-temperature.js";
@@ -7,7 +7,7 @@ import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
-import { controlMode } from "../../helpers/control-helpers.js";
+import { controlMode, getFaultNotificationMessage } from "../../helpers/control-helpers.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
@@ -155,13 +155,30 @@ export async function updateStates(insertedData, previousData) {
             const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
             // Prepare alert and fault notifications only when they exist
             let notificationDataFault = null;
+            let notificationDataFaultCleared = null;
             if (fault_description && created_by && motor_id && fault !== 0) {
                 notificationDataFault = {
                     userId: created_by, title: `${pumpName} Fault Detected`,
-                    message: fault_description, motorId: motor_id, starter_id: starter_id
+                    message: getFaultNotificationMessage(fault), motorId: motor_id, starter_id: starter_id
                 };
             }
-            const notificationData = { notificationDataState, notificationDataMode, notificationDataFault };
+            // Check if fault was cleared (fault === 0 and previous fault was non-zero)
+            if (fault === 0 && created_by && motor_id) {
+                const lastFaultRecord = await trx.select({ fault_code: alertsFaults.fault_code })
+                    .from(alertsFaults)
+                    .where(and(eq(alertsFaults.motor_id, motor_id), eq(alertsFaults.starter_id, starter_id), isNotNull(alertsFaults.fault_code), ne(alertsFaults.fault_code, 0)))
+                    .orderBy(desc(alertsFaults.timestamp))
+                    .limit(1);
+                const prevFaultCode = lastFaultRecord[0]?.fault_code;
+                if (prevFaultCode !== undefined && prevFaultCode !== 0) {
+                    notificationDataFaultCleared = {
+                        userId: created_by, title: `${pumpName} Faults Cleared`,
+                        message: `${pumpName} has no more faults`,
+                        motorId: motor_id, starter_id: starter_id
+                    };
+                }
+            }
+            const notificationData = { notificationDataState, notificationDataMode, notificationDataFault, notificationDataFaultCleared };
             return notificationData;
         });
         // Send notification after transaction completes (debounced: skip if same notification was sent within 2 minutes)
@@ -184,6 +201,13 @@ export async function updateStates(insertedData, previousData) {
             const faultNotificationData = notificationData.notificationDataFault;
             if (shouldSendNotification(faultNotificationData.motorId, "fault", fault)) {
                 await sendUserNotification(faultNotificationData.userId, faultNotificationData.title, faultNotificationData.message, faultNotificationData.motorId, faultNotificationData.starter_id);
+            }
+        }
+        // fault cleared notification
+        if (notificationData.notificationDataFaultCleared) {
+            const faultClearedData = notificationData.notificationDataFaultCleared;
+            if (shouldSendNotification(faultClearedData.motorId, "fault_cleared", 0)) {
+                await sendUserNotification(faultClearedData.userId, faultClearedData.title, faultClearedData.message, faultClearedData.motorId, faultClearedData.starter_id);
             }
         }
     }
