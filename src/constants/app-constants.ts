@@ -332,6 +332,12 @@ export const CYCLE_ON_MINUTES_REQUIRED = "Cycle ON duration (minutes) is require
 export const CYCLE_OFF_MINUTES_REQUIRED = "Cycle OFF duration (minutes) is required for CYCLIC mode";
 export const CYCLE_ON_MINUTES_MIN = "Cycle ON duration must be at least 1 minute";
 export const CYCLE_OFF_MINUTES_MIN = "Cycle OFF duration must be at least 1 minute";
+export const CYCLIC_REQUIRES_REPEAT = "Repeat must be enabled for cyclic schedules";
+export const CYCLIC_NO_POWER_LOSS_RECOVERY = "Power loss recovery is not supported for cyclic schedules";
+export const TIME_BASED_NO_REPEAT = "Repeat is not allowed for time-based schedules";
+export const ONE_TIME_REQUIRES_START_DATE = "Start date is required for one-time schedules";
+export const ONE_TIME_REQUIRES_START_TIME = "Start time is required for one-time schedules";
+export const ONE_TIME_REQUIRES_END_TIME = "End time is required for one-time schedules";
 
 // Runtime quota
 export const RUNTIME_MINUTES_MIN = "Runtime quota must be at least 1 minute";
@@ -354,7 +360,7 @@ export const SCHEDULE_CMD_REQUIRED = "cmd is required";
 // Schedule date validation
 export const SCHEDULE_DATE_REQUIRED_FOR_ONE_TIME = "Schedule date is required for one-time schedules";
 export const DAYS_OF_WEEK_REQUIRED_FOR_REPEAT_SCHEDULE = "At least one day of week is required for repeat schedules";
-export const CYCLE_FIELDS_NOT_ALLOWED_FOR_TIME_BASED = "Cycle ON/OFF durations are not applicable for one-time continuous schedules";
+export const CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME = "Cycle ON/OFF durations are not allowed for one-time schedules";
 export const REPEAT_REQUIRES_CYCLE = "Repeat schedules must have cycle ON and OFF durations";
 
 // Repeat days
