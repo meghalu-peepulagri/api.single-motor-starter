@@ -10,6 +10,8 @@ import {
   NO_ACTIVE_SCHEDULE,
   PENDING_SCHEDULES_FETCHED,
   REPEAT_DAYS_ADDED,
+  INVALID_SCHEDULE_CMD,
+  SCHEDULE_CMD_REQUIRED,
   SCHEDULE_DELETED,
   SCHEDULE_DETAILS_FETCHED,
   SCHEDULE_NOT_FOUND,
@@ -137,7 +139,17 @@ export class MotorScheduleHandler {
       const page = +(query.page) || 1;
       const limit = +(query.limit) || 10;
 
-      const filters: { starter_id?: number; motor_id?: number; status?: string, type?: string } = {};
+      const filters: {
+        starter_id?: number;
+        motor_id?: number;
+        status?: string;
+        type?: string;
+        start_date?: string;
+        end_date?: string;
+        repeat?: number;
+        enabled?: boolean;
+        day_of_week?: number;
+      } = {};
 
       if (query.starter_id) {
         const starterId = +query.starter_id;
@@ -157,6 +169,36 @@ export class MotorScheduleHandler {
 
       if (query.status) {
         filters.status = query.status;
+      }
+
+      if (query.type) {
+        filters.type = query.type;
+      }
+
+      if (query.start_date) {
+        filters.start_date = query.start_date;
+      }
+
+      if (query.end_date) {
+        filters.end_date = query.end_date;
+      }
+
+      if (query.repeat !== undefined) {
+        const repeat = +query.repeat;
+        if (repeat === 0 || repeat === 1) {
+          filters.repeat = repeat;
+        }
+      }
+
+      if (query.enabled !== undefined) {
+        filters.enabled = query.enabled === "true";
+      }
+
+      if (query.day_of_week !== undefined) {
+        const day = +query.day_of_week;
+        if (!Number.isNaN(day) && day >= 0 && day <= 6) {
+          filters.day_of_week = day;
+        }
       }
 
       const result = await findSchedulesByFilters(filters, page, limit);
@@ -276,38 +318,37 @@ export class MotorScheduleHandler {
     }
   };
 
-  // =================== STOP SINGLE SCHEDULE ===================
-  stopMotorScheduleHandler = async (c: Context) => {
+  // =================== UPDATE SCHEDULE STATUS (STOP / RESTART) ===================
+  // cmd: 1 = Stop, 2 = Restart
+  updateScheduleStatusHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
-      const activeSchedule = await findActiveScheduleById(scheduleId);
-      if (!activeSchedule) throw new BadRequestException(NO_ACTIVE_SCHEDULE);
-
-      const stopped = await stopScheduleById(scheduleId);
-      return sendResponse(c, 200, SCHEDULE_STOPPED, formatMotorScheduleResponse(stopped?.[0]));
-    } catch (error: any) {
-      console.error("Error at stop motor Schedule:", error.message);
-      throw error;
-    }
-  };
-
-  // =================== RESTART SINGLE SCHEDULE ===================
-  restartMotorScheduleHandler = async (c: Context) => {
-    try {
-      const scheduleId = +c.req.param("id");
-      paramsValidateException.validateId(scheduleId, "schedule id");
+      const { cmd } = await c.req.json();
+      if (cmd === undefined || cmd === null) throw new BadRequestException(SCHEDULE_CMD_REQUIRED);
+      if (cmd !== 1 && cmd !== 2) throw new BadRequestException(INVALID_SCHEDULE_CMD);
 
       const existed = await getRecordById<MotorScheduleTable>(
         motorSchedules, scheduleId, ["id", "schedule_status"],
       );
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
+      if (cmd === 1) {
+        // Stop: only active schedules can be stopped
+        const activeSchedule = await findActiveScheduleById(scheduleId);
+        if (!activeSchedule) throw new BadRequestException(NO_ACTIVE_SCHEDULE);
+
+        const stopped = await stopScheduleById(scheduleId);
+        return sendResponse(c, 200, SCHEDULE_STOPPED, formatMotorScheduleResponse(stopped?.[0]));
+      }
+
+      // cmd === 2: Restart
       const restarted = await restartScheduleById(scheduleId);
       return sendResponse(c, 200, SCHEDULE_RESTARTED, formatMotorScheduleResponse(restarted?.[0]));
     } catch (error: any) {
-      console.error("Error at restart motor Schedule:", error.message);
+      console.error("Error at update schedule status:", error.message);
+      handleJsonParseError(error);
       throw error;
     }
   };

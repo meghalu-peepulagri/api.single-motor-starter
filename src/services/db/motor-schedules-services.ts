@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 
@@ -124,7 +124,7 @@ export async function findAllActiveSchedulesForMotor(motorId: number) {
 // =================== SCHEDULE STATUS OPERATIONS ===================
 
 /**
- * Batch update schedule status to CANCELLED for multiple schedule IDs.
+ * Batch stop schedules by IDs (mark as STOPPED + manually_stopped).
  */
 export async function cancelSchedulesByIds(scheduleIds: number[]) {
   if (scheduleIds.length === 0) return;
@@ -132,7 +132,7 @@ export async function cancelSchedulesByIds(scheduleIds: number[]) {
   return await db
     .update(motorSchedules)
     .set({
-      schedule_status: "CANCELLED",
+      schedule_status: "STOPPED",
       manually_stopped: true,
       updated_at: new Date(),
     })
@@ -141,13 +141,13 @@ export async function cancelSchedulesByIds(scheduleIds: number[]) {
 }
 
 /**
- * Stop a single schedule (mark as CANCELLED + manually_stopped).
+ * Stop a single schedule (mark as STOPPED + manually_stopped).
  */
 export async function stopScheduleById(scheduleId: number) {
   return await db
     .update(motorSchedules)
     .set({
-      schedule_status: "CANCELLED",
+      schedule_status: "STOPPED",
       manually_stopped: true,
       updated_at: new Date(),
     })
@@ -156,13 +156,13 @@ export async function stopScheduleById(scheduleId: number) {
 }
 
 /**
- * Restart a schedule (mark as PENDING + clear manually_stopped).
+ * Restart a schedule (mark as SCHEDULED + clear manually_stopped).
  */
 export async function restartScheduleById(scheduleId: number) {
   return await db
     .update(motorSchedules)
     .set({
-      schedule_status: "PENDING",
+      schedule_status: "SCHEDULED",
       manually_stopped: false,
       updated_at: new Date(),
     })
@@ -173,10 +173,20 @@ export async function restartScheduleById(scheduleId: number) {
 // =================== LIST WITH FILTERS ===================
 
 /**
- * Find schedules by starter_id, motor_id, and/or status with pagination.
+ * Find schedules with filters and pagination.
  */
 export async function findSchedulesByFilters(
-  filters: { starter_id?: number; motor_id?: number; status?: string, type?: string },
+  filters: {
+    starter_id?: number;
+    motor_id?: number;
+    status?: string;
+    type?: string;
+    start_date?: string;
+    end_date?: string;
+    repeat?: number;
+    enabled?: boolean;
+    day_of_week?: number;
+  },
   page = 1, limit = 10,
 ) {
   const conditions: any[] = [ne(motorSchedules.status, "ARCHIVED")];
@@ -192,6 +202,21 @@ export async function findSchedulesByFilters(
   }
   if (filters.type) {
     conditions.push(eq(motorSchedules.schedule_type, filters.type as any));
+  }
+  if (filters.start_date) {
+    conditions.push(gte(motorSchedules.schedule_start_date, filters.start_date));
+  }
+  if (filters.end_date) {
+    conditions.push(lte(motorSchedules.schedule_start_date, filters.end_date));
+  }
+  if (filters.repeat !== undefined) {
+    conditions.push(eq(motorSchedules.repeat, filters.repeat));
+  }
+  if (filters.enabled !== undefined) {
+    conditions.push(eq(motorSchedules.enabled, filters.enabled));
+  }
+  if (filters.day_of_week !== undefined) {
+    conditions.push(sql`${motorSchedules.days_of_week} @> ARRAY[${filters.day_of_week}]::int[]`);
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

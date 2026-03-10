@@ -11,11 +11,8 @@ motorScheduleRoute.get("/sync/pending", motorScheduleHandler.getPendingSchedules
 // Stop all active schedules for a motor
 motorScheduleRoute.post("/stop-all/:motor_id", isAuthorized, motorScheduleHandler.stopAllMotorSchedulesHandler);
 
-// Stop a single active schedule
-motorScheduleRoute.post("/stop/:id", isAuthorized, motorScheduleHandler.stopMotorScheduleHandler);
-
-// Restart a schedule
-motorScheduleRoute.post("/restart/:id", isAuthorized, motorScheduleHandler.restartMotorScheduleHandler);
+// Update schedule status: cmd 1 = Stop, cmd 2 = Restart
+motorScheduleRoute.post("/update-status/:id", isAuthorized, motorScheduleHandler.updateScheduleStatusHandler);
 
 // Add repeat days to an existing schedule
 motorScheduleRoute.patch("/repeat-days/:id", isAuthorized, motorScheduleHandler.addRepeatDaysHandler);

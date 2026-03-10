@@ -1,5 +1,5 @@
 import { inArray } from "drizzle-orm";
-import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND, NO_ACTIVE_SCHEDULE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, INVALID_SCHEDULE_CMD, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
@@ -90,6 +90,30 @@ export class MotorScheduleHandler {
             }
             if (query.status) {
                 filters.status = query.status;
+            }
+            if (query.type) {
+                filters.type = query.type;
+            }
+            if (query.start_date) {
+                filters.start_date = query.start_date;
+            }
+            if (query.end_date) {
+                filters.end_date = query.end_date;
+            }
+            if (query.repeat !== undefined) {
+                const repeat = +query.repeat;
+                if (repeat === 0 || repeat === 1) {
+                    filters.repeat = repeat;
+                }
+            }
+            if (query.enabled !== undefined) {
+                filters.enabled = query.enabled === "true";
+            }
+            if (query.day_of_week !== undefined) {
+                const day = +query.day_of_week;
+                if (!Number.isNaN(day) && day >= 0 && day <= 6) {
+                    filters.day_of_week = day;
+                }
             }
             const result = await findSchedulesByFilters(filters, page, limit);
             return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result));
@@ -189,35 +213,35 @@ export class MotorScheduleHandler {
             throw error;
         }
     };
-    // =================== STOP SINGLE SCHEDULE ===================
-    stopMotorScheduleHandler = async (c) => {
+    // =================== UPDATE SCHEDULE STATUS (STOP / RESTART) ===================
+    // cmd: 1 = Stop, 2 = Restart
+    updateScheduleStatusHandler = async (c) => {
         try {
             const scheduleId = +c.req.param("id");
             paramsValidateException.validateId(scheduleId, "schedule id");
-            const activeSchedule = await findActiveScheduleById(scheduleId);
-            if (!activeSchedule)
-                throw new BadRequestException(NO_ACTIVE_SCHEDULE);
-            const stopped = await stopScheduleById(scheduleId);
-            return sendResponse(c, 200, SCHEDULE_STOPPED, formatMotorScheduleResponse(stopped?.[0]));
-        }
-        catch (error) {
-            console.error("Error at stop motor Schedule:", error.message);
-            throw error;
-        }
-    };
-    // =================== RESTART SINGLE SCHEDULE ===================
-    restartMotorScheduleHandler = async (c) => {
-        try {
-            const scheduleId = +c.req.param("id");
-            paramsValidateException.validateId(scheduleId, "schedule id");
+            const { cmd } = await c.req.json();
+            if (cmd === undefined || cmd === null)
+                throw new BadRequestException(SCHEDULE_CMD_REQUIRED);
+            if (cmd !== 1 && cmd !== 2)
+                throw new BadRequestException(INVALID_SCHEDULE_CMD);
             const existed = await getRecordById(motorSchedules, scheduleId, ["id", "schedule_status"]);
             if (!existed)
                 throw new BadRequestException(SCHEDULE_NOT_FOUND);
+            if (cmd === 1) {
+                // Stop: only active schedules can be stopped
+                const activeSchedule = await findActiveScheduleById(scheduleId);
+                if (!activeSchedule)
+                    throw new BadRequestException(NO_ACTIVE_SCHEDULE);
+                const stopped = await stopScheduleById(scheduleId);
+                return sendResponse(c, 200, SCHEDULE_STOPPED, formatMotorScheduleResponse(stopped?.[0]));
+            }
+            // cmd === 2: Restart
             const restarted = await restartScheduleById(scheduleId);
             return sendResponse(c, 200, SCHEDULE_RESTARTED, formatMotorScheduleResponse(restarted?.[0]));
         }
         catch (error) {
-            console.error("Error at restart motor Schedule:", error.message);
+            console.error("Error at update schedule status:", error.message);
+            handleJsonParseError(error);
             throw error;
         }
     };

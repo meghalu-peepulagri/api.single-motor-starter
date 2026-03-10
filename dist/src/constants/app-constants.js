@@ -316,6 +316,8 @@ export const SCHEDULE_STOPPED = "Motor schedule stopped successfully";
 export const SCHEDULE_RESTARTED = "Motor schedule restarted successfully";
 export const ALL_SCHEDULES_STOPPED = "All active schedules stopped for this motor";
 export const NO_ACTIVE_SCHEDULE = "No active schedule found to stop";
+export const INVALID_SCHEDULE_CMD = "Invalid cmd. Use 1 for stop, 2 for restart";
+export const SCHEDULE_CMD_REQUIRED = "cmd is required";
 // Schedule date validation
 export const SCHEDULE_DATE_REQUIRED_FOR_ONE_TIME = "Schedule date is required for one-time schedules";
 export const DAYS_OF_WEEK_REQUIRED_FOR_REPEAT_SCHEDULE = "At least one day of week is required for repeat schedules";
