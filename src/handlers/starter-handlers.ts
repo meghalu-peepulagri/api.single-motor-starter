@@ -325,8 +325,9 @@ export class StarterHandlers {
       let powerState = query.power || "";
       let motorState = query.state || "";
 
+      const isSingleDate = !!(query.from_date && query.to_date && query.from_date === query.to_date);
       const { fromDateUTC, toDateUTC } = parseQueryDates(query);
-      const starterList = query.parameter === "power" ? await getStarterRunTime(starterId, fromDateUTC, toDateUTC, motorId, powerState) : await getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId, motorState);
+      const starterList = query.parameter === "power" ? await getStarterRunTime(starterId, fromDateUTC, toDateUTC, motorId, powerState) : await getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId, motorState, isSingleDate);
       return sendResponse(c, 200, STARTER_RUNTIME_FETCHED, starterList);
     } catch (error: any) {
       console.error("Error at device run time :", error);

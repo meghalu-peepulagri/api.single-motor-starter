@@ -271,3 +271,31 @@ export type motorBasedStarterDetails = {
   id: number;
   assigned_at: Date | null;
 }
+
+// =================== RUNTIME TYPES ===================
+export interface RuntimeRecord {
+  id: number;
+  start_time: Date | string;
+  end_time: Date | string | null;
+  duration: string | null;
+  time_stamp: string | null;
+  motor_state: number | null;
+  power_start: string | null;
+  power_end: string | null;
+  power_duration: string | null;
+  power_state: number | null;
+}
+
+export interface SplitRuntimeRecord {
+  id: number;
+  start_time: Date;
+  end_time: Date | null;
+  duration: string | null;
+  time_stamp: string | null;
+  motor_state: number | null;
+  power_start: string | null;
+  power_end: string | null;
+  power_duration: string | null;
+  power_state: number | null;
+  is_split: boolean;
+}

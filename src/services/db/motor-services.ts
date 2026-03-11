@@ -8,6 +8,7 @@ import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { formatDuration, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
+import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
@@ -395,15 +396,20 @@ export async function trackDeviceRunTime(params: {
   }
 }
 
-export async function getMotorRunTime(starterId: number, fromDateUTC: string, toDateUTC: string, motorId?: number, motorState?: string) {
+export async function getMotorRunTime(starterId: number, fromDateUTC: string, toDateUTC: string, motorId?: number, motorState?: string, isSingleDate?: boolean) {
 
   const from = new Date(fromDateUTC);
   const to = new Date(toDateUTC);
 
-  const filters = [
+  // Fetch records that overlap with the date range:
+  // start_time <= toDate AND (end_time >= fromDate OR end_time IS NULL)
+  const filters: any[] = [
     eq(motorsRunTime.starter_box_id, starterId),
-    gte(motorsRunTime.start_time, from),
     lte(motorsRunTime.start_time, to),
+    or(
+      gte(motorsRunTime.end_time, from),
+      isNull(motorsRunTime.end_time),
+    ),
   ];
 
   if (motorId) {
@@ -415,10 +421,9 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
     filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
   }
 
-
   const records = await db.query.motorsRunTime.findMany({
     where: and(...filters),
-    orderBy: asc(motorsRunTime.time_stamp),
+    orderBy: asc(motorsRunTime.start_time),
     columns: {
       id: true,
       start_time: true,
@@ -432,6 +437,22 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
       power_state: true,
     }
   });
+
+  // Single date: split cross-midnight records to show only that date's runtime
+  // Date range: return original records as-is
+  if (isSingleDate) {
+    const splitRecords = splitRuntimeRecordsByDate(records, from, to);
+
+    const totalOnSeconds = splitRecords.reduce((sum, record) => {
+      if (record.motor_state !== 1 || !record.duration) return sum;
+      return sum + parseDurationToSeconds(record.duration);
+    }, 0);
+
+    return {
+      total_run_on_time: formatDuration(totalOnSeconds * 1000),
+      records: splitRecords,
+    };
+  }
 
   const totalRunTime = await getMotorTotalRunOnTime(starterId, fromDateUTC, toDateUTC, motorId);
   return {

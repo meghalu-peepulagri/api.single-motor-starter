@@ -303,6 +303,7 @@ export class MotorScheduleHandler {
             const updated = await updateRecordById(motorSchedules, scheduleId, {
                 acknowledgement: 1,
                 acknowledged_at: new Date(),
+                schedule_status: "SCHEDULED",
             });
             return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED, updated);
         }
