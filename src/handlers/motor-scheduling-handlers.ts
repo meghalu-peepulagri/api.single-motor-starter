@@ -419,7 +419,7 @@ export class MotorScheduleHandler {
         schedule_status: "SCHEDULED",
       });
 
-      return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED, updated);
+      return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
     } catch (error: any) {
       console.error("Error at update acknowledgement:", error.message);
       throw error;
