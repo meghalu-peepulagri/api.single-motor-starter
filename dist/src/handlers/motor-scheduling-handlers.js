@@ -7,6 +7,7 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict, } from "../helpers/motor-helper.js";
+import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-helper.js";
 import { buildDeviceSyncPayloads, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
@@ -92,48 +93,7 @@ export class MotorScheduleHandler {
             const query = c.req.query();
             const page = +(query.page) || 1;
             const limit = +(query.limit) || 10;
-            const filters = {};
-            if (query.starter_id) {
-                const starterId = +query.starter_id;
-                if (Number.isNaN(starterId) || starterId <= 0) {
-                    throw new BadRequestException("Invalid starter id");
-                }
-                filters.starter_id = starterId;
-            }
-            if (query.motor_id) {
-                const motorId = +query.motor_id;
-                if (Number.isNaN(motorId) || motorId <= 0) {
-                    throw new BadRequestException("Invalid motor id");
-                }
-                filters.motor_id = motorId;
-            }
-            if (query.status) {
-                filters.status = query.status;
-            }
-            if (query.type) {
-                filters.type = query.type;
-            }
-            if (query.start_date) {
-                filters.start_date = query.start_date;
-            }
-            if (query.end_date) {
-                filters.end_date = query.end_date;
-            }
-            if (query.repeat !== undefined) {
-                const repeat = +query.repeat;
-                if (repeat === 0 || repeat === 1) {
-                    filters.repeat = repeat;
-                }
-            }
-            if (query.enabled !== undefined) {
-                filters.enabled = query.enabled === "true";
-            }
-            if (query.day_of_week !== undefined) {
-                const day = +query.day_of_week;
-                if (!Number.isNaN(day) && day >= 0 && day <= 6) {
-                    filters.day_of_week = day;
-                }
-            }
+            const filters = buildMotorScheduleFilters(query);
             const result = await findSchedulesByFilters(filters, page, limit);
             return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result));
         }
@@ -271,11 +231,11 @@ export class MotorScheduleHandler {
                 if (!activeSchedule)
                     throw new BadRequestException(NO_ACTIVE_SCHEDULE);
                 const stopped = await stopScheduleById(scheduleId);
-                return sendResponse(c, 200, SCHEDULE_STOPPED, formatMotorScheduleResponse(stopped?.[0]));
+                return sendResponse(c, 200, SCHEDULE_STOPPED);
             }
             // cmd === 2: Restart
             const restarted = await restartScheduleById(scheduleId);
-            return sendResponse(c, 200, SCHEDULE_RESTARTED, formatMotorScheduleResponse(restarted?.[0]));
+            return sendResponse(c, 200, SCHEDULE_RESTARTED);
         }
         catch (error) {
             console.error("Error at update schedule status:", error.message);

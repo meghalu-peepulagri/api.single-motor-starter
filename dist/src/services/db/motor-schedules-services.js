@@ -141,8 +141,8 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
     if (filters.motor_id) {
         conditions.push(eq(motorSchedules.motor_id, filters.motor_id));
     }
-    if (filters.status) {
-        conditions.push(eq(motorSchedules.schedule_status, filters.status));
+    if (filters.schedule_status) {
+        conditions.push(eq(motorSchedules.schedule_status, filters.schedule_status));
     }
     if (filters.type) {
         conditions.push(eq(motorSchedules.schedule_type, filters.type));

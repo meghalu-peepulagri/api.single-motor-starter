@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
+import type { MotorScheduleFilters } from "../../helpers/motor-schedule-filter-helper.js";
 
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED"] as const;
 
@@ -176,17 +177,7 @@ export async function restartScheduleById(scheduleId: number) {
  * Find schedules with filters and pagination.
  */
 export async function findSchedulesByFilters(
-  filters: {
-    starter_id?: number;
-    motor_id?: number;
-    status?: string;
-    type?: string;
-    start_date?: string;
-    end_date?: string;
-    repeat?: number;
-    enabled?: boolean;
-    day_of_week?: number;
-  },
+  filters: MotorScheduleFilters,
   page = 1, limit = 10,
 ) {
   const conditions: any[] = [ne(motorSchedules.status, "ARCHIVED")];
@@ -197,8 +188,8 @@ export async function findSchedulesByFilters(
   if (filters.motor_id) {
     conditions.push(eq(motorSchedules.motor_id, filters.motor_id));
   }
-  if (filters.status) {
-    conditions.push(eq(motorSchedules.schedule_status, filters.status as any));
+  if (filters.schedule_status) {
+    conditions.push(eq(motorSchedules.schedule_status, filters.schedule_status as any));
   }
   if (filters.type) {
     conditions.push(eq(motorSchedules.schedule_type, filters.type as any));
