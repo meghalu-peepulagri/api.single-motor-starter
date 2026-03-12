@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { starterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
@@ -9,6 +9,7 @@ import { prepareDeviceConfigurationPayload } from "../../helpers/heart-beat-prep
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { logger } from "../../utils/logger.js";
+import { motors } from "../../database/schemas/motors.js";
 export async function getStarterDefaultSettings() {
     return await db.select().from(starterDefaultSettings).limit(1);
 }
@@ -18,6 +19,7 @@ export async function starterAcknowledgedSettings(starterId, filter) {
         orderBy: desc(starterSettings.created_at),
         with: {
             starter: {
+                where: ne(starterBoxes.status, "ARCHIVED"),
                 columns: {
                     id: true,
                     name: true,
@@ -27,6 +29,7 @@ export async function starterAcknowledgedSettings(starterId, filter) {
                 },
                 with: {
                     motors: {
+                        where: ne(motors.status, "ARCHIVED"),
                         columns: {
                             id: true,
                             name: true,
@@ -84,6 +87,7 @@ export async function getAcknowledgedStarterSettings(starterId, columns) {
         columns,
         with: {
             starter: {
+                where: ne(starterBoxes.status, "ARCHIVED"),
                 columns: {
                     id: true,
                     name: true,
@@ -92,6 +96,7 @@ export async function getAcknowledgedStarterSettings(starterId, columns) {
                 },
                 with: {
                     motors: {
+                        where: ne(motors.status, "ARCHIVED"),
                         columns: {
                             id: true,
                             name: true,

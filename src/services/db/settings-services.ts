@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { starterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { starterSettings, type StarterSettingsTable } from "../../database/schemas/starter-settings.js";
@@ -9,6 +9,7 @@ import { prepareDeviceConfigurationPayload } from "../../helpers/heart-beat-prep
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { logger } from "../../utils/logger.js";
+import { motors } from "../../database/schemas/motors.js";
 
 export async function getStarterDefaultSettings() {
   return await db.select().from(starterDefaultSettings).limit(1);
@@ -20,6 +21,7 @@ export async function starterAcknowledgedSettings(starterId: number, filter?: an
     orderBy: desc(starterSettings.created_at),
     with: {
       starter: {
+        where: ne(starterBoxes.status, "ARCHIVED"),
         columns: {
           id: true,
           name: true,
@@ -29,6 +31,7 @@ export async function starterAcknowledgedSettings(starterId: number, filter?: an
         },
         with: {
           motors: {
+            where: ne(motors.status, "ARCHIVED"),
             columns: {
               id: true,
               name: true,
@@ -39,7 +42,7 @@ export async function starterAcknowledgedSettings(starterId: number, filter?: an
         },
       },
     },
-  });
+  } as any);
 }
 
 
@@ -100,6 +103,7 @@ export async function getAcknowledgedStarterSettings(starterId: number, columns?
     columns,
     with: {
       starter: {
+        where: ne(starterBoxes.status, "ARCHIVED"),
         columns: {
           id: true,
           name: true,
@@ -108,6 +112,7 @@ export async function getAcknowledgedStarterSettings(starterId: number, columns?
         },
         with: {
           motors: {
+            where: ne(motors.status, "ARCHIVED"),
             columns: {
               id: true,
               name: true,
@@ -118,7 +123,7 @@ export async function getAcknowledgedStarterSettings(starterId: number, columns?
         },
       },
     },
-  });
+  } as any);
 }
 
 type DeviceCategory = keyof typeof DEVICE_SCHEMA;

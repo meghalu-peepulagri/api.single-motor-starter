@@ -471,20 +471,33 @@ export async function getMotorTotalRunOnTime(starterId: number, fromDate: string
   const records = await db.query.motorsRunTime.findMany({
     where: and(
       eq(motorsRunTime.starter_box_id, starterId),
-      gte(motorsRunTime.start_time, fromDateObj),
       lte(motorsRunTime.start_time, toDateObj),
+      or(
+        gte(motorsRunTime.end_time, fromDateObj),
+        isNull(motorsRunTime.end_time),
+      ),
       eq(motorsRunTime.motor_state, 1),
       motorId ? eq(motorsRunTime.motor_id, motorId) : undefined
     ),
     columns: {
+      start_time: true,
+      end_time: true,
       duration: true,
+      motor_state: true,
     },
   });
 
-  const totalSeconds = records.reduce(
-    (sum, record) => sum + (record.duration ? parseDurationToSeconds(record.duration) : 0),
-    0
-  );
+  let totalSeconds = 0;
+  for (const record of records) {
+    if (record.motor_state !== 1) continue;
+    const start = new Date(record.start_time);
+    const end = record.end_time ? new Date(record.end_time) : toDateObj;
+    const segmentStart = start > fromDateObj ? start : fromDateObj;
+    const segmentEnd = end < toDateObj ? end : toDateObj;
+    if (segmentEnd > segmentStart) {
+      totalSeconds += Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / 1000);
+    }
+  }
 
   return {
     total_run_on_time: formatDuration(totalSeconds * 1000),
