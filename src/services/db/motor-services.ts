@@ -466,13 +466,13 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
 
 export async function getMotorTotalRunOnTime(starterId: number, fromDate: string, toDate: string, motorId?: number) {
   const fromDateObj = new Date(fromDate);
-  const toDateObj = new Date(toDate).toISOString();
+  const toDateObj = new Date(toDate);
 
   const records = await db.query.motorsRunTime.findMany({
     where: and(
       eq(motorsRunTime.starter_box_id, starterId),
       gte(motorsRunTime.start_time, fromDateObj),
-      lte(motorsRunTime.time_stamp, toDateObj),
+      lte(motorsRunTime.start_time, toDateObj),
       eq(motorsRunTime.motor_state, 1),
       motorId ? eq(motorsRunTime.motor_id, motorId) : undefined
     ),

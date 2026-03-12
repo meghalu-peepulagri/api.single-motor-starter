@@ -154,6 +154,28 @@ export function normalizeRepeatDaysPayload(payload) {
         days_of_week: daysOfWeek,
     };
 }
+/**
+ * Build the shared schedule fields used by both create and edit handlers.
+ */
+export function buildScheduleData(data, scheduleStartDate) {
+    const scheduleType = data.schedule_type || "TIME_BASED";
+    return {
+        motor_id: data.motor_id,
+        starter_id: data.starter_id || null,
+        schedule_type: scheduleType,
+        schedule_start_date: scheduleStartDate,
+        schedule_end_date: data.schedule_end_date || null,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        days_of_week: data.days_of_week || [],
+        bit_wise_days: data.bit_wise_days ?? 0,
+        runtime_minutes: data.runtime_minutes || null,
+        cycle_on_minutes: scheduleType === "CYCLIC" ? data.cycle_on_minutes : null,
+        cycle_off_minutes: scheduleType === "CYCLIC" ? data.cycle_off_minutes : null,
+        power_loss_recovery: scheduleType === "CYCLIC" ? false : (data.power_loss_recovery ?? false),
+        repeat: data.repeat ?? 0,
+    };
+}
 export function formatMotorScheduleResponse(record) {
     if (!record || typeof record !== "object")
         return record;

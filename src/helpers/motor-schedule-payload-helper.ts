@@ -171,6 +171,44 @@ export function normalizeRepeatDaysPayload(payload: any): any {
   };
 }
 
+/**
+ * Build the shared schedule fields used by both create and edit handlers.
+ */
+export function buildScheduleData(data: {
+  motor_id: number;
+  starter_id?: number | null;
+  schedule_type?: string;
+  schedule_start_date?: string | null;
+  schedule_end_date?: string | null;
+  start_time: string;
+  end_time: string;
+  days_of_week?: number[];
+  bit_wise_days?: number;
+  runtime_minutes?: number | null;
+  cycle_on_minutes?: number | null;
+  cycle_off_minutes?: number | null;
+  power_loss_recovery?: boolean;
+  repeat?: number;
+}, scheduleStartDate: string) {
+  const scheduleType: ScheduleType = (data.schedule_type as ScheduleType) || "TIME_BASED";
+  return {
+    motor_id: data.motor_id,
+    starter_id: data.starter_id || null,
+    schedule_type: scheduleType,
+    schedule_start_date: scheduleStartDate,
+    schedule_end_date: data.schedule_end_date || null,
+    start_time: data.start_time,
+    end_time: data.end_time,
+    days_of_week: data.days_of_week || [],
+    bit_wise_days: data.bit_wise_days ?? 0,
+    runtime_minutes: data.runtime_minutes || null,
+    cycle_on_minutes: scheduleType === "CYCLIC" ? data.cycle_on_minutes : null,
+    cycle_off_minutes: scheduleType === "CYCLIC" ? data.cycle_off_minutes : null,
+    power_loss_recovery: scheduleType === "CYCLIC" ? false : (data.power_loss_recovery ?? false),
+    repeat: data.repeat ?? 0,
+  };
+}
+
 export function formatMotorScheduleResponse(record: any): any {
   if (!record || typeof record !== "object") return record;
 

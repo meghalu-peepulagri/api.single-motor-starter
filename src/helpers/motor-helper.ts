@@ -1,9 +1,15 @@
 import {
   ALREADY_SCHEDULED_EXISTS,
+  CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME,
+  CYCLE_ON_MINUTES_REQUIRED,
+  CYCLIC_NO_POWER_LOSS_RECOVERY,
+  CYCLIC_REQUIRES_REPEAT,
+  ONE_TIME_REQUIRES_START_DATE,
   SCHEDULE_DATE_PAST,
   SCHEDULE_GAP_CONFLICT,
   SCHEDULE_MIN_ADVANCE,
   SCHEDULE_OVERLAP_CONFLICT,
+  TIME_BASED_NO_REPEAT,
 } from "../constants/app-constants.js";
 
 import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
@@ -435,4 +441,27 @@ export function prepareMotorModeControlNotificationData(motor: any, mode_descrip
   }
 
   return null;
+}
+
+export function validateScheduleTypeRules(data: {
+  schedule_type?: string;
+  repeat?: number;
+  power_loss_recovery?: boolean;
+  cycle_on_minutes?: number | null;
+  cycle_off_minutes?: number | null;
+  schedule_start_date?: string | null;
+}) {
+  const scheduleType = data.schedule_type || "TIME_BASED";
+
+  if (scheduleType === "CYCLIC") {
+    if (data.repeat !== 1) throw new BadRequestException(CYCLIC_REQUIRES_REPEAT);
+    if (data.power_loss_recovery) throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);
+    if (!data.cycle_on_minutes || !data.cycle_off_minutes) throw new BadRequestException(CYCLE_ON_MINUTES_REQUIRED);
+  }
+
+  if (scheduleType === "TIME_BASED") {
+    if (data.repeat === 1) throw new BadRequestException(TIME_BASED_NO_REPEAT);
+    if (!data.schedule_start_date) throw new BadRequestException(ONE_TIME_REQUIRES_START_DATE);
+    if (data.cycle_on_minutes || data.cycle_off_minutes) throw new BadRequestException(CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME);
+  }
 }

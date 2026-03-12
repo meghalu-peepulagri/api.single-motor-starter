@@ -6,14 +6,8 @@ import {
   ALL_SCHEDULES_STOPPED,
   CANNOT_EDIT_RUNNING_SCHEDULE,
   CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
-  CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME,
-  CYCLE_ON_MINUTES_REQUIRED,
-  CYCLIC_NO_POWER_LOSS_RECOVERY,
-  CYCLIC_REQUIRES_REPEAT,
   MOTOR_NOT_FOUND,
-  TIME_BASED_NO_REPEAT,
   NO_ACTIVE_SCHEDULE,
-  ONE_TIME_REQUIRES_START_DATE,
   PENDING_SCHEDULES_FETCHED,
   REPEAT_DAYS_ADDED,
   INVALID_SCHEDULE_CMD,
@@ -37,12 +31,14 @@ import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import {
   checkMotorScheduleConflict,
+  validateScheduleTypeRules,
 } from "../helpers/motor-helper.js";
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import type { ScheduleForEvaluation } from "../types/app-types.js";
 import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-helper.js";
 import {
   buildDeviceSyncPayloads,
+  buildScheduleData,
   formatMotorScheduleListResponse,
   formatMotorScheduleResponse,
   normalizeMotorSchedulePayload,
@@ -95,21 +91,7 @@ export class MotorScheduleHandler {
       );
       if (!existedMotor) throw new BadRequestException(MOTOR_NOT_FOUND);
 
-      const scheduleType = data.schedule_type || "TIME_BASED";
-
-      // CYCLIC schedule validations
-      if (scheduleType === "CYCLIC") {
-        if (data.repeat !== 1) throw new BadRequestException(CYCLIC_REQUIRES_REPEAT);
-        if (data.power_loss_recovery) throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);
-        if (!data.cycle_on_minutes || !data.cycle_off_minutes) throw new BadRequestException(CYCLE_ON_MINUTES_REQUIRED);
-      }
-
-      // TIME_BASED schedule validations
-      if (scheduleType === "TIME_BASED") {
-        if (data.repeat === 1) throw new BadRequestException(TIME_BASED_NO_REPEAT);
-        if (!data.schedule_start_date) throw new BadRequestException(ONE_TIME_REQUIRES_START_DATE);
-        if (data.cycle_on_minutes || data.cycle_off_minutes) throw new BadRequestException(CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME);
-      }
+      validateScheduleTypeRules(data);
 
       // Use user-provided schedule_start_date for one-time schedules, fallback to today
       const scheduleStartDate = data.schedule_start_date || new Date().toISOString().split("T")[0];
@@ -129,21 +111,8 @@ export class MotorScheduleHandler {
 
       // Prepare and save
       const preparedData = {
-        motor_id: data.motor_id,
-        starter_id: data.starter_id || null,
+        ...buildScheduleData(data, scheduleStartDate),
         schedule_id: nextScheduleId,
-        schedule_type: scheduleType,
-        schedule_start_date: scheduleStartDate,
-        schedule_end_date: data.schedule_end_date || null,
-        start_time: data.start_time,
-        end_time: data.end_time,
-        days_of_week: data.days_of_week || [],
-        bit_wise_days: data.bit_wise_days ?? 0,
-        runtime_minutes: data.runtime_minutes || null,
-        cycle_on_minutes: scheduleType === "CYCLIC" ? data.cycle_on_minutes : null,
-        cycle_off_minutes: scheduleType === "CYCLIC" ? data.cycle_off_minutes : null,
-        power_loss_recovery: scheduleType === "CYCLIC" ? false : (data.power_loss_recovery || false),
-        repeat: data.repeat ?? 0,
         created_by: userPayload.id,
         enabled: data.enabled ?? true,
       };
@@ -215,21 +184,7 @@ export class MotorScheduleHandler {
         throw new BadRequestException(CANNOT_EDIT_RUNNING_SCHEDULE);
       }
 
-      const scheduleType = data.schedule_type || "TIME_BASED";
-
-      // CYCLIC schedule validations
-      if (scheduleType === "CYCLIC") {
-        if (data.repeat !== 1) throw new BadRequestException(CYCLIC_REQUIRES_REPEAT);
-        if (data.power_loss_recovery) throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);
-        if (!data.cycle_on_minutes || !data.cycle_off_minutes) throw new BadRequestException(CYCLE_ON_MINUTES_REQUIRED);
-      }
-
-      // TIME_BASED schedule validations
-      if (scheduleType === "TIME_BASED") {
-        if (data.repeat === 1) throw new BadRequestException(TIME_BASED_NO_REPEAT);
-        if (!data.schedule_start_date) throw new BadRequestException(ONE_TIME_REQUIRES_START_DATE);
-        if (data.cycle_on_minutes || data.cycle_off_minutes) throw new BadRequestException(CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME);
-      }
+      validateScheduleTypeRules(data);
 
       // Conflict detection: fetch potential conflicts by date/days, then check time overlap
       const scheduleStartDate = data.schedule_start_date || new Date().toISOString().split("T")[0];
@@ -243,22 +198,7 @@ export class MotorScheduleHandler {
       );
 
       // Update
-      const updateData = {
-        motor_id: data.motor_id,
-        starter_id: data.starter_id || null,
-        schedule_type: scheduleType,
-        schedule_start_date: scheduleStartDate,
-        schedule_end_date: data.schedule_end_date || null,
-        start_time: data.start_time,
-        end_time: data.end_time,
-        days_of_week: data.days_of_week || [],
-        bit_wise_days: data.bit_wise_days ?? 0,
-        runtime_minutes: data.runtime_minutes || null,
-        cycle_on_minutes: scheduleType === "CYCLIC" ? data.cycle_on_minutes : null,
-        cycle_off_minutes: scheduleType === "CYCLIC" ? data.cycle_off_minutes : null,
-        power_loss_recovery: scheduleType === "CYCLIC" ? false : (data.power_loss_recovery ?? false),
-        repeat: data.repeat ?? 0,
-      };
+      const updateData = buildScheduleData(data, scheduleStartDate);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, updateData);
       return sendResponse(c, 200, SCHEDULE_UPDATED);
@@ -323,12 +263,12 @@ export class MotorScheduleHandler {
         const activeSchedule = await findActiveScheduleById(scheduleId);
         if (!activeSchedule) throw new BadRequestException(NO_ACTIVE_SCHEDULE);
 
-        const stopped = await stopScheduleById(scheduleId);
+        await stopScheduleById(scheduleId);
         return sendResponse(c, 200, SCHEDULE_STOPPED);
       }
 
       // cmd === 2: Restart
-      const restarted = await restartScheduleById(scheduleId);
+      await restartScheduleById(scheduleId);
       return sendResponse(c, 200, SCHEDULE_RESTARTED);
     } catch (error: any) {
       console.error("Error at update schedule status:", error.message);
@@ -416,7 +356,7 @@ export class MotorScheduleHandler {
       );
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
-      const updated = await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, {
+      await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, {
         acknowledgement: 1,
         acknowledged_at: new Date(),
         schedule_status: "SCHEDULED",
