@@ -1,5 +1,5 @@
 import { inArray } from "drizzle-orm";
-import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME, CYCLE_ON_MINUTES_REQUIRED, CYCLIC_NO_POWER_LOSS_RECOVERY, CYCLIC_REQUIRES_REPEAT, MOTOR_NOT_FOUND, TIME_BASED_NO_REPEAT, NO_ACTIVE_SCHEDULE, ONE_TIME_REQUIRES_START_DATE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, INVALID_SCHEDULE_CMD, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME, CYCLE_ON_MINUTES_REQUIRED, CYCLIC_NO_POWER_LOSS_RECOVERY, CYCLIC_REQUIRES_REPEAT, MOTOR_NOT_FOUND, TIME_BASED_NO_REPEAT, NO_ACTIVE_SCHEDULE, ONE_TIME_REQUIRES_START_DATE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, INVALID_SCHEDULE_CMD, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, SCHEDULE_STATUS_SYNC_COMPLETED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
@@ -7,10 +7,11 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict, } from "../helpers/motor-helper.js";
+import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-helper.js";
 import { buildDeviceSyncPayloads, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
+import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
 import { publishData } from "../services/db/mqtt-db-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -309,6 +310,49 @@ export class MotorScheduleHandler {
         }
         catch (error) {
             console.error("Error at update acknowledgement:", error.message);
+            throw error;
+        }
+    };
+    // =================== SYNC SCHEDULE STATUSES (CRON ENDPOINT) ===================
+    syncScheduleStatusesHandler = async (c) => {
+        try {
+            const now = new Date();
+            const schedules = await findEvaluatableSchedules();
+            if (!schedules || schedules.length === 0) {
+                return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
+                    evaluated: 0,
+                    updated: 0,
+                    transitions: [],
+                });
+            }
+            const transitions = [];
+            // TODO: avoid query in loop
+            for (const schedule of schedules) {
+                const result = evaluateScheduleStatus(schedule, now);
+                if (!result)
+                    continue;
+                const updateData = {
+                    schedule_status: result.newStatus,
+                };
+                if (result.last_started_at)
+                    updateData.last_started_at = result.last_started_at;
+                if (result.last_stopped_at)
+                    updateData.last_stopped_at = result.last_stopped_at;
+                await updateRecordById(motorSchedules, result.id, updateData);
+                transitions.push({
+                    schedule_id: result.id,
+                    from: schedule.schedule_status,
+                    to: result.newStatus,
+                });
+            }
+            return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
+                evaluated: schedules.length,
+                updated: transitions.length,
+                transitions,
+            });
+        }
+        catch (error) {
+            console.error("Error at sync schedule statuses:", error.message);
             throw error;
         }
     };

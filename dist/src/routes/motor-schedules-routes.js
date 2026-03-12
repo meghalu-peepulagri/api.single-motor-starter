@@ -5,6 +5,8 @@ const motorScheduleHandler = new MotorScheduleHandler();
 const motorScheduleRoute = factory.createApp();
 // Pending schedules for device sync (no auth)
 motorScheduleRoute.get("/sync/pending", motorScheduleHandler.getPendingSchedulesForSyncHandler);
+// Cron: evaluate and update schedule statuses based on current time (no auth)
+motorScheduleRoute.post("/sync/status", motorScheduleHandler.syncScheduleStatusesHandler);
 // Stop all active schedules for a motor
 motorScheduleRoute.post("/stop-all/:motor_id", isAuthorized, motorScheduleHandler.stopAllMotorSchedulesHandler);
 // Update schedule status: cmd 1 = Stop, cmd 2 = Restart

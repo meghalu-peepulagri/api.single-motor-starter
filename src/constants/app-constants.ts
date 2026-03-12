@@ -319,7 +319,7 @@ export const PENDING_SCHEDULES_FETCHED = "Pending schedules fetched successfully
 export const SCHEDULE_UPDATED = "Motor Schedule updated successfully";
 export const SCHEDULE_NOT_FOUND = "Motor schedule id not found";
 export const SCHEDULE_DELETED = "Motor Schedule deleted successfully";
-export const SCHEDULE_STATUS = ["PENDING", "SCHEDULED", "RUNNING", "STOPPED", "COMPLETED", "FAILED", "CANCELLED", "DELETED", "RESTARTED"] as const;
+export const SCHEDULE_STATUS = ["PENDING", "SCHEDULED", "RUNNING", "STOPPED", "COMPLETED", "FAILED", "CANCELLED", "DELETED", "RESTARTED", "WAITING_NEXT_CYCLE"] as const;
 export const INVALID_SCHEDULED_STATUS = "Invalid schedule status";
 export const ACKNOWLEDGEMENT_UPDATED = "Acknowledgement updated successfully";
 export const SCHEDULE_ACK_SUCCESS = "Schedule acknowledged successfully";
@@ -362,6 +362,9 @@ export const SCHEDULE_DATE_REQUIRED_FOR_ONE_TIME = "Schedule date is required fo
 export const DAYS_OF_WEEK_REQUIRED_FOR_REPEAT_SCHEDULE = "At least one day of week is required for repeat schedules";
 export const CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME = "Cycle ON/OFF durations are not allowed for one-time schedules";
 export const REPEAT_REQUIRES_CYCLE = "Repeat schedules must have cycle ON and OFF durations";
+
+// Schedule status sync (cron)
+export const SCHEDULE_STATUS_SYNC_COMPLETED = "Schedule status sync completed successfully";
 
 // Repeat days
 export const REPEAT_DAYS_ADDED = "Repeat days updated successfully";

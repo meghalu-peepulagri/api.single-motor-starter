@@ -176,6 +176,13 @@
       "when": 1772805063943,
       "tag": "0024_hot_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1773299551756,
+      "tag": "0025_overrated_red_hulk",
+      "breakpoints": true
     }
   ]
 }

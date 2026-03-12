@@ -3,7 +3,7 @@ import db from "../../database/configuration.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import type { MotorScheduleFilters } from "../../helpers/motor-schedule-filter-helper.js";
 
-const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED"] as const;
+const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
 
 // =================== AUTO-INCREMENT SCHEDULE ID PER MOTOR ===================
 
@@ -290,5 +290,35 @@ export async function findPendingSchedulesForSync() {
       enabled: true,
     },
     orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.start_time)],
+  });
+}
+
+// =================== EVALUATABLE SCHEDULES FOR STATUS SYNC ===================
+
+/**
+ * Fetch all schedules whose status can be evaluated by the cron sync.
+ * Targets: SCHEDULED, RUNNING, WAITING_NEXT_CYCLE (enabled & not archived).
+ */
+export async function findEvaluatableSchedules() {
+  return await db.query.motorSchedules.findMany({
+    where: and(
+      eq(motorSchedules.enabled, true),
+      ne(motorSchedules.status, "ARCHIVED"),
+      inArray(motorSchedules.schedule_status, ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE"]),
+    ),
+    columns: {
+      id: true,
+      schedule_type: true,
+      schedule_status: true,
+      start_time: true,
+      end_time: true,
+      schedule_start_date: true,
+      schedule_end_date: true,
+      days_of_week: true,
+      repeat: true,
+      runtime_minutes: true,
+      last_started_at: true,
+      enabled: true,
+    },
   });
 }

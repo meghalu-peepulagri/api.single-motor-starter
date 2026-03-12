@@ -213,6 +213,29 @@ export type RequireAtLeastOne<T, Keys extends keyof T = keyof T> =
     [K in Keys]-?: Required<Pick<T, K>> & Partial<Pick<T, Exclude<Keys, K>>>
   }[Keys];
 
+// =================== SCHEDULE EVALUATOR TYPES ===================
+export interface ScheduleForEvaluation {
+  id: number;
+  schedule_type: "TIME_BASED" | "CYCLIC";
+  schedule_status: string;
+  start_time: string;   // HH:mm (IST 24hr)
+  end_time: string;     // HH:mm (IST 24hr)
+  schedule_start_date: string | null;  // YYYY-MM-DD (IST)
+  schedule_end_date: string | null;    // YYYY-MM-DD (IST)
+  days_of_week: number[];
+  repeat: number;
+  runtime_minutes: number | null;
+  last_started_at: Date | null;
+  enabled: boolean;
+}
+
+export interface ScheduleStatusUpdate {
+  id: number;
+  newStatus: "RUNNING" | "COMPLETED" | "WAITING_NEXT_CYCLE";
+  last_started_at?: Date;
+  last_stopped_at?: Date;
+}
+
 export type preparedLiveData = {
   payload_version: number;
   packet_number: number;

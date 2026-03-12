@@ -6,15 +6,16 @@ import { statusEnum } from "../../constants/enum-types.js";
 import { users } from "./users.js";
 
 export const scheduleStatusEnum = pgEnum("schedule_status", [
-  "PENDING",     // Created but not yet evaluated
-  "SCHEDULED",   // Waiting for start time
-  "RUNNING",     // Currently running
-  "STOPPED",     // Stopped manually (cmd=1)
-  "COMPLETED",   // Finished successfully
-  "FAILED",      // Device execution failed
-  "CANCELLED",   // Cancelled by user/system
-  "DELETED",      // Deleted (cmd=3)
-  "RESTARTED",    // Restarted (cmd=2)
+  "PENDING",             // Created but not yet evaluated
+  "SCHEDULED",           // Waiting for start time
+  "RUNNING",             // Currently running
+  "STOPPED",             // Stopped manually (cmd=1)
+  "COMPLETED",           // Finished successfully
+  "FAILED",              // Device execution failed
+  "CANCELLED",           // Cancelled by user/system
+  "DELETED",             // Deleted (cmd=3)
+  "RESTARTED",           // Restarted (cmd=2)
+  "WAITING_NEXT_CYCLE",  // Repeat/Cyclic: waiting for next scheduled cycle
 ]);
 
 export const scheduleTypeEnum = pgEnum("schedule_mode", ["TIME_BASED", "CYCLIC"]);

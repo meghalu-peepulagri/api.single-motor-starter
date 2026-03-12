@@ -14,6 +14,7 @@ export const scheduleStatusEnum = pgEnum("schedule_status", [
     "CANCELLED", // Cancelled by user/system
     "DELETED", // Deleted (cmd=3)
     "RESTARTED", // Restarted (cmd=2)
+    "WAITING_NEXT_CYCLE", // Repeat/Cyclic: waiting for next scheduled cycle
 ]);
 export const scheduleTypeEnum = pgEnum("schedule_mode", ["TIME_BASED", "CYCLIC"]);
 export const motorSchedules = pgTable("motor_schedules", {

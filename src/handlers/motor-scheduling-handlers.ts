@@ -26,6 +26,7 @@ import {
   SCHEDULE_UPDATED,
   SCHEDULED_CREATED,
   SCHEDULED_LIST_FETCHED,
+  SCHEDULE_STATUS_SYNC_COMPLETED,
   UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA
 } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
@@ -37,6 +38,8 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import {
   checkMotorScheduleConflict,
 } from "../helpers/motor-helper.js";
+import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
+import type { ScheduleForEvaluation } from "../types/app-types.js";
 import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-helper.js";
 import {
   buildDeviceSyncPayloads,
@@ -56,6 +59,7 @@ import {
   findActiveScheduleById,
   findAllActiveSchedulesForMotor,
   findConflictingSchedules,
+  findEvaluatableSchedules,
   findPendingSchedulesForSync,
   findSchedulesByFilters,
   getNextScheduleIdForMotor,
@@ -426,6 +430,52 @@ export class MotorScheduleHandler {
     }
   };
 
+
+  // =================== SYNC SCHEDULE STATUSES (CRON ENDPOINT) ===================
+  syncScheduleStatusesHandler = async (c: Context) => {
+    try {
+      const now = new Date();
+      const schedules = await findEvaluatableSchedules();
+
+      if (!schedules || schedules.length === 0) {
+        return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
+          evaluated: 0,
+          updated: 0,
+          transitions: [],
+        });
+      }
+
+      const transitions: Array<{ schedule_id: number; from: string; to: string }> = [];
+    // TODO: avoid query in loop
+      for (const schedule of schedules) {
+        const result = evaluateScheduleStatus(schedule as ScheduleForEvaluation, now);
+        if (!result) continue;
+
+        const updateData: Record<string, any> = {
+          schedule_status: result.newStatus,
+        };
+        if (result.last_started_at) updateData.last_started_at = result.last_started_at;
+        if (result.last_stopped_at) updateData.last_stopped_at = result.last_stopped_at;
+    
+        await updateRecordById<MotorScheduleTable>(motorSchedules, result.id, updateData);
+
+        transitions.push({
+          schedule_id: result.id,
+          from: schedule.schedule_status,
+          to: result.newStatus,
+        });
+      }
+
+      return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
+        evaluated: schedules.length,
+        updated: transitions.length,
+        transitions,
+      });
+    } catch (error: any) {
+      console.error("Error at sync schedule statuses:", error.message);
+      throw error;
+    }
+  };
 
   // =================== PENDING SCHEDULES FOR DEVICE SYNC (NO AUTH) ===================
   getPendingSchedulesForSyncHandler = async (c: Context) => {
