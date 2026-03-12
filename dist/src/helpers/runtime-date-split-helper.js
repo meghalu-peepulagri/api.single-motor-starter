@@ -1,4 +1,6 @@
+import moment from "moment-timezone";
 import { formatDuration } from "./dns-helpers.js";
+const DEFAULT_TIMEZONE = "Asia/Kolkata";
 /**
  * Splits runtime records that span across midnight into separate per-day segments.
  *
@@ -9,13 +11,13 @@ import { formatDuration } from "./dns-helpers.js";
  * Records that start and end on the same date are returned as-is.
  * Records with no end_time (still running) are not split.
  */
-export function splitRuntimeRecordsByDate(records, fromDate, toDate) {
+export function splitRuntimeRecordsByDate(records, fromDate, toDate, timeZone = DEFAULT_TIMEZONE) {
     const result = [];
     for (const record of records) {
         const startTime = new Date(record.start_time);
         const endTime = record.end_time ? new Date(record.end_time) : null;
         // If no end_time or same date, no split needed
-        if (!endTime || isSameDate(startTime, endTime)) {
+        if (!endTime || isSameDate(startTime, endTime, timeZone)) {
             result.push({
                 ...record,
                 start_time: startTime,
@@ -25,7 +27,7 @@ export function splitRuntimeRecordsByDate(records, fromDate, toDate) {
             continue;
         }
         // Split across date boundaries
-        const segments = splitAcrossDays(startTime, endTime, record);
+        const segments = splitAcrossDays(startTime, endTime, record, timeZone);
         // Filter segments to only include those within the requested date range
         for (const segment of segments) {
             if (segment.end_time && segment.end_time < fromDate)
@@ -37,22 +39,25 @@ export function splitRuntimeRecordsByDate(records, fromDate, toDate) {
     }
     return result;
 }
-function isSameDate(a, b) {
-    return (a.getFullYear() === b.getFullYear() &&
-        a.getMonth() === b.getMonth() &&
-        a.getDate() === b.getDate());
+function isSameDate(a, b, timeZone) {
+    const aTz = moment.tz(a, timeZone);
+    const bTz = moment.tz(b, timeZone);
+    return (aTz.year() === bTz.year() &&
+        aTz.month() === bTz.month() &&
+        aTz.date() === bTz.date());
 }
-function splitAcrossDays(startTime, endTime, record) {
+function splitAcrossDays(startTime, endTime, record, timeZone) {
     const segments = [];
-    let currentStart = new Date(startTime);
-    while (!isSameDate(currentStart, endTime)) {
+    let currentStart = moment.tz(startTime, timeZone);
+    const endTimeTz = moment.tz(endTime, timeZone);
+    while (!isSameDate(currentStart.toDate(), endTime, timeZone)) {
         // End of current day: 23:59:59.999
-        const endOfDay = new Date(currentStart);
-        endOfDay.setHours(23, 59, 59, 999);
-        const segmentDurationMs = endOfDay.getTime() - currentStart.getTime();
+        const endOfDay = currentStart.clone().endOf("day").toDate();
+        const segmentStart = currentStart.toDate();
+        const segmentDurationMs = endOfDay.getTime() - segmentStart.getTime();
         segments.push({
             id: record.id,
-            start_time: currentStart,
+            start_time: segmentStart,
             end_time: endOfDay,
             duration: formatDuration(segmentDurationMs),
             time_stamp: record.time_stamp,
@@ -64,17 +69,15 @@ function splitAcrossDays(startTime, endTime, record) {
             is_split: true,
         });
         // Start of next day: 00:00:00.000
-        const nextDay = new Date(currentStart);
-        nextDay.setDate(nextDay.getDate() + 1);
-        nextDay.setHours(0, 0, 0, 0);
-        currentStart = nextDay;
+        currentStart = currentStart.clone().add(1, "day").startOf("day");
     }
     // Final segment: from start of last day to actual end_time
-    const finalDurationMs = endTime.getTime() - currentStart.getTime();
+    const finalStart = currentStart.toDate();
+    const finalDurationMs = endTime.getTime() - finalStart.getTime();
     segments.push({
         id: record.id,
-        start_time: currentStart,
-        end_time: endTime,
+        start_time: finalStart,
+        end_time: endTimeTz.toDate(),
         duration: formatDuration(finalDurationMs),
         time_stamp: record.time_stamp,
         motor_state: record.motor_state,

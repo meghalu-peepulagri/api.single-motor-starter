@@ -1,5 +1,8 @@
+import moment from "moment-timezone";
 import type { RuntimeRecord, SplitRuntimeRecord } from "../types/app-types.js";
 import { formatDuration } from "./dns-helpers.js";
+
+const DEFAULT_TIMEZONE = "Asia/Kolkata";
 
 /**
  * Splits runtime records that span across midnight into separate per-day segments.
@@ -15,6 +18,7 @@ export function splitRuntimeRecordsByDate(
   records: RuntimeRecord[],
   fromDate: Date,
   toDate: Date,
+  timeZone: string = DEFAULT_TIMEZONE,
 ): SplitRuntimeRecord[] {
   const result: SplitRuntimeRecord[] = [];
 
@@ -23,7 +27,7 @@ export function splitRuntimeRecordsByDate(
     const endTime = record.end_time ? new Date(record.end_time) : null;
 
     // If no end_time or same date, no split needed
-    if (!endTime || isSameDate(startTime, endTime)) {
+    if (!endTime || isSameDate(startTime, endTime, timeZone)) {
       result.push({
         ...record,
         start_time: startTime,
@@ -34,7 +38,7 @@ export function splitRuntimeRecordsByDate(
     }
 
     // Split across date boundaries
-    const segments = splitAcrossDays(startTime, endTime, record);
+    const segments = splitAcrossDays(startTime, endTime, record, timeZone);
 
     // Filter segments to only include those within the requested date range
     for (const segment of segments) {
@@ -47,11 +51,13 @@ export function splitRuntimeRecordsByDate(
   return result;
 }
 
-function isSameDate(a: Date, b: Date): boolean {
+function isSameDate(a: Date, b: Date, timeZone: string): boolean {
+  const aTz = moment.tz(a, timeZone);
+  const bTz = moment.tz(b, timeZone);
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    aTz.year() === bTz.year() &&
+    aTz.month() === bTz.month() &&
+    aTz.date() === bTz.date()
   );
 }
 
@@ -59,20 +65,22 @@ function splitAcrossDays(
   startTime: Date,
   endTime: Date,
   record: RuntimeRecord,
+  timeZone: string,
 ): SplitRuntimeRecord[] {
   const segments: SplitRuntimeRecord[] = [];
-  let currentStart = new Date(startTime);
+  let currentStart = moment.tz(startTime, timeZone);
+  const endTimeTz = moment.tz(endTime, timeZone);
 
-  while (!isSameDate(currentStart, endTime)) {
+  while (!isSameDate(currentStart.toDate(), endTime, timeZone)) {
     // End of current day: 23:59:59.999
-    const endOfDay = new Date(currentStart);
-    endOfDay.setHours(23, 59, 59, 999);
+    const endOfDay = currentStart.clone().endOf("day").toDate();
 
-    const segmentDurationMs = endOfDay.getTime() - currentStart.getTime();
+    const segmentStart = currentStart.toDate();
+    const segmentDurationMs = endOfDay.getTime() - segmentStart.getTime();
 
     segments.push({
       id: record.id,
-      start_time: currentStart,
+      start_time: segmentStart,
       end_time: endOfDay,
       duration: formatDuration(segmentDurationMs),
       time_stamp: record.time_stamp,
@@ -85,18 +93,16 @@ function splitAcrossDays(
     });
 
     // Start of next day: 00:00:00.000
-    const nextDay = new Date(currentStart);
-    nextDay.setDate(nextDay.getDate() + 1);
-    nextDay.setHours(0, 0, 0, 0);
-    currentStart = nextDay;
+    currentStart = currentStart.clone().add(1, "day").startOf("day");
   }
 
   // Final segment: from start of last day to actual end_time
-  const finalDurationMs = endTime.getTime() - currentStart.getTime();
+  const finalStart = currentStart.toDate();
+  const finalDurationMs = endTime.getTime() - finalStart.getTime();
   segments.push({
     id: record.id,
-    start_time: currentStart,
-    end_time: endTime,
+    start_time: finalStart,
+    end_time: endTimeTz.toDate(),
     duration: formatDuration(finalDurationMs),
     time_stamp: record.time_stamp,
     motor_state: record.motor_state,
