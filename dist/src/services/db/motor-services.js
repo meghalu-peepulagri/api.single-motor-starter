@@ -373,6 +373,28 @@ export async function getMotorTotalRunOnTime(starterId, fromDate, toDate, motorI
         total_run_on_time: formatDuration(totalSeconds * 1000),
     };
 }
+export async function getMotorsTotalRunOnTime(motorIds) {
+    if (!motorIds.length)
+        return {};
+    const records = await db.query.motorsRunTime.findMany({
+        where: and(inArray(motorsRunTime.motor_id, motorIds), eq(motorsRunTime.motor_state, 1)),
+        columns: {
+            motor_id: true,
+            duration: true,
+        },
+    });
+    const runTimeMap = {};
+    const grouped = {};
+    for (const record of records) {
+        if (!record.motor_id || !record.duration)
+            continue;
+        grouped[record.motor_id] = (grouped[record.motor_id] || 0) + parseDurationToSeconds(record.duration);
+    }
+    for (const [motorId, totalSeconds] of Object.entries(grouped)) {
+        runTimeMap[Number(motorId)] = formatDuration(totalSeconds * 1000);
+    }
+    return runTimeMap;
+}
 export async function updateStarterStatusWithTransaction(starterIds) {
     const action = async (trx) => {
         // Update starters to INACTIVE

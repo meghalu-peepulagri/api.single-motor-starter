@@ -11,7 +11,7 @@ import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js"
 import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-helper.js";
 import { buildDeviceSyncPayloads, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
+import { batchUpdateScheduleStatuses, cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
 import { publishData } from "../services/db/mqtt-db-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -276,13 +276,12 @@ export class MotorScheduleHandler {
             const existed = await getRecordById(motorSchedules, scheduleId, ["id", "motor_id", "days_of_week", "start_time", "end_time"]);
             if (!existed)
                 throw new BadRequestException(SCHEDULE_NOT_FOUND);
-            const schedule = existed;
             // Merge existing days with new days (deduplicated and sorted)
-            const existingDays = schedule.days_of_week || [];
+            const existingDays = existed.days_of_week || [];
             const mergedDays = [...new Set([...existingDays, ...data.days_of_week])].sort();
             // Re-check conflicts with expanded days
-            const conflicts = await findConflictingSchedules(schedule.motor_id, null, mergedDays, scheduleId);
-            checkMotorScheduleConflict({ start_time: schedule.start_time, end_time: schedule.end_time, repeat: 1, days_of_week: mergedDays }, conflicts);
+            const conflicts = await findConflictingSchedules(existed.motor_id, null, mergedDays, scheduleId);
+            checkMotorScheduleConflict({ start_time: existed.start_time, end_time: existed.end_time, repeat: 1, days_of_week: mergedDays }, conflicts);
             await updateRecordById(motorSchedules, scheduleId, {
                 days_of_week: mergedDays,
                 bit_wise_days: data.bit_wise_days ?? 0,
@@ -326,25 +325,30 @@ export class MotorScheduleHandler {
                 });
             }
             const transitions = [];
-            // TODO: avoid query in loop
+            const runningIds = [];
+            const completedIds = [];
+            const waitingIds = [];
             for (const schedule of schedules) {
                 const result = evaluateScheduleStatus(schedule, now);
                 if (!result)
                     continue;
-                const updateData = {
-                    schedule_status: result.newStatus,
-                };
-                if (result.last_started_at)
-                    updateData.last_started_at = result.last_started_at;
-                if (result.last_stopped_at)
-                    updateData.last_stopped_at = result.last_stopped_at;
-                await updateRecordById(motorSchedules, result.id, updateData);
+                if (result.newStatus === "RUNNING")
+                    runningIds.push(result.id);
+                else if (result.newStatus === "COMPLETED")
+                    completedIds.push(result.id);
+                else if (result.newStatus === "WAITING_NEXT_CYCLE")
+                    waitingIds.push(result.id);
                 transitions.push({
                     schedule_id: result.id,
                     from: schedule.schedule_status,
                     to: result.newStatus,
                 });
             }
+            await batchUpdateScheduleStatuses([
+                { status: "RUNNING", ids: runningIds, last_started_at: now },
+                { status: "COMPLETED", ids: completedIds, last_stopped_at: now },
+                { status: "WAITING_NEXT_CYCLE", ids: waitingIds, last_stopped_at: now },
+            ]);
             return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
                 evaluated: schedules.length,
                 updated: transitions.length,

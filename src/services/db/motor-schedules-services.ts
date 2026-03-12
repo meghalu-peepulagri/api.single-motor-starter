@@ -1,6 +1,6 @@
-import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
-import { motorSchedules } from "../../database/schemas/motor-schedules.js";
+import { motorSchedules, type MotorSchedule } from "../../database/schemas/motor-schedules.js";
 import type { MotorScheduleFilters } from "../../helpers/motor-schedule-filter-helper.js";
 
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
@@ -33,7 +33,7 @@ export async function findConflictingSchedules(
   daysOfWeek: number[] = [],
   excludeScheduleId?: number,
 ) {
-  const conditions: any[] = [
+  const conditions: SQL[] = [
     eq(motorSchedules.motor_id, motorId),
     inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]),
   ];
@@ -43,7 +43,7 @@ export async function findConflictingSchedules(
   }
 
   // Build date/day filter: match by exact date OR overlapping days
-  const dateOrDayConditions: any[] = [];
+  const dateOrDayConditions: SQL[] = [];
 
   if (scheduleDate) {
     dateOrDayConditions.push(eq(motorSchedules.schedule_start_date, scheduleDate));
@@ -180,7 +180,7 @@ export async function findSchedulesByFilters(
   filters: MotorScheduleFilters,
   page = 1, limit = 10,
 ) {
-  const conditions: any[] = [ne(motorSchedules.status, "ARCHIVED")];
+  const conditions: SQL[] = [ne(motorSchedules.status, "ARCHIVED")];
 
   if (filters.starter_id) {
     conditions.push(eq(motorSchedules.starter_id, filters.starter_id));
@@ -189,10 +189,10 @@ export async function findSchedulesByFilters(
     conditions.push(eq(motorSchedules.motor_id, filters.motor_id));
   }
   if (filters.schedule_status) {
-    conditions.push(eq(motorSchedules.schedule_status, filters.schedule_status as any));
+    conditions.push(eq(motorSchedules.schedule_status, filters.schedule_status as MotorSchedule["schedule_status"]));
   }
   if (filters.type) {
-    conditions.push(eq(motorSchedules.schedule_type, filters.type as any));
+    conditions.push(eq(motorSchedules.schedule_type, filters.type as MotorSchedule["schedule_type"]));
   }
   if (filters.start_date) {
     conditions.push(gte(motorSchedules.schedule_start_date, filters.start_date));
@@ -291,6 +291,47 @@ export async function findPendingSchedulesForSync() {
     },
     orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.start_time)],
   });
+}
+
+// =================== BATCH STATUS UPDATE FOR SYNC ===================
+
+/**
+ * Batch update schedule statuses grouped by newStatus.
+ * Max 3 queries (RUNNING, COMPLETED, WAITING_NEXT_CYCLE) instead of N individual updates.
+ */
+export async function batchUpdateScheduleStatuses(
+  groups: {
+    status: "RUNNING" | "COMPLETED" | "WAITING_NEXT_CYCLE";
+    ids: number[];
+    last_started_at?: Date;
+    last_stopped_at?: Date;
+  }[],
+) {
+  const results = [];
+  for (const group of groups) {
+    if (group.ids.length === 0) continue;
+
+    const setData: {
+      schedule_status: MotorSchedule["schedule_status"];
+      updated_at: Date;
+      last_started_at?: Date;
+      last_stopped_at?: Date;
+    } = {
+      schedule_status: group.status,
+      updated_at: new Date(),
+    };
+    if (group.last_started_at) setData.last_started_at = group.last_started_at;
+    if (group.last_stopped_at) setData.last_stopped_at = group.last_stopped_at;
+
+    const result = await db
+      .update(motorSchedules)
+      .set(setData)
+      .where(inArray(motorSchedules.id, group.ids))
+      .returning({ id: motorSchedules.id });
+
+    results.push(...result);
+  }
+  return results;
 }
 
 // =================== EVALUATABLE SCHEDULES FOR STATUS SYNC ===================

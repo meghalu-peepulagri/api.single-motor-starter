@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"];
@@ -228,6 +228,33 @@ export async function findPendingSchedulesForSync() {
         },
         orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.start_time)],
     });
+}
+// =================== BATCH STATUS UPDATE FOR SYNC ===================
+/**
+ * Batch update schedule statuses grouped by newStatus.
+ * Max 3 queries (RUNNING, COMPLETED, WAITING_NEXT_CYCLE) instead of N individual updates.
+ */
+export async function batchUpdateScheduleStatuses(groups) {
+    const results = [];
+    for (const group of groups) {
+        if (group.ids.length === 0)
+            continue;
+        const setData = {
+            schedule_status: group.status,
+            updated_at: new Date(),
+        };
+        if (group.last_started_at)
+            setData.last_started_at = group.last_started_at;
+        if (group.last_stopped_at)
+            setData.last_stopped_at = group.last_stopped_at;
+        const result = await db
+            .update(motorSchedules)
+            .set(setData)
+            .where(inArray(motorSchedules.id, group.ids))
+            .returning({ id: motorSchedules.id });
+        results.push(...result);
+    }
+    return results;
 }
 // =================== EVALUATABLE SCHEDULES FOR STATUS SYNC ===================
 /**

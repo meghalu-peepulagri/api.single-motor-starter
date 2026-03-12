@@ -30,7 +30,7 @@ import {
   UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA
 } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
-import { motorSchedules, type MotorScheduleTable } from "../database/schemas/motor-schedules.js";
+import { motorSchedules, type MotorSchedule, type MotorScheduleTable } from "../database/schemas/motor-schedules.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -55,6 +55,7 @@ import {
   updateRecordById
 } from "../services/db/base-db-services.js";
 import {
+  batchUpdateScheduleStatuses,
   cancelSchedulesByIds,
   findActiveScheduleById,
   findAllActiveSchedulesForMotor,
@@ -206,11 +207,11 @@ export class MotorScheduleHandler {
 
       const existedSchedule = await getRecordById<MotorScheduleTable>(
         motorSchedules, scheduleId, ["id", "motor_id", "schedule_status"],
-      );
+      ) as Pick<MotorSchedule, "id" | "motor_id" | "schedule_status"> | null;
       if (!existedSchedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       // Cannot edit a RUNNING schedule
-      if ((existedSchedule as any).schedule_status === "RUNNING") {
+      if (existedSchedule.schedule_status === "RUNNING") {
         throw new BadRequestException(CANNOT_EDIT_RUNNING_SCHEDULE);
       }
 
@@ -234,7 +235,7 @@ export class MotorScheduleHandler {
       const scheduleStartDate = data.schedule_start_date || new Date().toISOString().split("T")[0];
       const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
       const existingSchedules = await findConflictingSchedules(
-        (existedSchedule as any).motor_id, conflictDate, data.days_of_week || [], scheduleId,
+        existedSchedule.motor_id, conflictDate, data.days_of_week || [], scheduleId,
       );
       checkMotorScheduleConflict(
         { ...data, schedule_start_date: scheduleStartDate },
@@ -279,16 +280,16 @@ export class MotorScheduleHandler {
 
       const existed = await getRecordById<MotorScheduleTable>(
         motorSchedules, scheduleId, ["id", "schedule_status"],
-      );
+      ) as Pick<MotorSchedule, "id" | "schedule_status"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       // If schedule is RUNNING, stop it first (no compensation)
-      if ((existed as any).schedule_status === "RUNNING") {
+      if (existed.schedule_status === "RUNNING") {
         await stopScheduleById(scheduleId);
       }
 
       // Soft delete: mark as DELETED with deleted_by user
-      await updateRecordById<MotorScheduleTable>(motorSchedules, (existed as any).id, {
+      await updateRecordById<MotorScheduleTable>(motorSchedules, existed.id, {
         schedule_status: "DELETED",
         deleted_by: userPayload.id,
         status: "ARCHIVED",
@@ -377,27 +378,25 @@ export class MotorScheduleHandler {
       const existed = await getRecordById<MotorScheduleTable>(
         motorSchedules, scheduleId,
         ["id", "motor_id", "days_of_week", "start_time", "end_time"],
-      );
+      ) as Pick<MotorSchedule, "id" | "motor_id" | "days_of_week" | "start_time" | "end_time"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
-      const schedule = existed as any;
-
       // Merge existing days with new days (deduplicated and sorted)
-      const existingDays: number[] = schedule.days_of_week || [];
+      const existingDays: number[] = existed.days_of_week || [];
       const mergedDays = [...new Set([...existingDays, ...data.days_of_week])].sort();
 
       // Re-check conflicts with expanded days
       const conflicts = await findConflictingSchedules(
-        schedule.motor_id, null, mergedDays, scheduleId,
+        existed.motor_id, null, mergedDays, scheduleId,
       );
       checkMotorScheduleConflict(
-        { start_time: schedule.start_time, end_time: schedule.end_time, repeat: 1, days_of_week: mergedDays },
+        { start_time: existed.start_time, end_time: existed.end_time, repeat: 1, days_of_week: mergedDays },
         conflicts,
       );
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, {
         days_of_week: mergedDays,
-        bit_wise_days: (data as any).bit_wise_days ?? 0,
+        bit_wise_days: data.bit_wise_days ?? 0,
       });
 
       return sendResponse(c, 200, REPEAT_DAYS_ADDED, { days_of_week: mergedDays });
@@ -446,18 +445,17 @@ export class MotorScheduleHandler {
       }
 
       const transitions: Array<{ schedule_id: number; from: string; to: string }> = [];
-    // TODO: avoid query in loop
+      const runningIds: number[] = [];
+      const completedIds: number[] = [];
+      const waitingIds: number[] = [];
+
       for (const schedule of schedules) {
         const result = evaluateScheduleStatus(schedule as ScheduleForEvaluation, now);
         if (!result) continue;
 
-        const updateData: Record<string, any> = {
-          schedule_status: result.newStatus,
-        };
-        if (result.last_started_at) updateData.last_started_at = result.last_started_at;
-        if (result.last_stopped_at) updateData.last_stopped_at = result.last_stopped_at;
-    
-        await updateRecordById<MotorScheduleTable>(motorSchedules, result.id, updateData);
+        if (result.newStatus === "RUNNING") runningIds.push(result.id);
+        else if (result.newStatus === "COMPLETED") completedIds.push(result.id);
+        else if (result.newStatus === "WAITING_NEXT_CYCLE") waitingIds.push(result.id);
 
         transitions.push({
           schedule_id: result.id,
@@ -465,6 +463,12 @@ export class MotorScheduleHandler {
           to: result.newStatus,
         });
       }
+
+      await batchUpdateScheduleStatuses([
+        { status: "RUNNING", ids: runningIds, last_started_at: now },
+        { status: "COMPLETED", ids: completedIds, last_stopped_at: now },
+        { status: "WAITING_NEXT_CYCLE", ids: waitingIds, last_stopped_at: now },
+      ]);
 
       return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
         evaluated: schedules.length,
@@ -502,7 +506,7 @@ export class MotorScheduleHandler {
         }
 
         for (const chunk of chunks) {
-          publishData(chunk, starterData as any);
+          publishData(chunk, starterData);
           totalPublished++;
           console.log(`Published chunk to starter_id=${starter_id}, items=${chunk.length}, bytes=${Buffer.byteLength(JSON.stringify(chunk), "utf8")}`);
         }

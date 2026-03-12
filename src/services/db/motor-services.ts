@@ -13,7 +13,10 @@ import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
 
-export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?: string | null; hp?: number | null }>, trx?: any): Promise<void> {
+// Extract transaction type from Drizzle's db.transaction callback
+type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
+
+export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?: string | null; hp?: number | null }>, trx?: DbTransaction): Promise<void> {
   if (!motorsToUpdate || motorsToUpdate.length === 0) return;
 
   const queryBuilder = trx || db;
@@ -158,7 +161,7 @@ export async function trackMotorRunTime(params: {
   time_stamp?: string;
   previous_power_state?: number;
   new_power_state?: number;
-}, externalTrx?: any) {
+}, externalTrx?: DbTransaction) {
   const {
     starter_id,
     motor_id,
@@ -177,7 +180,7 @@ export async function trackMotorRunTime(params: {
   const now = time_stamp ? new Date(time_stamp) : new Date();
   const formattedDate = now.toISOString();
 
-  const action = async (trx: any) => {
+  const action = async (trx: DbTransaction) => {
     // Fetch the most recent open record for this motor
     const [openRecord] = await trx
       .select()
@@ -328,13 +331,13 @@ export async function trackDeviceRunTime(params: {
   motor_state: number;
   mode_description: string;
   time_stamp: string;
-}, externalTrx?: any) {
+}, externalTrx?: DbTransaction) {
   const { starter_id, motor_id, location_id, new_power_state, motor_state, mode_description, time_stamp } = params;
 
   if (!starter_id) return;
   const now = new Date(time_stamp);
 
-  const action = async (trx: any) => {
+  const action = async (trx: DbTransaction) => {
     const [openRecord] = await trx
       .select()
       .from(deviceRunTime)
@@ -403,7 +406,7 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
 
   // Fetch records that overlap with the date range:
   // start_time <= toDate AND (end_time >= fromDate OR end_time IS NULL)
-  const filters: any[] = [
+  const filters: (SQL | undefined)[] = [
     eq(motorsRunTime.starter_box_id, starterId),
     lte(motorsRunTime.start_time, to),
     or(
@@ -488,8 +491,37 @@ export async function getMotorTotalRunOnTime(starterId: number, fromDate: string
   };
 }
 
+export async function getMotorsTotalRunOnTime(motorIds: number[]) {
+  if (!motorIds.length) return {};
+
+  const records = await db.query.motorsRunTime.findMany({
+    where: and(
+      inArray(motorsRunTime.motor_id, motorIds),
+      eq(motorsRunTime.motor_state, 1),
+    ),
+    columns: {
+      motor_id: true,
+      duration: true,
+    },
+  });
+
+  const runTimeMap: Record<number, string> = {};
+
+  const grouped: Record<number, number> = {};
+  for (const record of records) {
+    if (!record.motor_id || !record.duration) continue;
+    grouped[record.motor_id] = (grouped[record.motor_id] || 0) + parseDurationToSeconds(record.duration);
+  }
+
+  for (const [motorId, totalSeconds] of Object.entries(grouped)) {
+    runTimeMap[Number(motorId)] = formatDuration(totalSeconds * 1000);
+  }
+
+  return runTimeMap;
+}
+
 export async function updateStarterStatusWithTransaction(starterIds: number[]) {
-  const action = async (trx: any) => {
+  const action = async (trx: DbTransaction) => {
     // Update starters to INACTIVE
     const inActiveStarterIds = await trx
       .update(starterBoxes)

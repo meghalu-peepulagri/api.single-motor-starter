@@ -9,7 +9,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { motorFilters } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { paginatedMotorsList } from "../services/db/motor-services.js";
+import { getMotorsTotalRunOnTime, paginatedMotorsList } from "../services/db/motor-services.js";
 import { getMotorWithStarterDetails } from "../services/db/motor-starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -173,8 +173,20 @@ export class MotorHandlers {
       const paginationParams = getPaginationOffParams(query);
       const orderQueryData = parseOrderByQueryCondition<MotorsTable>(query.order_by, query.order_type, "assigned_at", "desc");
       const whereQueryData = motorFilters(query, userPayload);
-      const motors = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
-      return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motors);
+      const motorsData = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
+
+      const motorIds = motorsData.records.map((m: any) => m.id).filter(Boolean);
+      const runTimeMap = await getMotorsTotalRunOnTime(motorIds);
+
+      const records = motorsData.records.map((motor: any) => ({
+        ...motor,
+        run_time_duration: runTimeMap[motor.id] || "0h 0m 0s",
+      }));
+
+      return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, {
+        ...motorsData,
+        records,
+      });
     } catch (error: any) {
       console.error("Error at get all motors :", error);
       throw error;
