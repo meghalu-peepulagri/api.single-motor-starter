@@ -465,15 +465,13 @@ export async function getMotorsTotalRunOnTime(motorIds: number[]) {
   const fromDateObj = now.clone().startOf("day").utc().toDate();
   const toDateObj = now.clone().endOf("day").utc().toDate();
 
-  // Fetch all records (not just motor_state=1) to determine effective end times for orphaned records
+  // Only fetch records that have an actual end_time (completed sessions)
   const records = await db.query.motorsRunTime.findMany({
     where: and(
       inArray(motorsRunTime.motor_id, motorIds),
+      isNotNull(motorsRunTime.end_time),
       lte(motorsRunTime.start_time, toDateObj),
-      or(
-        gte(motorsRunTime.end_time, fromDateObj),
-        isNull(motorsRunTime.end_time),
-      ),
+      gte(motorsRunTime.end_time, fromDateObj),
     ),
     columns: {
       motor_id: true,
@@ -501,18 +499,10 @@ export async function getMotorsTotalRunOnTime(motorIds: number[]) {
     for (let i = 0; i < motorRecords.length; i++) {
       const record = motorRecords[i];
       if (record.motor_state !== 1) continue;
+      if (!record.end_time) continue;
 
       const start = new Date(record.start_time);
-
-      // For null end_time: use next record's start_time as effective end
-      let end: Date;
-      if (record.end_time) {
-        end = new Date(record.end_time);
-      } else if (i < motorRecords.length - 1) {
-        end = new Date(motorRecords[i + 1].start_time);
-      } else {
-        end = toDateObj;
-      }
+      const end = new Date(record.end_time);
 
       // Clamp to date range
       const segmentStart = start > fromDateObj ? start : fromDateObj;
