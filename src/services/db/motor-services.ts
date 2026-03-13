@@ -441,93 +441,78 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
     }
   });
 
-  // Single date: split cross-midnight records to show only that date's runtime
-  // Date range: return original records as-is
-  if (isSingleDate) {
-    const splitRecords = splitRuntimeRecordsByDate(records, from, to);
+  // Clamp records to the requested date range and split cross-midnight records
+  const splitRecords = splitRuntimeRecordsByDate(records, from, to);
 
-    const totalOnSeconds = splitRecords.reduce((sum, record) => {
-      if (record.motor_state !== 1 || !record.duration) return sum;
-      return sum + parseDurationToSeconds(record.duration);
-    }, 0);
-
-    return {
-      total_run_on_time: formatDuration(totalOnSeconds * 1000),
-      records: splitRecords,
-    };
-  }
-
-  const totalRunTime = await getMotorTotalRunOnTime(starterId, fromDateUTC, toDateUTC, motorId);
-  return {
-    total_run_on_time: totalRunTime.total_run_on_time,
-    records,
-  };
-}
-
-export async function getMotorTotalRunOnTime(starterId: number, fromDate: string, toDate: string, motorId?: number) {
-  const fromDateObj = new Date(fromDate);
-  const toDateObj = new Date(toDate);
-
-  const records = await db.query.motorsRunTime.findMany({
-    where: and(
-      eq(motorsRunTime.starter_box_id, starterId),
-      lte(motorsRunTime.start_time, toDateObj),
-      or(
-        gte(motorsRunTime.end_time, fromDateObj),
-        isNull(motorsRunTime.end_time),
-      ),
-      eq(motorsRunTime.motor_state, 1),
-      motorId ? eq(motorsRunTime.motor_id, motorId) : undefined
-    ),
-    columns: {
-      start_time: true,
-      end_time: true,
-      duration: true,
-      motor_state: true,
-    },
-  });
-
-  let totalSeconds = 0;
-  for (const record of records) {
-    if (record.motor_state !== 1) continue;
-    const start = new Date(record.start_time);
-    const end = record.end_time ? new Date(record.end_time) : toDateObj;
-    const segmentStart = start > fromDateObj ? start : fromDateObj;
-    const segmentEnd = end < toDateObj ? end : toDateObj;
-    if (segmentEnd > segmentStart) {
-      totalSeconds += Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / 1000);
-    }
-  }
+  const totalOnSeconds = splitRecords.reduce((sum, record) => {
+    if (record.motor_state !== 1 || !record.duration) return sum;
+    return sum + parseDurationToSeconds(record.duration);
+  }, 0);
 
   return {
-    total_run_on_time: formatDuration(totalSeconds * 1000),
+    total_run_on_time: formatDuration(totalOnSeconds * 1000),
+    records: splitRecords,
   };
 }
 
 export async function getMotorsTotalRunOnTime(motorIds: number[]) {
   if (!motorIds.length) return {};
 
+  // Default to today's date range in IST
+  const IST = "Asia/Kolkata";
+  const moment = (await import("moment-timezone")).default;
+  const now = moment().tz(IST);
+  const fromDateObj = now.clone().startOf("day").utc().toDate();
+  const toDateObj = now.clone().endOf("day").utc().toDate();
+
+  // Only fetch records that have an actual end_time (completed sessions)
   const records = await db.query.motorsRunTime.findMany({
     where: and(
       inArray(motorsRunTime.motor_id, motorIds),
-      eq(motorsRunTime.motor_state, 1),
+      isNotNull(motorsRunTime.end_time),
+      lte(motorsRunTime.start_time, toDateObj),
+      gte(motorsRunTime.end_time, fromDateObj),
     ),
     columns: {
       motor_id: true,
+      start_time: true,
+      end_time: true,
       duration: true,
+      motor_state: true,
     },
+    orderBy: asc(motorsRunTime.start_time),
   });
+
+  // Group records by motor_id
+  const groupedByMotor: Record<number, typeof records> = {};
+  for (const record of records) {
+    if (!record.motor_id) continue;
+    if (!groupedByMotor[record.motor_id]) groupedByMotor[record.motor_id] = [];
+    groupedByMotor[record.motor_id].push(record);
+  }
 
   const runTimeMap: Record<number, string> = {};
 
-  const grouped: Record<number, number> = {};
-  for (const record of records) {
-    if (!record.motor_id || !record.duration) continue;
-    grouped[record.motor_id] = (grouped[record.motor_id] || 0) + parseDurationToSeconds(record.duration);
-  }
+  for (const [motorIdStr, motorRecords] of Object.entries(groupedByMotor)) {
+    let totalSeconds = 0;
 
-  for (const [motorId, totalSeconds] of Object.entries(grouped)) {
-    runTimeMap[Number(motorId)] = formatDuration(totalSeconds * 1000);
+    for (let i = 0; i < motorRecords.length; i++) {
+      const record = motorRecords[i];
+      if (record.motor_state !== 1) continue;
+      if (!record.end_time) continue;
+
+      const start = new Date(record.start_time);
+      const end = new Date(record.end_time);
+
+      // Clamp to date range
+      const segmentStart = start > fromDateObj ? start : fromDateObj;
+      const segmentEnd = end < toDateObj ? end : toDateObj;
+      if (segmentEnd > segmentStart) {
+        totalSeconds += Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / 1000);
+      }
+    }
+
+    runTimeMap[Number(motorIdStr)] = formatDuration(totalSeconds * 1000);
   }
 
   return runTimeMap;

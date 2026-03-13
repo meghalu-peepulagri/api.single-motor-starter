@@ -320,5 +320,4 @@ export interface SplitRuntimeRecord {
   power_end: string | null;
   power_duration: string | null;
   power_state: number | null;
-  is_split: boolean;
 }

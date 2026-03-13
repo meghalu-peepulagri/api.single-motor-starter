@@ -10,7 +10,7 @@ import { starterBoxParameters } from "../../database/schemas/starter-parameters.
 import { starterSettingsLimits } from "../../database/schemas/starter-settings-limits.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
 import { users } from "../../database/schemas/users.js";
-import { formatDuration, getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
+import { formatDuration, getUTCFromDateAndToDate, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter, formatAnalyticsData } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
@@ -278,51 +278,38 @@ export async function getStarterRunTime(starterId, fromDate, toDate, motorId, po
         .from(deviceRunTime)
         .where(and(...filters))
         .orderBy(asc(deviceRunTime.start_time));
-    let totalSeconds = 0;
-    for (const record of records) {
-        if (!powerState && record.power_state !== 1)
-            continue;
-        const start = new Date(record.start_time);
-        const end = record.end_time ? new Date(record.end_time) : to;
-        const segmentStart = start > from ? start : from;
-        const segmentEnd = end < to ? end : to;
-        if (segmentEnd > segmentStart) {
-            totalSeconds += Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / 1000);
-        }
-    }
-    if (isSingleDate) {
-        const runtimeRecords = records.map((record) => ({
-            id: record.id,
-            start_time: record.start_time,
-            end_time: record.end_time,
-            duration: record.duration,
-            time_stamp: record.time_stamp,
-            motor_state: record.motor_state ?? null,
-            power_start: null,
-            power_end: null,
-            power_duration: null,
-            power_state: record.power_state ?? null,
-        }));
-        const splitRecords = splitRuntimeRecordsByDate(runtimeRecords, from, to);
-        const deviceIdById = new Map(records.map((record) => [record.id, record.device_id]));
-        const mappedSplit = splitRecords.map((record) => ({
-            id: record.id,
-            device_id: deviceIdById.get(record.id),
-            start_time: record.start_time,
-            end_time: record.end_time,
-            duration: record.duration,
-            power_state: record.power_state,
-            time_stamp: record.time_stamp,
-            is_split: record.is_split,
-        }));
-        return {
-            total_run_on_time: formatDuration(totalSeconds * 1000),
-            records: mappedSplit,
-        };
-    }
+    // Clamp records to the requested date range and split cross-midnight records
+    const runtimeRecords = records.map((record) => ({
+        id: record.id,
+        start_time: record.start_time,
+        end_time: record.end_time,
+        duration: record.duration,
+        time_stamp: record.time_stamp,
+        motor_state: record.motor_state ?? null,
+        power_start: null,
+        power_end: null,
+        power_duration: null,
+        power_state: record.power_state ?? null,
+    }));
+    const splitRecords = splitRuntimeRecordsByDate(runtimeRecords, from, to);
+    const deviceIdById = new Map(records.map((record) => [record.id, record.device_id]));
+    const totalOnSeconds = splitRecords.reduce((sum, record) => {
+        if ((!powerState && record.power_state !== 1) || !record.duration)
+            return sum;
+        return sum + parseDurationToSeconds(record.duration);
+    }, 0);
+    const mappedSplit = splitRecords.map((record) => ({
+        id: record.id,
+        device_id: deviceIdById.get(record.id),
+        start_time: record.start_time,
+        end_time: record.end_time,
+        duration: record.duration,
+        power_state: record.power_state,
+        time_stamp: record.time_stamp,
+    }));
     return {
-        total_run_on_time: formatDuration(totalSeconds * 1000),
-        records,
+        total_run_on_time: formatDuration(totalOnSeconds * 1000),
+        records: mappedSplit,
     };
 }
 export async function assignStarterWebWithTransaction(starterDetails, requestBody) {
