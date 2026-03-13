@@ -346,10 +346,23 @@ export async function getStarterRunTime(
     .orderBy(asc(deviceRunTime.start_time));
 
   let totalSeconds = 0;
-  for (const record of records) {
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
     if (!powerState && record.power_state !== 1) continue;
+
     const start = new Date(record.start_time);
-    const end = record.end_time ? new Date(record.end_time) : to;
+
+    // For null end_time: use next record's start_time as effective end.
+    // Only the very last record (no next record) uses toDate.
+    let end: Date;
+    if (record.end_time) {
+      end = new Date(record.end_time);
+    } else if (i < records.length - 1) {
+      end = new Date(records[i + 1].start_time);
+    } else {
+      end = to;
+    }
+
     const segmentStart = start > from ? start : from;
     const segmentEnd = end < to ? end : to;
     if (segmentEnd > segmentStart) {
@@ -357,8 +370,14 @@ export async function getStarterRunTime(
     }
   }
 
+  // Filter orphaned null records: only keep the last one (truly still running)
+  const filteredRecords = records.filter((r, i) => {
+    if (r.end_time !== null) return true;
+    return i === records.length - 1;
+  });
+
   if (isSingleDate) {
-    const runtimeRecords = records.map((record) => ({
+    const runtimeRecords = filteredRecords.map((record) => ({
       id: record.id,
       start_time: record.start_time,
       end_time: record.end_time,
@@ -371,7 +390,7 @@ export async function getStarterRunTime(
       power_state: record.power_state ?? null,
     }));
     const splitRecords = splitRuntimeRecordsByDate(runtimeRecords, from, to);
-    const deviceIdById = new Map(records.map((record) => [record.id, record.device_id]));
+    const deviceIdById = new Map(filteredRecords.map((record) => [record.id, record.device_id]));
 
     const mappedSplit = splitRecords.map((record) => ({
       id: record.id,
@@ -392,7 +411,7 @@ export async function getStarterRunTime(
 
   return {
     total_run_on_time: formatDuration(totalSeconds * 1000),
-    records,
+    records: filteredRecords,
   };
 }
 

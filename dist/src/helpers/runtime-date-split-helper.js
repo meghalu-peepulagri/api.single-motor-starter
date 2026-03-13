@@ -16,8 +16,20 @@ export function splitRuntimeRecordsByDate(records, fromDate, toDate, timeZone = 
     for (const record of records) {
         const startTime = new Date(record.start_time);
         const endTime = record.end_time ? new Date(record.end_time) : null;
-        // If no end_time or same date, no split needed
-        if (!endTime || isSameDate(startTime, endTime, timeZone)) {
+        // If no end_time, only include if start_time falls within the requested date range
+        if (!endTime) {
+            if (startTime >= fromDate && startTime <= toDate) {
+                result.push({
+                    ...record,
+                    start_time: startTime,
+                    end_time: endTime,
+                    is_split: false,
+                });
+            }
+            continue;
+        }
+        // Same date, no split needed
+        if (isSameDate(startTime, endTime, timeZone)) {
             result.push({
                 ...record,
                 start_time: startTime,
