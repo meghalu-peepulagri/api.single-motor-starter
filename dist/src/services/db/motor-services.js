@@ -339,76 +339,16 @@ export async function getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId
             power_state: true,
         }
     });
-    // Single date: split cross-midnight records to show only that date's runtime
-    // Date range: return original records as-is
-    if (isSingleDate) {
-        const splitRecords = splitRuntimeRecordsByDate(records, from, to);
-        const totalOnSeconds = splitRecords.reduce((sum, record) => {
-            if (record.motor_state !== 1 || !record.duration)
-                return sum;
-            return sum + parseDurationToSeconds(record.duration);
-        }, 0);
-        return {
-            total_run_on_time: formatDuration(totalOnSeconds * 1000),
-            records: splitRecords,
-        };
-    }
-    // Filter orphaned null records: only keep the last end_time=null record (truly still running)
-    // Earlier null records are orphaned (a newer record started after them)
-    const filteredRecords = records.filter((r, i) => {
-        if (r.end_time !== null)
-            return true;
-        // Keep only if no later record exists (i.e., it's the last record)
-        return i === records.length - 1;
-    });
-    const totalRunTime = await getMotorTotalRunOnTime(starterId, fromDateUTC, toDateUTC, motorId);
+    // Clamp records to the requested date range and split cross-midnight records
+    const splitRecords = splitRuntimeRecordsByDate(records, from, to);
+    const totalOnSeconds = splitRecords.reduce((sum, record) => {
+        if (record.motor_state !== 1 || !record.duration)
+            return sum;
+        return sum + parseDurationToSeconds(record.duration);
+    }, 0);
     return {
-        total_run_on_time: totalRunTime.total_run_on_time,
-        records: filteredRecords,
-    };
-}
-export async function getMotorTotalRunOnTime(starterId, fromDate, toDate, motorId) {
-    const fromDateObj = new Date(fromDate);
-    const toDateObj = new Date(toDate);
-    // Fetch ALL records (not just motor_state=1) to determine effective end times
-    const allRecords = await db.query.motorsRunTime.findMany({
-        where: and(eq(motorsRunTime.starter_box_id, starterId), lte(motorsRunTime.start_time, toDateObj), or(gte(motorsRunTime.end_time, fromDateObj), isNull(motorsRunTime.end_time)), motorId ? eq(motorsRunTime.motor_id, motorId) : undefined),
-        columns: {
-            start_time: true,
-            end_time: true,
-            duration: true,
-            motor_state: true,
-        },
-        orderBy: asc(motorsRunTime.start_time),
-    });
-    let totalSeconds = 0;
-    for (let i = 0; i < allRecords.length; i++) {
-        const record = allRecords[i];
-        if (record.motor_state !== 1)
-            continue;
-        const start = new Date(record.start_time);
-        // For null end_time: use next record's start_time as effective end.
-        // Only the very last record (no next record) uses toDateObj.
-        let end;
-        if (record.end_time) {
-            end = new Date(record.end_time);
-        }
-        else if (i < allRecords.length - 1) {
-            // Orphaned record — use next record's start as effective end
-            end = new Date(allRecords[i + 1].start_time);
-        }
-        else {
-            // Last record, truly still running — use toDate
-            end = toDateObj;
-        }
-        const segmentStart = start > fromDateObj ? start : fromDateObj;
-        const segmentEnd = end < toDateObj ? end : toDateObj;
-        if (segmentEnd > segmentStart) {
-            totalSeconds += Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / 1000);
-        }
-    }
-    return {
-        total_run_on_time: formatDuration(totalSeconds * 1000),
+        total_run_on_time: formatDuration(totalOnSeconds * 1000),
+        records: splitRecords,
     };
 }
 export async function getMotorsTotalRunOnTime(motorIds) {
