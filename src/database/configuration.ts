@@ -26,16 +26,16 @@ import dbConfig from "../config/db-config.js";
 const { Pool } = pg;
 
 const dbClient = new Pool({
-  // host: env.DB_HOST,
-  // port: Number(env.DB_PORT),
-  // user: env.DB_USER,
-  // password: env.DB_PASSWORD,
-  // database: env.DB_NAME,
-  // ssl: {
-  //   rejectUnauthorized: true,
-  //   ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
-  // },
-  connectionString: dbConfig.connectionString,
+  host: env.DB_HOST,
+  port: Number(env.DB_PORT),
+  user: env.DB_USER,
+  password: env.DB_PASSWORD,
+  database: env.DB_NAME,
+  ssl: {
+    rejectUnauthorized: true,
+    ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
+  },
+  // connectionString: dbConfig.connectionString,
 });
 
 const db = drizzle(dbClient, {
