@@ -509,7 +509,7 @@ export class StarterHandlers {
 
   markStarterStatusHandler = async (c: Context) => {
     try {
-      const timeStamp = new Date(new Date().getTime() - 5 * 60 * 1000); // 5 minutes below
+      const timeStamp = new Date(new Date().getTime() - 3 * 60 * 1000); // 3 minutes below
       const uniqueStarterData = await getUniqueStarterIdsWithInTime(timeStamp);
       await updateStarterStatusWithTransaction(uniqueStarterData);
       return sendResponse(c, 200, STARTER_BOX_STATUS_UPDATED);
