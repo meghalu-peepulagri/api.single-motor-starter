@@ -5,23 +5,25 @@ import { formatDuration } from "./dns-helpers.js";
  * - Records fully outside the range are excluded.
  * - Records that overlap the range are clamped: start_time and end_time
  *   are adjusted to fit within fromDate–toDate, and duration is recalculated.
- * - Records with no end_time are only included if start_time falls within the range.
+ * - Records with no end_time (session not closed) are included but with duration: null.
+ *   Only records with an actual end_time contribute to duration/total_run_on_time.
  */
 export function splitRuntimeRecordsByDate(records, fromDate, toDate) {
     const result = [];
     for (const record of records) {
         const startTime = new Date(record.start_time);
         const endTime = record.end_time ? new Date(record.end_time) : null;
-        // If no end_time, only include if start_time falls within the requested date range
+        // If no end_time (session not closed), include record but don't count duration
         if (!endTime) {
-            if (startTime >= fromDate && startTime <= toDate) {
-                result.push({
-                    ...record,
-                    start_time: startTime,
-                    end_time: endTime,
-                    duration: null,
-                });
-            }
+            if (startTime > toDate)
+                continue;
+            const clampedStart = startTime > fromDate ? startTime : fromDate;
+            result.push({
+                ...record,
+                start_time: clampedStart,
+                end_time: null,
+                duration: null,
+            });
             continue;
         }
         // Skip records fully outside the date range

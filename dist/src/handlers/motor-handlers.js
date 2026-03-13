@@ -157,7 +157,7 @@ export class MotorHandlers {
             const runTimeMap = await getMotorsTotalRunOnTime(motorIds);
             const records = motorsData.records.map((motor) => ({
                 ...motor,
-                run_time_duration: runTimeMap[motor.id] || "0h 0m 0s",
+                run_time_duration: runTimeMap[motor.id] || "0 h 0 m 0 sec",
             }));
             return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, {
                 ...motorsData,
