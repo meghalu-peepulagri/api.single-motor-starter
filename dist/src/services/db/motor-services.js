@@ -154,6 +154,10 @@ export async function trackMotorRunTime(params, externalTrx) {
             });
             return;
         }
+        // Skip out-of-order messages: if incoming timestamp is older than the open record's start_time
+        if (now.getTime() < new Date(openRecord.start_time).getTime()) {
+            return;
+        }
         // Calculate durations
         const totalDurationMs = now.getTime() - new Date(openRecord.start_time).getTime();
         const motorDurationFormatted = formatDuration(totalDurationMs);
