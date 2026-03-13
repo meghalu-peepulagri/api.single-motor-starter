@@ -664,9 +664,13 @@ export async function deviceInfoAckHandler(message, topic) {
         if (hasValue(message.D.val) && message.D.val !== validMac.sim_recharge_expires_at) {
             updatedFields.sim_recharge_expires_at = message.D.val;
         }
-        // SIM mobile number (validated)
-        if (hasValue(message.D.sim_num) && message.D.sim_num !== validMac.device_mobile_number) {
-            updatedFields.device_mobile_number = message.D.sim_num;
+        // SIM mobile number (validated) — strip country code, take last 10 digits
+        if (hasValue(message.D.sim_num)) {
+            const rawSim = String(message.D.sim_num).replace(/^\+91/, ''); // remove +91 country code
+            const simNumber = rawSim.slice(0, 10); // take first 10 digits
+            if (simNumber.length === 10 && simNumber !== validMac.device_mobile_number) {
+                updatedFields.device_mobile_number = simNumber;
+            }
         }
         if (Object.keys(updatedFields).length > 0) {
             await updateRecordById(starterBoxes, validMac.id, updatedFields);
