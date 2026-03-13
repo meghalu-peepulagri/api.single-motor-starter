@@ -9,7 +9,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { motorFilters } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { paginatedMotorsList } from "../services/db/motor-services.js";
+import { getMotorsTotalRunOnTime, paginatedMotorsList } from "../services/db/motor-services.js";
 import { getMotorWithStarterDetails } from "../services/db/motor-starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -76,6 +76,7 @@ export class MotorHandlers {
       const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["location_id", "alias_name", "id", "status"], ["=", "=", "!=", "!="], [motor.location_id, validMotorReq.name, motor.id, "ARCHIVED"]);
       if (existedMotor) throw new ConflictException(MOTOR_NAME_EXISTED);
 
+      const device = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [motor.starter_id, "ARCHIVED"]);
       const notificationData = await db.transaction(async (trx) => {
         const updatePayload: any = { alias_name: validMotorReq.name, hp: validMotorReq.hp.toString() };
         if (validMotorReq.state !== undefined) updatePayload.state = validMotorReq.state;
@@ -93,9 +94,10 @@ export class MotorHandlers {
         const hasStateChanged = updatedMotor.state !== undefined && updatedMotor.state !== motor.state;
         const hasModeChanged = updatedMotor.mode !== undefined && updatedMotor.mode !== motor.mode;
         const mode = updatedMotor.mode || motor.mode || "";
+        const starterNumber = device ? device.starter_number : "";
 
-        const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, updatedMotor.state, mode, starterId) : null;
-        const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, updatedMotor.mode, starterId) : null;
+        const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, updatedMotor.state, mode, starterId, starterNumber) : null;
+        const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, updatedMotor.mode, starterId, starterNumber) : null;
         return { notificationDataState, notificationDataMode };
       })
 
@@ -171,8 +173,20 @@ export class MotorHandlers {
       const paginationParams = getPaginationOffParams(query);
       const orderQueryData = parseOrderByQueryCondition<MotorsTable>(query.order_by, query.order_type, "assigned_at", "desc");
       const whereQueryData = motorFilters(query, userPayload);
-      const motors = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
-      return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, motors);
+      const motorsData = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
+
+      const motorIds = motorsData.records.map((m: any) => m.id).filter(Boolean);
+      const runTimeMap = await getMotorsTotalRunOnTime(motorIds);
+
+      const records = motorsData.records.map((motor: any) => ({
+        ...motor,
+        run_time_duration: runTimeMap[motor.id] || "0h 0m 0s",
+      }));
+
+      return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, {
+        ...motorsData,
+        records,
+      });
     } catch (error: any) {
       console.error("Error at get all motors :", error);
       throw error;

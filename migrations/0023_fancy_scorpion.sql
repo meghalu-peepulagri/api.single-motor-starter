@@ -1,0 +1,1 @@
+ALTER TABLE "motor_schedules" ADD COLUMN "priority" integer DEFAULT 2 NOT NULL;

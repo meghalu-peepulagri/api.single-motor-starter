@@ -38,6 +38,7 @@ export const UNIQUE_INDEX_MESSAGES = {
     "valid_starter_box_name": "Name already exist.",
     "unique_motor_alias_name_per_location": "Pump name already exist.",
     "validate_device_mobile_number": "Mobile number already exist.",
+    "motor_schedule_unique_idx": "Schedule already exists with a pump same type & time",
 };
 export const FOREIGN_KEY_MESSAGES = {
     "locations_user_id_users_id_fk": "User not found.",
@@ -257,6 +258,7 @@ export const LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY = "Latest PCB number fetched
 export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
 export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
 export const DEVICE_RESET_SUCCESSFULLY = "Device reset successfully";
+export const SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT = "SIM recharge expiry notifications sent";
 // Bridge Service
 export const BRIDGE_AGENT_NOT_FOUND = "Agent ID is required";
 export const BRIDGE_AGENT_TRIGGERED = "Agent triggered successfully";
@@ -265,25 +267,82 @@ export const BRIDGE_RESULT_FETCHED = "Bridge result fetched successfully";
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
 // Motor schedule 
-export const SCHEDULE_TYPES = ["ONE_TIME", "DAILY", "WEEKLY"];
+export const SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"];
+export const SCHEDULE_TYPE_CODES = [1, 2]; // 1 = TIME_BASED, 2 = CYCLIC
+export const DAYS_OF_WEEK_ENUM = [0, 1, 2, 3, 4, 5, 6]; // 0=Sunday ... 6=Saturday
 export const SCHEDULED_CREATED = "Motor schedule created successfully";
-export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with a motor same type & time";
+export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with same time";
 export const SCHEDULE_TYPE_IS_REQUIRED = "Schedule type is required";
 export const INVALID_SCHEDULED_TYPE = "Invalid schedule type";
 export const SCHEDULE_DATE_REQUIRED = "Schedule date is required";
 export const SCHEDULE_DATE_FORMAT = "Schedule date must be in YYYY-MM-DD format";
+export const SCHEDULE_START_DATE_FORMAT = "Schedule start date must be in YYYY-MM-DD format";
+export const SCHEDULE_END_DATE_FORMAT = "Schedule end date must be in YYYY-MM-DD format";
+export const SCHEDULE_END_DATE_PAST = "Schedule end date cannot be in the past";
+export const SCHEDULE_END_DATE_BEFORE_START = "Schedule end date must be on or after start date";
 export const SCHEDULE_START_TIME_REQUIRED = "Start time is required";
 export const SCHEDULE_START_TIME_INVALID = "Invalid start time";
 export const SCHEDULE_END_TIME_REQUIRED = "End time is required";
 export const SCHEDULE_END_TIME_INVALID = "Invalid end time";
 export const INVALID_DAYS_WEEK = "Invalid day of week";
 export const SCHEDULED_LIST_FETCHED = "Motor scheduled list fetches successfully";
+export const SCHEDULE_DETAILS_FETCHED = "Motor schedule details fetched successfully";
+export const PENDING_SCHEDULES_FETCHED = "Pending schedules fetched successfully";
 export const SCHEDULE_UPDATED = "Motor Schedule updated successfully";
 export const SCHEDULE_NOT_FOUND = "Motor schedule id not found";
 export const SCHEDULE_DELETED = "Motor Schedule deleted successfully";
-export const SCHEDULE_STATUS = ["PENDING", "RUNNING", "COMPLETED", "FAILED", "PAUSED", "CANCELLED", "RESCHEDULED"];
+export const SCHEDULE_STATUS = ["PENDING", "SCHEDULED", "RUNNING", "STOPPED", "COMPLETED", "FAILED", "CANCELLED", "DELETED", "RESTARTED", "WAITING_NEXT_CYCLE"];
 export const INVALID_SCHEDULED_STATUS = "Invalid schedule status";
-export const SCHEDULE_STATUS_DAILY_WEEKLY = ["DAILY", "WEEKLY"];
+export const ACKNOWLEDGEMENT_UPDATED = "Acknowledgement updated successfully";
+export const SCHEDULE_ACK_SUCCESS = "Schedule acknowledged successfully";
+export const SCHEDULE_ACK_FAILED = "Device failed to acknowledge schedule";
+export const INVALID_ACK_PAYLOAD = "Invalid acknowledgement payload";
+export const INVALID_ACK_STATUS = "Invalid acknowledgement status";
+// Cyclic mode validation
+export const CYCLE_ON_MINUTES_REQUIRED = "Cycle ON duration (minutes) is required for CYCLIC mode";
+export const CYCLE_OFF_MINUTES_REQUIRED = "Cycle OFF duration (minutes) is required for CYCLIC mode";
+export const CYCLE_ON_MINUTES_MIN = "Cycle ON duration must be at least 1 minute";
+export const CYCLE_OFF_MINUTES_MIN = "Cycle OFF duration must be at least 1 minute";
+export const CYCLIC_REQUIRES_REPEAT = "Repeat must be enabled for cyclic schedules";
+export const CYCLIC_NO_POWER_LOSS_RECOVERY = "Power loss recovery is not supported for cyclic schedules";
+export const TIME_BASED_NO_REPEAT = "Repeat is not allowed for time-based schedules";
+export const ONE_TIME_REQUIRES_START_DATE = "Start date is required for one-time schedules";
+export const ONE_TIME_REQUIRES_START_TIME = "Start time is required for one-time schedules";
+export const ONE_TIME_REQUIRES_END_TIME = "End time is required for one-time schedules";
+// Runtime quota
+export const RUNTIME_MINUTES_MIN = "Runtime quota must be at least 1 minute";
+// Time validation
+export const START_TIME_BEFORE_END_TIME = "Start time must be before end time (unless crossing midnight)";
+export const SCHEDULE_MIN_GAP = "Schedule must have at least a 5-minute gap from existing schedules";
+export const SCHEDULE_MIN_ADVANCE = "Schedule must be created at least 5 minutes before start time";
+export const DAYS_OF_WEEK_REQUIRED_FOR_REPEAT = "At least one day must be required";
+export const SCHEDULE_DATE_PAST = "Schedule date cannot be in the past";
+// Stop / Stop-all
+export const SCHEDULE_STOPPED = "Motor schedule stopped successfully";
+export const SCHEDULE_RESTARTED = "Motor schedule restarted successfully";
+export const ALL_SCHEDULES_STOPPED = "All active schedules stopped for this motor";
+export const NO_ACTIVE_SCHEDULE = "No active schedule found to stop";
+export const INVALID_SCHEDULE_CMD = "Invalid cmd. Use 1 for stop, 2 for restart";
+export const SCHEDULE_CMD_REQUIRED = "cmd is required";
+// Schedule date validation
+export const SCHEDULE_DATE_REQUIRED_FOR_ONE_TIME = "Schedule date is required for one-time schedules";
+export const DAYS_OF_WEEK_REQUIRED_FOR_REPEAT_SCHEDULE = "At least one day of week is required for repeat schedules";
+export const CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME = "Cycle ON/OFF durations are not allowed for one-time schedules";
+export const REPEAT_REQUIRES_CYCLE = "Repeat schedules must have cycle ON and OFF durations";
+// Schedule status sync (cron)
+export const SCHEDULE_STATUS_SYNC_COMPLETED = "Schedule status sync completed successfully";
+// Repeat days
+export const REPEAT_DAYS_ADDED = "Repeat days updated successfully";
+export const INVALID_REPEAT_DAYS_UPDATE = "Cannot add repeat days to a date-specific schedule";
+// Conflict detection
+export const SCHEDULE_OVERLAP_CONFLICT = "Schedule time overlaps with an existing schedule";
+export const SCHEDULE_GAP_CONFLICT = "Minimum 5-minute gap required between schedules";
+// Validation criteria
+export const UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA = "Update motor schedule details provided do not meet the required validation criteria";
+export const ADD_REPEAT_DAYS_VALIDATION_CRITERIA = "Add repeat days details provided do not meet the required validation criteria";
+// Starter ID
+export const STARTER_ID_REQUIRED = "Device is required";
+export const CANNOT_EDIT_RUNNING_SCHEDULE = "Cannot edit a running schedule. Stop it first";
 export const All_USER_TYPES = ["OWNER", "MANAGER", "SUPERVISOR", "USER"];
 export const ALL_ADMIN_TYPES = ["ADMIN", "SUPER_ADMIN"];
 export const ALL_WRITE_TYPES = ["OWNER", "MANAGER"];

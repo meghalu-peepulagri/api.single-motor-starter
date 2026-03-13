@@ -25,7 +25,7 @@ export function validationErrors(issues = []) {
                 .filter(Boolean)
                 .join('.')
             : '';
-        const key = fullPath || 'phone';
+        const key = fullPath || '_error';
         acc[key] = issue.message;
         return acc;
     }, {});

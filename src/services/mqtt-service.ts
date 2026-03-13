@@ -104,7 +104,6 @@ export class MqttService {
     catch (error: any) {
       logger.error("Error while processing MQTT message", error);
       console.error("Error while processing MQTT message", error);
-      throw error;
     }
   };
 

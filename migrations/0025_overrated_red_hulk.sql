@@ -1,0 +1,1 @@
+ALTER TYPE "public"."schedule_status" ADD VALUE 'WAITING_NEXT_CYCLE';

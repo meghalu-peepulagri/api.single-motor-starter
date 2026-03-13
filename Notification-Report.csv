@@ -1,0 +1,61 @@
+Sl No,Trigger Source,Function Name,File Location,Notification Type,Condition to Send,Title Format,Message Format,Recipient (userId),Parameters Sent to FCM
+1,MQTT G01 - Live Data,updateStates,src/services/db/mqtt-db-services.ts,State Change,"motor_state changed (motor_state !== prevState)","Pump {pumpName} state turned ON with mode {mode}  OR  Pump {pumpName} state turned OFF with mode {mode}  OR  Pump {pumpName} state Unable to update due to: {reason}","State updated to 'ON/OFF' with mode 'AUTO/MANUAL'  OR  State not updated due to '{reason}'",motor.created_by,"motor_id, starter_id"
+2,MQTT G01 - Live Data,updateStates,src/services/db/mqtt-db-services.ts,Mode Change,"mode changed (mode_description !== prevMode)","Pump {pumpName} mode updated to from {oldMode} to {newMode}  OR  Pump {pumpName} Mode not updated due to {mode_description}","Mode updated from '{oldMode}' to '{newMode}'  OR  Mode not updated due to '{mode_description}'",motor.created_by,"motor_id, starter_id"
+3,MQTT G01 - Live Data,updateStates,src/services/db/mqtt-db-services.ts,Alert,alert_code exists AND alert_code !== 0,{pumpName} Alert Detected,"{alert_description} (e.g. Dry Run Alert, Overload Alert, Locked Rotor Alert, Current Imbalance Alert, Frequent Start Alert, Phase Failure Alert, Low Voltage Alert, High Voltage Alert, Voltage Imbalance Alert, Phase Reversal Alert, Frequency deviation Alert, Output phase Alert)",motor.created_by,"motor_id, starter_id"
+4,MQTT G01 - Live Data,updateStates,src/services/db/mqtt-db-services.ts,Fault,fault exists AND fault !== 0,{pumpName} Fault Detected,"{fault_description} (e.g. Dry Run Fault, Overload Fault, Locked Rotor Fault, Current Imbalance Fault, Frequent Start Fault, Phase Failure Fault, Low Voltage Fault, High Voltage Fault, Voltage Imbalance Fault, Phase Reversal Fault, Frequency deviation Fault, Output phase Fault)",motor.created_by,"motor_id, starter_id"
+5,MQTT G02 - Power ON & Motor ON,updateDevicePowerAndMotorStateToON,src/services/db/mqtt-db-services.ts,State Change,"motor_state changed (motor_state !== prevState)","Pump {pumpName} state turned ON with mode {mode}  OR  Pump {pumpName} state turned OFF with mode {mode}","State updated to 'ON/OFF' with mode 'AUTO/MANUAL'",motor.created_by,"motor_id, starter_id"
+6,MQTT G02 - Power ON & Motor ON,updateDevicePowerAndMotorStateToON,src/services/db/mqtt-db-services.ts,Mode Change,"mode changed (mode_description !== prevMode)","Pump {pumpName} mode updated to from {oldMode} to {newMode}","Mode updated from '{oldMode}' to '{newMode}'",motor.created_by,"motor_id, starter_id"
+7,MQTT G03 - Power ON & Motor OFF,updateDevicePowerONAndMotorStateOFF,src/services/db/mqtt-db-services.ts,State Change,"motor_state changed (motor_state !== prevState)","Pump {pumpName} state turned OFF with mode {mode}","State updated to 'OFF' with mode 'AUTO/MANUAL'",motor.created_by,"motor_id, starter_id"
+8,MQTT G04 - Power OFF & Motor OFF,updateDevicePowerAndMotorStateOFF,src/services/db/mqtt-db-services.ts,Mode Change,"mode changed (mode_description !== prevMode)","Pump {pumpName} mode updated to from {oldMode} to {newMode}","Mode updated from '{oldMode}' to '{newMode}'",motor.created_by,"motor_id, starter_id"
+9,MQTT - Motor Control ACK,motorControlAckHandler,src/services/db/mqtt-db-services.ts,State Change,"state actually changed (newState !== prevState)","Pump {pumpName} state turned ON/OFF with mode {mode}","State updated to 'ON/OFF' with mode 'AUTO/MANUAL'",motor.created_by,"motor_id, starter_id"
+10,MQTT - Mode Change ACK,motorModeChangeAckHandler,src/services/db/mqtt-db-services.ts,Mode Change,"mode actually changed (mode !== motor.mode)","Pump {pumpName} mode updated to from {oldMode} to {newMode}","Mode updated from '{oldMode}' to '{newMode}'",motor.created_by,"motor_id, starter_id"
+11,User API - Motor Update,updateMotorHandler,src/handlers/motor-handlers.ts,State Change,"user changed state (updatedMotor.state !== motor.state)","Pump {pumpName} state turned ON/OFF with mode {mode}","State updated to 'ON/OFF' with mode 'AUTO/MANUAL'",motor.created_by,"motor_id, starter_id"
+12,User API - Motor Update,updateMotorHandler,src/handlers/motor-handlers.ts,Mode Change,"user changed mode (updatedMotor.mode !== motor.mode)","Pump {pumpName} mode updated to from {oldMode} to {newMode}","Mode updated from '{oldMode}' to '{newMode}'",motor.created_by,"motor_id, starter_id"
+
+REFERENCE SHEET - Alert Codes,,,,,,,,
+Code,Description,,,,,,,,
+0x01,Dry Run Alert,,,,,,,,
+0x02,Overload Alert,,,,,,,,
+0x04,Locked Rotor Alert,,,,,,,,
+0x08,Current Imbalance Alert,,,,,,,,
+0x10,Frequent Start Alert,,,,,,,,
+0x20,Phase Failure Alert,,,,,,,,
+0x40,Low Voltage Alert,,,,,,,,
+0x80,High Voltage Alert,,,,,,,,
+0x100,Voltage Imbalance Alert,,,,,,,,
+0x200,Phase Reversal Alert,,,,,,,,
+0x400,Frequency deviation Alert,,,,,,,,
+0x1000,Output phase Alert,,,,,,,,
+
+REFERENCE SHEET - Fault Codes,,,,,,,,
+Code,Description,,,,,,,,
+0x01,Dry Run Fault,,,,,,,,
+0x02,Overload Fault,,,,,,,,
+0x04,Locked Rotor Fault,,,,,,,,
+0x08,Current Imbalance Fault,,,,,,,,
+0x10,Frequent Start Fault,,,,,,,,
+0x20,Phase Failure Fault,,,,,,,,
+0x40,Low Voltage Fault,,,,,,,,
+0x80,High Voltage Fault,,,,,,,,
+0x100,Voltage Imbalance Fault,,,,,,,,
+0x200,Phase Reversal Fault,,,,,,,,
+0x400,Frequency deviation Fault,,,,,,,,
+0x1000,Output phase Fault,,,,,,,,
+
+REFERENCE SHEET - Motor State Codes,,,,,,,,
+Code,Description,,,,,,,,
+0,OFF,,,,,,,,
+1,ON,,,,,,,,
+2,POWER NOT PRESENT,,,,,,,,
+3,FAULT BLOCKED,,,,,,,,
+4,INVALID CONTROL MODE CHANGE,,,,,,,,
+5,INVALID REQUEST,,,,,,,,
+6,ALREADY ON,,,,,,,,
+7,ALREADY OFF,,,,,,,,
+8,FEATURE NOT ENABLED,,,,,,,,
+
+NOTES,,,,,,,,
+"pumpName = motor.alias_name if available, otherwise starter_number",,,,,,,,
+"Notifications only sent if motor.created_by is not null/undefined",,,,,,,,
+"FCM tokens fetched from device_tokens table where status = ACTIVE",,,,,,,,
+"Motor Scheduling (motor-scheduling-handlers.ts) does NOT send any notifications",,,,,,,,

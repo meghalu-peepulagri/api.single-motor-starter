@@ -141,6 +141,48 @@
       "when": 1771326114243,
       "tag": "0019_chunky_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1772252541379,
+      "tag": "0020_open_captain_flint",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1772692615079,
+      "tag": "0021_amusing_micromacro",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1772708753961,
+      "tag": "0022_cute_maximus",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1772719967843,
+      "tag": "0023_fancy_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1772805063943,
+      "tag": "0024_hot_wasp",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1773299551756,
+      "tag": "0025_overrated_red_hulk",
+      "breakpoints": true
     }
   ]
 }

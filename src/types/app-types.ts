@@ -3,15 +3,15 @@ import type { ValidatedUpdateDefaultSettingsLimits } from "../validations/schema
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import type { validatedAddField } from "../validations/schema/field-validations.js";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
-import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../validations/schema/motor-schedule-validators.js";
+import type { ValidatedAddRepeatDays, ValidatedMotorSchedule, ValidatedMotorScheduleArray, ValidatedUpdateMotorSchedule } from "../validations/schema/motor-schedule-validators.js";
 import type { validatedAddMotor, validatedUpdateMotor, validatedUpdateMotorTestRunStatus } from "../validations/schema/motor-validations.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 
 export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
-  | ValidatedMotorScheduleArray | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits;
+  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits;
 
-export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "assign-starter" | "replace-starter" |
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
   "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits";
 
 export interface IResp {
@@ -213,6 +213,29 @@ export type RequireAtLeastOne<T, Keys extends keyof T = keyof T> =
     [K in Keys]-?: Required<Pick<T, K>> & Partial<Pick<T, Exclude<Keys, K>>>
   }[Keys];
 
+// =================== SCHEDULE EVALUATOR TYPES ===================
+export interface ScheduleForEvaluation {
+  id: number;
+  schedule_type: "TIME_BASED" | "CYCLIC";
+  schedule_status: string;
+  start_time: string;   // HH:mm (IST 24hr)
+  end_time: string;     // HH:mm (IST 24hr)
+  schedule_start_date: string | null;  // YYYY-MM-DD (IST)
+  schedule_end_date: string | null;    // YYYY-MM-DD (IST)
+  days_of_week: number[];
+  repeat: number;
+  runtime_minutes: number | null;
+  last_started_at: Date | null;
+  enabled: boolean;
+}
+
+export interface ScheduleStatusUpdate {
+  id: number;
+  newStatus: "RUNNING" | "COMPLETED" | "WAITING_NEXT_CYCLE";
+  last_started_at?: Date;
+  last_stopped_at?: Date;
+}
+
 export type preparedLiveData = {
   payload_version: number;
   packet_number: number;
@@ -270,4 +293,32 @@ export type previousPreparedLiveData = {
 export type motorBasedStarterDetails = {
   id: number;
   assigned_at: Date | null;
+}
+
+// =================== RUNTIME TYPES ===================
+export interface RuntimeRecord {
+  id: number;
+  start_time: Date | string;
+  end_time: Date | string | null;
+  duration: string | null;
+  time_stamp: string | null;
+  motor_state: number | null;
+  power_start: string | null;
+  power_end: string | null;
+  power_duration: string | null;
+  power_state: number | null;
+}
+
+export interface SplitRuntimeRecord {
+  id: number;
+  start_time: Date;
+  end_time: Date | null;
+  duration: string | null;
+  time_stamp: string | null;
+  motor_state: number | null;
+  power_start: string | null;
+  power_end: string | null;
+  power_duration: string | null;
+  power_state: number | null;
+  is_split: boolean;
 }

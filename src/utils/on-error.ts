@@ -35,7 +35,7 @@ export function validationErrors(issues: BaseIssue<unknown>[] = []) {
         .join('.')
       : '';
 
-    const key = fullPath || 'phone';
+    const key = fullPath || '_error';
     acc[key] = issue.message;
     return acc;
   }, {} as Record<string, string>);

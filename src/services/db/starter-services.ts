@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
@@ -10,10 +10,11 @@ import { starterBoxParameters } from "../../database/schemas/starter-parameters.
 import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
 import { starterSettings, type StarterSettingsTable } from "../../database/schemas/starter-settings.js";
 import { users, type User } from "../../database/schemas/users.js";
-import { getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
+import { formatDuration, getUTCFromDateAndToDate } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter, formatAnalyticsData } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
+import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
@@ -93,6 +94,9 @@ export async function getStarterByMacWithMotor(mac: string) {
       device_allocation: true,
       allocation_status_count: true,
       starter_number: true,
+      hardware_version: true,
+      sim_recharge_expires_at: true,
+      device_mobile_number: true,
     },
     with: {
       motors: {
@@ -298,11 +302,24 @@ export async function getStarterAnalytics(
 }
 
 
-export async function getStarterRunTime(starterId: number, fromDate: string, toDate: string, motorId?: number, powerState?: string) {
+export async function getStarterRunTime(
+  starterId: number,
+  fromDate: string,
+  toDate: string,
+  motorId?: number,
+  powerState?: string,
+  isSingleDate?: boolean,
+) {
+  const from = new Date(fromDate);
+  const to = new Date(toDate);
+
   const filters = [
     eq(deviceRunTime.starter_box_id, starterId),
-    gte(deviceRunTime.time_stamp, fromDate),
-    lte(deviceRunTime.time_stamp, toDate),
+    lte(deviceRunTime.start_time, to),
+    or(
+      gte(deviceRunTime.end_time, from),
+      isNull(deviceRunTime.end_time),
+    ),
   ];
 
   if (motorId) {
@@ -314,7 +331,7 @@ export async function getStarterRunTime(starterId: number, fromDate: string, toD
     filters.push(eq(deviceRunTime.power_state, powerStateNumber));
   }
 
-  return await db.select({
+  const records = await db.select({
     id: deviceRunTime.id,
     device_id: deviceRunTime.starter_box_id,
     start_time: deviceRunTime.start_time,
@@ -322,10 +339,61 @@ export async function getStarterRunTime(starterId: number, fromDate: string, toD
     duration: deviceRunTime.duration,
     power_state: deviceRunTime.power_state,
     time_stamp: deviceRunTime.time_stamp,
+    motor_state: deviceRunTime.motor_state,
   })
     .from(deviceRunTime)
     .where(and(...filters))
     .orderBy(asc(deviceRunTime.start_time));
+
+  let totalSeconds = 0;
+  for (const record of records) {
+    if (!powerState && record.power_state !== 1) continue;
+    const start = new Date(record.start_time);
+    const end = record.end_time ? new Date(record.end_time) : to;
+    const segmentStart = start > from ? start : from;
+    const segmentEnd = end < to ? end : to;
+    if (segmentEnd > segmentStart) {
+      totalSeconds += Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / 1000);
+    }
+  }
+
+  if (isSingleDate) {
+    const runtimeRecords = records.map((record) => ({
+      id: record.id,
+      start_time: record.start_time,
+      end_time: record.end_time,
+      duration: record.duration,
+      time_stamp: record.time_stamp,
+      motor_state: record.motor_state ?? null,
+      power_start: null,
+      power_end: null,
+      power_duration: null,
+      power_state: record.power_state ?? null,
+    }));
+    const splitRecords = splitRuntimeRecordsByDate(runtimeRecords, from, to);
+    const deviceIdById = new Map(records.map((record) => [record.id, record.device_id]));
+
+    const mappedSplit = splitRecords.map((record) => ({
+      id: record.id,
+      device_id: deviceIdById.get(record.id),
+      start_time: record.start_time,
+      end_time: record.end_time,
+      duration: record.duration,
+      power_state: record.power_state,
+      time_stamp: record.time_stamp,
+      is_split: record.is_split,
+    }));
+
+    return {
+      total_run_on_time: formatDuration(totalSeconds * 1000),
+      records: mappedSplit,
+    };
+  }
+
+  return {
+    total_run_on_time: formatDuration(totalSeconds * 1000),
+    records,
+  };
 }
 
 export async function assignStarterWebWithTransaction(starterDetails: StarterBox, requestBody: { user_id: number }) {
@@ -364,6 +432,8 @@ export async function starterConnectedMotors(starterId: number) {
       synced_settings_status: true,
       allocation_status_count: true,
       device_reset_status: true,
+      sim_recharge_expires_at: true,
+      hardware_version: true,
     },
     with: {
       motors: {

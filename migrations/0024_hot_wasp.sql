@@ -1,0 +1,1 @@
+ALTER TABLE "motor_schedules" ADD COLUMN "bit_wise_days" integer DEFAULT 0;

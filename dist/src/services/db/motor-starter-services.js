@@ -39,6 +39,9 @@ export async function getMotorWithStarterDetails(motorId) {
                     power: true,
                     network_type: true,
                     device_allocation: true,
+                    sim_recharge_expires_at: true,
+                    hardware_version: true,
+                    device_mobile_number: true,
                 },
                 with: {
                     starterParameters: {

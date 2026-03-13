@@ -1,12 +1,13 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
 import { deviceTemperature } from "../../database/schemas/device-temperature.js";
+import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
-import { controlMode } from "../../helpers/control-helpers.js";
+import { controlMode, getFaultNotificationMessage } from "../../helpers/control-helpers.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
@@ -72,13 +73,17 @@ export async function selectTopicAck(topicType, payload, topic) {
         case "DEVICE_RESET_ACK":
             await deviceResetAckHandler(payload, topic);
             break;
+        case "DEVICE_INFO_ACK":
+            await deviceInfoAckHandler(payload, topic);
+            break;
+        case "SCHEDULING_CREATION_ACK":
+            await schedulingCreationAckHandler(payload, topic);
+            break;
         default:
             return null;
     }
 }
 const VALID_MODES = ["AUTO", "MANUAL"];
-// Track last known fault code per motor to detect fault-cleared transitions
-const lastFaultCodeMap = new Map();
 export async function updateStates(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
     const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
@@ -150,68 +155,59 @@ export async function updateStates(insertedData, previousData) {
             const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
             // Prepare alert and fault notifications only when they exist
             let notificationDataFault = null;
-            // if (created_by && alert_description && motor_id && alert_code !== 0) {
-            //   notificationDataAlert = {
-            //     userId: created_by, title: `${pumpName} Alert Detected`,
-            //     message: alert_description, motorId: motor_id, starter_id: starter_id
-            //   };
-            // }
+            let notificationDataFaultCleared = null;
             if (fault_description && created_by && motor_id && fault !== 0) {
                 notificationDataFault = {
                     userId: created_by, title: `${pumpName} Fault Detected`,
-                    message: fault_description, motorId: motor_id, starter_id: starter_id
+                    message: getFaultNotificationMessage(fault), motorId: motor_id, starter_id: starter_id
                 };
             }
-            let notificationDataFaultCleared = null;
-            const prevFaultCode = motor_id ? lastFaultCodeMap.get(motor_id) : undefined;
-            if (fault === 0 && prevFaultCode !== undefined && prevFaultCode !== 0 && created_by && motor_id) {
-                notificationDataFaultCleared = {
-                    userId: created_by, title: `${pumpName} Faults Cleared`,
-                    message: `${pumpName} has no more faults`,
-                    motorId: motor_id, starter_id: starter_id
-                };
-            }
-            // Update last known fault code for this motor
-            if (motor_id && fault !== null && fault !== undefined) {
-                lastFaultCodeMap.set(motor_id, fault);
+            // Check if fault was cleared (fault === 0 and previous fault was non-zero)
+            if (fault === 0 && created_by && motor_id) {
+                const lastFaultRecord = await trx.select({ fault_code: alertsFaults.fault_code })
+                    .from(alertsFaults)
+                    .where(and(eq(alertsFaults.motor_id, motor_id), eq(alertsFaults.starter_id, starter_id), isNotNull(alertsFaults.fault_code), ne(alertsFaults.fault_code, 0)))
+                    .orderBy(desc(alertsFaults.timestamp))
+                    .limit(1);
+                const prevFaultCode = lastFaultRecord[0]?.fault_code;
+                if (prevFaultCode !== undefined && prevFaultCode !== 0) {
+                    notificationDataFaultCleared = {
+                        userId: created_by, title: `${pumpName} Faults Cleared`,
+                        message: `${pumpName} has no more faults`,
+                        motorId: motor_id, starter_id: starter_id
+                    };
+                }
             }
             const notificationData = { notificationDataState, notificationDataMode, notificationDataFault, notificationDataFaultCleared };
             return notificationData;
         });
-        // Send notification after transaction completes (debounced: skip if same notification sent within 2 min)
+        // Send notification after transaction completes (debounced: skip if same notification was sent within 2 minutes)
         // state notification
         if (notificationData.notificationDataState) {
-            const d = notificationData.notificationDataState;
-            if (shouldSendNotification(d.motorId, "state", motor_state)) {
-                await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starterId);
+            const stateNotoificatioData = notificationData.notificationDataState;
+            if (shouldSendNotification(stateNotoificatioData.motorId, "state", motor_state)) {
+                await sendUserNotification(stateNotoificatioData.userId, stateNotoificatioData.title, stateNotoificatioData.message, stateNotoificatioData.motorId, stateNotoificatioData.starterId);
             }
         }
         // mode notification
         if (notificationData.notificationDataMode) {
-            const d = notificationData.notificationDataMode;
-            if (shouldSendNotification(d.motorId, "mode", mode_description)) {
-                await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starterId);
+            const modeNotificationData = notificationData.notificationDataMode;
+            if (shouldSendNotification(modeNotificationData.motorId, "mode", mode_description)) {
+                await sendUserNotification(modeNotificationData.userId, modeNotificationData.title, modeNotificationData.message, modeNotificationData.motorId, modeNotificationData.starterId);
             }
         }
-        // alert notification (removed for now)
-        // if (notificationData.notificationDataAlert) {
-        //   const d = notificationData.notificationDataAlert;
-        //   if (shouldSendNotification(d.motorId, "alert", alert_code)) {
-        //     await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starter_id);
-        //   }
-        // }
         // fault notification
         if (notificationData.notificationDataFault) {
-            const d = notificationData.notificationDataFault;
-            if (shouldSendNotification(d.motorId, "fault", fault)) {
-                await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starter_id);
+            const faultNotificationData = notificationData.notificationDataFault;
+            if (shouldSendNotification(faultNotificationData.motorId, "fault", fault)) {
+                await sendUserNotification(faultNotificationData.userId, faultNotificationData.title, faultNotificationData.message, faultNotificationData.motorId, faultNotificationData.starter_id);
             }
         }
         // fault cleared notification
         if (notificationData.notificationDataFaultCleared) {
-            const d = notificationData.notificationDataFaultCleared;
-            if (shouldSendNotification(d.motorId, "fault", "cleared")) {
-                await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starter_id);
+            const faultClearedData = notificationData.notificationDataFaultCleared;
+            if (shouldSendNotification(faultClearedData.motorId, "fault_cleared", 0)) {
+                await sendUserNotification(faultClearedData.userId, faultClearedData.title, faultClearedData.message, faultClearedData.motorId, faultClearedData.starter_id);
             }
         }
     }
@@ -286,15 +282,13 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         return { notificationDataState, notificationDataMode };
     });
     if (notificationData.notificationDataState) {
-        const d = notificationData.notificationDataState;
-        if (shouldSendNotification(d.motorId, "state", motor_state)) {
-            await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starterId);
+        if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
+            await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
         }
     }
     if (notificationData.notificationDataMode) {
-        const d = notificationData.notificationDataMode;
-        if (shouldSendNotification(d.motorId, "mode", mode_description)) {
-            await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starterId);
+        if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {
+            await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
         }
     }
 }
@@ -349,9 +343,8 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
         return { notificationDataState };
     });
     if (notificationData.notificationDataState) {
-        const d = notificationData.notificationDataState;
-        if (shouldSendNotification(d.motorId, "state", motor_state)) {
-            await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starterId);
+        if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
+            await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
         }
     }
 }
@@ -403,9 +396,8 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         return { notificationDataMode };
     });
     if (notificationData.notificationDataMode) {
-        const d = notificationData.notificationDataMode;
-        if (shouldSendNotification(d.motorId, "mode", mode_description)) {
-            await sendUserNotification(d.userId, d.title, d.message, d.motorId, d.starterId);
+        if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {
+            await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
         }
     }
 }
@@ -618,7 +610,8 @@ export async function adminConfigDataRequestAckHandler(message, topic) {
         }
         // Update DB
         await updateLatestStarterSettings(validMac.id, message.D);
-        if (validMac && validMac.synced_settings_status === "false") {
+        if (validMac &&
+            validMac.synced_settings_status === "false") {
             await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
         }
     }
@@ -646,6 +639,96 @@ export async function deviceResetAckHandler(message, topic) {
     }
     catch (error) {
         console.error("Error at device reset ack topic:", error);
+        throw error;
+    }
+}
+export async function deviceInfoAckHandler(message, topic) {
+    const macFromTopic = topic.split("/")[1];
+    const updatedFields = {};
+    try {
+        const validMac = await getStarterByMacWithMotor(macFromTopic);
+        if (!validMac?.id) {
+            console.error(`No starter found with given MAC [${topic}]`);
+            return null;
+        }
+        if (!message.D) {
+            console.error(`Invalid message data in device info ack`);
+            return null;
+        }
+        if (message.D.fw && message.D.fw !== validMac.hardware_version) {
+            updatedFields.hardware_version = message.D.fw;
+        }
+        const hasValue = (value) => value !== undefined && value !== null &&
+            typeof value === "string" && value.trim() !== "";
+        // SIM recharge expiration date (validated)
+        if (hasValue(message.D.val) && message.D.val !== validMac.sim_recharge_expires_at) {
+            updatedFields.sim_recharge_expires_at = message.D.val;
+        }
+        // SIM mobile number (validated)
+        if (hasValue(message.D.sim_num) && message.D.sim_num !== validMac.device_mobile_number) {
+            updatedFields.device_mobile_number = message.D.sim_num;
+        }
+        if (Object.keys(updatedFields).length > 0) {
+            await updateRecordById(starterBoxes, validMac.id, updatedFields);
+        }
+    }
+    catch (error) {
+        if (error?.code === "23505" || error?.cause?.code === "23505") {
+            const duplicateMobile = updatedFields.device_mobile_number;
+            logger.info(`Device Info ACK failed for ${macFromTopic} - Duplicate mobile number: ${duplicateMobile}`);
+            logger.mqtt(`Duplicate SIM number detected during device info ACK | MAC: ${macFromTopic} | Mobile: ${duplicateMobile}`);
+            return;
+        }
+        logger.error(`Device Info ACK error for ${macFromTopic}: ${error.message}`);
+        logger.mqtt(`MQTT Device Info ACK error | MAC: ${macFromTopic} | Error: ${error.message}`);
+        console.error("Error at device info ack handler:", error);
+    }
+}
+const ACTIVE_SCHEDULE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED"];
+export async function schedulingCreationAckHandler(message, topic) {
+    try {
+        const macFromTopic = topic.split("/")[1];
+        if (!message?.D || typeof message.D !== "object") {
+            console.error("Invalid scheduling ack payload: missing D object");
+            return null;
+        }
+        const { id: scheduleId, status } = message.D;
+        if (typeof scheduleId !== "number" || scheduleId <= 0) {
+            console.error(`Invalid schedule_id in scheduling ack: ${scheduleId}`);
+            return null;
+        }
+        if (status !== 0 && status !== 1) {
+            console.error(`Invalid status in scheduling ack: ${status}`);
+            return null;
+        }
+        // Find active schedule by schedule_id (per-motor auto-increment ID)
+        const schedule = await db.query.motorSchedules.findFirst({
+            where: and(eq(motorSchedules.schedule_id, scheduleId), inArray(motorSchedules.schedule_status, [...ACTIVE_SCHEDULE_STATUSES]), ne(motorSchedules.status, "ARCHIVED")),
+            columns: { id: true, schedule_id: true },
+        });
+        if (!schedule) {
+            console.error(`No active schedule found with schedule_id=${scheduleId} for ack from ${macFromTopic}`);
+            return null;
+        }
+        if (status === 1) {
+            // Device acknowledged successfully
+            await updateRecordById(motorSchedules, schedule.id, {
+                schedule_status: "SCHEDULED",
+                acknowledgement: 1,
+                acknowledged_at: new Date(),
+            });
+            logger.info(`Schedule ack success: schedule_id=${scheduleId}, db_id=${schedule.id}, from ${macFromTopic}`);
+        }
+        else {
+            // Device failed to acknowledge (status === 0)
+            await updateRecordById(motorSchedules, schedule.id, {
+                schedule_status: "FAILED",
+            });
+            logger.warn(`Schedule ack failed: schedule_id=${scheduleId}, db_id=${schedule.id}, from ${macFromTopic}`);
+        }
+    }
+    catch (error) {
+        console.error("Error at scheduling creation ack handler:", error);
         throw error;
     }
 }

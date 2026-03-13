@@ -1,0 +1,1 @@
+ALTER TABLE "starter_boxes" ADD COLUMN "sim_recharge_expires_at" varchar;

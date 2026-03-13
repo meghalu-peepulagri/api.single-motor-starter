@@ -8,11 +8,15 @@ import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { formatDuration, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
+import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
 
-export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?: string | null; hp?: number | null }>, trx?: any): Promise<void> {
+// Extract transaction type from Drizzle's db.transaction callback
+type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
+
+export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?: string | null; hp?: number | null }>, trx?: DbTransaction): Promise<void> {
   if (!motorsToUpdate || motorsToUpdate.length === 0) return;
 
   const queryBuilder = trx || db;
@@ -157,7 +161,7 @@ export async function trackMotorRunTime(params: {
   time_stamp?: string;
   previous_power_state?: number;
   new_power_state?: number;
-}, externalTrx?: any) {
+}, externalTrx?: DbTransaction) {
   const {
     starter_id,
     motor_id,
@@ -176,7 +180,7 @@ export async function trackMotorRunTime(params: {
   const now = time_stamp ? new Date(time_stamp) : new Date();
   const formattedDate = now.toISOString();
 
-  const action = async (trx: any) => {
+  const action = async (trx: DbTransaction) => {
     // Fetch the most recent open record for this motor
     const [openRecord] = await trx
       .select()
@@ -327,13 +331,13 @@ export async function trackDeviceRunTime(params: {
   motor_state: number;
   mode_description: string;
   time_stamp: string;
-}, externalTrx?: any) {
+}, externalTrx?: DbTransaction) {
   const { starter_id, motor_id, location_id, new_power_state, motor_state, mode_description, time_stamp } = params;
 
   if (!starter_id) return;
   const now = new Date(time_stamp);
 
-  const action = async (trx: any) => {
+  const action = async (trx: DbTransaction) => {
     const [openRecord] = await trx
       .select()
       .from(deviceRunTime)
@@ -395,15 +399,20 @@ export async function trackDeviceRunTime(params: {
   }
 }
 
-export async function getMotorRunTime(starterId: number, fromDateUTC: string, toDateUTC: string, motorId?: number, motorState?: string) {
+export async function getMotorRunTime(starterId: number, fromDateUTC: string, toDateUTC: string, motorId?: number, motorState?: string, isSingleDate?: boolean) {
 
   const from = new Date(fromDateUTC);
   const to = new Date(toDateUTC);
 
-  const filters = [
+  // Fetch records that overlap with the date range:
+  // start_time <= toDate AND (end_time >= fromDate OR end_time IS NULL)
+  const filters: (SQL | undefined)[] = [
     eq(motorsRunTime.starter_box_id, starterId),
-    gte(motorsRunTime.start_time, from),
     lte(motorsRunTime.start_time, to),
+    or(
+      gte(motorsRunTime.end_time, from),
+      isNull(motorsRunTime.end_time),
+    ),
   ];
 
   if (motorId) {
@@ -415,10 +424,9 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
     filters.push(eq(motorsRunTime.motor_state, motorStateNumber));
   }
 
-
   const records = await db.query.motorsRunTime.findMany({
     where: and(...filters),
-    orderBy: asc(motorsRunTime.time_stamp),
+    orderBy: asc(motorsRunTime.start_time),
     columns: {
       id: true,
       start_time: true,
@@ -433,6 +441,22 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
     }
   });
 
+  // Single date: split cross-midnight records to show only that date's runtime
+  // Date range: return original records as-is
+  if (isSingleDate) {
+    const splitRecords = splitRuntimeRecordsByDate(records, from, to);
+
+    const totalOnSeconds = splitRecords.reduce((sum, record) => {
+      if (record.motor_state !== 1 || !record.duration) return sum;
+      return sum + parseDurationToSeconds(record.duration);
+    }, 0);
+
+    return {
+      total_run_on_time: formatDuration(totalOnSeconds * 1000),
+      records: splitRecords,
+    };
+  }
+
   const totalRunTime = await getMotorTotalRunOnTime(starterId, fromDateUTC, toDateUTC, motorId);
   return {
     total_run_on_time: totalRunTime.total_run_on_time,
@@ -442,33 +466,75 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
 
 export async function getMotorTotalRunOnTime(starterId: number, fromDate: string, toDate: string, motorId?: number) {
   const fromDateObj = new Date(fromDate);
-  const toDateObj = new Date(toDate).toISOString();
+  const toDateObj = new Date(toDate);
 
   const records = await db.query.motorsRunTime.findMany({
     where: and(
       eq(motorsRunTime.starter_box_id, starterId),
-      gte(motorsRunTime.start_time, fromDateObj),
-      lte(motorsRunTime.time_stamp, toDateObj),
+      lte(motorsRunTime.start_time, toDateObj),
+      or(
+        gte(motorsRunTime.end_time, fromDateObj),
+        isNull(motorsRunTime.end_time),
+      ),
       eq(motorsRunTime.motor_state, 1),
       motorId ? eq(motorsRunTime.motor_id, motorId) : undefined
     ),
     columns: {
+      start_time: true,
+      end_time: true,
       duration: true,
+      motor_state: true,
     },
   });
 
-  const totalSeconds = records.reduce(
-    (sum, record) => sum + (record.duration ? parseDurationToSeconds(record.duration) : 0),
-    0
-  );
+  let totalSeconds = 0;
+  for (const record of records) {
+    if (record.motor_state !== 1) continue;
+    const start = new Date(record.start_time);
+    const end = record.end_time ? new Date(record.end_time) : toDateObj;
+    const segmentStart = start > fromDateObj ? start : fromDateObj;
+    const segmentEnd = end < toDateObj ? end : toDateObj;
+    if (segmentEnd > segmentStart) {
+      totalSeconds += Math.floor((segmentEnd.getTime() - segmentStart.getTime()) / 1000);
+    }
+  }
 
   return {
     total_run_on_time: formatDuration(totalSeconds * 1000),
   };
 }
 
+export async function getMotorsTotalRunOnTime(motorIds: number[]) {
+  if (!motorIds.length) return {};
+
+  const records = await db.query.motorsRunTime.findMany({
+    where: and(
+      inArray(motorsRunTime.motor_id, motorIds),
+      eq(motorsRunTime.motor_state, 1),
+    ),
+    columns: {
+      motor_id: true,
+      duration: true,
+    },
+  });
+
+  const runTimeMap: Record<number, string> = {};
+
+  const grouped: Record<number, number> = {};
+  for (const record of records) {
+    if (!record.motor_id || !record.duration) continue;
+    grouped[record.motor_id] = (grouped[record.motor_id] || 0) + parseDurationToSeconds(record.duration);
+  }
+
+  for (const [motorId, totalSeconds] of Object.entries(grouped)) {
+    runTimeMap[Number(motorId)] = formatDuration(totalSeconds * 1000);
+  }
+
+  return runTimeMap;
+}
+
 export async function updateStarterStatusWithTransaction(starterIds: number[]) {
-  const action = async (trx: any) => {
+  const action = async (trx: DbTransaction) => {
     // Update starters to INACTIVE
     const inActiveStarterIds = await trx
       .update(starterBoxes)

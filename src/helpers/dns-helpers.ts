@@ -50,11 +50,13 @@ export function parseQueryDates(query: any) {
   const IST = "Asia/Kolkata";
   const now = moment().tz(IST);
 
-  // Default → last 24 hours
+  // Default → today (IST day)
   if (!fromDate || !toDate) {
+    const startOfToday = now.clone().startOf("day");
+    const endOfToday = now.clone().endOf("day");
     return {
-      fromDateUTC: now.clone().subtract(24, "hours").utc().toISOString(),
-      toDateUTC: now.utc().toISOString(),
+      fromDateUTC: startOfToday.utc().toISOString(),
+      toDateUTC: endOfToday.utc().toISOString(),
     };
   }
 

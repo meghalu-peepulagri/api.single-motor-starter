@@ -92,9 +92,48 @@ export async function getConsecutiveGroupsCount(starterId, motorId, type, assign
     const countRes = await db.execute(countQuery);
     return Number(countRes.rows?.[0]?.total_groups ?? 0);
 }
-export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit, assignedAt = null, actionType = null) {
-    const query = sql `
-    SELECT * FROM (
+export function buildActivityActionFilter(logTypes) {
+    const includeOn = logTypes.includes("on");
+    const includeOff = logTypes.includes("off");
+    const includeModeChange = logTypes.includes("mode");
+    const includeAllActivity = logTypes.includes("activity");
+    // If only "activity" is present with no specific sub-types, return all activities
+    if (includeAllActivity && !includeOn && !includeOff && !includeModeChange)
+        return sql ``;
+    // Build OR conditions for specific activity sub-types
+    const conditions = [];
+    if (includeOn) {
+        conditions.push(sql `(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND new_data::text LIKE '%"state":1%')`);
+    }
+    if (includeOff) {
+        conditions.push(sql `(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND new_data::text LIKE '%"state":0%')`);
+    }
+    if (includeModeChange) {
+        conditions.push(sql `(action IN ('MOTOR_MODE_SYNC', 'MOTOR_MODE_ACK', 'MOTOR_MODE_UPDATED'))`);
+    }
+    if (includeAllActivity) {
+        // "activity" combined with specific sub-types: include everything else too
+        conditions.push(sql `(action NOT IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK', 'MOTOR_MODE_SYNC', 'MOTOR_MODE_ACK', 'MOTOR_MODE_UPDATED'))`);
+    }
+    if (conditions.length === 0)
+        return null; // no activity sub-types requested
+    if (conditions.length === 1)
+        return sql `AND ${conditions[0]}`;
+    return sql `AND (${conditions.reduce((acc, cond, i) => i === 0 ? cond : sql `${acc} OR ${cond}`)})`;
+}
+export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit, assignedAt = null, logTypes = null) {
+    // If no logTypes provided, include everything
+    const types = logTypes && logTypes.length > 0 ? logTypes : ["alert", "fault", "activity"];
+    const includeAlert = types.includes("alert");
+    const includeFault = types.includes("fault");
+    // Check if any activity sub-type is requested
+    const hasActivityType = types.includes("activity") || types.includes("on") || types.includes("off") || types.includes("mode");
+    const activityActionFilter = hasActivityType ? buildActivityActionFilter(types) : null;
+    const includeActivity = activityActionFilter !== null;
+    const assignedAtFilter = assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``;
+    const parts = [];
+    if (includeActivity) {
+        parts.push(sql `
       SELECT
         id,
         'activity' AS log_type,
@@ -108,11 +147,12 @@ export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit,
       FROM user_activity_logs
       WHERE device_id = ${starterId}
         AND (entity_type = 'STARTER' OR entity_id = ${motorId})
-        ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
-        ${actionType ? sql `AND action = ${actionType}` : sql ``}
-
-      UNION ALL
-
+        ${assignedAtFilter}
+        ${activityActionFilter}
+    `);
+    }
+    if (includeAlert) {
+        parts.push(sql `
       SELECT
         MAX(id) AS id,
         'alert' AS log_type,
@@ -145,10 +185,10 @@ export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit,
           ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) alert_groups
       GROUP BY starter_id, motor_id, alert_code, alert_description, grp
-      ${actionType ? sql `HAVING 'ALERT' = ${actionType}` : sql ``}
-
-      UNION ALL
-
+    `);
+    }
+    if (includeFault) {
+        parts.push(sql `
       SELECT
         MAX(id) AS id,
         'fault' AS log_type,
@@ -181,7 +221,16 @@ export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit,
           ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) fault_groups
       GROUP BY starter_id, motor_id, fault_code, fault_description, grp
-      ${actionType ? sql `HAVING 'FAULT' = ${actionType}` : sql ``}
+    `);
+    }
+    if (parts.length === 0)
+        return [];
+    const unionQuery = parts.length === 1
+        ? parts[0]
+        : parts.reduce((acc, part, i) => i === 0 ? part : sql `${acc} UNION ALL ${part}`);
+    const query = sql `
+    SELECT * FROM (
+      ${unionQuery}
     ) unified
     WHERE message IS NOT NULL
     ORDER BY timestamp DESC
@@ -191,19 +240,28 @@ export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit,
     const results = await db.execute(query);
     return results.rows ?? results;
 }
-export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null, actionType = null) {
-    const countQuery = sql `
-    SELECT COUNT(*) AS total FROM (
+export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null, logTypes = null) {
+    const types = logTypes && logTypes.length > 0 ? logTypes : ["alert", "fault", "activity"];
+    const includeAlert = types.includes("alert");
+    const includeFault = types.includes("fault");
+    const hasActivityType = types.includes("activity") || types.includes("on") || types.includes("off") || types.includes("mode");
+    const activityActionFilter = hasActivityType ? buildActivityActionFilter(types) : null;
+    const includeActivity = activityActionFilter !== null;
+    const assignedAtFilter = assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``;
+    const parts = [];
+    if (includeActivity) {
+        parts.push(sql `
       SELECT id, message
       FROM user_activity_logs
       WHERE device_id = ${starterId}
         AND (entity_type = 'STARTER' OR entity_id = ${motorId})
         AND message IS NOT NULL
-        ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
-        ${actionType ? sql `AND action = ${actionType}` : sql ``}
-
-      UNION ALL
-
+        ${assignedAtFilter}
+        ${activityActionFilter}
+    `);
+    }
+    if (includeAlert) {
+        parts.push(sql `
       SELECT MAX(id) AS id, alert_description AS message
       FROM (
         SELECT *,
@@ -227,10 +285,10 @@ export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null,
           ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) alert_groups
       GROUP BY starter_id, motor_id, alert_code, alert_description, grp
-      ${actionType ? sql `HAVING 'ALERT' = ${actionType}` : sql ``}
-
-      UNION ALL
-
+    `);
+    }
+    if (includeFault) {
+        parts.push(sql `
       SELECT MAX(id) AS id, fault_description AS message
       FROM (
         SELECT *,
@@ -254,7 +312,16 @@ export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null,
           ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) fault_groups
       GROUP BY starter_id, motor_id, fault_code, fault_description, grp
-      ${actionType ? sql `HAVING 'FAULT' = ${actionType}` : sql ``}
+    `);
+    }
+    if (parts.length === 0)
+        return 0;
+    const unionQuery = parts.length === 1
+        ? parts[0]
+        : parts.reduce((acc, part, i) => i === 0 ? part : sql `${acc} UNION ALL ${part}`);
+    const countQuery = sql `
+    SELECT COUNT(*) AS total FROM (
+      ${unionQuery}
     ) unified
   `;
     const countRes = await db.execute(countQuery);

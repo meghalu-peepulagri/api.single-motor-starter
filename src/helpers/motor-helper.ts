@@ -1,12 +1,26 @@
-import { ALREADY_SCHEDULED_EXISTS } from "../constants/app-constants.js";
+import {
+  ALREADY_SCHEDULED_EXISTS,
+  CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME,
+  CYCLE_ON_MINUTES_REQUIRED,
+  CYCLIC_NO_POWER_LOSS_RECOVERY,
+  CYCLIC_REQUIRES_REPEAT,
+  ONE_TIME_REQUIRES_START_DATE,
+  SCHEDULE_DATE_PAST,
+  SCHEDULE_GAP_CONFLICT,
+  SCHEDULE_MIN_ADVANCE,
+  SCHEDULE_OVERLAP_CONFLICT,
+  TIME_BASED_NO_REPEAT,
+} from "../constants/app-constants.js";
 
 import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
 import type { Motor, MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import type { arrayOfMotorInputType } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { motorState } from "./control-helpers.js";
+import { meaningfulModeMessage } from "./activity-helper.js";
 
 
 
@@ -162,40 +176,214 @@ export function extractPreviousData(previousData: any, motorId: number) {
   const prevMode = motor.mode ?? null;
   const locationId = motor.location_id ?? null;
   const created_by = motor.created_by ?? null;
-  const device_created_by = previousData?.created_b
-  const starter_number = previousData.starter_number ?? null;
-  const alias_name = motor.alias_name ?? null;
+  const device_created_by = previousData?.created_by;
 
-  return { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number, alias_name };
+  return { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number: previousData?.starter_number };
 }
 
-export async function checkMotorScheduleConflict(validatedReqData: any, existingMotorSchedule: any) {
-  if (!existingMotorSchedule)
-    return;
+// =================== SCHEDULE TIME UTILITIES ===================
 
-  const newStart = validatedReqData.output.start_time;
-  const newEnd = validatedReqData.output.end_time;
-  const existStart = existingMotorSchedule.start_time;
-  const existEnd = existingMotorSchedule.end_time;
+/** Convert "HH:mm" to total minutes from midnight */
+export function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
 
-  // Exact match
-  if (newStart === existStart && newEnd === existEnd) {
-    throw new ConflictException(ALREADY_SCHEDULED_EXISTS);
+/**
+ * Check if two time ranges overlap, accounting for midnight crossing.
+ * Each range is [start, end) in "HH:mm" format.
+ * Midnight crossing: start > end means the schedule wraps past midnight.
+ */
+export function doTimeRangesOverlap(
+  startA: string, endA: string,
+  startB: string, endB: string,
+): boolean {
+  const sA = timeToMinutes(startA);
+  const eA = timeToMinutes(endA);
+  const sB = timeToMinutes(startB);
+  const eB = timeToMinutes(endB);
+
+  // Split midnight-crossing ranges into two segments
+  const segmentsA = sA < eA
+    ? [{ s: sA, e: eA }]
+    : [{ s: sA, e: 1440 }, { s: 0, e: eA }];
+
+  const segmentsB = sB < eB
+    ? [{ s: sB, e: eB }]
+    : [{ s: sB, e: 1440 }, { s: 0, e: eB }];
+
+  for (const a of segmentsA) {
+    for (const b of segmentsB) {
+      if (a.s < b.e && b.s < a.e) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if two time ranges are within `gapMinutes` of each other.
+ * Returns true if the gap is LESS than gapMinutes (i.e., too close).
+ */
+export function areTimeRangesTooClose(
+  startA: string, endA: string,
+  startB: string, endB: string,
+  gapMinutes: number = 5,
+): boolean {
+  const sA = timeToMinutes(startA);
+  const eA = timeToMinutes(endA);
+  const sB = timeToMinutes(startB);
+  const eB = timeToMinutes(endB);
+
+  const segmentsA = sA < eA
+    ? [{ s: sA, e: eA }]
+    : [{ s: sA, e: 1440 }, { s: 0, e: eA }];
+
+  const segmentsB = sB < eB
+    ? [{ s: sB, e: eB }]
+    : [{ s: sB, e: 1440 }, { s: 0, e: eB }];
+
+  for (const a of segmentsA) {
+    for (const b of segmentsB) {
+      // Expand segment A by gapMinutes on both sides
+      const expandedAS = Math.max(0, a.s - gapMinutes);
+      const expandedAE = Math.min(1440, a.e + gapMinutes);
+      if (expandedAS < b.e && b.s < expandedAE) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if a new schedule's date/days actually overlap with an existing schedule.
+ * - For one-time schedules (repeat=0): must share the same schedule_start_date
+ * - For repeat schedules (repeat=1): must share at least one common day_of_week
+ */
+function hasDateOrDayOverlap(
+  newSchedule: {
+    repeat?: number;
+    schedule_start_date?: string | null;
+    days_of_week?: number[];
+  },
+  existing: {
+    schedule_start_date?: string | null;
+    days_of_week?: number[];
+  },
+): boolean {
+  const isNewRepeat = (newSchedule.repeat ?? 0) === 1;
+
+  if (isNewRepeat) {
+    // Repeat schedule: conflict only if they share at least one common day
+    const newDays = newSchedule.days_of_week || [];
+    const existingDays = existing.days_of_week || [];
+    if (newDays.length === 0 || existingDays.length === 0) return true; // no day info, assume conflict
+    return newDays.some(d => existingDays.includes(d));
   }
 
-  //  Overlap check (if times intersect at all)
-  // The only case where there is NO conflict is when:
-  const isOverlapping = !(newEnd <= existStart || newStart >= existEnd);
+  // One-time schedule: conflict only if same schedule_start_date
+  const newDate = newSchedule.schedule_start_date;
+  const existingDate = existing.schedule_start_date;
+  if (!newDate || !existingDate) return true; // no date info, assume conflict
+  return newDate === existingDate;
+}
 
-  if (isOverlapping) {
-    throw new ConflictException(
-      "Schedule overlaps with an existing schedule",
-    );
+/**
+ * Full conflict check against an array of existing schedules.
+ * Checks date/day overlap first, then time overlaps and 5-minute gap violations.
+ */
+export function checkMotorScheduleConflict(
+  newSchedule: {
+    start_time: string;
+    end_time: string;
+    repeat?: number;
+    schedule_start_date?: string | null;
+    days_of_week?: number[];
+  },
+  existingSchedules: Array<{
+    id: number;
+    start_time: string;
+    end_time: string;
+    schedule_start_date?: string | null;
+    days_of_week?: number[];
+  }>,
+): void {
+  if (!existingSchedules || existingSchedules.length === 0) return;
+
+  for (const existing of existingSchedules) {
+    // Skip if no date/day overlap
+    if (!hasDateOrDayOverlap(newSchedule, existing)) continue;
+
+    const conflictInfo = {
+      conflicting_schedule_id: existing.id,
+      existing_start_time: existing.start_time,
+      existing_end_time: existing.end_time,
+      existing_date: existing.schedule_start_date || null,
+      existing_days: existing.days_of_week || [],
+    };
+
+    // Check exact match
+    if (newSchedule.start_time === existing.start_time && newSchedule.end_time === existing.end_time) {
+      throw new ConflictException(
+        `${ALREADY_SCHEDULED_EXISTS} (${existing.start_time} - ${existing.end_time})`,
+        conflictInfo,
+      );
+    }
+
+    // Check direct overlap
+    if (doTimeRangesOverlap(
+      newSchedule.start_time, newSchedule.end_time,
+      existing.start_time, existing.end_time,
+    )) {
+      throw new ConflictException(
+        `${SCHEDULE_OVERLAP_CONFLICT} (conflicts with ${existing.start_time} - ${existing.end_time})`,
+        conflictInfo,
+      );
+    }
+
+    // Check 5-min gap
+    if (areTimeRangesTooClose(
+      newSchedule.start_time, newSchedule.end_time,
+      existing.start_time, existing.end_time,
+      5,
+    )) {
+      throw new ConflictException(
+        `${SCHEDULE_GAP_CONFLICT} (too close to ${existing.start_time} - ${existing.end_time})`,
+        conflictInfo,
+      );
+    }
+  }
+}
+
+/**
+ * Validate that a schedule is created at least 5 minutes before its start_time.
+ * For ONE_TIME schedules, also validates that schedule_date is not in the past.
+ */
+export function validateScheduleAdvanceTime(
+  startTime: string,
+  scheduleDate?: string | null,
+): void {
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+
+  if (scheduleDate) {
+    if (scheduleDate < todayStr) {
+      throw new BadRequestException(SCHEDULE_DATE_PAST);
+    }
+    if (scheduleDate > todayStr) {
+      return; // future date, no advance-time check needed
+    }
+  }
+
+  // Schedule is for today — check 5-min advance
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = timeToMinutes(startTime);
+
+  if (startMinutes - nowMinutes < 5) {
+    throw new BadRequestException(SCHEDULE_MIN_ADVANCE);
   }
 }
 
 //prepare motor control notification
-export function prepareMotorStateControlNotificationData(motor: Motor, newState: number, mode_description: string, starter_id: number, starter_number?: string | null): { userId: number; title: string; message: string; motorId: number, starterId: number } | null {
+export function prepareMotorStateControlNotificationData(motor: Motor, newState: number, mode_description: string, starter_id: number, starter_number: string): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string } | null {
   const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
   const title = newState === 1
     ? `Pump ${pumpName} state turned ON${mode_description ? ` with mode ${mode_description}` : ""}`
@@ -204,7 +392,18 @@ export function prepareMotorStateControlNotificationData(motor: Motor, newState:
       : `Pump ${pumpName} state Unable to update due to: ${motorState(Number(newState))}`;
 
   // Prepare notification message
-  const messageContent = (newState === 0 || newState === 1) ? `State updated to '${motorState(Number(newState))}' with mode '${mode_description}'` : `State not updated due to '${motorState(Number(newState))}'`
+  let messageContent: string;
+  if (newState === 1) {
+    messageContent = mode_description === "AUTO"
+      ? "The pump is now ON in AUTO mode after power recovery."
+      : "The pump is running in MANUAL mode.";
+  } else if (newState === 0) {
+    messageContent = mode_description === "AUTO"
+      ? "The pump is OFF in AUTO mode due to power failure."
+      : "The pump is stopped in MANUAL mode.";
+  } else {
+    messageContent = `State not updated due to '${motorState(Number(newState))}'`;
+  }
 
   // Check if user exists (allow 0 as valid user ID)
   if (motor.created_by !== null && motor.created_by !== undefined) {
@@ -213,21 +412,21 @@ export function prepareMotorStateControlNotificationData(motor: Motor, newState:
       title: title,
       message: messageContent,
       motorId: motor.id,
-      starterId: starter_id
+      starterId: starter_id,
+      starterNumber: starter_number,
     };
   }
 
   return null;
 }
 
-export function prepareMotorModeControlNotificationData(motor: any, mode_description: string, starter_id: number, starter_number?: string | null): { userId: number; title: string; message: string; motorId: number, starterId: number } | null {
+export function prepareMotorModeControlNotificationData(motor: any, mode_description: string, starter_id: number, starter_number: string): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string } | null {
   const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
   const title = mode_description === "MANUAL" || mode_description === "AUTO" ? `Pump ${pumpName} mode updated to from ${motor.mode} to ${mode_description}`
     : `Pump ${pumpName} Mode not updated due to ${mode_description}`;
 
   // Prepare notification message
-  const messageContent = (mode_description === "MANUAL" || mode_description === "AUTO")
-    ? `Mode updated from '${motor.mode}' to '${mode_description}'` : `Mode not updated due to '${mode_description}'`;
+  const messageContent = meaningfulModeMessage(motor.mode, mode_description);
 
   // Check if user exists (allow 0 as valid user ID)
   if (motor.created_by !== null && motor.created_by !== undefined) {
@@ -236,9 +435,33 @@ export function prepareMotorModeControlNotificationData(motor: any, mode_descrip
       title: title,
       message: messageContent,
       motorId: motor.id,
-      starterId: starter_id
+      starterId: starter_id,
+      starterNumber: starter_number,
     };
   }
 
   return null;
+}
+
+export function validateScheduleTypeRules(data: {
+  schedule_type?: string;
+  repeat?: number;
+  power_loss_recovery?: boolean;
+  cycle_on_minutes?: number | null;
+  cycle_off_minutes?: number | null;
+  schedule_start_date?: string | null;
+}) {
+  const scheduleType = data.schedule_type || "TIME_BASED";
+
+  if (scheduleType === "CYCLIC") {
+    if (data.repeat !== 1) throw new BadRequestException(CYCLIC_REQUIRES_REPEAT);
+    if (data.power_loss_recovery) throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);
+    if (!data.cycle_on_minutes || !data.cycle_off_minutes) throw new BadRequestException(CYCLE_ON_MINUTES_REQUIRED);
+  }
+
+  if (scheduleType === "TIME_BASED") {
+    if (data.repeat === 1) throw new BadRequestException(TIME_BASED_NO_REPEAT);
+    if (!data.schedule_start_date) throw new BadRequestException(ONE_TIME_REQUIRES_START_DATE);
+    if (data.cycle_on_minutes || data.cycle_off_minutes) throw new BadRequestException(CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME);
+  }
 }

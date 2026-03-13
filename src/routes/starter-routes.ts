@@ -11,13 +11,14 @@ starterRoutes.post("/", isAuthorized, starterHandlers.addStarterBoxHandler);
 starterRoutes.get("/mobile", isAuthorized, starterHandlers.starterListMobileHandler);
 starterRoutes.get("/web/all", isAuthorized, isSuperAdminOrAdmin, starterHandlers.starterListWebHandler);
 starterRoutes.get("/dashboard-counts", isAuthorized, starterHandlers.starterCountBasedOnStatusHandler);
+starterRoutes.get("/latest-pcb-number", isAuthorized, starterHandlers.getLatestPcbNumberHandler);
+starterRoutes.get("/sim-recharge-expiry-notifications", starterHandlers.simRechargeExpiryNotificationHandler);
 
 starterRoutes.patch("/assign", isAuthorized, starterHandlers.assignStarterMobileHandler);
 starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWebHandler);
 starterRoutes.patch("/assign-location", isAuthorized, starterHandlers.assignLocationToStarterHandler);
 starterRoutes.patch("/replace", isAuthorized, starterHandlers.replaceStarterLocationHandler);
 starterRoutes.patch("/update-status", starterHandlers.markStarterStatusHandler);
-starterRoutes.get("/latest-pcb-number", isAuthorized, starterHandlers.getLatestPcbNumberHandler);
 
 starterRoutes.get("/:id/run-time", isAuthorized, starterHandlers.starterRunTimeHandler);
 starterRoutes.get("/:id/analytics", isAuthorized, starterHandlers.starterAnalyticsHandler);
