@@ -1,19 +1,20 @@
 import * as v from "valibot";
+import { todayAsYYMMDD } from "../../helpers/motor-schedule-payload-helper.js";
 import { CYCLE_OFF_MINUTES_MIN, CYCLE_ON_MINUTES_REQUIRED, DAYS_OF_WEEK_ENUM, DAYS_OF_WEEK_REQUIRED_FOR_REPEAT, DAYS_OF_WEEK_REQUIRED_FOR_REPEAT_SCHEDULE, INVALID_DAYS_WEEK, INVALID_SCHEDULED_STATUS, INVALID_SCHEDULED_TYPE, MOTOR_ID_REQUIRED, REPEAT_REQUIRES_CYCLE, RUNTIME_MINUTES_MIN, SCHEDULE_DATE_REQUIRED_FOR_ONE_TIME, SCHEDULE_END_TIME_INVALID, SCHEDULE_END_TIME_REQUIRED, SCHEDULE_START_DATE_FORMAT, SCHEDULE_END_DATE_FORMAT, SCHEDULE_START_TIME_INVALID, SCHEDULE_START_TIME_REQUIRED, SCHEDULE_STATUS, SCHEDULE_TYPE_IS_REQUIRED, SCHEDULE_TYPES, START_TIME_BEFORE_END_TIME, SCHEDULE_DATE_PAST, SCHEDULE_END_DATE_PAST, SCHEDULE_END_DATE_BEFORE_START, STARTER_ID_REQUIRED } from "../../constants/app-constants.js";
 import { enable01 } from "../../helpers/settings-helpers.js";
 // =================== CREATE SCHEDULE VALIDATOR ===================
 export const vAddMotorSchedule = v.pipe(v.object({
     motor_id: v.pipe(v.number(MOTOR_ID_REQUIRED), v.custom((value) => typeof value === "number" && Number.isInteger(value) && value > 0, "Invalid motor id")),
-    starter_id: v.nullish(v.pipe(v.number(STARTER_ID_REQUIRED), v.custom((value) => typeof value === "number" && Number.isInteger(value) && value > 0, "Invalid starter id"))),
+    starter_id: v.pipe(v.number(STARTER_ID_REQUIRED), v.custom((value) => typeof value === "number" && Number.isInteger(value) && value > 0, "Invalid starter id")),
     schedule_type: v.pipe(v.string(SCHEDULE_TYPE_IS_REQUIRED), v.nonEmpty(SCHEDULE_TYPE_IS_REQUIRED), v.picklist(SCHEDULE_TYPES, INVALID_SCHEDULED_TYPE)),
-    start_time: v.pipe(v.string(SCHEDULE_START_TIME_REQUIRED), v.nonEmpty(SCHEDULE_START_TIME_REQUIRED), v.regex(/^([01]\d|2[0-3]):([0-5]\d)$/, SCHEDULE_START_TIME_INVALID)),
-    end_time: v.pipe(v.string(SCHEDULE_END_TIME_REQUIRED), v.nonEmpty(SCHEDULE_END_TIME_REQUIRED), v.regex(/^([01]\d|2[0-3]):([0-5]\d)$/, SCHEDULE_END_TIME_INVALID)),
+    start_time: v.pipe(v.string(SCHEDULE_START_TIME_REQUIRED), v.nonEmpty(SCHEDULE_START_TIME_REQUIRED), v.regex(/^([01]\d|2[0-3])([0-5]\d)$/, SCHEDULE_START_TIME_INVALID)),
+    end_time: v.pipe(v.string(SCHEDULE_END_TIME_REQUIRED), v.nonEmpty(SCHEDULE_END_TIME_REQUIRED), v.regex(/^([01]\d|2[0-3])([0-5]\d)$/, SCHEDULE_END_TIME_INVALID)),
     // Optional for one-time date-based schedules; required for repeat schedules
     days_of_week: v.nullish(v.pipe(v.array(v.number()), v.custom((val) => Array.isArray(val) && val.every((day) => DAYS_OF_WEEK_ENUM.includes(day)), INVALID_DAYS_WEEK))),
-    // Schedule start date (YYYY-MM-DD)
-    schedule_start_date: v.nullish(v.pipe(v.string(), v.regex(/^\d{4}-\d{2}-\d{2}$/, SCHEDULE_START_DATE_FORMAT))),
-    // Schedule end date (YYYY-MM-DD)
-    schedule_end_date: v.nullish(v.pipe(v.string(), v.regex(/^\d{4}-\d{2}-\d{2}$/, SCHEDULE_END_DATE_FORMAT))),
+    // Schedule start date (numeric YYMMDD, e.g., 260415)
+    schedule_start_date: v.pipe(v.number(SCHEDULE_START_DATE_FORMAT), v.custom((val) => typeof val === "number" && Number.isInteger(val) && val >= 0 && val <= 991231, SCHEDULE_START_DATE_FORMAT)),
+    // Schedule end date (numeric YYMMDD, e.g., 260416)
+    schedule_end_date: v.pipe(v.number(SCHEDULE_END_DATE_FORMAT), v.custom((val) => typeof val === "number" && Number.isInteger(val) && val >= 0 && val <= 991231, SCHEDULE_END_DATE_FORMAT)),
     // TIME_BASED: optional runtime quota in minutes
     runtime_minutes: v.nullish(v.pipe(v.number(), v.custom((val) => typeof val === "number" && Number.isInteger(val) && val >= 1, RUNTIME_MINUTES_MIN))),
     // CYCLIC: ON/OFF durations in minutes
@@ -22,7 +23,7 @@ export const vAddMotorSchedule = v.pipe(v.object({
     power_loss_recovery: v.nullish(v.boolean()),
     schedule_status: v.nullish(v.picklist(SCHEDULE_STATUS, INVALID_SCHEDULED_STATUS)),
     repeat: v.nullish(v.union([v.literal(0), v.literal(1)], "Repeat must be 0 or 1")),
-    enabled: v.nullish(v.boolean()),
+    enabled: v.optional(v.boolean()),
     bit_wise_days: v.nullish(v.number()),
 }), 
 // Cross-field: CYCLIC schedules require cycle_on_minutes and cycle_off_minutes
@@ -58,16 +59,14 @@ v.custom((data) => {
 // Cross-field: schedule_start_date must not be in the past
 v.custom((data) => {
     if (data.schedule_start_date) {
-        const today = new Date().toISOString().split("T")[0];
-        return data.schedule_start_date >= today;
+        return data.schedule_start_date >= todayAsYYMMDD();
     }
     return true;
 }, SCHEDULE_DATE_PAST), 
 // Cross-field: schedule_end_date must not be in the past
 v.custom((data) => {
     if (data.schedule_end_date) {
-        const today = new Date().toISOString().split("T")[0];
-        return data.schedule_end_date >= today;
+        return data.schedule_end_date >= todayAsYYMMDD();
     }
     return true;
 }, SCHEDULE_END_DATE_PAST), 
@@ -82,10 +81,12 @@ v.custom((data) => {
 v.custom((data) => {
     return data.start_time !== data.end_time;
 }, START_TIME_BEFORE_END_TIME), 
-// Cross-field: auto-calculate runtime_minutes from start_time and end_time
+// Cross-field: auto-calculate runtime_minutes from start_time and end_time (4-digit HHMM string)
 v.transform((data) => {
-    const [sh, sm] = data.start_time.split(":").map(Number);
-    const [eh, em] = data.end_time.split(":").map(Number);
+    const sh = parseInt(data.start_time.substring(0, 2), 10);
+    const sm = parseInt(data.start_time.substring(2, 4), 10);
+    const eh = parseInt(data.end_time.substring(0, 2), 10);
+    const em = parseInt(data.end_time.substring(2, 4), 10);
     let diff = (eh * 60 + em) - (sh * 60 + sm);
     if (diff <= 0)
         diff += 24 * 60;

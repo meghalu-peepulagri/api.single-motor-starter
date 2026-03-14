@@ -3,13 +3,11 @@ import {
   CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME,
   CYCLE_ON_MINUTES_REQUIRED,
   CYCLIC_NO_POWER_LOSS_RECOVERY,
-  CYCLIC_REQUIRES_REPEAT,
   ONE_TIME_REQUIRES_START_DATE,
   SCHEDULE_DATE_PAST,
   SCHEDULE_GAP_CONFLICT,
   SCHEDULE_MIN_ADVANCE,
-  SCHEDULE_OVERLAP_CONFLICT,
-  TIME_BASED_NO_REPEAT,
+  SCHEDULE_OVERLAP_CONFLICT
 } from "../constants/app-constants.js";
 
 import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
@@ -19,10 +17,8 @@ import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import type { arrayOfMotorInputType } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
-import { motorState } from "./control-helpers.js";
 import { meaningfulModeMessage } from "./activity-helper.js";
-
-
+import { motorState } from "./control-helpers.js";
 
 
 
@@ -184,15 +180,16 @@ export function extractPreviousData(previousData: any, motorId: number) {
 // =================== SCHEDULE TIME UTILITIES ===================
 
 /** Convert "HH:mm" to total minutes from midnight */
+/** Convert 4-digit HHMM string to total minutes. e.g., "0600" → 360, "1430" → 870 */
 export function timeToMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
+  const h = parseInt(time.substring(0, 2), 10);
+  const m = parseInt(time.substring(2, 4), 10);
   return h * 60 + m;
 }
 
 /**
  * Check if two time ranges overlap, accounting for midnight crossing.
- * Each range is [start, end) in "HH:mm" format.
- * Midnight crossing: start > end means the schedule wraps past midnight.
+ * Each range is [start, end) in 4-digit HHMM string format (e.g., "0600", "1430").
  */
 export function doTimeRangesOverlap(
   startA: string, endA: string,
@@ -203,7 +200,6 @@ export function doTimeRangesOverlap(
   const sB = timeToMinutes(startB);
   const eB = timeToMinutes(endB);
 
-  // Split midnight-crossing ranges into two segments
   const segmentsA = sA < eA
     ? [{ s: sA, e: eA }]
     : [{ s: sA, e: 1440 }, { s: 0, e: eA }];
@@ -244,7 +240,6 @@ export function areTimeRangesTooClose(
 
   for (const a of segmentsA) {
     for (const b of segmentsB) {
-      // Expand segment A by gapMinutes on both sides
       const expandedAS = Math.max(0, a.s - gapMinutes);
       const expandedAE = Math.min(1440, a.e + gapMinutes);
       if (expandedAS < b.e && b.s < expandedAE) return true;
@@ -261,11 +256,11 @@ export function areTimeRangesTooClose(
 function hasDateOrDayOverlap(
   newSchedule: {
     repeat?: number;
-    schedule_start_date?: string | null;
+    schedule_start_date?: number | null;
     days_of_week?: number[];
   },
   existing: {
-    schedule_start_date?: string | null;
+    schedule_start_date?: number | null;
     days_of_week?: number[];
   },
 ): boolean {
@@ -295,14 +290,14 @@ export function checkMotorScheduleConflict(
     start_time: string;
     end_time: string;
     repeat?: number;
-    schedule_start_date?: string | null;
+    schedule_start_date?: number | null;
     days_of_week?: number[];
   },
   existingSchedules: Array<{
     id: number;
     start_time: string;
     end_time: string;
-    schedule_start_date?: string | null;
+    schedule_start_date?: number | null;
     days_of_week?: number[];
   }>,
 ): void {
@@ -449,19 +444,20 @@ export function validateScheduleTypeRules(data: {
   power_loss_recovery?: boolean;
   cycle_on_minutes?: number | null;
   cycle_off_minutes?: number | null;
-  schedule_start_date?: string | null;
+  schedule_start_date?: number | null;
+  schedule_end_date?: number | null;
 }) {
   const scheduleType = data.schedule_type || "TIME_BASED";
 
   if (scheduleType === "CYCLIC") {
-    if (data.repeat !== 1) throw new BadRequestException(CYCLIC_REQUIRES_REPEAT);
-    if (data.power_loss_recovery) throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);
+    if (data.power_loss_recovery === true) throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);
     if (!data.cycle_on_minutes || !data.cycle_off_minutes) throw new BadRequestException(CYCLE_ON_MINUTES_REQUIRED);
   }
 
   if (scheduleType === "TIME_BASED") {
-    if (data.repeat === 1) throw new BadRequestException(TIME_BASED_NO_REPEAT);
     if (!data.schedule_start_date) throw new BadRequestException(ONE_TIME_REQUIRES_START_DATE);
+    if (!data.schedule_end_date) throw new BadRequestException("End date is required for TIME_BASED schedules");
+    if (data.schedule_end_date && data.schedule_end_date < data.schedule_start_date) throw new BadRequestException(SCHEDULE_DATE_PAST);
     if (data.cycle_on_minutes || data.cycle_off_minutes) throw new BadRequestException(CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME);
   }
 }

@@ -43,6 +43,7 @@ import {
   formatMotorScheduleResponse,
   normalizeMotorSchedulePayload,
   normalizeRepeatDaysPayload,
+  todayAsYYMMDD,
 } from "../helpers/motor-schedule-payload-helper.js";
 import {
   getRecordById,
@@ -94,7 +95,7 @@ export class MotorScheduleHandler {
       validateScheduleTypeRules(data);
 
       // Use user-provided schedule_start_date for one-time schedules, fallback to today
-      const scheduleStartDate = data.schedule_start_date || new Date().toISOString().split("T")[0];
+      const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
 
       // Conflict detection: fetch potential conflicts by date/days, then check time overlap
       const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
@@ -187,7 +188,7 @@ export class MotorScheduleHandler {
       validateScheduleTypeRules(data);
 
       // Conflict detection: fetch potential conflicts by date/days, then check time overlap
-      const scheduleStartDate = data.schedule_start_date || new Date().toISOString().split("T")[0];
+      const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
       const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
       const existingSchedules = await findConflictingSchedules(
         existedSchedule.motor_id, conflictDate, data.days_of_week || [], scheduleId,

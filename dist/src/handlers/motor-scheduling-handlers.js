@@ -9,7 +9,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { checkMotorScheduleConflict, validateScheduleTypeRules, } from "../helpers/motor-helper.js";
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-helper.js";
-import { buildDeviceSyncPayloads, buildScheduleData, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, } from "../helpers/motor-schedule-payload-helper.js";
+import { buildDeviceSyncPayloads, buildScheduleData, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, todayAsYYMMDD, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { batchUpdateScheduleStatuses, cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
 import { publishData } from "../services/db/mqtt-db-services.js";
@@ -31,7 +31,7 @@ export class MotorScheduleHandler {
                 throw new BadRequestException(MOTOR_NOT_FOUND);
             validateScheduleTypeRules(data);
             // Use user-provided schedule_start_date for one-time schedules, fallback to today
-            const scheduleStartDate = data.schedule_start_date || new Date().toISOString().split("T")[0];
+            const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
             // Conflict detection: fetch potential conflicts by date/days, then check time overlap
             const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
             const existingSchedules = await findConflictingSchedules(existedMotor.id, conflictDate, data.days_of_week || []);
@@ -104,7 +104,7 @@ export class MotorScheduleHandler {
             }
             validateScheduleTypeRules(data);
             // Conflict detection: fetch potential conflicts by date/days, then check time overlap
-            const scheduleStartDate = data.schedule_start_date || new Date().toISOString().split("T")[0];
+            const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
             const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
             const existingSchedules = await findConflictingSchedules(existedSchedule.motor_id, conflictDate, data.days_of_week || [], scheduleId);
             checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate }, existingSchedules);

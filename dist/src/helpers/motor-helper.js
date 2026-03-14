@@ -142,21 +142,21 @@ export function extractPreviousData(previousData, motorId) {
 }
 // =================== SCHEDULE TIME UTILITIES ===================
 /** Convert "HH:mm" to total minutes from midnight */
+/** Convert 4-digit HHMM string to total minutes. e.g., "0600" → 360, "1430" → 870 */
 export function timeToMinutes(time) {
-    const [h, m] = time.split(":").map(Number);
+    const h = parseInt(time.substring(0, 2), 10);
+    const m = parseInt(time.substring(2, 4), 10);
     return h * 60 + m;
 }
 /**
  * Check if two time ranges overlap, accounting for midnight crossing.
- * Each range is [start, end) in "HH:mm" format.
- * Midnight crossing: start > end means the schedule wraps past midnight.
+ * Each range is [start, end) in 4-digit HHMM string format (e.g., "0600", "1430").
  */
 export function doTimeRangesOverlap(startA, endA, startB, endB) {
     const sA = timeToMinutes(startA);
     const eA = timeToMinutes(endA);
     const sB = timeToMinutes(startB);
     const eB = timeToMinutes(endB);
-    // Split midnight-crossing ranges into two segments
     const segmentsA = sA < eA
         ? [{ s: sA, e: eA }]
         : [{ s: sA, e: 1440 }, { s: 0, e: eA }];
@@ -188,7 +188,6 @@ export function areTimeRangesTooClose(startA, endA, startB, endB, gapMinutes = 5
         : [{ s: sB, e: 1440 }, { s: 0, e: eB }];
     for (const a of segmentsA) {
         for (const b of segmentsB) {
-            // Expand segment A by gapMinutes on both sides
             const expandedAS = Math.max(0, a.s - gapMinutes);
             const expandedAE = Math.min(1440, a.e + gapMinutes);
             if (expandedAS < b.e && b.s < expandedAE)

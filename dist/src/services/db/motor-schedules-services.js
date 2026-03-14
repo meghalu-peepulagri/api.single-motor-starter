@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
+import { dateToYYMMDD } from "../../helpers/motor-schedule-payload-helper.js";
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"];
 // =================== AUTO-INCREMENT SCHEDULE ID PER MOTOR ===================
 /**
@@ -201,14 +202,14 @@ export async function findPendingSchedulesForSync() {
     yesterday.setDate(today.getDate() - 1);
     const threeDaysLater = new Date(today);
     threeDaysLater.setDate(today.getDate() + 3);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
-    const threeDaysStr = threeDaysLater.toISOString().split("T")[0];
-    const todayStr = today.toISOString().split("T")[0];
+    const yesterdayNum = dateToYYMMDD(yesterday);
+    const threeDaysNum = dateToYYMMDD(threeDaysLater);
+    const todayNum = dateToYYMMDD(today);
     return await db.query.motorSchedules.findMany({
         where: and(eq(motorSchedules.acknowledgement, 0), eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]), sql `(
         ${motorSchedules.repeat} = 1
-        OR (${motorSchedules.schedule_start_date} >= ${todayStr} AND ${motorSchedules.schedule_start_date} <= ${threeDaysStr})
-        OR (${motorSchedules.schedule_start_date} = ${yesterdayStr} AND ${motorSchedules.start_time} > ${motorSchedules.end_time})
+        OR (${motorSchedules.schedule_start_date} >= ${todayNum} AND ${motorSchedules.schedule_start_date} <= ${threeDaysNum})
+        OR (${motorSchedules.schedule_start_date} = ${yesterdayNum} AND ${motorSchedules.start_time} > ${motorSchedules.end_time})
       )`),
         columns: {
             id: true,
