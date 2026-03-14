@@ -22,7 +22,7 @@ export const vAddMotorSchedule = v.pipe(v.object({
     cycle_off_minutes: v.nullish(v.pipe(v.number(), v.custom((val) => typeof val === "number" && Number.isInteger(val) && val >= 1, CYCLE_OFF_MINUTES_MIN))),
     power_loss_recovery: v.nullish(v.boolean()),
     schedule_status: v.nullish(v.picklist(SCHEDULE_STATUS, INVALID_SCHEDULED_STATUS)),
-    repeat: v.nullish(v.union([v.literal(0), v.literal(1)], "Repeat must be 0 or 1")),
+    repeat: v.optional(v.union([v.literal(0), v.literal(1)], "Repeat must be 0 or 1")),
     enabled: v.optional(v.boolean()),
     bit_wise_days: v.nullish(v.number()),
 }), 

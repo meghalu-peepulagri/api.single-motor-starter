@@ -278,10 +278,12 @@ export async function trackMotorRunTime(params: {
 
     // Case 3: Only power state changed (motor state same)
     if (powerStateChanged && !motorStateChanged) {
-      // Close the current power session in the existing record
+      // Close the current motor + power session and start a new segment
       await trx
         .update(motorsRunTime)
         .set({
+          end_time: now,
+          duration: motorDurationFormatted,
           power_end: formattedDate,
           power_duration: powerDurationFormatted,
           time_stamp: formattedDate,
@@ -352,35 +354,51 @@ export async function trackDeviceRunTime(params: {
           isNull(deviceRunTime.end_time)
         )
       )
-      .orderBy(desc(deviceRunTime.start_time));
+      .orderBy(desc(deviceRunTime.start_time))
+      .limit(1);
 
-    if (!openRecord) {
-      return await trx.insert(deviceRunTime).values({
-        motor_id,
-        starter_box_id: starter_id,
-        location_id,
+      if (!openRecord) {
+        return await trx.insert(deviceRunTime).values({
+          motor_id,
+          starter_box_id: starter_id,
+          location_id,
         start_time: now,
         end_time: null,
         duration: null,
         motor_state,
         motor_mode: mode_description,
         power_state: new_power_state,
-        signal_strength: null,
-        time_stamp
-      });
-    }
-    const durationMs = now.getTime() - new Date(openRecord.start_time).getTime();
-    const durationFormatted = formatDuration(durationMs);
+          signal_strength: null,
+          time_stamp
+        });
+      }
+      // Skip out-of-order messages: if incoming timestamp is older than the open record's start_time
+      if (now.getTime() < new Date(openRecord.start_time).getTime()) {
+        return;
+      }
 
-    if (openRecord.power_state !== new_power_state) {
+      const motorStateChanged = openRecord.motor_state !== motor_state;
+      const powerStateChanged = openRecord.power_state !== new_power_state;
+
+      // No state change: keep the record open and avoid creating duplicates
+      if (!motorStateChanged && !powerStateChanged) {
+        await trx.update(deviceRunTime).set({
+          updated_at: now
+        }).where(eq(deviceRunTime.id, openRecord.id));
+        return;
+      }
+
+      const durationMs = now.getTime() - new Date(openRecord.start_time).getTime();
+      const durationFormatted = formatDuration(durationMs);
 
       await trx.update(deviceRunTime).set({
         end_time: now,
         duration: durationFormatted,
-        updated_at: now
+        updated_at: now,
+        time_stamp
       }).where(eq(deviceRunTime.id, openRecord.id));
 
-      // Insert new runtime session
+      // Insert new runtime session starting exactly at previous end_time
       return await trx.insert(deviceRunTime).values({
         motor_id,
         starter_box_id: starter_id,
@@ -394,7 +412,6 @@ export async function trackDeviceRunTime(params: {
         signal_strength: null,
         time_stamp
       });
-    }
   };
 
   if (externalTrx) {

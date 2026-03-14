@@ -201,23 +201,33 @@ function normalizeSingleSchedulePayload(payload) {
     const scheduleType = inferScheduleType(payload);
     const startTime = normalizeTime(payload.st ?? payload.start_time ?? payload.start);
     const runtimeMinutes = toInteger(payload.runtime_minutes ?? payload.dur);
-    const explicitEnd = normalizeTime(payload.et ?? payload.end_time ?? payload.end);
+    const rawEndInput = payload.et ?? payload.end_time ?? payload.end;
+    const hasEndInput = !(rawEndInput === undefined
+        || rawEndInput === null
+        || (typeof rawEndInput === "string" && rawEndInput.trim() === ""));
+    const explicitEnd = normalizeTime(rawEndInput);
     let endTime = explicitEnd;
-    if (endTime === undefined && startTime !== undefined && runtimeMinutes !== undefined && runtimeMinutes > 0) {
+    if (!hasEndInput && endTime === undefined && startTime !== undefined && runtimeMinutes !== undefined && runtimeMinutes > 0) {
         endTime = addMinutesToTime(startTime, runtimeMinutes);
     }
-    if (endTime === undefined && scheduleType === "CYCLIC") {
+    if (!hasEndInput && endTime === undefined && scheduleType === "CYCLIC") {
         endTime = "2359";
     }
     const cycleOnMinutes = toInteger(payload.cycle_on_minutes ?? payload.on);
     const cycleOffMinutes = toInteger(payload.cycle_off_minutes ?? payload.off);
+    const rawRepeat = payload.repeat ?? payload.rep;
+    const hasRepeatInput = !(rawRepeat === undefined
+        || rawRepeat === null
+        || (typeof rawRepeat === "string" && rawRepeat.trim() === ""));
+    const repeatRaw = toInteger(rawRepeat);
+    const repeat = repeatRaw === 0 || repeatRaw === 1 ? repeatRaw : undefined;
     const daysOfWeek = normalizeDays(payload.days_of_week ?? payload.days) ?? [];
     const scheduleStartDate = normalizeDate(payload.sd ?? payload.schedule_start_date ?? payload.schedule_date ?? payload.date);
     const scheduleEndDate = normalizeDate(payload.ed ?? payload.schedule_end_date);
     const powerLossRecovery = to01(payload.power_loss_recovery ?? payload.pwr_rec);
     const enabled = to01(payload.en);
     const finalStartTime = startTime ?? payload.start_time;
-    const finalEndTime = endTime ?? payload.end_time;
+    const finalEndTime = hasEndInput ? (explicitEnd ?? rawEndInput) : (endTime ?? payload.end_time);
     const normalized = {
         ...payload,
         schedule_type: scheduleType,
@@ -225,16 +235,17 @@ function normalizeSingleSchedulePayload(payload) {
         schedule_end_date: scheduleEndDate ?? payload.schedule_end_date ?? null,
         start_time: finalStartTime,
         end_time: finalEndTime,
+        repeat: hasRepeatInput ? (repeat ?? rawRepeat) : 0,
         cycle_on_minutes: cycleOnMinutes ?? payload.cycle_on_minutes,
         cycle_off_minutes: cycleOffMinutes ?? payload.cycle_off_minutes,
         days_of_week: daysOfWeek,
     };
-    // power_loss_recovery: TIME_BASED allows 0 or 1, CYCLIC always forced to 0
-    if (scheduleType === "CYCLIC") {
-        normalized.power_loss_recovery = false;
-    }
-    else if (powerLossRecovery !== undefined) {
+    // power_loss_recovery: keep explicit input for validation; default CYCLIC to false only if not provided
+    if (powerLossRecovery !== undefined) {
         normalized.power_loss_recovery = powerLossRecovery === 1;
+    }
+    else if (scheduleType === "CYCLIC") {
+        normalized.power_loss_recovery = false;
     }
     if (enabled !== undefined && normalized.schedule_status === undefined) {
         normalized.schedule_status = enabled === 1 ? "PENDING" : "PAUSED";
