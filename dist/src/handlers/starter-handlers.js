@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
 import { gateways } from "../database/schemas/gateways.js";
@@ -338,9 +338,13 @@ export class StarterHandlers {
             paramsValidateException.validateId(starterId, "Device id");
             paramsValidateException.emptyBodyValidation(reqData);
             const validatedReqData = await validatedRequest("update-deployed-status", reqData, STARTER_BOX_VALIDATION_CRITERIA);
-            const starterBox = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "device_status", "status"]);
+            const starterBox = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "device_status", "status", "device_allocation"]);
             if (!starterBox)
                 throw new BadRequestException(STARTER_BOX_NOT_FOUND);
+            const isTestToDeployed = starterBox.device_status === "TEST" && validatedReqData.deploy_status === "DEPLOYED";
+            if (isTestToDeployed && starterBox.device_allocation === "false") {
+                throw new BadRequestException(DEVICE_NOT_ALLOCATED);
+            }
             const updateData = { device_status: validatedReqData.deploy_status };
             if (validatedReqData.deploy_status === "DEPLOYED") {
                 updateData.deployed_at = new Date();
@@ -531,11 +535,30 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             const currentCount = starter.allocation_status_count ?? 0;
+            const previousAllocation = starter.device_allocation ?? "false";
             if (userPayload.user_type !== "SUPER_ADMIN" && allocationStatus === "true" && starter.device_allocation === "false" && currentCount >= 1) {
                 throw new UnauthorizedException("Unauthorized");
             }
-            const newCount = (allocationStatus === "true" && starter.device_allocation === "false") ? currentCount + 1 : currentCount;
-            await updateRecordById(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount });
+            if (allocationStatus === previousAllocation) {
+                return sendResponse(c, 200, "Device allocation status updated successfully");
+            }
+            const newCount = (allocationStatus === "true" && previousAllocation === "false") ? currentCount + 1 : currentCount;
+            let allocationAction = null;
+            let messageLog = null;
+            if (previousAllocation === "false" && allocationStatus === "true") {
+                allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
+                messageLog = newCount === 1 ? "Allocated" : "Reallocated";
+            }
+            else if (previousAllocation === "true" && allocationStatus === "false") {
+                allocationAction = "DEVICE_DEALLOCATED";
+                messageLog = "Deallocated";
+            }
+            await db.transaction(async (trx) => {
+                await updateRecordByIdWithTrx(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount }, trx);
+                if (allocationAction && messageLog) {
+                    await ActivityService.writeDeviceAllocationLog(userPayload.id, starterId, allocationAction, { device_allocation: previousAllocation, allocation_status_count: currentCount }, { device_allocation: allocationStatus, allocation_status_count: newCount }, messageLog, trx);
+                }
+            });
             return sendResponse(c, 200, "Device allocation status updated successfully");
         }
         catch (error) {
