@@ -541,7 +541,7 @@ export async function deviceSerialNumberAllocationAckHandler(message, topic) {
             await db.transaction(async (trx) => {
                 await updateRecordByIdWithTrx(starterBoxes, starter.id, { device_allocation: "false" }, trx);
                 if (userId) {
-                    await ActivityService.writeDeviceAllocationLog(userId, starter.id, "DEVICE_DEALLOCATED", { device_allocation: previousAllocation, allocation_status_count: currentCount }, { device_allocation: "false", allocation_status_count: currentCount }, "Deallocated", trx);
+                    await ActivityService.writeDeviceAllocationLog(userId, starter.id, "DEVICE_DEALLOCATED", { device_allocation: previousAllocation, allocation_status_count: currentCount }, { device_allocation: "false", allocation_status_count: currentCount }, "Device Deallocated", trx);
                 }
             });
             return;

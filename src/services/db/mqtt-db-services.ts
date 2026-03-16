@@ -650,7 +650,7 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
             "DEVICE_DEALLOCATED",
             { device_allocation: previousAllocation, allocation_status_count: currentCount },
             { device_allocation: "false", allocation_status_count: currentCount },
-            "Deallocated",
+            "Device Deallocated",
             trx,
           );
         }
