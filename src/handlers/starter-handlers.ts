@@ -731,7 +731,8 @@ export class StarterHandlers {
         sim_recharge_expires_at: starterBoxes.sim_recharge_expires_at,
         motor_alias_name: motors.alias_name,
         motor_created_by: motors.created_by,
-        created_by: starterBoxes.created_by
+        created_by: starterBoxes.created_by,
+        motor_id: motors.id
       }).from(starterBoxes)
         .leftJoin(motors, and(eq(motors.starter_id, starterBoxes.id), ne(motors.status, "ARCHIVED")))
         .where(
@@ -785,8 +786,8 @@ export class StarterHandlers {
           message = `Your SIM recharge for device ${deviceName} expires today (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
         }
 
-        if (title && userId) {
-          await sendUserNotification(userId, title, message, starter.id, starter.id);
+        if (title && userId && starter.motor_id) {
+          await sendUserNotification(userId, title, message, starter.motor_id, starter.id);
           notificationsSent++;
         }
       }
