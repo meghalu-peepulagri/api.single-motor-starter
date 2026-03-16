@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { todayAsYYMMDD } from "../../helpers/motor-schedule-payload-helper.js";
 import {
   CYCLE_OFF_MINUTES_MIN,
   CYCLE_ON_MINUTES_REQUIRED,
@@ -40,7 +41,7 @@ export const vAddMotorSchedule = v.pipe(
       ),
     ),
 
-    starter_id: v.nullish(
+    starter_id:
       v.pipe(
         v.number(STARTER_ID_REQUIRED),
         v.custom(
@@ -48,7 +49,6 @@ export const vAddMotorSchedule = v.pipe(
           "Invalid starter id",
         ),
       ),
-    ),
 
     schedule_type: v.pipe(
       v.string(SCHEDULE_TYPE_IS_REQUIRED),
@@ -59,13 +59,13 @@ export const vAddMotorSchedule = v.pipe(
     start_time: v.pipe(
       v.string(SCHEDULE_START_TIME_REQUIRED),
       v.nonEmpty(SCHEDULE_START_TIME_REQUIRED),
-      v.regex(/^([01]\d|2[0-3]):([0-5]\d)$/, SCHEDULE_START_TIME_INVALID),
+      v.regex(/^([01]\d|2[0-3])([0-5]\d)$/, SCHEDULE_START_TIME_INVALID),
     ),
 
     end_time: v.pipe(
       v.string(SCHEDULE_END_TIME_REQUIRED),
       v.nonEmpty(SCHEDULE_END_TIME_REQUIRED),
-      v.regex(/^([01]\d|2[0-3]):([0-5]\d)$/, SCHEDULE_END_TIME_INVALID),
+      v.regex(/^([01]\d|2[0-3])([0-5]\d)$/, SCHEDULE_END_TIME_INVALID),
     ),
 
     // Optional for one-time date-based schedules; required for repeat schedules
@@ -80,21 +80,25 @@ export const vAddMotorSchedule = v.pipe(
       ),
     ),
 
-    // Schedule start date (YYYY-MM-DD)
-    schedule_start_date: v.nullish(
+    // Schedule start date (numeric YYMMDD, e.g., 260415)
+    schedule_start_date:
       v.pipe(
-        v.string(),
-        v.regex(/^\d{4}-\d{2}-\d{2}$/, SCHEDULE_START_DATE_FORMAT),
+        v.number(SCHEDULE_START_DATE_FORMAT),
+        v.custom(
+          (val: unknown) => typeof val === "number" && Number.isInteger(val) && val >= 0 && val <= 991231,
+          SCHEDULE_START_DATE_FORMAT,
+        ),
       ),
-    ),
 
-    // Schedule end date (YYYY-MM-DD)
-    schedule_end_date: v.nullish(
+    // Schedule end date (numeric YYMMDD, e.g., 260416)
+    schedule_end_date:
       v.pipe(
-        v.string(),
-        v.regex(/^\d{4}-\d{2}-\d{2}$/, SCHEDULE_END_DATE_FORMAT),
+        v.number(SCHEDULE_END_DATE_FORMAT),
+        v.custom(
+          (val: unknown) => typeof val === "number" && Number.isInteger(val) && val >= 0 && val <= 991231,
+          SCHEDULE_END_DATE_FORMAT,
+        ),
       ),
-    ),
 
     // TIME_BASED: optional runtime quota in minutes
     runtime_minutes: v.nullish(
@@ -131,8 +135,8 @@ export const vAddMotorSchedule = v.pipe(
     power_loss_recovery: v.nullish(v.boolean()),
 
     schedule_status: v.nullish(v.picklist(SCHEDULE_STATUS, INVALID_SCHEDULED_STATUS)),
-    repeat: v.nullish(v.union([v.literal(0), v.literal(1)], "Repeat must be 0 or 1")),
-    enabled: v.nullish(v.boolean()),
+    repeat: v.optional(v.union([v.literal(0), v.literal(1)], "Repeat must be 0 or 1")),
+    enabled: v.optional(v.boolean()),
     bit_wise_days: v.nullish(v.number()),
   }),
 
@@ -173,8 +177,7 @@ export const vAddMotorSchedule = v.pipe(
   // Cross-field: schedule_start_date must not be in the past
   v.custom((data: any) => {
     if (data.schedule_start_date) {
-      const today = new Date().toISOString().split("T")[0];
-      return data.schedule_start_date >= today;
+      return data.schedule_start_date >= todayAsYYMMDD();
     }
     return true;
   }, SCHEDULE_DATE_PAST),
@@ -182,8 +185,7 @@ export const vAddMotorSchedule = v.pipe(
   // Cross-field: schedule_end_date must not be in the past
   v.custom((data: any) => {
     if (data.schedule_end_date) {
-      const today = new Date().toISOString().split("T")[0];
-      return data.schedule_end_date >= today;
+      return data.schedule_end_date >= todayAsYYMMDD();
     }
     return true;
   }, SCHEDULE_END_DATE_PAST),
@@ -201,10 +203,12 @@ export const vAddMotorSchedule = v.pipe(
     return data.start_time !== data.end_time;
   }, START_TIME_BEFORE_END_TIME),
 
-  // Cross-field: auto-calculate runtime_minutes from start_time and end_time
+  // Cross-field: auto-calculate runtime_minutes from start_time and end_time (4-digit HHMM string)
   v.transform((data: any) => {
-    const [sh, sm] = data.start_time.split(":").map(Number);
-    const [eh, em] = data.end_time.split(":").map(Number);
+    const sh = parseInt(data.start_time.substring(0, 2), 10);
+    const sm = parseInt(data.start_time.substring(2, 4), 10);
+    const eh = parseInt(data.end_time.substring(0, 2), 10);
+    const em = parseInt(data.end_time.substring(2, 4), 10);
     let diff = (eh * 60 + em) - (sh * 60 + sm);
     if (diff <= 0) diff += 24 * 60;
     return { ...data, runtime_minutes: diff };

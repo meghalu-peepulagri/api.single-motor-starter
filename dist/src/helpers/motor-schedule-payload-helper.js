@@ -37,23 +37,52 @@ function normalizeScheduleType(value) {
         return "CYCLIC";
     return undefined;
 }
+/**
+ * Normalize any time input to 4-digit zero-padded HHMM string.
+ * Accepts: number 600, string "5", "25", "600", "0005", "06:00" → returns "0600", "0005" etc.
+ */
 function normalizeTime(value) {
-    if (typeof value !== "string")
+    let h;
+    let m;
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 2359) {
+        h = Math.floor(value / 100);
+        m = value % 100;
+    }
+    else if (typeof value === "string") {
+        const trimmed = value.trim();
+        // HH:MM format
+        const colonMatch = trimmed.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+        if (colonMatch) {
+            h = parseInt(colonMatch[1], 10);
+            m = parseInt(colonMatch[2], 10);
+        }
+        else if (/^\d{1,4}$/.test(trimmed)) {
+            // 1-4 digit string: pad to 4, split HHMM
+            const padded = trimmed.padStart(4, "0");
+            h = parseInt(padded.substring(0, 2), 10);
+            m = parseInt(padded.substring(2, 4), 10);
+        }
+        else {
+            return undefined;
+        }
+    }
+    else {
         return undefined;
-    const trimmed = value.trim();
-    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(trimmed))
+    }
+    if (h < 0 || h > 23 || m < 0 || m > 59)
         return undefined;
-    return trimmed;
+    return `${String(h).padStart(2, "0")}${String(m).padStart(2, "0")}`;
 }
 function formatTimeFromMinutes(totalMinutes) {
     const minutesInDay = 24 * 60;
     const normalized = ((totalMinutes % minutesInDay) + minutesInDay) % minutesInDay;
     const hours = Math.floor(normalized / 60);
     const minutes = normalized % 60;
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}${String(minutes).padStart(2, "0")}`;
 }
-function addMinutesToTime(time, minutesToAdd) {
-    const [h, m] = time.split(":").map(Number);
+function addMinutesToTime(hhmm, minutesToAdd) {
+    const h = parseInt(hhmm.substring(0, 2), 10);
+    const m = parseInt(hhmm.substring(2, 4), 10);
     return formatTimeFromMinutes((h * 60) + m + minutesToAdd);
 }
 function decodeDaysMask(mask) {
@@ -77,15 +106,88 @@ function normalizeDays(days) {
         return undefined;
     return decodeDaysMask(mask);
 }
+/**
+ * Normalize any date input to numeric YYMMDD integer.
+ * Accepts: number 260606, string "260606", "20260606", "2026-06-06" → returns 260606
+ */
 function normalizeDate(value) {
+    // Already numeric YYMMDD (e.g., 260606)
+    if (typeof value === "number" && Number.isInteger(value)) {
+        return validateAndReturnYYMMDD(value);
+    }
     if (typeof value !== "string")
         return undefined;
     const trimmed = value.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed))
+    // YYYY-MM-DD format → convert to numeric YYMMDD
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+        const yy = parseInt(isoMatch[1], 10) - 2000;
+        const mm = parseInt(isoMatch[2], 10);
+        const dd = parseInt(isoMatch[3], 10);
+        return validateAndReturnYYMMDD(yy * 10000 + mm * 100 + dd);
+    }
+    // String YYYYMMDD format (e.g., "20260606")
+    if (/^\d{8}$/.test(trimmed)) {
+        const yy = parseInt(trimmed.substring(0, 4), 10) - 2000;
+        const mm = parseInt(trimmed.substring(4, 6), 10);
+        const dd = parseInt(trimmed.substring(6, 8), 10);
+        return validateAndReturnYYMMDD(yy * 10000 + mm * 100 + dd);
+    }
+    // String YYMMDD format (e.g., "260606")
+    if (/^\d{6}$/.test(trimmed)) {
+        return validateAndReturnYYMMDD(parseInt(trimmed, 10));
+    }
+    return undefined;
+}
+function validateAndReturnYYMMDD(value) {
+    const str = String(value).padStart(6, "0");
+    if (str.length > 6)
         return undefined;
-    return trimmed;
+    const yy = parseInt(str.substring(0, 2), 10);
+    const mm = parseInt(str.substring(2, 4), 10);
+    const dd = parseInt(str.substring(4, 6), 10);
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31)
+        return undefined;
+    const yyyy = 2000 + yy;
+    const dateObj = new Date(yyyy, mm - 1, dd);
+    if (dateObj.getFullYear() !== yyyy || dateObj.getMonth() !== mm - 1 || dateObj.getDate() !== dd)
+        return undefined;
+    return value;
+}
+/** Convert numeric YYMMDD to "YYYY-MM-DD" string (for display/legacy) */
+export function numericToDateString(value) {
+    const str = String(value).padStart(6, "0");
+    const yy = parseInt(str.substring(0, 2), 10);
+    const mm = str.substring(2, 4);
+    const dd = str.substring(4, 6);
+    return `${2000 + yy}-${mm}-${dd}`;
+}
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // +5:30 in milliseconds
+/** Convert a Date to IST and return { yy, mm, dd } */
+function toISTDate(date) {
+    const istTime = new Date(date.getTime() + IST_OFFSET_MS);
+    return {
+        yy: istTime.getUTCFullYear() - 2000,
+        mm: istTime.getUTCMonth() + 1,
+        dd: istTime.getUTCDate(),
+    };
+}
+/** Convert current IST date to numeric YYMMDD */
+export function todayAsYYMMDD() {
+    const { yy, mm, dd } = toISTDate(new Date());
+    return yy * 10000 + mm * 100 + dd;
+}
+/** Convert a Date object to numeric YYMMDD (IST) */
+export function dateToYYMMDD(date) {
+    const { yy, mm, dd } = toISTDate(date);
+    return yy * 10000 + mm * 100 + dd;
 }
 function inferScheduleType(payload) {
+    // Accept cy: 1 = CYCLIC, cy: 0 or absent = TIME_BASED
+    if (payload.cy === 1)
+        return "CYCLIC";
+    if (payload.cy === 0)
+        return "TIME_BASED";
     const directType = normalizeScheduleType(payload.schedule_type) ?? normalizeScheduleType(payload.sch_type);
     if (directType)
         return directType;
@@ -97,25 +199,35 @@ function inferScheduleType(payload) {
 }
 function normalizeSingleSchedulePayload(payload) {
     const scheduleType = inferScheduleType(payload);
-    const startTime = normalizeTime(payload.start_time ?? payload.start);
+    const startTime = normalizeTime(payload.st ?? payload.start_time ?? payload.start);
     const runtimeMinutes = toInteger(payload.runtime_minutes ?? payload.dur);
-    const explicitEnd = normalizeTime(payload.end_time ?? payload.end);
+    const rawEndInput = payload.et ?? payload.end_time ?? payload.end;
+    const hasEndInput = !(rawEndInput === undefined
+        || rawEndInput === null
+        || (typeof rawEndInput === "string" && rawEndInput.trim() === ""));
+    const explicitEnd = normalizeTime(rawEndInput);
     let endTime = explicitEnd;
-    if (!endTime && startTime && runtimeMinutes !== undefined && runtimeMinutes > 0) {
+    if (!hasEndInput && endTime === undefined && startTime !== undefined && runtimeMinutes !== undefined && runtimeMinutes > 0) {
         endTime = addMinutesToTime(startTime, runtimeMinutes);
     }
-    if (!endTime && scheduleType === "CYCLIC") {
-        endTime = "23:59";
+    if (!hasEndInput && endTime === undefined && scheduleType === "CYCLIC") {
+        endTime = "2359";
     }
     const cycleOnMinutes = toInteger(payload.cycle_on_minutes ?? payload.on);
     const cycleOffMinutes = toInteger(payload.cycle_off_minutes ?? payload.off);
+    const rawRepeat = payload.repeat ?? payload.rep;
+    const hasRepeatInput = !(rawRepeat === undefined
+        || rawRepeat === null
+        || (typeof rawRepeat === "string" && rawRepeat.trim() === ""));
+    const repeatRaw = toInteger(rawRepeat);
+    const repeat = repeatRaw === 0 || repeatRaw === 1 ? repeatRaw : undefined;
     const daysOfWeek = normalizeDays(payload.days_of_week ?? payload.days) ?? [];
-    const scheduleStartDate = normalizeDate(payload.schedule_start_date ?? payload.schedule_date ?? payload.date);
-    const scheduleEndDate = normalizeDate(payload.schedule_end_date);
+    const scheduleStartDate = normalizeDate(payload.sd ?? payload.schedule_start_date ?? payload.schedule_date ?? payload.date);
+    const scheduleEndDate = normalizeDate(payload.ed ?? payload.schedule_end_date);
     const powerLossRecovery = to01(payload.power_loss_recovery ?? payload.pwr_rec);
     const enabled = to01(payload.en);
     const finalStartTime = startTime ?? payload.start_time;
-    const finalEndTime = endTime ?? payload.end_time;
+    const finalEndTime = hasEndInput ? (explicitEnd ?? rawEndInput) : (endTime ?? payload.end_time);
     const normalized = {
         ...payload,
         schedule_type: scheduleType,
@@ -123,12 +235,17 @@ function normalizeSingleSchedulePayload(payload) {
         schedule_end_date: scheduleEndDate ?? payload.schedule_end_date ?? null,
         start_time: finalStartTime,
         end_time: finalEndTime,
+        repeat: hasRepeatInput ? (repeat ?? rawRepeat) : 0,
         cycle_on_minutes: cycleOnMinutes ?? payload.cycle_on_minutes,
         cycle_off_minutes: cycleOffMinutes ?? payload.cycle_off_minutes,
         days_of_week: daysOfWeek,
     };
+    // power_loss_recovery: keep explicit input for validation; default CYCLIC to false only if not provided
     if (powerLossRecovery !== undefined) {
         normalized.power_loss_recovery = powerLossRecovery === 1;
+    }
+    else if (scheduleType === "CYCLIC") {
+        normalized.power_loss_recovery = false;
     }
     if (enabled !== undefined && normalized.schedule_status === undefined) {
         normalized.schedule_status = enabled === 1 ? "PENDING" : "PAUSED";
@@ -172,7 +289,7 @@ export function buildScheduleData(data, scheduleStartDate) {
         runtime_minutes: data.runtime_minutes || null,
         cycle_on_minutes: scheduleType === "CYCLIC" ? data.cycle_on_minutes : null,
         cycle_off_minutes: scheduleType === "CYCLIC" ? data.cycle_off_minutes : null,
-        power_loss_recovery: scheduleType === "CYCLIC" ? false : (data.power_loss_recovery ?? false),
+        power_loss_recovery: scheduleType === "CYCLIC" ? false : (data.power_loss_recovery === true),
         repeat: data.repeat ?? 0,
     };
 }
