@@ -13,6 +13,8 @@
     "logs": "tsx src/scripts/view-logs.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1009.0",
+    "@aws-sdk/s3-request-presigner": "^3.1009.0",
     "@core-services/mqtt": "^1.0.0",
     "@hono/node-server": "^1.19.6",
     "argon2": "^0.44.0",

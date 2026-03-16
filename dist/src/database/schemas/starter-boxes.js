@@ -35,6 +35,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     allocation_status_count: integer("allocation_status_count").default(0),
     device_reset_status: varchar("device_reset_status").default("false"), // need to write in boolean
     sim_recharge_expires_at: varchar("sim_recharge_expires_at"),
+    installation_photo_key: varchar("installation_photo_key"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),

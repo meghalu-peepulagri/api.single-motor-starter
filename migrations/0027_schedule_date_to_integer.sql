@@ -1,2 +1,4 @@
+UPDATE "motor_schedules" SET "schedule_start_date" = NULL WHERE "schedule_start_date" !~ '^\d{2}/\d{2}/\d{2}$';--> statement-breakpoint
+UPDATE "motor_schedules" SET "schedule_end_date" = NULL WHERE "schedule_end_date" !~ '^\d{2}/\d{2}/\d{2}$';--> statement-breakpoint
 ALTER TABLE "motor_schedules" ALTER COLUMN "schedule_start_date" SET DATA TYPE integer USING ((SUBSTRING(schedule_start_date, 3, 2)::integer) * 10000 + (SUBSTRING(schedule_start_date, 6, 2)::integer) * 100 + (SUBSTRING(schedule_start_date, 9, 2)::integer));--> statement-breakpoint
 ALTER TABLE "motor_schedules" ALTER COLUMN "schedule_end_date" SET DATA TYPE integer USING ((SUBSTRING(schedule_end_date, 3, 2)::integer) * 10000 + (SUBSTRING(schedule_end_date, 6, 2)::integer) * 100 + (SUBSTRING(schedule_end_date, 9, 2)::integer));

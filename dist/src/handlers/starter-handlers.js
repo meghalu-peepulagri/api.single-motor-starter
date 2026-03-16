@@ -23,6 +23,7 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
+import { generateUploadUrl, generateDownloadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
@@ -138,7 +139,7 @@ export class StarterHandlers {
                     motor_name: updatedMotor.alias_name
                 }, trx);
             });
-            return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
+            return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY, { starter_id: starterBox.id });
         }
         catch (error) {
             console.error("Error at assign starter :", error);
@@ -383,6 +384,9 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             const connectedMotors = await starterConnectedMotors(starterId);
+            if (connectedMotors?.installation_photo_key) {
+                connectedMotors.installation_photo_url = await generateDownloadUrl(connectedMotors.installation_photo_key);
+            }
             return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
         }
         catch (error) {
@@ -637,6 +641,23 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at device reset handler :", error);
+            throw error;
+        }
+    };
+    getInstallationPhotoUploadUrlHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("id");
+            paramsValidateException.validateId(starterId, "Device id");
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            const contentType = c.req.query("content_type") || "image/jpeg";
+            const { uploadUrl, key } = await generateUploadUrl(starterId, contentType);
+            await updateRecordById(starterBoxes, starterId, { installation_photo_key: key });
+            return sendResponse(c, 200, "Upload URL generated successfully", { upload_url: uploadUrl, key });
+        }
+        catch (error) {
+            console.error("Error at get installation photo upload url :", error);
             throw error;
         }
     };

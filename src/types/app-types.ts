@@ -69,6 +69,7 @@ export interface AssignStarterType {
   motor_name: string;
   location_id: number;
   hp: number;
+  installation_photo_key?: string;
 }
 
 export interface RetryOptions {

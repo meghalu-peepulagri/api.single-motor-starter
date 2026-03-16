@@ -1,0 +1,1 @@
+ALTER TABLE "starter_boxes" ADD COLUMN "installation_photo_key" varchar;
