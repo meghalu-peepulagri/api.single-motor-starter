@@ -691,6 +691,10 @@ export class StarterHandlers {
                     title = `SIM Recharge Expiring Tomorrow - ${deviceName}`;
                     message = `Your SIM recharge for device ${deviceName} expires tomorrow (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
                 }
+                else if (diffDays === 0) {
+                    title = `SIM Recharge Expires Today - ${deviceName}`;
+                    message = `Your SIM recharge for device ${deviceName} expires today (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
+                }
                 if (title && userId) {
                     await sendUserNotification(userId, title, message, starter.id, starter.id);
                     notificationsSent++;
