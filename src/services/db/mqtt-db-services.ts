@@ -663,7 +663,7 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
 
     const newCount = currentCount + 1;
     const allocationAction: "DEVICE_ALLOCATED" | "DEVICE_REALLOCATED" = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
-    const message_log = newCount === 1 ? "Allocated" : "Reallocated";
+    const message_log = newCount === 1 ? "Device Allocated" : "Device Reallocated";
 
     await db.transaction(async (trx) => {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter.id, { device_allocation: "true", allocation_status_count: newCount }, trx);

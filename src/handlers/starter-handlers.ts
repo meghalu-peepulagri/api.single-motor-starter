@@ -611,10 +611,10 @@ export class StarterHandlers {
 
       if (previousAllocation === "false" && allocationStatus === "true") {
         allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
-        messageLog = newCount === 1 ? "Allocated" : "Reallocated";
+        messageLog = newCount === 1 ? "Device Allocated" : "Device Reallocated";
       } else if (previousAllocation === "true" && allocationStatus === "false") {
         allocationAction = "DEVICE_DEALLOCATED";
-        messageLog = "Deallocated";
+        messageLog = "Device Deallocated";
       }
 
       await db.transaction(async (trx) => {
