@@ -11,6 +11,7 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
+import { log } from "node:util";
 export async function bulkMotorsUpdate(motorsToUpdate, trx) {
     if (!motorsToUpdate || motorsToUpdate.length === 0)
         return;
