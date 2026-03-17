@@ -284,6 +284,7 @@ export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
 export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
 export const DEVICE_RESET_SUCCESSFULLY = "Device reset successfully";
 export const SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT = "SIM recharge expiry notifications sent";
+export const DEVICE_INFO_REQUEST_SENT = "Device info request sent successfully";
 
 // Bridge Service
 export const BRIDGE_AGENT_NOT_FOUND = "Agent ID is required";

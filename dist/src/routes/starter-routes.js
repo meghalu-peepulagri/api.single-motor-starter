@@ -10,6 +10,7 @@ starterRoutes.get("/web/all", isAuthorized, isSuperAdminOrAdmin, starterHandlers
 starterRoutes.get("/dashboard-counts", isAuthorized, starterHandlers.starterCountBasedOnStatusHandler);
 starterRoutes.get("/latest-pcb-number", isAuthorized, starterHandlers.getLatestPcbNumberHandler);
 starterRoutes.get("/sim-recharge-expiry-notifications", starterHandlers.simRechargeExpiryNotificationHandler);
+starterRoutes.get("/device-info-request", starterHandlers.deviceInfoRequestHandler);
 starterRoutes.patch("/assign", isAuthorized, starterHandlers.assignStarterMobileHandler);
 starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWebHandler);
 starterRoutes.patch("/assign-location", isAuthorized, starterHandlers.assignLocationToStarterHandler);

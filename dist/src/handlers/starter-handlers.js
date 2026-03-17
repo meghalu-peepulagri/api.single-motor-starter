@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_INFO_REQUEST_SENT, DEVICE_NOT_ALLOCATED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
 import { gateways } from "../database/schemas/gateways.js";
@@ -22,10 +22,12 @@ import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStart
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import { generateUploadUrl, generateDownloadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBoxHandler = async (c) => {
@@ -726,6 +728,42 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at sim recharge expiry notification handler :", error);
+            throw error;
+        }
+    };
+    deviceInfoRequestHandler = async (c) => {
+        try {
+            const allDevices = await db.query.starterBoxes.findMany({
+                where: ne(starterBoxes.status, "ARCHIVED"),
+            });
+            const BATCH_SIZE = 10;
+            const BATCH_DELAY_MS = 60 * 1000; // 1 minute between batches
+            // Fire-and-forget: process batches in background
+            (async () => {
+                for (let i = 0; i < allDevices.length; i += BATCH_SIZE) {
+                    const batch = allDevices.slice(i, i + BATCH_SIZE);
+                    for (const device of batch) {
+                        const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
+                        publishMultipleTimesInBackground(deviceInfoPayload, device);
+                    }
+                    logger.info(`Device info request: batch ${Math.floor(i / BATCH_SIZE) + 1} sent (${batch.length} devices)`);
+                    // Wait 1 minute before next batch (skip delay after last batch)
+                    if (i + BATCH_SIZE < allDevices.length) {
+                        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+                    }
+                }
+                logger.info(`Device info request: all ${allDevices.length} devices processed`);
+            })();
+            const totalBatches = Math.ceil(allDevices.length / BATCH_SIZE);
+            return sendResponse(c, 200, DEVICE_INFO_REQUEST_SENT, {
+                total_devices: allDevices.length,
+                batch_size: BATCH_SIZE,
+                total_batches: totalBatches,
+                estimated_time_minutes: totalBatches - 1,
+            });
+        }
+        catch (error) {
+            console.error("Error at device info request handler :", error);
             throw error;
         }
     };
