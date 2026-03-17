@@ -45,6 +45,7 @@ export const motorSchedules = pgTable("motor_schedules", {
 
   // Power loss recovery: track actual ON time, extend schedule to compensate
   power_loss_recovery: boolean("power_loss_recovery").default(false).notNull(),
+  power_loss_recovery_time: integer("power_loss_recovery_time").default(30),
 
   // Accumulated actual ON time in seconds (updated by device/MQTT layer)
   accumulated_on_seconds: integer("accumulated_on_seconds").default(0),

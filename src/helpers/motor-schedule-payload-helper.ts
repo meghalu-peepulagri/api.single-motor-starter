@@ -311,6 +311,7 @@ export function buildScheduleData(data: {
   cycle_off_minutes?: number | null;
   power_loss_recovery?: boolean;
   repeat?: number;
+  power_loss_recovery_time?: number;
 }, scheduleStartDate: number) {
   const scheduleType: ScheduleType = (data.schedule_type as ScheduleType) || "TIME_BASED";
   return {
@@ -328,6 +329,7 @@ export function buildScheduleData(data: {
     cycle_off_minutes: scheduleType === "CYCLIC" ? data.cycle_off_minutes : null,
     power_loss_recovery: scheduleType === "CYCLIC" ? false : (data.power_loss_recovery === true),
     repeat: data.repeat ?? 0,
+    power_loss_recovery_time: data.power_loss_recovery_time ?? 30,
   };
 }
 
