@@ -10,9 +10,26 @@ const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"
 
 /**
  * Get the next schedule_id for a given motor.
- * Returns max(schedule_id) + 1 for that motor, or 1 if no schedules exist.
+ * First tries to reuse the lowest schedule_id from ARCHIVED/DELETED schedules.
+ * If no reusable ID found, returns max(schedule_id) + 1, or 1 if no schedules exist.
  */
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
+  // Find the lowest schedule_id that is ARCHIVED (status) or DELETED (schedule_status)
+  const reusable = await db
+    .select({ scheduleId: motorSchedules.schedule_id })
+    .from(motorSchedules)
+    .where(and(
+      eq(motorSchedules.motor_id, motorId),
+      sql`(${motorSchedules.status} = 'ARCHIVED' OR ${motorSchedules.schedule_status} IN ('DELETED', 'CANCELLED'))`,
+    ))
+    .orderBy(motorSchedules.schedule_id)
+    .limit(1);
+
+  if (reusable.length > 0) {
+    return reusable[0].scheduleId;
+  }
+
+  // No reusable ID found — fallback to max + 1
   const result = await db
     .select({ maxId: sql<number>`COALESCE(MAX(${motorSchedules.schedule_id}), 0)` })
     .from(motorSchedules)
@@ -195,11 +212,11 @@ export async function findSchedulesByFilters(
   if (filters.type) {
     conditions.push(eq(motorSchedules.schedule_type, filters.type as MotorSchedule["schedule_type"]));
   }
-  if (filters.start_date) {
-    conditions.push(gte(motorSchedules.schedule_start_date, filters.start_date));
+  if (filters.schedule_start_date) {
+    conditions.push(gte(motorSchedules.schedule_start_date, filters.schedule_start_date));
   }
-  if (filters.end_date) {
-    conditions.push(lte(motorSchedules.schedule_start_date, filters.end_date));
+  if (filters.schedule_end_date) {
+    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_end_date));
   }
   if (filters.repeat !== undefined) {
     conditions.push(eq(motorSchedules.repeat, filters.repeat));
@@ -213,12 +230,19 @@ export async function findSchedulesByFilters(
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const countResult = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(motorSchedules)
-    .where(whereClause);
+  const [countResult, runningCountResult] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(motorSchedules)
+      .where(whereClause),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(motorSchedules)
+      .where(whereClause ? and(whereClause, eq(motorSchedules.schedule_status, "RUNNING")) : eq(motorSchedules.schedule_status, "RUNNING")),
+  ]);
 
   const total_records = countResult[0]?.count || 0;
+  const running_count = runningCountResult[0]?.count || 0;
   const total_pages = Math.ceil(total_records / limit) || 1;
   const offset = (page - 1) * limit;
 
@@ -231,8 +255,13 @@ export async function findSchedulesByFilters(
     prev_page: page <= 1 ? null : page - 1,
   };
 
+  const schedule_summary = {
+    total_schedules: total_records,
+    running_count,
+  };
+
   if (total_records === 0) {
-    return { pagination_info, records: [] };
+    return { pagination_info, schedule_summary, records: [] };
   }
 
   const records = await db.query.motorSchedules.findMany({
@@ -242,7 +271,7 @@ export async function findSchedulesByFilters(
     offset,
   });
 
-  return { pagination_info, records };
+  return { pagination_info, schedule_summary, records };
 }
 
 // =================== PENDING SCHEDULES FOR DEVICE SYNC ===================
