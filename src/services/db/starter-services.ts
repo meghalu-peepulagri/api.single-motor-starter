@@ -216,6 +216,8 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
       signal_quality: true,
       network_type: true,
       device_allocation: true,
+      sim_recharge_expires_at: true,
+      device_mobile_number: true,
     },
     with: {
       motors: {
