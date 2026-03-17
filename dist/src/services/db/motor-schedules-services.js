@@ -142,6 +142,17 @@ export async function restartScheduleById(scheduleId) {
         .where(eq(motorSchedules.id, scheduleId))
         .returning();
 }
+// =================== MAX END DATE FOR DATE RANGE FILTER ===================
+/**
+ * Get the highest schedule_end_date for a given motor and starter.
+ */
+export async function getMaxEndDate(motorId, starterId) {
+    const result = await db
+        .select({ maxEndDate: sql `MAX(${motorSchedules.schedule_end_date})` })
+        .from(motorSchedules)
+        .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), ne(motorSchedules.status, "ARCHIVED")));
+    return result[0]?.maxEndDate ?? null;
+}
 // =================== LIST WITH FILTERS ===================
 /**
  * Find schedules with filters and pagination.
@@ -161,9 +172,12 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
         conditions.push(eq(motorSchedules.schedule_type, filters.type));
     }
     if (filters.schedule_start_date) {
-        conditions.push(gte(motorSchedules.schedule_start_date, filters.schedule_start_date));
+        // Find schedules whose date range contains the given start date:
+        // schedule_start_date <= filter_date AND schedule_end_date >= filter_date
+        conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_start_date));
+        conditions.push(gte(motorSchedules.schedule_end_date, filters.schedule_start_date));
     }
-    if (filters.schedule_end_date) {
+    else if (filters.schedule_end_date) {
         conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_end_date));
     }
     if (filters.repeat !== undefined) {
