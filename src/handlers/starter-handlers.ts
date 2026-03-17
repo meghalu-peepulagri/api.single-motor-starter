@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_INFO_REQUEST_SENT, DEVICE_NOT_ALLOCATED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
@@ -24,10 +24,13 @@ import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
+import { generateUploadUrl, generateDownloadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {
@@ -160,7 +163,7 @@ export class StarterHandlers {
         }, trx);
       });
 
-      return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
+      return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY, { starter_id: starterBox.id });
     } catch (error: any) {
       console.error("Error at assign starter :", error);
       handleJsonParseError(error);
@@ -380,8 +383,13 @@ export class StarterHandlers {
       paramsValidateException.emptyBodyValidation(reqData);
 
       const validatedReqData = await validatedRequest<validatedUpdateDeployedStatus>("update-deployed-status", reqData, STARTER_BOX_VALIDATION_CRITERIA);
-      const starterBox = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "device_status", "status"]);
+      const starterBox = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "device_status", "status", "device_allocation"]);
       if (!starterBox) throw new BadRequestException(STARTER_BOX_NOT_FOUND);
+
+      const isTestToDeployed = starterBox.device_status === "TEST" && validatedReqData.deploy_status === "DEPLOYED";
+      if (isTestToDeployed && starterBox.device_allocation === "false") {
+        throw new BadRequestException(DEVICE_NOT_ALLOCATED);
+      }
 
       const updateData: Record<string, any> = { device_status: validatedReqData.deploy_status };
 
@@ -421,7 +429,12 @@ export class StarterHandlers {
       paramsValidateException.validateId(starterId, "Device id");
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
-      const connectedMotors = await starterConnectedMotors(starterId);
+      const connectedMotors = await starterConnectedMotors(starterId) as any;
+
+      if (connectedMotors?.installation_photo_key) {
+        connectedMotors.installation_photo_url = await generateDownloadUrl(connectedMotors.installation_photo_key);
+      }
+
       return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
     } catch (error: any) {
       console.error("Error at starter connected motors :", error);
@@ -589,14 +602,43 @@ export class StarterHandlers {
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       const currentCount = starter.allocation_status_count ?? 0;
+      const previousAllocation = starter.device_allocation ?? "false";
 
       if (userPayload.user_type !== "SUPER_ADMIN" && allocationStatus === "true" && starter.device_allocation === "false" && currentCount >= 1) {
         throw new UnauthorizedException("Unauthorized");
       }
 
-      const newCount = (allocationStatus === "true" && starter.device_allocation === "false") ? currentCount + 1 : currentCount;
+      if (allocationStatus === previousAllocation) {
+        return sendResponse(c, 200, "Device allocation status updated successfully");
+      }
 
-      await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount });
+      const newCount = (allocationStatus === "true" && previousAllocation === "false") ? currentCount + 1 : currentCount;
+
+      let allocationAction: "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED" | null = null;
+      let messageLog: string | null = null;
+
+      if (previousAllocation === "false" && allocationStatus === "true") {
+        allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
+        messageLog = newCount === 1 ? "Device Allocated" : "Device Reallocated";
+      } else if (previousAllocation === "true" && allocationStatus === "false") {
+        allocationAction = "DEVICE_DEALLOCATED";
+        messageLog = "Device Deallocated";
+      }
+
+      await db.transaction(async (trx) => {
+        await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount }, trx);
+        if (allocationAction && messageLog) {
+          await ActivityService.writeDeviceAllocationLog(
+            userPayload.id,
+            starterId,
+            allocationAction,
+            { device_allocation: previousAllocation, allocation_status_count: currentCount },
+            { device_allocation: allocationStatus, allocation_status_count: newCount },
+            messageLog,
+            trx,
+          );
+        }
+      });
       return sendResponse(c, 200, "Device allocation status updated successfully");
     } catch (error: any) {
       console.error("Error at update device allocation status :", error);
@@ -685,6 +727,26 @@ export class StarterHandlers {
     }
   }
 
+  getInstallationPhotoUploadUrlHandler = async (c: Context) => {
+    try {
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      const contentType = c.req.query("content_type") || "image/jpeg";
+      const { uploadUrl, key } = await generateUploadUrl(starterId, contentType);
+
+      await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { installation_photo_key: key });
+
+      return sendResponse(c, 200, "Upload URL generated successfully", { upload_url: uploadUrl, key });
+    } catch (error: any) {
+      console.error("Error at get installation photo upload url :", error);
+      throw error;
+    }
+  }
+
   simRechargeExpiryNotificationHandler = async (c: Context) => {
     try {
       const today = new Date();
@@ -697,7 +759,8 @@ export class StarterHandlers {
         sim_recharge_expires_at: starterBoxes.sim_recharge_expires_at,
         motor_alias_name: motors.alias_name,
         motor_created_by: motors.created_by,
-        created_by: starterBoxes.created_by
+        created_by: starterBoxes.created_by,
+        motor_id: motors.id
       }).from(starterBoxes)
         .leftJoin(motors, and(eq(motors.starter_id, starterBoxes.id), ne(motors.status, "ARCHIVED")))
         .where(
@@ -746,10 +809,13 @@ export class StarterHandlers {
         } else if (diffDays === 1) {
           title = `SIM Recharge Expiring Tomorrow - ${deviceName}`;
           message = `Your SIM recharge for device ${deviceName} expires tomorrow (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
+        } else if (diffDays === 0) {
+          title = `SIM Recharge Expires Today - ${deviceName}`;
+          message = `Your SIM recharge for device ${deviceName} expires today (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
         }
 
-        if (title && userId) {
-          await sendUserNotification(userId, title, message, starter.id, starter.id);
+        if (title && userId && starter.motor_id) {
+          await sendUserNotification(userId, title, message, starter.motor_id, starter.id);
           notificationsSent++;
         }
       }
@@ -757,6 +823,49 @@ export class StarterHandlers {
       return sendResponse(c, 200, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, { notifications_sent: notificationsSent });
     } catch (error: any) {
       console.error("Error at sim recharge expiry notification handler :", error);
+      throw error;
+    }
+  }
+
+  deviceInfoRequestHandler = async (c: Context) => {
+    try {
+      const allDevices = await db.query.starterBoxes.findMany({
+        where: ne(starterBoxes.status, "ARCHIVED"),
+      });
+
+      const BATCH_SIZE = 10;
+      const BATCH_DELAY_MS = 60 * 1000; // 1 minute between batches
+
+      // Fire-and-forget: process batches in background
+      (async () => {
+        for (let i = 0; i < allDevices.length; i += BATCH_SIZE) {
+          const batch = allDevices.slice(i, i + BATCH_SIZE);
+
+          for (const device of batch) {
+            const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
+            publishMultipleTimesInBackground(deviceInfoPayload, device);
+          }
+
+          logger.info(`Device info request: batch ${Math.floor(i / BATCH_SIZE) + 1} sent (${batch.length} devices)`);
+
+          // Wait 1 minute before next batch (skip delay after last batch)
+          if (i + BATCH_SIZE < allDevices.length) {
+            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+          }
+        }
+
+        logger.info(`Device info request: all ${allDevices.length} devices processed`);
+      })();
+
+      const totalBatches = Math.ceil(allDevices.length / BATCH_SIZE);
+      return sendResponse(c, 200, DEVICE_INFO_REQUEST_SENT, {
+        total_devices: allDevices.length,
+        batch_size: BATCH_SIZE,
+        total_batches: totalBatches,
+        estimated_time_minutes: totalBatches - 1,
+      });
+    } catch (error: any) {
+      console.error("Error at device info request handler :", error);
       throw error;
     }
   }

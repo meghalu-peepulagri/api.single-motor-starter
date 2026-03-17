@@ -500,25 +500,64 @@ export async function heartbeatHandler(message, topic) {
 }
 export async function deviceSerialNumberAllocationAckHandler(message, topic) {
     try {
-        const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-        if (!validMac?.id) {
-            console.error(`Any starter found with given MAC [${topic}]`);
+        const identifier = topic.split("/")[1];
+        const upperId = identifier?.trim().toUpperCase();
+        if (!upperId)
+            return null;
+        const byMac = await db.query.starterBoxes.findFirst({
+            where: and(eq(starterBoxes.mac_address, upperId), ne(starterBoxes.status, "ARCHIVED")),
+            columns: {
+                id: true,
+                user_id: true,
+                created_by: true,
+                device_allocation: true,
+                allocation_status_count: true,
+            },
+        });
+        const matchType = byMac ? "mac" : "pcb";
+        const starter = byMac ?? await db.query.starterBoxes.findFirst({
+            where: and(eq(starterBoxes.pcb_number, upperId), ne(starterBoxes.status, "ARCHIVED")),
+            columns: {
+                id: true,
+                user_id: true,
+                created_by: true,
+                device_allocation: true,
+                allocation_status_count: true,
+            },
+        });
+        if (!starter?.id) {
+            console.error(`No starter found with identifier [${upperId}]`);
             return null;
         }
-        ;
-        if (message.D === 1) {
-            const currentCount = validMac.allocation_status_count ?? 0;
-            const newCount = currentCount + 1;
-            const allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
-            const message_log = newCount === 1 ? "Device Allocated" : "Device Reallocated";
-            const userId = validMac.user_id || validMac.created_by;
+        if (message.D !== 1)
+            return null;
+        const previousAllocation = starter.device_allocation ?? "false";
+        const currentCount = starter.allocation_status_count ?? 0;
+        const userId = starter.user_id || starter.created_by;
+        if (matchType === "pcb") {
+            // Deallocation event when PCB number is used
+            if (previousAllocation === "false")
+                return null;
             await db.transaction(async (trx) => {
-                await updateRecordByIdWithTrx(starterBoxes, validMac.id, { device_allocation: "true", allocation_status_count: newCount }, trx);
+                await updateRecordByIdWithTrx(starterBoxes, starter.id, { device_allocation: "false" }, trx);
                 if (userId) {
-                    await ActivityService.writeDeviceAllocationLog(userId, validMac.id, allocationAction, { device_allocation: validMac.device_allocation ?? "false", allocation_status_count: currentCount }, { device_allocation: "true", allocation_status_count: newCount }, message_log, trx);
+                    await ActivityService.writeDeviceAllocationLog(userId, starter.id, "DEVICE_DEALLOCATED", { device_allocation: previousAllocation, allocation_status_count: currentCount }, { device_allocation: "false", allocation_status_count: currentCount }, "Device Deallocated", trx);
                 }
             });
+            return;
         }
+        // Allocation event when MAC address is used
+        if (previousAllocation === "true")
+            return null;
+        const newCount = currentCount + 1;
+        const allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
+        const message_log = newCount === 1 ? "Device Allocated" : "Device Reallocated";
+        await db.transaction(async (trx) => {
+            await updateRecordByIdWithTrx(starterBoxes, starter.id, { device_allocation: "true", allocation_status_count: newCount }, trx);
+            if (userId) {
+                await ActivityService.writeDeviceAllocationLog(userId, starter.id, allocationAction, { device_allocation: previousAllocation, allocation_status_count: currentCount }, { device_allocation: "true", allocation_status_count: newCount }, message_log, trx);
+            }
+        });
     }
     catch (error) {
         console.error("Error at device serial number allocation ack handler:", error);
@@ -664,9 +703,13 @@ export async function deviceInfoAckHandler(message, topic) {
         if (hasValue(message.D.val) && message.D.val !== validMac.sim_recharge_expires_at) {
             updatedFields.sim_recharge_expires_at = message.D.val;
         }
-        // SIM mobile number (validated)
-        if (hasValue(message.D.sim_num) && message.D.sim_num !== validMac.device_mobile_number) {
-            updatedFields.device_mobile_number = message.D.sim_num;
+        // SIM mobile number (validated) — strip country code, take last 10 digits
+        if (hasValue(message.D.sim_num)) {
+            const rawSim = String(message.D.sim_num).replace(/^\+91/, ''); // remove +91 country code
+            const simNumber = rawSim.slice(0, 10); // take first 10 digits
+            if (simNumber.length === 10 && simNumber !== validMac.device_mobile_number) {
+                updatedFields.device_mobile_number = simNumber;
+            }
         }
         if (Object.keys(updatedFields).length > 0) {
             await updateRecordById(starterBoxes, validMac.id, updatedFields);

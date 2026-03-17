@@ -54,9 +54,13 @@ export async function assignStarterWithTransaction(payload: AssignStarterType, u
   const existedMotorData = await getSingleRecordByAColumnValue<MotorsTable>(motors, "starter_id", "=", starterBoxPayload.id);
 
   const action = async (trx: any) => {
-    const updatedStarter = await updateRecordById(starterBoxes, starterBoxPayload.id, {
+    const starterUpdateData: Record<string, any> = {
       user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt
-    }, trx);
+    };
+    if (payload.installation_photo_key) {
+      starterUpdateData.installation_photo_key = payload.installation_photo_key;
+    }
+    const updatedStarter = await updateRecordById(starterBoxes, starterBoxPayload.id, starterUpdateData, trx);
 
     const updatedMotor = existedMotorData
       ? (await trx.update(motors).set({ ...motorDetails }).where(eq(motors.id, existedMotorData.id)).returning())[0]
@@ -212,6 +216,8 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
       signal_quality: true,
       network_type: true,
       device_allocation: true,
+      sim_recharge_expires_at: true,
+      device_mobile_number: true,
     },
     with: {
       motors: {
@@ -420,6 +426,7 @@ export async function starterConnectedMotors(starterId: number) {
       device_reset_status: true,
       sim_recharge_expires_at: true,
       hardware_version: true,
+      installation_photo_key: true,
     },
     with: {
       motors: {

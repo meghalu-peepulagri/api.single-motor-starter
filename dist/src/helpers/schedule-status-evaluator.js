@@ -3,20 +3,23 @@ import { timeToMinutes } from "./motor-helper.js";
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // +5:30 in milliseconds
 function toIST(date) {
     const istTime = new Date(date.getTime() + IST_OFFSET_MS);
+    const yy = istTime.getUTCFullYear() - 2000;
+    const mm = istTime.getUTCMonth() + 1;
+    const dd = istTime.getUTCDate();
     return {
         totalMinutes: istTime.getUTCHours() * 60 + istTime.getUTCMinutes(),
         dayOfWeek: istTime.getUTCDay(), // 0=Sunday
-        dateStr: `${istTime.getUTCFullYear()}-${String(istTime.getUTCMonth() + 1).padStart(2, "0")}-${String(istTime.getUTCDate()).padStart(2, "0")}`,
+        dateNum: yy * 10000 + mm * 100 + dd, // Numeric YYMMDD
     };
 }
 // =================== INTERNAL HELPERS ===================
-function isTodayValidForSchedule(schedule, currentDateStr, currentDayOfWeek) {
+function isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek) {
     if (schedule.repeat === 1) {
         if (schedule.days_of_week.length === 0)
             return true;
         return schedule.days_of_week.map(Number).includes(currentDayOfWeek);
     }
-    return schedule.schedule_start_date === currentDateStr;
+    return schedule.schedule_start_date === currentDateNum;
 }
 function hasPassedEndTime(currentMinutes, startMinutes, endMinutes) {
     if (startMinutes < endMinutes) {
@@ -34,11 +37,11 @@ function isWithinTimeWindow(currentMinutes, startMinutes, endMinutes) {
 export function evaluateScheduleStatus(schedule, now) {
     const ist = toIST(now);
     const currentMinutes = ist.totalMinutes;
-    const currentDateStr = ist.dateStr;
+    const currentDateNum = ist.dateNum;
     const currentDayOfWeek = ist.dayOfWeek;
     const startMinutes = timeToMinutes(schedule.start_time);
     const endMinutes = timeToMinutes(schedule.end_time);
-    const isTodayValid = isTodayValidForSchedule(schedule, currentDateStr, currentDayOfWeek);
+    const isTodayValid = isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek);
     // ── SCHEDULED → RUNNING / WAITING_NEXT_CYCLE / COMPLETED (missed window) ──
     if (schedule.schedule_status === "SCHEDULED") {
         if (!isTodayValid)
@@ -48,7 +51,7 @@ export function evaluateScheduleStatus(schedule, now) {
         }
         if (hasPassedEndTime(currentMinutes, startMinutes, endMinutes)) {
             if (schedule.repeat === 1) {
-                if (schedule.schedule_end_date && currentDateStr > schedule.schedule_end_date) {
+                if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
                     return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
                 }
                 return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
@@ -72,7 +75,7 @@ export function evaluateScheduleStatus(schedule, now) {
         }
         if (shouldComplete) {
             if (schedule.repeat === 1) {
-                if (schedule.schedule_end_date && currentDateStr > schedule.schedule_end_date) {
+                if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
                     return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
                 }
                 return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
@@ -83,7 +86,7 @@ export function evaluateScheduleStatus(schedule, now) {
     }
     // ── WAITING_NEXT_CYCLE → RUNNING / COMPLETED ──
     if (schedule.schedule_status === "WAITING_NEXT_CYCLE") {
-        if (schedule.schedule_end_date && currentDateStr > schedule.schedule_end_date) {
+        if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
             return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
         }
         if (!isTodayValid)

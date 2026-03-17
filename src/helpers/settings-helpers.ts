@@ -575,7 +575,6 @@ export const publishMultipleTimesInBackground = async (
     );
     return false;
   }
-
   publishingMap.set(starterDetails.id, true);
 
   const totalAttempts = 3;

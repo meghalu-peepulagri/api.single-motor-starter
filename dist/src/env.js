@@ -30,6 +30,10 @@ const VEnvSchema = object({
     FCM_CLIENT_X509_CERT_URL: string(),
     FCM_UNIVERSE_DOMAIN: string(),
     FCM_PRIMERY_KEY: string(),
+    AWS_S3_ACCESS_KEY_ID: string(),
+    AWS_S3_SECRET_ACCESS_KEY: string(),
+    AWS_S3_BUCKET_REGION: string(),
+    AWS_S3_BUCKET: string(),
 });
 let envData;
 try {

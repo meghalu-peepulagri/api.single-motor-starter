@@ -69,6 +69,7 @@ export interface AssignStarterType {
   motor_name: string;
   location_id: number;
   hp: number;
+  installation_photo_key?: string;
 }
 
 export interface RetryOptions {
@@ -218,10 +219,10 @@ export interface ScheduleForEvaluation {
   id: number;
   schedule_type: "TIME_BASED" | "CYCLIC";
   schedule_status: string;
-  start_time: string;   // HH:mm (IST 24hr)
-  end_time: string;     // HH:mm (IST 24hr)
-  schedule_start_date: string | null;  // YYYY-MM-DD (IST)
-  schedule_end_date: string | null;    // YYYY-MM-DD (IST)
+  start_time: string;   // 4-digit HHMM (e.g., "0005", "0600", "1430")
+  end_time: string;     // 4-digit HHMM (e.g., "0020", "0700", "2359")
+  schedule_start_date: number | null;  // Numeric YYMMDD (e.g., 260415)
+  schedule_end_date: number | null;    // Numeric YYMMDD (e.g., 260416)
   days_of_week: number[];
   repeat: number;
   runtime_minutes: number | null;

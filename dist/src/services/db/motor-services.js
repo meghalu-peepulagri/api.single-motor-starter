@@ -11,6 +11,7 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
+import { log } from "node:util";
 export async function bulkMotorsUpdate(motorsToUpdate, trx) {
     if (!motorsToUpdate || motorsToUpdate.length === 0)
         return;
@@ -154,6 +155,10 @@ export async function trackMotorRunTime(params, externalTrx) {
             });
             return;
         }
+        // Skip out-of-order messages: if incoming timestamp is older than the open record's start_time
+        if (now.getTime() < new Date(openRecord.start_time).getTime()) {
+            return;
+        }
         // Calculate durations
         const totalDurationMs = now.getTime() - new Date(openRecord.start_time).getTime();
         const motorDurationFormatted = formatDuration(totalDurationMs);
@@ -201,10 +206,12 @@ export async function trackMotorRunTime(params, externalTrx) {
         }
         // Case 3: Only power state changed (motor state same)
         if (powerStateChanged && !motorStateChanged) {
-            // Close the current power session in the existing record
+            // Close the current motor + power session and start a new segment
             await trx
                 .update(motorsRunTime)
                 .set({
+                end_time: now,
+                duration: motorDurationFormatted,
                 power_end: formattedDate,
                 power_duration: powerDurationFormatted,
                 time_stamp: formattedDate,
@@ -259,7 +266,8 @@ export async function trackDeviceRunTime(params, externalTrx) {
             .select()
             .from(deviceRunTime)
             .where(and(eq(deviceRunTime.starter_box_id, starter_id), isNull(deviceRunTime.end_time)))
-            .orderBy(desc(deviceRunTime.start_time));
+            .orderBy(desc(deviceRunTime.start_time))
+            .limit(1);
         if (!openRecord) {
             return await trx.insert(deviceRunTime).values({
                 motor_id,
@@ -275,29 +283,41 @@ export async function trackDeviceRunTime(params, externalTrx) {
                 time_stamp
             });
         }
-        const durationMs = now.getTime() - new Date(openRecord.start_time).getTime();
-        const durationFormatted = formatDuration(durationMs);
-        if (openRecord.power_state !== new_power_state) {
+        // Skip out-of-order messages: if incoming timestamp is older than the open record's start_time
+        if (now.getTime() < new Date(openRecord.start_time).getTime()) {
+            return;
+        }
+        const motorStateChanged = openRecord.motor_state !== motor_state;
+        const powerStateChanged = openRecord.power_state !== new_power_state;
+        // No state change: keep the record open and avoid creating duplicates
+        if (!motorStateChanged && !powerStateChanged) {
             await trx.update(deviceRunTime).set({
-                end_time: now,
-                duration: durationFormatted,
                 updated_at: now
             }).where(eq(deviceRunTime.id, openRecord.id));
-            // Insert new runtime session
-            return await trx.insert(deviceRunTime).values({
-                motor_id,
-                starter_box_id: starter_id,
-                location_id,
-                start_time: now,
-                end_time: null,
-                duration: null,
-                motor_state,
-                motor_mode: mode_description,
-                power_state: new_power_state,
-                signal_strength: null,
-                time_stamp
-            });
+            return;
         }
+        const durationMs = now.getTime() - new Date(openRecord.start_time).getTime();
+        const durationFormatted = formatDuration(durationMs);
+        await trx.update(deviceRunTime).set({
+            end_time: now,
+            duration: durationFormatted,
+            updated_at: now,
+            time_stamp
+        }).where(eq(deviceRunTime.id, openRecord.id));
+        // Insert new runtime session starting exactly at previous end_time
+        return await trx.insert(deviceRunTime).values({
+            motor_id,
+            starter_box_id: starter_id,
+            location_id,
+            start_time: now,
+            end_time: null,
+            duration: null,
+            motor_state,
+            motor_mode: mode_description,
+            power_state: new_power_state,
+            signal_strength: null,
+            time_stamp
+        });
     };
     if (externalTrx) {
         return await action(externalTrx);

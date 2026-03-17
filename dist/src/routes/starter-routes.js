@@ -10,6 +10,7 @@ starterRoutes.get("/web/all", isAuthorized, isSuperAdminOrAdmin, starterHandlers
 starterRoutes.get("/dashboard-counts", isAuthorized, starterHandlers.starterCountBasedOnStatusHandler);
 starterRoutes.get("/latest-pcb-number", isAuthorized, starterHandlers.getLatestPcbNumberHandler);
 starterRoutes.get("/sim-recharge-expiry-notifications", starterHandlers.simRechargeExpiryNotificationHandler);
+starterRoutes.get("/device-info-request", starterHandlers.deviceInfoRequestHandler);
 starterRoutes.patch("/assign", isAuthorized, starterHandlers.assignStarterMobileHandler);
 starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWebHandler);
 starterRoutes.patch("/assign-location", isAuthorized, starterHandlers.assignLocationToStarterHandler);
@@ -26,5 +27,6 @@ starterRoutes.patch("/:id/details", isAuthorized, starterHandlers.updateStarterD
 starterRoutes.patch("/:id/allocation", isAuthorized, starterHandlers.updateDeviceAllocationHandler);
 starterRoutes.patch("/:id/settings-sync", isAuthorized, starterHandlers.updateSettingsSyncStatusHandler);
 starterRoutes.patch("/:id/reset", isAuthorized, starterHandlers.deviceResetHandler);
+starterRoutes.get("/:id/installation-photo/upload-url", isAuthorized, starterHandlers.getInstallationPhotoUploadUrlHandler);
 starterRoutes.patch("/:id", isAuthorized, starterHandlers.deleteStarterBoxHandler);
 export default starterRoutes;

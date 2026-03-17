@@ -29,12 +29,12 @@ export const motorSchedules = pgTable("motor_schedules", {
   schedule_id: integer("schedule_id").notNull(), // Auto-increment per motor
   bit_wise_days: integer("bit_wise_days").default(0), // Bitmask of days_of_week: bit0=Sun, bit1=Mon ... bit6=Sat
 
-  schedule_start_date: varchar("schedule_start_date"), // Scheduled at
-  schedule_end_date: varchar("schedule_end_date"), // Optional end date for 
+  schedule_start_date: integer("schedule_start_date"), // Numeric YYMMDD (e.g., 260415 = 2026-04-15)
+  schedule_end_date: integer("schedule_end_date"), // Numeric YYMMDD (e.g., 260416 = 2026-04-16)
   days_of_week: integer("days_of_week").array().notNull().default(sql`'{}'::integer[]`), // 0=Sunday, 1=Monday ... 6=Saturday
 
-  start_time: varchar("start_time").notNull(), // HH:mm format
-  end_time: varchar("end_time").notNull(), // HH:mm format
+  start_time: varchar("start_time").notNull(), // 4-digit HHMM format (e.g., "0005", "0600", "1430")
+  end_time: varchar("end_time").notNull(), // 4-digit HHMM format (e.g., "0020", "0700", "2359")
 
   // Runtime quota in minutes (optional - for TIME_BASED mode)
   runtime_minutes: integer("runtime_minutes"),
@@ -45,6 +45,7 @@ export const motorSchedules = pgTable("motor_schedules", {
 
   // Power loss recovery: track actual ON time, extend schedule to compensate
   power_loss_recovery: boolean("power_loss_recovery").default(false).notNull(),
+  power_loss_recovery_time: integer("power_loss_recovery_time").default(30),
 
   // Accumulated actual ON time in seconds (updated by device/MQTT layer)
   accumulated_on_seconds: integer("accumulated_on_seconds").default(0),

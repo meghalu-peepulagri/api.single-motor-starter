@@ -265,6 +265,7 @@ export const SMALL_LETTERS_NOT_ALLOWED = "Small characters not allowed";
 export const STARTER_ASSIGNED_SUCCESSFULLY = "Device assigned successfully";
 export const STARTER_ALREADY_ASSIGNED = "Device already assigned";
 export const STARTER_NOT_DEPLOYED = "Device not deployed yet";
+export const DEVICE_NOT_ALLOCATED = "Device not allocated";
 export const STARTER_LIST_FETCHED = "Device fetches successfully";
 export const STARTER_REPLACED_SUCCESSFULLY = "Device location updated successfully";
 export const STARTER_RUNTIME_FETCHED = "Run time fetches successfully";
@@ -283,6 +284,7 @@ export const TEMPERATURE_FETCHED = "Temperature details fetched successfully";
 export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
 export const DEVICE_RESET_SUCCESSFULLY = "Device reset successfully";
 export const SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT = "SIM recharge expiry notifications sent";
+export const DEVICE_INFO_REQUEST_SENT = "Device info request sent successfully";
 
 // Bridge Service
 export const BRIDGE_AGENT_NOT_FOUND = "Agent ID is required";

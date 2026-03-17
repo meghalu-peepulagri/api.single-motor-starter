@@ -22,10 +22,16 @@ export function buildMotorScheduleFilters(query) {
         filters.type = query.type;
     }
     if (query.start_date) {
-        filters.start_date = query.start_date;
+        const sd = +query.start_date;
+        if (!Number.isNaN(sd) && Number.isInteger(sd)) {
+            filters.start_date = sd;
+        }
     }
     if (query.end_date) {
-        filters.end_date = query.end_date;
+        const ed = +query.end_date;
+        if (!Number.isNaN(ed) && Number.isInteger(ed)) {
+            filters.end_date = ed;
+        }
     }
     if (query.repeat !== undefined) {
         const repeat = +query.repeat;

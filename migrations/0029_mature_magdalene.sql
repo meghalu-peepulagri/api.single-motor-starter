@@ -1,0 +1,1 @@
+ALTER TABLE "motor_schedules" ADD COLUMN "power_loss_recovery_time" integer DEFAULT 30;
