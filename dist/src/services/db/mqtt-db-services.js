@@ -685,6 +685,12 @@ export async function deviceInfoAckHandler(message, topic) {
     const macFromTopic = topic.split("/")[1];
     const updatedFields = {};
     try {
+        // Resolve pending ACK to stop retry publishing
+        const pendingAck = pendingAckMap.get(macFromTopic);
+        if (pendingAck) {
+            pendingAck.resolve(true);
+            pendingAckMap.delete(macFromTopic);
+        }
         const validMac = await getStarterByMacWithMotor(macFromTopic);
         if (!validMac?.id) {
             console.error(`No starter found with given MAC [${topic}]`);
@@ -716,6 +722,12 @@ export async function deviceInfoAckHandler(message, topic) {
         }
     }
     catch (error) {
+        // On error, resolve pending ACK as false so caller doesn't hang
+        const pendingAck = pendingAckMap.get(macFromTopic);
+        if (pendingAck) {
+            pendingAck.resolve(false);
+            pendingAckMap.delete(macFromTopic);
+        }
         if (error?.code === "23505" || error?.cause?.code === "23505") {
             const duplicateMobile = updatedFields.device_mobile_number;
             logger.info(`Device Info ACK failed for ${macFromTopic} - Duplicate mobile number: ${duplicateMobile}`);
