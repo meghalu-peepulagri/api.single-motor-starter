@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
@@ -528,3 +528,25 @@ export async function updateStarterStatus(starterIds: number[]) {
     activeStarterIds: activeStarterIds.map(row => row.id),
   };
 };
+
+export async function getStartersWithSimRechargeExpiry() {
+  return await db.select({
+    id: starterBoxes.id,
+    starter_number: starterBoxes.starter_number,
+    sim_recharge_expires_at: starterBoxes.sim_recharge_expires_at,
+    mac_address: starterBoxes.mac_address,
+    pcb_number: starterBoxes.pcb_number,
+    device_allocation: starterBoxes.device_allocation,
+    motor_alias_name: motors.alias_name,
+    motor_created_by: motors.created_by,
+    created_by: starterBoxes.created_by,
+    motor_id: motors.id,
+  }).from(starterBoxes)
+    .leftJoin(motors, and(eq(motors.starter_id, starterBoxes.id), ne(motors.status, "ARCHIVED")))
+    .where(
+      and(
+        ne(starterBoxes.status, "ARCHIVED"),
+        isNotNull(starterBoxes.sim_recharge_expires_at),
+      )
+    );
+}

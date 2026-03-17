@@ -13,7 +13,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { starterFilters } from "../helpers/starter-helper.js";
+import { processSimRechargeExpiryNotifications, starterFilters } from "../helpers/starter-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsPaginated, getUnifiedLogsCount } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
@@ -23,7 +23,6 @@ import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
-import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import { generateUploadUrl, generateDownloadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -665,65 +664,7 @@ export class StarterHandlers {
     };
     simRechargeExpiryNotificationHandler = async (c) => {
         try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            // Fetch all assigned starters with motor alias_name via left join
-            const starters = await db.select({
-                id: starterBoxes.id,
-                starter_number: starterBoxes.starter_number,
-                sim_recharge_expires_at: starterBoxes.sim_recharge_expires_at,
-                motor_alias_name: motors.alias_name,
-                motor_created_by: motors.created_by,
-                created_by: starterBoxes.created_by,
-                motor_id: motors.id
-            }).from(starterBoxes)
-                .leftJoin(motors, and(eq(motors.starter_id, starterBoxes.id), ne(motors.status, "ARCHIVED")))
-                .where(and(ne(starterBoxes.status, "ARCHIVED"), isNotNull(starterBoxes.sim_recharge_expires_at)));
-            let notificationsSent = 0;
-            for (const starter of starters) {
-                if (!starter.sim_recharge_expires_at || !starter.created_by)
-                    continue;
-                // Parse date format "16 FEB 2025" (case-insensitive)
-                const monthMap = {
-                    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-                    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-                };
-                const parts = starter.sim_recharge_expires_at.trim().split(/\s+/);
-                const day = parseInt(parts[0], 10);
-                const month = monthMap[parts[1]?.toLowerCase()];
-                const year = parseInt(parts[2], 10);
-                const expiryDate = (parts.length === 3 && !isNaN(day) && month !== undefined && !isNaN(year)) ? new Date(year, month, day) : new Date(starter.sim_recharge_expires_at);
-                if (isNaN(expiryDate.getTime())) {
-                    continue;
-                }
-                expiryDate.setHours(0, 0, 0, 0);
-                const diffTime = expiryDate.getTime() - today.getTime();
-                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                const deviceName = starter.motor_alias_name ?? starter.starter_number;
-                const userId = starter.motor_created_by ?? starter.created_by;
-                let title = "";
-                let message = "";
-                if (diffDays === 3) {
-                    title = `SIM Recharge Expiring Soon - ${deviceName}`;
-                    message = `Your SIM recharge for device ${deviceName} expires in 3 days (${starter.sim_recharge_expires_at}). Please recharge soon.`;
-                }
-                else if (diffDays === 2) {
-                    title = `SIM Recharge Expiring Soon - ${deviceName}`;
-                    message = `Your SIM recharge for device ${deviceName} expires in 2 days (${starter.sim_recharge_expires_at}). Please recharge soon.`;
-                }
-                else if (diffDays === 1) {
-                    title = `SIM Recharge Expiring Tomorrow - ${deviceName}`;
-                    message = `Your SIM recharge for device ${deviceName} expires tomorrow (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
-                }
-                else if (diffDays === 0) {
-                    title = `SIM Recharge Expires Today - ${deviceName}`;
-                    message = `Your SIM recharge for device ${deviceName} expires today (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
-                }
-                if (title && userId && starter.motor_id) {
-                    await sendUserNotification(userId, title, message, starter.motor_id, starter.id);
-                    notificationsSent++;
-                }
-            }
+            const notificationsSent = await processSimRechargeExpiryNotifications();
             return sendResponse(c, 200, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, { notifications_sent: notificationsSent });
         }
         catch (error) {
