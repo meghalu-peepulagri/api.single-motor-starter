@@ -18,6 +18,8 @@ import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-help
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
+import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
+import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
     const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
     const defaultSettings = await getStarterDefaultSettings();
@@ -29,6 +31,8 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload) 
         await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
         await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
         await saveSingleRecord(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
+        const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
+        publishMultipleTimesInBackground(deviceInfoPayload, starter);
         return starter;
     });
 }

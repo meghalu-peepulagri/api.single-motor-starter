@@ -20,6 +20,8 @@ import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
+import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
+import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
@@ -39,6 +41,8 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
     );
 
     await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
+    const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
+    publishMultipleTimesInBackground(deviceInfoPayload, starter);
     return starter;
   });
 }
