@@ -132,7 +132,6 @@ export class StarterHandlers {
                 throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
             if (starterBox.device_status !== "DEPLOYED")
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
-            console.log("validatedReqData", validatedReqData);
             await db.transaction(async (trx) => {
                 const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
                 await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {

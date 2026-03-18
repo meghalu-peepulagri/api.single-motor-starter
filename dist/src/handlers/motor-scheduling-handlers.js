@@ -12,7 +12,7 @@ import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-help
 import { buildDeviceSyncPayloads, buildScheduleData, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, todayAsYYMMDD, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { batchUpdateScheduleStatuses, cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
-import { publishData } from "../services/db/mqtt-db-services.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -308,20 +308,35 @@ export class MotorScheduleHandler {
             const starterIds = grouped.map(g => g.starter_id);
             const startersData = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, starterIds));
             const starterMap = new Map(startersData.map(s => [s.id, s]));
-            let totalPublished = 0;
+            let totalDevices = 0;
             for (const { starter_id, chunks } of grouped) {
                 const starterData = starterMap.get(starter_id);
                 if (!starterData) {
                     console.error(`Starter not found for id=${starter_id}, skipping publish`);
                     continue;
                 }
-                for (const chunk of chunks) {
-                    publishData(chunk, starterData);
-                    totalPublished++;
-                    console.log(`Published chunk to starter_id=${starter_id}, items=${chunk.length}, bytes=${Buffer.byteLength(JSON.stringify(chunk), "utf8")}`);
-                }
+                totalDevices++;
+                // Publish chunks sequentially in background — each chunk waits for ACK (D=4) before sending next
+                const publishChunksSequentially = async () => {
+                    for (const { payload, dbIds } of chunks) {
+                        const ackSuccess = await publishMultipleTimesInBackground(payload, starterData);
+                        if (ackSuccess) {
+                            // D=4: device acknowledged — mark schedules as SCHEDULED
+                            await db.update(motorSchedules)
+                                .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+                                .where(inArray(motorSchedules.id, dbIds));
+                            console.log(`Schedule chunk ACK success for starter_id=${starter_id}, idx=${payload.D.idx}, updated ${dbIds.length} schedules as SCHEDULED`);
+                        }
+                        else {
+                            // ACK failed after all retries — keep previous status so next sync cycle retries
+                            console.warn(`Schedule chunk ACK failed for starter_id=${starter_id}, idx=${payload.D.idx}, keeping ${dbIds.length} schedules in current state for retry`);
+                            break;
+                        }
+                    }
+                };
+                publishChunksSequentially();
             }
-            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: grouped.length, payloads_published: totalPublished });
+            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: totalDevices, total_chunks: grouped.reduce((sum, g) => sum + g.chunks.length, 0) });
         }
         catch (error) {
             console.error("Error at get pending schedules for sync:", error.message);

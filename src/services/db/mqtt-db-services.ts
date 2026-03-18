@@ -1,8 +1,7 @@
-import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../../database/schemas/device-temperature.js";
-import { motorSchedules, type MotorScheduleTable } from "../../database/schemas/motor-schedules.js";
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
@@ -10,10 +9,10 @@ import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { controlMode, getFaultNotificationMessage } from "../../helpers/control-helpers.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
+import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
 import { logger } from "../../utils/logger.js";
-import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
@@ -21,7 +20,6 @@ import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordBy
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { getStarterByMacWithMotor } from "./starter-services.js";
-
 // Live data
 export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId: string, previousData: previousPreparedLiveData) {
   switch (groupId) {
@@ -80,8 +78,8 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
     case "DEVICE_INFO_ACK":
       await deviceInfoAckHandler(payload, topic);
       break;
-    case "SCHEDULING_CREATION_ACK":
-      await schedulingCreationAckHandler(payload, topic);
+    case "SCHEDULING_ACK":
+      scheduleCreationAckResolver(payload, topic);
       break;
     default:
       return null;
@@ -916,63 +914,28 @@ export async function deviceInfoAckHandler(message: any, topic: string) {
   }
 }
 
-const ACTIVE_SCHEDULE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED"] as const;
+function scheduleCreationAckResolver(message: any, topic: string) {
+  const macFromTopic = topic.split("/")[1];
+  if (!macFromTopic) return;
 
-export async function schedulingCreationAckHandler(message: any, topic: string) {
-  try {
-    const macFromTopic = topic.split("/")[1];
-
-    if (!message?.D || typeof message.D !== "object") {
-      console.error("Invalid scheduling ack payload: missing D object");
-      return null;
-    }
-
-    const { id: scheduleId, status } = message.D;
-
-    if (typeof scheduleId !== "number" || scheduleId <= 0) {
-      console.error(`Invalid schedule_id in scheduling ack: ${scheduleId}`);
-      return null;
-    }
-
-    if (status !== 0 && status !== 1) {
-      console.error(`Invalid status in scheduling ack: ${status}`);
-      return null;
-    }
-
-    // Find active schedule by schedule_id (per-motor auto-increment ID)
-    const schedule = await db.query.motorSchedules.findFirst({
-      where: and(
-        eq(motorSchedules.schedule_id, scheduleId),
-        inArray(motorSchedules.schedule_status, [...ACTIVE_SCHEDULE_STATUSES]),
-        ne(motorSchedules.status, "ARCHIVED"),
-      ),
-      columns: { id: true, schedule_id: true },
-    });
-
-    if (!schedule) {
-      console.error(`No active schedule found with schedule_id=${scheduleId} for ack from ${macFromTopic}`);
-      return null;
-    }
-
-    if (status === 1) {
-      // Device acknowledged successfully
-      await updateRecordById<MotorScheduleTable>(motorSchedules, schedule.id, {
-        schedule_status: "SCHEDULED",
-        acknowledgement: 1,
-        acknowledged_at: new Date(),
-      });
-      logger.info(`Schedule ack success: schedule_id=${scheduleId}, db_id=${schedule.id}, from ${macFromTopic}`);
-    } else {
-      // Device failed to acknowledge (status === 0)
-      await updateRecordById<MotorScheduleTable>(motorSchedules, schedule.id, {
-        schedule_status: "FAILED",
-      });
-      logger.warn(`Schedule ack failed: schedule_id=${scheduleId}, db_id=${schedule.id}, from ${macFromTopic}`);
-    }
-  } catch (error: any) {
-    console.error("Error at scheduling creation ack handler:", error);
-    throw error;
+  const pendingAck = pendingAckMap.get(macFromTopic);
+  if (!pendingAck) {
+    logger.warn(`No pending schedule ACK found for ${macFromTopic}`);
+    return;
   }
+
+  if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
+    logger.warn(`Schedule ACK sequence mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+    return;
+  }
+
+  const dValue = typeof message.D === "number" ? message.D : -1;
+
+  // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
+  const ackSuccess = dValue === 1 || dValue === 4;
+  pendingAck.resolve(ackSuccess);
+  pendingAckMap.delete(macFromTopic);
+  logger.info(`Schedule creation ACK resolved for ${macFromTopic}, D=${dValue}, success=${ackSuccess}`);
 }
 
 export const waitForAck = (

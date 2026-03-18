@@ -229,30 +229,25 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
 }
 // =================== PENDING SCHEDULES FOR DEVICE SYNC ===================
 /**
- * Fetch unacknowledged, active schedules where schedule_date is within the next 3 days
- * or repeat=1 (repeat schedules always need syncing).
- * Groups results by starter_id.
+ * Fetch unacknowledged, active schedules where schedule_start_date is within
+ * today and next 2 days (3 days total: today, tomorrow, day after).
+ * Only schedules with ack=0 and a valid start date.
  */
 export async function findPendingSchedulesForSync() {
     const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    const threeDaysLater = new Date(today);
-    threeDaysLater.setDate(today.getDate() + 3);
-    const yesterdayNum = dateToYYMMDD(yesterday);
-    const threeDaysNum = dateToYYMMDD(threeDaysLater);
+    const twoDaysLater = new Date(today);
+    twoDaysLater.setDate(today.getDate() + 2);
     const todayNum = dateToYYMMDD(today);
+    const lastDayNum = dateToYYMMDD(twoDaysLater);
     return await db.query.motorSchedules.findMany({
-        where: and(eq(motorSchedules.acknowledgement, 0), eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]), sql `(
-        ${motorSchedules.repeat} = 1
-        OR (${motorSchedules.schedule_start_date} >= ${todayNum} AND ${motorSchedules.schedule_start_date} <= ${threeDaysNum})
-        OR (${motorSchedules.schedule_start_date} = ${yesterdayNum} AND ${motorSchedules.start_time} > ${motorSchedules.end_time})
-      )`),
+        where: and(eq(motorSchedules.acknowledgement, 0), eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]), gte(motorSchedules.schedule_start_date, todayNum), lte(motorSchedules.schedule_start_date, lastDayNum)),
         columns: {
             id: true,
             starter_id: true,
             schedule_id: true,
             schedule_type: true,
+            schedule_start_date: true,
+            schedule_end_date: true,
             start_time: true,
             end_time: true,
             runtime_minutes: true,
@@ -262,6 +257,7 @@ export async function findPendingSchedulesForSync() {
             days_of_week: true,
             bit_wise_days: true,
             power_loss_recovery: true,
+            power_loss_recovery_time: true,
             enabled: true,
         },
         orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.start_time)],
