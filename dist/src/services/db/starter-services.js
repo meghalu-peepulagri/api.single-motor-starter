@@ -379,6 +379,7 @@ export async function starterConnectedMotors(starterId) {
                 },
             },
             createdBy: {
+                where: ne(users.status, "ARCHIVED"),
                 columns: {
                     id: true,
                     full_name: true,

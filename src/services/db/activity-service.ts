@@ -357,6 +357,29 @@ export class ActivityService {
   }
 
   /**
+   * Logs a fault cleared event
+   */
+  static async writeFaultClearedLog(
+    userId: number,
+    motorId: number,
+    starterId: number,
+    oldData: { fault_code: number },
+    trx?: Transaction
+  ) {
+    const log = prepareActionLog({
+      userId,
+      action: "FAULT_CLEARED",
+      entityType: "MOTOR",
+      entityId: motorId,
+      deviceId: starterId,
+      oldData,
+      newData: { fault_code: 0 },
+      message: `Fault cleared - No more faults`
+    });
+    await this.saveActivityLogs([log], trx);
+  }
+
+  /**
    * Logs a device allocation event (Allocated / Deallocated / Reallocated)
    */
   static async writeDeviceAllocationLog(

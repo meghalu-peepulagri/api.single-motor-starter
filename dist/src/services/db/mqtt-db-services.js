@@ -175,6 +175,7 @@ export async function updateStates(insertedData, previousData) {
                         message: `${pumpName} has no more faults`,
                         motorId: motor_id, starter_id: starter_id
                     };
+                    await ActivityService.writeFaultClearedLog(created_by, motor_id, starter_id, { fault_code: prevFaultCode }, trx);
                 }
             }
             const notificationData = { notificationDataState, notificationDataMode, notificationDataFault, notificationDataFaultCleared };
