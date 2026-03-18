@@ -642,14 +642,22 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
       if (previousAllocation === "false") return null;
 
       await db.transaction(async (trx) => {
+        // Re-read inside transaction to avoid duplicate logs when frontend already updated
+        const latestStarter = await trx.query.starterBoxes.findFirst({
+          where: and(eq(starterBoxes.id, starter.id), ne(starterBoxes.status, "ARCHIVED")),
+          columns: { device_allocation: true, allocation_status_count: true },
+        });
+        if (!latestStarter || latestStarter.device_allocation === "false") return;
+
+        const latestCount = latestStarter.allocation_status_count ?? 0;
         await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter.id, { device_allocation: "false" }, trx);
         if (userId) {
           await ActivityService.writeDeviceAllocationLog(
             userId,
             starter.id,
             "DEVICE_DEALLOCATED",
-            { device_allocation: previousAllocation, allocation_status_count: currentCount },
-            { device_allocation: "false", allocation_status_count: currentCount },
+            { device_allocation: latestStarter.device_allocation!, allocation_status_count: latestCount },
+            { device_allocation: "false", allocation_status_count: latestCount },
             "Device Deallocated",
             trx,
           );
@@ -661,18 +669,26 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
     // Allocation event when MAC address is used
     if (previousAllocation === "true") return null;
 
-    const newCount = currentCount + 1;
-    const allocationAction: "DEVICE_ALLOCATED" | "DEVICE_REALLOCATED" = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
-    const message_log = newCount === 1 ? "Device Allocated" : "Device Reallocated";
-
     await db.transaction(async (trx) => {
+      // Re-read inside transaction to avoid duplicate logs when frontend already updated
+      const latestStarter = await trx.query.starterBoxes.findFirst({
+        where: and(eq(starterBoxes.id, starter.id), ne(starterBoxes.status, "ARCHIVED")),
+        columns: { device_allocation: true, allocation_status_count: true },
+      });
+      if (!latestStarter || latestStarter.device_allocation === "true") return;
+
+      const latestCount = latestStarter.allocation_status_count ?? 0;
+      const newCount = latestCount + 1;
+      const allocationAction: "DEVICE_ALLOCATED" | "DEVICE_REALLOCATED" = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
+      const message_log = newCount === 1 ? "Device Allocated" : "Device Reallocated";
+
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter.id, { device_allocation: "true", allocation_status_count: newCount }, trx);
       if (userId) {
         await ActivityService.writeDeviceAllocationLog(
           userId,
           starter.id,
           allocationAction,
-          { device_allocation: previousAllocation, allocation_status_count: currentCount },
+          { device_allocation: latestStarter.device_allocation!, allocation_status_count: latestCount },
           { device_allocation: "true", allocation_status_count: newCount },
           message_log,
           trx,

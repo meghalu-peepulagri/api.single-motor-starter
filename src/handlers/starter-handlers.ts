@@ -154,6 +154,8 @@ export class StarterHandlers {
       if (starterBox.device_status === "ASSIGNED" && motorCount > 0) throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
       if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARTER_NOT_DEPLOYED);
 
+      console.log("validatedReqData", validatedReqData);
+
       await db.transaction(async (trx) => {
         const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
 
@@ -627,15 +629,38 @@ export class StarterHandlers {
       }
 
       await db.transaction(async (trx) => {
-        await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount }, trx);
-        if (allocationAction && messageLog) {
+        // Re-read inside transaction to get latest state and avoid duplicate logs with MQTT ack handler
+        const latestStarter = await trx.query.starterBoxes.findFirst({
+          where: and(eq(starterBoxes.id, starterId), ne(starterBoxes.status, "ARCHIVED")),
+          columns: { device_allocation: true, allocation_status_count: true },
+        });
+
+        if (!latestStarter || latestStarter.device_allocation === allocationStatus) return;
+
+        const latestCount = latestStarter.allocation_status_count ?? 0;
+        const latestPrevAllocation = latestStarter.device_allocation ?? "false";
+        const updatedCount = (allocationStatus === "true" && latestPrevAllocation === "false") ? latestCount + 1 : latestCount;
+
+        let txAllocationAction: "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED" | null = null;
+        let txMessageLog: string | null = null;
+
+        if (latestPrevAllocation === "false" && allocationStatus === "true") {
+          txAllocationAction = updatedCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
+          txMessageLog = updatedCount === 1 ? "Device Allocated" : "Device Reallocated";
+        } else if (latestPrevAllocation === "true" && allocationStatus === "false") {
+          txAllocationAction = "DEVICE_DEALLOCATED";
+          txMessageLog = "Device Deallocated";
+        }
+
+        await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: updatedCount }, trx);
+        if (txAllocationAction && txMessageLog) {
           await ActivityService.writeDeviceAllocationLog(
             userPayload.id,
             starterId,
-            allocationAction,
-            { device_allocation: previousAllocation, allocation_status_count: currentCount },
-            { device_allocation: allocationStatus, allocation_status_count: newCount },
-            messageLog,
+            txAllocationAction,
+            { device_allocation: latestPrevAllocation, allocation_status_count: latestCount },
+            { device_allocation: allocationStatus, allocation_status_count: updatedCount },
+            txMessageLog,
             trx,
           );
         }

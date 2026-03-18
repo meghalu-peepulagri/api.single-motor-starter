@@ -59,7 +59,8 @@ export async function assignStarterWithTransaction(payload: AssignStarterType, u
 
   const action = async (trx: any) => {
     const starterUpdateData: Record<string, any> = {
-      user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt
+      user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt,
+      device_installed_location : payload.device_installed_location
     };
     if (payload.installation_photo_key) {
       starterUpdateData.installation_photo_key = payload.installation_photo_key;

@@ -45,7 +45,8 @@ export async function assignStarterWithTransaction(payload, userPayload, starter
     const existedMotorData = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterBoxPayload.id);
     const action = async (trx) => {
         const starterUpdateData = {
-            user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt
+            user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt,
+            device_installed_location: payload.device_installed_location
         };
         if (payload.installation_photo_key) {
             starterUpdateData.installation_photo_key = payload.installation_photo_key;

@@ -69,6 +69,7 @@ export interface AssignStarterType {
   motor_name: string;
   location_id: number;
   hp: number;
+  device_installed_location?: string | null;
   installation_photo_key?: string;
 }
 
