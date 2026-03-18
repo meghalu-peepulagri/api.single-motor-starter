@@ -60,7 +60,7 @@ export async function assignStarterWithTransaction(payload: AssignStarterType, u
   const action = async (trx: any) => {
     const starterUpdateData: Record<string, any> = {
       user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt,
-      device_installed_location : payload.device_installed_location
+      device_installed_location: payload.device_installed_location
     };
     if (payload.installation_photo_key) {
       starterUpdateData.installation_photo_key = payload.installation_photo_key;
@@ -432,6 +432,8 @@ export async function starterConnectedMotors(starterId: number) {
       sim_recharge_expires_at: true,
       hardware_version: true,
       installation_photo_key: true,
+      device_installed_location: true,
+      warranty_expiry_date: true,
     },
     with: {
       motors: {
@@ -450,6 +452,12 @@ export async function starterConnectedMotors(starterId: number) {
         columns: {
           id: true,
           name: true,
+        },
+      },
+      createdBy: {
+        columns: {
+          id: true,
+          full_name: true,
         },
       },
     },

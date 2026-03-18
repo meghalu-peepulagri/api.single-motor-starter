@@ -70,7 +70,10 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => 
     fields: [starterBoxes.user_id],
     references: [users.id],
   }),
-
+  createdBy : one(users, {
+    fields: [starterBoxes.created_by],
+    references: [users.id],
+  }),
   gateway: one(gateways, {
     fields: [starterBoxes.gateway_id],
     references: [gateways.id],

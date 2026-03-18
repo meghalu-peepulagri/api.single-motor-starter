@@ -356,6 +356,8 @@ export async function starterConnectedMotors(starterId) {
             sim_recharge_expires_at: true,
             hardware_version: true,
             installation_photo_key: true,
+            device_installed_location: true,
+            warranty_expiry_date: true,
         },
         with: {
             motors: {
@@ -374,6 +376,12 @@ export async function starterConnectedMotors(starterId) {
                 columns: {
                     id: true,
                     name: true,
+                },
+            },
+            createdBy: {
+                columns: {
+                    id: true,
+                    full_name: true,
                 },
             },
         },
