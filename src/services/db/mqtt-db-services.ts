@@ -145,6 +145,7 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
 
         if (shouldUpdateMotor) {
           await updateRecordByIdWithTrx(motors, motor_id, updateData, trx);
+          await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx, starter_id);
         }
 
         const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
@@ -157,7 +158,6 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
             mode_description, time_stamp, previous_power_state: power, new_power_state: power_present
           }, trx);
         }
-        await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx, starter_id);
       }
 
       const alertsFaultsRecord = {
@@ -302,14 +302,13 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
 
       if (shouldUpdateMotor) {
         await updateRecordByIdWithTrx(motors, motor_id, updateData, trx);
+        await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id,
+          { state: prevState, mode: prevMode },
+          { state: motor_state, mode: mode_description },
+          trx,
+          starter_id
+        );
       }
-
-      await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id,
-        { state: prevState, mode: prevMode },
-        { state: motor_state, mode: mode_description },
-        trx,
-        starter_id
-      );
     }
 
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
@@ -388,8 +387,8 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
       if (motor_state === 0 || motor_state === 1) {
         await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
       }
+      await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: prevMode }, trx, starter_id);
     }
-    await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: prevMode }, trx, starter_id);
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
     const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
     const hasStateChanged = typeof motor_state === "number" && motor_state !== prevState;
@@ -452,9 +451,8 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 
     if (VALID_MODES.includes(mode_description as ValidMode) && mode_description !== prevMode && motor_id) {
       await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description as ValidMode }, trx);
+      await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { mode: prevMode }, { mode: mode_description }, trx, starter_id);
     }
-
-    await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { mode: prevMode }, { mode: mode_description }, trx, starter_id);
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
     const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
     const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
