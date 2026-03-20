@@ -18,7 +18,7 @@ import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
-import { getStarterByMacWithMotor } from "./starter-services.js";
+import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {
     switch (groupId) {
@@ -506,24 +506,12 @@ export async function deviceSerialNumberAllocationAckHandler(message, topic) {
             return null;
         const byMac = await db.query.starterBoxes.findFirst({
             where: and(eq(starterBoxes.mac_address, upperId), ne(starterBoxes.status, "ARCHIVED")),
-            columns: {
-                id: true,
-                user_id: true,
-                created_by: true,
-                device_allocation: true,
-                allocation_status_count: true,
-            },
+            columns: { id: true, user_id: true, created_by: true, device_allocation: true },
         });
         const matchType = byMac ? "mac" : "pcb";
         const starter = byMac ?? await db.query.starterBoxes.findFirst({
             where: and(eq(starterBoxes.pcb_number, upperId), ne(starterBoxes.status, "ARCHIVED")),
-            columns: {
-                id: true,
-                user_id: true,
-                created_by: true,
-                device_allocation: true,
-                allocation_status_count: true,
-            },
+            columns: { id: true, user_id: true, created_by: true, device_allocation: true },
         });
         if (!starter?.id) {
             console.error(`No starter found with identifier [${upperId}]`);
@@ -531,49 +519,15 @@ export async function deviceSerialNumberAllocationAckHandler(message, topic) {
         }
         if (message.D !== 1)
             return null;
-        const previousAllocation = starter.device_allocation ?? "false";
-        const currentCount = starter.allocation_status_count ?? 0;
         const userId = starter.user_id || starter.created_by;
-        if (matchType === "pcb") {
-            // Deallocation event when PCB number is used
-            if (previousAllocation === "false")
-                return null;
-            await db.transaction(async (trx) => {
-                // Re-read inside transaction to avoid duplicate logs when frontend already updated
-                const latestStarter = await trx.query.starterBoxes.findFirst({
-                    where: and(eq(starterBoxes.id, starter.id), ne(starterBoxes.status, "ARCHIVED")),
-                    columns: { device_allocation: true, allocation_status_count: true },
-                });
-                if (!latestStarter || latestStarter.device_allocation === "false")
-                    return;
-                const latestCount = latestStarter.allocation_status_count ?? 0;
-                await updateRecordByIdWithTrx(starterBoxes, starter.id, { device_allocation: "false" }, trx);
-                if (userId) {
-                    await ActivityService.writeDeviceAllocationLog(userId, starter.id, "DEVICE_DEALLOCATED", { device_allocation: latestStarter.device_allocation, allocation_status_count: latestCount }, { device_allocation: "false", allocation_status_count: latestCount }, "Device Deallocated", trx);
-                }
-            });
-            return;
-        }
-        // Allocation event when MAC address is used
-        if (previousAllocation === "true")
+        if (!userId)
             return null;
-        await db.transaction(async (trx) => {
-            // Re-read inside transaction to avoid duplicate logs when frontend already updated
-            const latestStarter = await trx.query.starterBoxes.findFirst({
-                where: and(eq(starterBoxes.id, starter.id), ne(starterBoxes.status, "ARCHIVED")),
-                columns: { device_allocation: true, allocation_status_count: true },
-            });
-            if (!latestStarter || latestStarter.device_allocation === "true")
-                return;
-            const latestCount = latestStarter.allocation_status_count ?? 0;
-            const newCount = latestCount + 1;
-            const allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
-            const message_log = newCount === 1 ? "Device Allocated" : "Device Reallocated";
-            await updateRecordByIdWithTrx(starterBoxes, starter.id, { device_allocation: "true", allocation_status_count: newCount }, trx);
-            if (userId) {
-                await ActivityService.writeDeviceAllocationLog(userId, starter.id, allocationAction, { device_allocation: latestStarter.device_allocation, allocation_status_count: latestCount }, { device_allocation: "true", allocation_status_count: newCount }, message_log, trx);
-            }
-        });
+        // PCB = deallocation, MAC = allocation
+        const newAllocation = matchType === "pcb" ? "false" : "true";
+        // Skip if already in target state
+        if (starter.device_allocation === newAllocation)
+            return null;
+        await applyDeviceAllocation(starter.id, newAllocation, userId);
     }
     catch (error) {
         console.error("Error at device serial number allocation ack handler:", error);

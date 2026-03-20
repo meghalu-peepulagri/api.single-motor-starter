@@ -16,7 +16,8 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { ActivityService } from "./activity-service.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
@@ -451,4 +452,40 @@ export async function getStartersWithSimRechargeExpiry() {
     }).from(starterBoxes)
         .leftJoin(motors, and(eq(motors.starter_id, starterBoxes.id), ne(motors.status, "ARCHIVED")))
         .where(and(ne(starterBoxes.status, "ARCHIVED"), isNotNull(starterBoxes.sim_recharge_expires_at)));
+}
+/**
+ * Shared device allocation handler — uses SELECT FOR UPDATE to prevent
+ * duplicate logs when frontend API and MQTT ack race each other.
+ * Returns true if allocation was actually changed, false if already in target state.
+ */
+export async function applyDeviceAllocation(starterId, newAllocation, userId) {
+    return await db.transaction(async (trx) => {
+        // Lock the row to prevent race between API and MQTT ack
+        const [latestStarter] = await trx
+            .select({
+            device_allocation: starterBoxes.device_allocation,
+            allocation_status_count: starterBoxes.allocation_status_count,
+        })
+            .from(starterBoxes)
+            .where(and(eq(starterBoxes.id, starterId), ne(starterBoxes.status, "ARCHIVED")))
+            .for("update");
+        if (!latestStarter || latestStarter.device_allocation === newAllocation)
+            return false;
+        const previousAllocation = latestStarter.device_allocation ?? "false";
+        const currentCount = latestStarter.allocation_status_count ?? 0;
+        const newCount = (newAllocation === "true" && previousAllocation === "false") ? currentCount + 1 : currentCount;
+        let allocationAction;
+        let messageLog;
+        if (previousAllocation === "false" && newAllocation === "true") {
+            allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
+            messageLog = newCount === 1 ? "Device Allocated" : "Device Reallocated";
+        }
+        else {
+            allocationAction = "DEVICE_DEALLOCATED";
+            messageLog = "Device Deallocated";
+        }
+        await updateRecordByIdWithTrx(starterBoxes, starterId, { device_allocation: newAllocation, allocation_status_count: newCount }, trx);
+        await ActivityService.writeDeviceAllocationLog(userId, starterId, allocationAction, { device_allocation: previousAllocation, allocation_status_count: currentCount }, { device_allocation: newAllocation, allocation_status_count: newCount }, messageLog, trx);
+        return true;
+    });
 }

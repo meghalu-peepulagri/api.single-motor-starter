@@ -20,7 +20,7 @@ import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsPaginated, getUnifiedLogsCount } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
@@ -603,66 +603,12 @@ export class StarterHandlers {
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       const currentCount = starter.allocation_status_count ?? 0;
-      const previousAllocation = starter.device_allocation ?? "false";
 
       if (userPayload.user_type !== "SUPER_ADMIN" && allocationStatus === "true" && starter.device_allocation === "false" && currentCount >= 1) {
         throw new UnauthorizedException("Unauthorized");
       }
 
-      if (allocationStatus === previousAllocation) {
-        return sendResponse(c, 200, "Device allocation status updated successfully");
-      }
-
-      const newCount = (allocationStatus === "true" && previousAllocation === "false") ? currentCount + 1 : currentCount;
-
-      let allocationAction: "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED" | null = null;
-      let messageLog: string | null = null;
-
-      if (previousAllocation === "false" && allocationStatus === "true") {
-        allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
-        messageLog = newCount === 1 ? "Device Allocated" : "Device Reallocated";
-      } else if (previousAllocation === "true" && allocationStatus === "false") {
-        allocationAction = "DEVICE_DEALLOCATED";
-        messageLog = "Device Deallocated";
-      }
-
-      await db.transaction(async (trx) => {
-        // Re-read inside transaction to get latest state and avoid duplicate logs with MQTT ack handler
-        const latestStarter = await trx.query.starterBoxes.findFirst({
-          where: and(eq(starterBoxes.id, starterId), ne(starterBoxes.status, "ARCHIVED")),
-          columns: { device_allocation: true, allocation_status_count: true },
-        });
-
-        if (!latestStarter || latestStarter.device_allocation === allocationStatus) return;
-
-        const latestCount = latestStarter.allocation_status_count ?? 0;
-        const latestPrevAllocation = latestStarter.device_allocation ?? "false";
-        const updatedCount = (allocationStatus === "true" && latestPrevAllocation === "false") ? latestCount + 1 : latestCount;
-
-        let txAllocationAction: "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED" | null = null;
-        let txMessageLog: string | null = null;
-
-        if (latestPrevAllocation === "false" && allocationStatus === "true") {
-          txAllocationAction = updatedCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
-          txMessageLog = updatedCount === 1 ? "Device Allocated" : "Device Reallocated";
-        } else if (latestPrevAllocation === "true" && allocationStatus === "false") {
-          txAllocationAction = "DEVICE_DEALLOCATED";
-          txMessageLog = "Device Deallocated";
-        }
-
-        await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: updatedCount }, trx);
-        if (txAllocationAction && txMessageLog) {
-          await ActivityService.writeDeviceAllocationLog(
-            userPayload.id,
-            starterId,
-            txAllocationAction,
-            { device_allocation: latestPrevAllocation, allocation_status_count: latestCount },
-            { device_allocation: allocationStatus, allocation_status_count: updatedCount },
-            txMessageLog,
-            trx,
-          );
-        }
-      });
+      await applyDeviceAllocation(starterId, allocationStatus, userPayload.id);
       return sendResponse(c, 200, "Device allocation status updated successfully");
     } catch (error: any) {
       console.error("Error at update device allocation status :", error);
