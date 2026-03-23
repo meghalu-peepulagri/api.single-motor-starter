@@ -96,14 +96,16 @@ export class MotorScheduleHandler {
 
       // Use user-provided schedule_start_date for one-time schedules, fallback to today
       const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
+      const scheduleEndDate = data.schedule_end_date || scheduleStartDate;
 
-      // Conflict detection: fetch potential conflicts by date/days, then check time overlap
-      const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
+      // Conflict detection: fetch potential conflicts by date range/days, then check time overlap
+      const conflictStartDate = data.repeat === 1 ? null : scheduleStartDate;
+      const conflictEndDate = data.repeat === 1 ? null : scheduleEndDate;
       const existingSchedules = await findConflictingSchedules(
-        existedMotor.id, conflictDate, data.days_of_week || [],
+        existedMotor.id, conflictStartDate, conflictEndDate, data.days_of_week || [],
       );
       checkMotorScheduleConflict(
-        { ...data, schedule_start_date: scheduleStartDate },
+        { ...data, schedule_start_date: scheduleStartDate, schedule_end_date: scheduleEndDate },
         existingSchedules,
       );
 
@@ -187,14 +189,16 @@ export class MotorScheduleHandler {
 
       validateScheduleTypeRules(data);
 
-      // Conflict detection: fetch potential conflicts by date/days, then check time overlap
+      // Conflict detection: fetch potential conflicts by date range/days, then check time overlap
       const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
-      const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
+      const scheduleEndDate = data.schedule_end_date || scheduleStartDate;
+      const conflictStartDate = data.repeat === 1 ? null : scheduleStartDate;
+      const conflictEndDate = data.repeat === 1 ? null : scheduleEndDate;
       const existingSchedules = await findConflictingSchedules(
-        existedSchedule.motor_id, conflictDate, data.days_of_week || [], scheduleId,
+        existedSchedule.motor_id, conflictStartDate, conflictEndDate, data.days_of_week || [], scheduleId,
       );
       checkMotorScheduleConflict(
-        { ...data, schedule_start_date: scheduleStartDate },
+        { ...data, schedule_start_date: scheduleStartDate, schedule_end_date: scheduleEndDate },
         existingSchedules,
       );
 
@@ -328,7 +332,7 @@ export class MotorScheduleHandler {
 
       // Re-check conflicts with expanded days
       const conflicts = await findConflictingSchedules(
-        existed.motor_id, null, mergedDays, scheduleId,
+        existed.motor_id, null, null, mergedDays, scheduleId,
       );
       checkMotorScheduleConflict(
         { start_time: existed.start_time, end_time: existed.end_time, repeat: 1, days_of_week: mergedDays },

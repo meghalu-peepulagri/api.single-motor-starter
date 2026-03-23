@@ -82,7 +82,7 @@ v.custom((data) => {
 v.custom((data) => {
     return data.start_time !== data.end_time;
 }, START_TIME_BEFORE_END_TIME), 
-// Cross-field: auto-calculate runtime_minutes from start_time and end_time (4-digit HHMM string)
+// Cross-field: auto-calculate runtime_minutes and set power_loss_recovery_time defaults
 v.transform((data) => {
     const sh = parseInt(data.start_time.substring(0, 2), 10);
     const sm = parseInt(data.start_time.substring(2, 4), 10);
@@ -91,7 +91,10 @@ v.transform((data) => {
     let diff = (eh * 60 + em) - (sh * 60 + sm);
     if (diff <= 0)
         diff += 24 * 60;
-    return { ...data, runtime_minutes: diff };
+    // Default power_loss_recovery_time: CYCLIC = 0, TIME_BASED = 30
+    const defaultRecoveryTime = data.schedule_type === "CYCLIC" ? 0 : 30;
+    const power_loss_recovery_time = data.power_loss_recovery_time ?? defaultRecoveryTime;
+    return { ...data, runtime_minutes: diff, power_loss_recovery_time };
 }));
 // =================== UPDATE SCHEDULE VALIDATOR ===================
 export const vUpdateMotorSchedule = vAddMotorSchedule;

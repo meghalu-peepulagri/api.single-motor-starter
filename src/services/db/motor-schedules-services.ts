@@ -42,12 +42,13 @@ export async function getNextScheduleIdForMotor(motorId: number): Promise<number
 
 /**
  * Find active schedules for a motor that could conflict.
- * Filters by schedule_date and/or overlapping days_of_week — no schedule_type comparison.
+ * Filters by date range overlap and/or overlapping days_of_week.
  * Optionally excludes a specific schedule ID (for updates).
  */
 export async function findConflictingSchedules(
   motorId: number,
-  scheduleDate?: number | null,
+  scheduleStartDate?: number | null,
+  scheduleEndDate?: number | null,
   daysOfWeek: number[] = [],
   excludeScheduleId?: number,
 ) {
@@ -60,11 +61,19 @@ export async function findConflictingSchedules(
     conditions.push(ne(motorSchedules.id, excludeScheduleId));
   }
 
-  // Build date/day filter: match by exact date OR overlapping days
+  // Build date/day filter: match by date range overlap OR overlapping days
   const dateOrDayConditions: SQL[] = [];
 
-  if (scheduleDate) {
-    dateOrDayConditions.push(eq(motorSchedules.schedule_start_date, scheduleDate));
+  if (scheduleStartDate && scheduleEndDate) {
+    // Date range overlap: existing.start <= new.end AND existing.end >= new.start
+    dateOrDayConditions.push(
+      sql`${motorSchedules.schedule_start_date} <= ${scheduleEndDate} AND ${motorSchedules.schedule_end_date} >= ${scheduleStartDate}`,
+    );
+  } else if (scheduleStartDate) {
+    // Fallback: single date match (start date only)
+    dateOrDayConditions.push(
+      sql`${motorSchedules.schedule_start_date} <= ${scheduleStartDate} AND ${motorSchedules.schedule_end_date} >= ${scheduleStartDate}`,
+    );
   }
 
   if (daysOfWeek.length > 0) {
@@ -88,6 +97,7 @@ export async function findConflictingSchedules(
       start_time: true,
       end_time: true,
       schedule_start_date: true,
+      schedule_end_date: true,
       days_of_week: true,
     },
   });
