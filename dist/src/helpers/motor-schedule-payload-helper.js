@@ -316,7 +316,7 @@ export function formatMotorScheduleListResponse(result) {
     };
 }
 // =================== COMPACT DEVICE SYNC PAYLOAD ===================
-const MAX_SCHEDULES_PER_DEVICE = 10;
+const MAX_SCHEDULES_PER_DEVICE = 12;
 const MAX_ITEMS_PER_CHUNK = 8;
 /** Format a single schedule record into compact m1 item based on schedule type */
 function toCompactSchedule(record) {
@@ -369,8 +369,8 @@ export function buildDeviceSyncPayloads(records) {
             .filter((p) => p.compact !== null);
         const compactItems = compactPairs.map(p => p.compact);
         const validRecords = compactPairs.map(p => p.record);
-        // sch_cnt = total unack'd schedules for this device (before slicing/filtering)
-        const totalCount = schedules.length;
+        // sch_cnt = total valid schedules being sent to this device in this sync call
+        const totalCount = compactItems.length;
         if (compactItems.length === 0)
             continue;
         // Get plr from the first valid schedule (default 30)

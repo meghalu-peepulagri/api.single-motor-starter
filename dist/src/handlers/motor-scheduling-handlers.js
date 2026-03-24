@@ -320,25 +320,19 @@ export class MotorScheduleHandler {
                     continue;
                 }
                 totalDevices++;
-                // Publish chunks sequentially in background — each chunk waits for ACK (D=4) before sending next
-                const publishChunksSequentially = async () => {
-                    for (const { payload, dbIds } of chunks) {
-                        const ackSuccess = await publishMultipleTimesInBackground(payload, starterData);
-                        if (ackSuccess) {
-                            // D=4: device acknowledged — mark schedules as SCHEDULED
-                            await db.update(motorSchedules)
-                                .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
-                                .where(inArray(motorSchedules.id, dbIds));
-                            console.log(`Schedule chunk ACK success for starter_id=${starter_id}, idx=${payload.D.idx}, updated ${dbIds.length} schedules as SCHEDULED`);
-                        }
-                        else {
-                            // ACK failed after all retries — keep previous status so next sync cycle retries
-                            console.warn(`Schedule chunk ACK failed for starter_id=${starter_id}, idx=${payload.D.idx}, keeping ${dbIds.length} schedules in current state for retry`);
-                            break;
-                        }
+                // Publish all chunks sequentially — await each so publishingMap clears before next chunk
+                for (const { payload, dbIds } of chunks) {
+                    const ackSuccess = await publishMultipleTimesInBackground(payload, starterData);
+                    if (ackSuccess) {
+                        await db.update(motorSchedules)
+                            .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+                            .where(inArray(motorSchedules.id, dbIds));
+                        console.log(`Schedule chunk ACK success for starter_id=${starter_id}, idx=${payload.D.idx}, marked ${dbIds.length} schedules as SCHEDULED`);
                     }
-                };
-                publishChunksSequentially();
+                    else {
+                        console.warn(`Schedule chunk ACK failed for starter_id=${starter_id}, idx=${payload.D.idx}, keeping ${dbIds.length} schedules for retry`);
+                    }
+                }
             }
             return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, {
                 devices: totalDevices,
