@@ -1,5 +1,5 @@
-import { parse, isValid } from "date-fns";
-import moment from "moment-timezone";
+import { parse, isValid, startOfDay, endOfDay } from "date-fns";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 export function parseTimestamp(ct?: string): string {
   if (ct) {
@@ -15,17 +15,17 @@ export function parseTimestamp(ct?: string): string {
 export function getUTCFromDateAndToDate(fromDate: string, toDate: string, applyDayBoundary: boolean = true) {
   const IST_TIMEZONE = "Asia/Kolkata";
 
-  let fromIST = moment.tz(fromDate, IST_TIMEZONE);
-  let toIST = moment.tz(toDate, IST_TIMEZONE);
+  let fromIST = toZonedTime(new Date(fromDate), IST_TIMEZONE);
+  let toIST = toZonedTime(new Date(toDate), IST_TIMEZONE);
 
   if (applyDayBoundary) {
-    fromIST = fromIST.startOf("day");
-    toIST = toIST.endOf("day");
+    fromIST = startOfDay(fromIST);
+    toIST = endOfDay(toIST);
   }
 
   return {
-    startOfDayUTC: fromIST.utc().toISOString(),
-    endOfDayUTC: toIST.utc().toISOString(),
+    startOfDayUTC: fromZonedTime(fromIST, IST_TIMEZONE).toISOString(),
+    endOfDayUTC: fromZonedTime(toIST, IST_TIMEZONE).toISOString(),
   };
 }
 
@@ -48,24 +48,24 @@ export function parseQueryDates(query: any) {
   let toDate = query.to_date;
 
   const IST = "Asia/Kolkata";
-  const now = moment().tz(IST);
+  const nowIST = toZonedTime(new Date(), IST);
 
   // Default → today (IST day)
   if (!fromDate || !toDate) {
-    const startOfToday = now.clone().startOf("day");
-    const endOfToday = now.clone().endOf("day");
+    const startOfToday = startOfDay(nowIST);
+    const endOfToday = endOfDay(nowIST);
     return {
-      fromDateUTC: startOfToday.utc().toISOString(),
-      toDateUTC: endOfToday.utc().toISOString(),
+      fromDateUTC: fromZonedTime(startOfToday, IST).toISOString(),
+      toDateUTC: fromZonedTime(endOfToday, IST).toISOString(),
     };
   }
 
-  const fromIST = moment.tz(fromDate, "YYYY-MM-DD", IST).startOf("day");
-  const toIST = moment.tz(toDate, "YYYY-MM-DD", IST).endOf("day");
+  const fromIST = startOfDay(toZonedTime(new Date(fromDate), IST));
+  const toIST = endOfDay(toZonedTime(new Date(toDate), IST));
 
   return {
-    fromDateUTC: fromIST.utc().toISOString(),
-    toDateUTC: toIST.utc().toISOString(),
+    fromDateUTC: fromZonedTime(fromIST, IST).toISOString(),
+    toDateUTC: fromZonedTime(toIST, IST).toISOString(),
   };
 }
 

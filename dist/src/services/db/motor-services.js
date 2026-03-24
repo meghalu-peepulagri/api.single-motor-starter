@@ -375,10 +375,11 @@ export async function getMotorsTotalRunOnTime(motorIds) {
         return {};
     // Default to today's date range in IST
     const IST = "Asia/Kolkata";
-    const moment = (await import("moment-timezone")).default;
-    const now = moment().tz(IST);
-    const fromDateObj = now.clone().startOf("day").utc().toDate();
-    const toDateObj = now.clone().endOf("day").utc().toDate();
+    const { toZonedTime, fromZonedTime } = await import("date-fns-tz");
+    const { startOfDay, endOfDay } = await import("date-fns");
+    const nowIST = toZonedTime(new Date(), IST);
+    const fromDateObj = fromZonedTime(startOfDay(nowIST), IST);
+    const toDateObj = fromZonedTime(endOfDay(nowIST), IST);
     // Only fetch records that have an actual end_time (completed sessions)
     const records = await db.query.motorsRunTime.findMany({
         where: and(inArray(motorsRunTime.motor_id, motorIds), isNotNull(motorsRunTime.end_time), lte(motorsRunTime.start_time, toDateObj), gte(motorsRunTime.end_time, fromDateObj)),

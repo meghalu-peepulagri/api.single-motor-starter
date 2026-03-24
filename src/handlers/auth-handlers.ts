@@ -1,6 +1,6 @@
 import argon2 from "argon2";
 import type { Context } from "hono";
-import moment from "moment";
+import { isBefore } from "date-fns";
 import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, MOBILE_NUMBER_ALREADY_EXIST, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
 import db from "../database/configuration.js";
@@ -149,12 +149,12 @@ export class AuthHandlers {
             if (user === true) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
 
             const otpData: NewOtp[] = await otpService.fetchOtp({ phone: validReqData.phone });
-            const now = moment.utc();
+            const now = new Date();
 
             const otpValidationErrors: Record<string, string> = {};
             let otp = otpData[0];
 
-            if (!otp || otp.otp !== validReqData.otp || !otp.expires_at || moment.utc(otp.expires_at).isBefore(now)) {
+            if (!otp || otp.otp !== validReqData.otp || !otp.expires_at || isBefore(new Date(otp.expires_at), now)) {
                 otpValidationErrors.otp = INVALID_OTP;
             }
 

@@ -4,7 +4,6 @@ import type { StarterBox } from "../database/schemas/starter-boxes.js";
 import { publishData } from "../services/db/mqtt-db-services.js";
 import { logger } from "../utils/logger.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
-import { ACK_TYPES } from "./packet-types-helper.js";
 import { pendingAckMap, publishingMap } from "./ack-tracker-hepler.js";
 
 
