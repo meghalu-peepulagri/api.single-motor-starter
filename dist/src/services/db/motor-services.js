@@ -5,6 +5,7 @@ import { locations } from "../../database/schemas/locations.js";
 import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { formatDuration, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
@@ -481,4 +482,22 @@ export async function getMotorBasedStarterDetails(motorId) {
         console.error("Error fetching motor-based starter details:", error);
         throw error;
     }
+}
+/**
+ * Get active schedule counts grouped by motor_id.
+ * Excludes ARCHIVED status and DELETED/CANCELLED schedule_status.
+ */
+export async function getMotorsActiveScheduleCount(motorIds) {
+    if (!motorIds.length)
+        return {};
+    const rows = await db
+        .select({ motor_id: motorSchedules.motor_id, count: sql `count(*)::int` })
+        .from(motorSchedules)
+        .where(and(inArray(motorSchedules.motor_id, motorIds), ne(motorSchedules.status, "ARCHIVED"), sql `${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`))
+        .groupBy(motorSchedules.motor_id);
+    const map = {};
+    for (const row of rows) {
+        map[row.motor_id] = row.count;
+    }
+    return map;
 }
