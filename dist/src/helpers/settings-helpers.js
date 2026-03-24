@@ -350,12 +350,6 @@ export const prepareHardWareVersion = (starterDetails) => {
         }
     };
 };
-const validateSettingsAck = (payload, expectedSequence) => {
-    return (payload &&
-        payload.T === ACK_TYPES.ADMIN_CONFIG_DATA_REQUEST_ACK &&
-        payload.S === expectedSequence &&
-        (payload.D === 0 || payload.D === 1));
-};
 export const publishMultipleTimesInBackground = async (devicePayload, starterDetails) => {
     // Prevent duplicate publishing
     if (publishingMap.get(starterDetails.id)) {

@@ -2,11 +2,7 @@ import { userActivityLogs, type NewUserActivityLog } from "../../database/schema
 import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
-import type { Motor } from "../../database/schemas/motors.js";
-import type { StarterBox } from "../../database/schemas/starter-boxes.js";
-import type { Location } from "../../database/schemas/locations.js";
 import type { User } from "../../database/schemas/users.js";
-import { log } from "node:console";
 
 type Transaction = any; // Placeholder for now, but will use more specific types for data
 

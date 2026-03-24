@@ -644,8 +644,13 @@ export class StarterHandlers {
   starterCountBasedOnStatusHandler = async (c: Context) => {
     try {
       const notArchived = ne(starterBoxes.status, "ARCHIVED");
+      const query = c.req.query();
 
       const baseFilters = [notArchived];
+
+      if (query.user_id) {
+        baseFilters.push(eq(starterBoxes.user_id, Number(query.user_id)));
+      }
 
       const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
         getRecordsCount(starterBoxes, [...baseFilters]),

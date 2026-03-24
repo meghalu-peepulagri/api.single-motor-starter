@@ -2,7 +2,6 @@ import { userActivityLogs } from "../../database/schemas/user-activity-logs.js";
 import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
-import { log } from "node:console";
 /**
  * Service to handle Database Level Activity Logs (Audit Trail)
  */

@@ -554,16 +554,6 @@ export const prepareHardWareVersion = (starterDetails: StarterBox) => {
   };
 };
 
-
-const validateSettingsAck = (payload: any, expectedSequence: number) => {
-  return (
-    payload &&
-    payload.T === ACK_TYPES.ADMIN_CONFIG_DATA_REQUEST_ACK &&
-    payload.S === expectedSequence &&
-    (payload.D === 0 || payload.D === 1)
-  );
-};
-
 export const publishMultipleTimesInBackground = async (
   devicePayload: any,
   starterDetails: StarterBox

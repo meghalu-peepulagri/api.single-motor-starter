@@ -12,7 +12,6 @@ import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-help
 import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
-import { log } from "node:util";
 
 // Extract transaction type from Drizzle's db.transaction callback
 type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
