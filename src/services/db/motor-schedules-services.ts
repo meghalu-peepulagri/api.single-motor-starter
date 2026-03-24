@@ -14,13 +14,21 @@ const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"
  * If no reusable ID found, returns max(schedule_id) + 1, or 1 if no schedules exist.
  */
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
-  // Find the lowest schedule_id that is ARCHIVED (status) or DELETED (schedule_status)
+  // Find the lowest schedule_id from deleted/archived rows
+  // that is NOT used by any active row for the same motor
   const reusable = await db
     .select({ scheduleId: motorSchedules.schedule_id })
     .from(motorSchedules)
     .where(and(
       eq(motorSchedules.motor_id, motorId),
       sql`(${motorSchedules.status} = 'ARCHIVED' OR ${motorSchedules.schedule_status} IN ('DELETED', 'CANCELLED'))`,
+      sql`NOT EXISTS (
+        SELECT 1 FROM motor_schedules ms2
+        WHERE ms2.motor_id = ${motorId}
+          AND ms2.schedule_id = ${motorSchedules.schedule_id}
+          AND ms2.status != 'ARCHIVED'
+          AND ms2.schedule_status NOT IN ('DELETED', 'CANCELLED')
+      )`,
     ))
     .orderBy(motorSchedules.schedule_id)
     .limit(1);
@@ -54,6 +62,7 @@ export async function findConflictingSchedules(
 ) {
   const conditions: SQL[] = [
     eq(motorSchedules.motor_id, motorId),
+    ne(motorSchedules.status, "ARCHIVED"),
     inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]),
   ];
 

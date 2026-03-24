@@ -233,10 +233,11 @@ export class MotorScheduleHandler {
         await stopScheduleById(scheduleId);
       }
 
-      // Soft delete: mark as DELETED with deleted_by user
+      // Soft delete: mark as DELETED with deleted_by user and deleted_at timestamp
       await updateRecordById<MotorScheduleTable>(motorSchedules, existed.id, {
         schedule_status: "DELETED",
         deleted_by: userPayload.id,
+        deleted_at: new Date(),
         status: "ARCHIVED",
         enabled: false,
       });
