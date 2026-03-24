@@ -340,7 +340,10 @@ export class MotorScheduleHandler {
                 };
                 publishChunksSequentially();
             }
-            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: totalDevices, total_chunks: grouped.reduce((sum, g) => sum + g.chunks.length, 0) });
+            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, {
+                devices: totalDevices,
+                total_chunks: grouped.reduce((sum, g) => sum + g.chunks.length, 0),
+            });
         }
         catch (error) {
             console.error("Error at get pending schedules for sync:", error.message);

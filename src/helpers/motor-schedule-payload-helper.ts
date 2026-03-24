@@ -417,7 +417,8 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
       .filter((p): p is { record: any; compact: Record<string, any> } => p.compact !== null);
     const compactItems = compactPairs.map(p => p.compact);
     const validRecords = compactPairs.map(p => p.record);
-    const totalCount = compactItems.length;
+    // sch_cnt = total unack'd schedules for this device (before slicing/filtering)
+    const totalCount = schedules.length;
 
     if (compactItems.length === 0) continue;
 

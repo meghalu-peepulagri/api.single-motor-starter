@@ -369,7 +369,8 @@ export function buildDeviceSyncPayloads(records) {
             .filter((p) => p.compact !== null);
         const compactItems = compactPairs.map(p => p.compact);
         const validRecords = compactPairs.map(p => p.record);
-        const totalCount = compactItems.length;
+        // sch_cnt = total unack'd schedules for this device (before slicing/filtering)
+        const totalCount = schedules.length;
         if (compactItems.length === 0)
             continue;
         // Get plr from the first valid schedule (default 30)

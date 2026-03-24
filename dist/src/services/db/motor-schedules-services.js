@@ -266,7 +266,7 @@ export async function findPendingSchedulesForSync() {
             power_loss_recovery_time: true,
             enabled: true,
         },
-        orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.start_time)],
+        orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.schedule_id)],
     });
 }
 // =================== BATCH STATUS UPDATE FOR SYNC ===================
