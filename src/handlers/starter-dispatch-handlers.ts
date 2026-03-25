@@ -4,7 +4,7 @@ import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-
 import { starterDispatch, type StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { preparedPayloadOfDispatchData } from "../helpers/starter-dispatch-helper.js";
+import { formatExpiringRecords, preparedPayloadOfDispatchData } from "../helpers/starter-dispatch-helper.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
 import { getExpiringDispatches, getStarterDispatchByStarterId } from "../services/db/starter-dispatch-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -50,8 +50,9 @@ export class StarterDispatchHandlers {
       const type = c.req.query("type") as string | undefined;
 
       const expiringRecords = await getExpiringDispatches(type);
+      const formattedRecords = formatExpiringRecords(expiringRecords, type);
 
-      return sendResponse(c, 200, EXPIRING_DISPATCH_FETCHED, expiringRecords);
+      return sendResponse(c, 200, EXPIRING_DISPATCH_FETCHED, formattedRecords);
     } catch (error: any) {
       console.error("Error at get expiring dispatch :", error);
       throw error;

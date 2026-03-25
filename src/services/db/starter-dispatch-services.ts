@@ -33,7 +33,7 @@ export async function getExpiringDispatches(type?: string) {
   const warrantyExpiryCondition = sql`TO_DATE(${starterDispatch.warranty_end_date}, 'DD-MM-YYYY') BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`;
 
   let expiryCondition;
-  if (type === "sim") {
+  if (type === "recharge") {
     expiryCondition = simExpiryCondition;
   } else if (type === "warranty") {
     expiryCondition = warrantyExpiryCondition;
@@ -46,21 +46,16 @@ export async function getExpiringDispatches(type?: string) {
       ne(starterDispatch.status, "ARCHIVED"),
       expiryCondition
     ),
-    with: {
-      createdBy: {
-        where: ne(users.status, "ARCHIVED"),
-        columns: {
-          id: true,
-          full_name: true,
-        },
-      },
-      updatedBy: {
-        where: ne(users.status, "ARCHIVED"),
-        columns: {
-          id: true,
-          full_name: true,
-        },
-      },
+    columns: {
+      id: true,
+      starter_id: true,
+      customer_name: true,
+      contact_number: true,
+      address: true,
+      location: true,
+      sim_no: true,
+      sim_recharge_end_date: true,
+      warranty_end_date: true,
     },
   } as any);
 }
