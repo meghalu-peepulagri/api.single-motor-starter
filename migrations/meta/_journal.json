@@ -225,6 +225,13 @@
       "when": 1774347753386,
       "tag": "0031_wonderful_leopardon",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774430473417,
+      "tag": "0032_white_titania",
+      "breakpoints": true
     }
   ]
 }

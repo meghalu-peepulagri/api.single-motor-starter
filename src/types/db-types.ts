@@ -18,10 +18,11 @@ import type { StarterSettings, StarterSettingsTable } from "../database/schemas/
 import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import type { User, UsersTable } from "../database/schemas/users.js";
 import type { DeviceTemperature, DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
+import type { StarterDispatch, StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
   MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable | StarterDefaultSettingsLimitsTable
-  | StarterBoxParametersTable | DeviceTemperatureTable;
+  | StarterBoxParametersTable | DeviceTemperatureTable | StarterDispatchTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User :
@@ -43,6 +44,7 @@ export type DBRecord<T extends DBTable> =
   T extends StarterSettingsTable ? StarterSettings :
   T extends StarterDefaultSettingsLimitsTable ? StarterDefaultSettingsLimits :
   T extends DeviceTemperatureTable ? DeviceTemperature :
+  T extends StarterDispatchTable ? StarterDispatch :
   never;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;

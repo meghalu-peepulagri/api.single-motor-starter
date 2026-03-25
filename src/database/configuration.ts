@@ -21,6 +21,7 @@ import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
 import * as DefaultSettingsLimitsSchema from "./schemas/starter-default-settings-limits.js";
 import * as benchedStarterParametersSchema from "./schemas/benched-starter-parameters.js";
+import * as starterDispatchSchema from "./schemas/starter-dispatch.js";
 
 const { Pool } = pg;
 
@@ -57,6 +58,7 @@ const db = drizzle(dbClient, {
     ...alertsFaultsSchema,
     ...DefaultSettingsLimitsSchema,
     ...benchedStarterParametersSchema,
+    ...starterDispatchSchema,
   },
 });
 

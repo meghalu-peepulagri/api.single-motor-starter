@@ -1,0 +1,9 @@
+import factory from "../factory.js";
+import { StarterDispatchHandlers } from "../handlers/starter-dispatch-handlers.js";
+import { isAuthorized } from "../middlewares/isAuthorized.js";
+const starterDispatchHandlers = new StarterDispatchHandlers();
+const starterDispatchRoutes = factory.createApp();
+starterDispatchRoutes.post("/", isAuthorized, starterDispatchHandlers.addStarterDispatchHandler);
+starterDispatchRoutes.get("/expiring", isAuthorized, starterDispatchHandlers.getExpiringDispatchHandler);
+starterDispatchRoutes.get("/:starterId", isAuthorized, starterDispatchHandlers.getStarterDispatchByStarterIdHandler);
+export default starterDispatchRoutes;
