@@ -5,7 +5,8 @@ import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { formatExpiringRecords, preparedPayloadOfDispatchData } from "../helpers/starter-dispatch-helper.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
-import { getExpiringDispatches, getStarterDispatchByStarterId } from "../services/db/starter-dispatch-services.js";
+import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
+import { getExpiringDispatches, getExpiringDispatchesCount, getStarterDispatchByStarterId } from "../services/db/starter-dispatch-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -34,10 +35,18 @@ export class StarterDispatchHandlers {
     };
     getExpiringDispatchHandler = async (c) => {
         try {
-            const type = c.req.query("type");
-            const expiringRecords = await getExpiringDispatches(type);
+            const query = c.req.query();
+            const type = query.type;
+            const { page, pageSize, offset } = getPaginationOffParams(query);
+            const totalRecords = await getExpiringDispatchesCount(type);
+            const paginationInfo = getPaginationData(page, pageSize, totalRecords);
+            const expiringRecords = await getExpiringDispatches(type, offset, pageSize);
             const formattedRecords = formatExpiringRecords(expiringRecords, type);
-            return sendResponse(c, 200, EXPIRING_DISPATCH_FETCHED, formattedRecords);
+            const response = {
+                pagination: paginationInfo,
+                records: formattedRecords,
+            };
+            return sendResponse(c, 200, EXPIRING_DISPATCH_FETCHED, response);
         }
         catch (error) {
             console.error("Error at get expiring dispatch :", error);
