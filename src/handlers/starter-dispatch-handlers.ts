@@ -4,14 +4,15 @@ import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-
 import { starterDispatch, type StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { formatExpiringRecords, preparedPayloadOfDispatchData } from "../helpers/starter-dispatch-helper.js";
-import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
+import { formatExpiringRecords, preparedPayloadOfDispatchData, preparedStarterBoxUpdateData } from "../helpers/starter-dispatch-helper.js";
+import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getExpiringDispatches, getExpiringDispatchesCount, getStarterDispatchByStarterId } from "../services/db/starter-dispatch-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedAddStarterDispatch } from "../validations/schema/starter-dispatch-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -32,11 +33,22 @@ export class StarterDispatchHandlers {
 
       if (!existedStarter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
+      const existedSimNumberRecord = await getSingleRecordByMultipleColumnValues<StarterDispatchTable>(starterDispatch,
+        ["sim_no", "status"], ["=", "!="], [validDispatchReq.sim_no, "ARCHIVED"]);
+
+      if (existedSimNumberRecord) {
+        throw new ConflictException(`SIM number already existed.`);
+      }
+
       const preparedPayload = preparedPayloadOfDispatchData(validDispatchReq, userPayload.id);
+      const starterBoxUpdate = preparedStarterBoxUpdateData(preparedPayload);
 
-      const savedRecord = await saveSingleRecord<StarterDispatchTable>(starterDispatch, preparedPayload);
+      await Promise.all([
+        updateRecordById(starterBoxes, existedStarter.id, starterBoxUpdate),
+        saveSingleRecord<StarterDispatchTable>(starterDispatch, preparedPayload)
+      ]);
 
-      return sendResponse(c, 201, STARTER_DISPATCH_ADDED_SUCCESSFULLY, savedRecord);
+      return sendResponse(c, 201, STARTER_DISPATCH_ADDED_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at add starter dispatch :", error);
       handleJsonParseError(error);

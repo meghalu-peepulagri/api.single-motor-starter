@@ -60,9 +60,6 @@ export async function selectTopicAck(topicType, payload, topic) {
         case "CALIBRATION_ACK":
             await deviceSyncUpdate(payload, topic);
             break;
-        // case "CALIBRATION_ACK":
-        //   await adminConfigDataRequestAckHandler(payload, topic);
-        //   break;
         case "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK":
             await deviceSerialNumberAllocationAckHandler(payload, topic);
             break;

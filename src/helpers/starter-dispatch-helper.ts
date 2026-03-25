@@ -64,6 +64,15 @@ function addOneYearValidity(dateStr: string): string {
   return `${dd}-${mm}-${yyyy}`;
 }
 
+export function preparedStarterBoxUpdateData(dispatchPayload: NewStarterDispatch) {
+  return {
+    sim_recharge_expires_at: dispatchPayload.sim_recharge_end_date,
+    warranty_expiry_date: dispatchPayload.warranty_end_date,
+    device_mobile_number: dispatchPayload.sim_no,
+    hardware_version: dispatchPayload.hardware_version,
+  };
+}
+
 export function preparedPayloadOfDispatchData(validDispatchReq: ValidatedAddStarterDispatch, createdBy: number): NewStarterDispatch {
   const invoiceDate = validDispatchReq.invoice_date;
   const simRechargeEndDate = addOneYearValidity(invoiceDate);
