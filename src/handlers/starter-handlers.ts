@@ -32,6 +32,7 @@ import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
+import { starterDispatch, type StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {
@@ -227,6 +228,7 @@ export class StarterHandlers {
           await saveSingleRecord<MotorsTable>(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
         } else {
           await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
+          await updateRecordById<StarterDispatchTable>(starterDispatch, starterId, { status: "ARCHIVED" }, trx);
         }
 
         if (motor) {
@@ -487,6 +489,10 @@ export class StarterHandlers {
       const userId = (c.get("user_payload") as User).id;
       await db.transaction(async (trx) => {
         const updatedStarter = await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, validatedReqData, trx);
+        await updateRecordById<StarterDispatchTable>(starterDispatch, starter.id, {
+          pcb_number: validatedReqData.pcb_number, box_serial_no: validatedReqData.starter_number,
+          sim_no: validatedReqData.device_mobile_number
+        }, trx);
 
         await ActivityService.writeStarterUpdatedLog(userId, starterId,
           {
