@@ -743,7 +743,7 @@ export class StarterHandlers {
       const allDevices = await db.query.starterBoxes.findMany({
         where: ne(starterBoxes.status, "ARCHIVED"),
       });
-
+ 
       const BATCH_SIZE = 10;
       const BATCH_DELAY_MS = 60 * 1000; // 1 minute between batches
 

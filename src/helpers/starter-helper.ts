@@ -3,8 +3,9 @@ import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import type { User } from "../database/schemas/users.js";
 import type { starterBoxPayloadType } from "../types/app-types.js";
-import { randomSequenceNumber } from "./mqtt-helpers.js";
-import { publishMultipleTimesInBackground } from "./settings-helpers.js";
+// Previously used for MQTT device info requests — topic no longer available after enhancement
+// import { randomSequenceNumber } from "./mqtt-helpers.js";
+// import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import { getStartersWithSimRechargeExpiry } from "../services/db/starter-services.js";
 
@@ -67,6 +68,23 @@ export function starterFilters(query: any, user: any) {
 }
 
 export function parseSimExpiryDate(dateStr: string): Date | null {
+  // DD-MM-YYYY format (e.g., "21-02-2027") — primary format from dispatch
+  const ddmmyyyy = dateStr.trim().split("-");
+  if (ddmmyyyy.length === 3) {
+    const day = parseInt(ddmmyyyy[0], 10);
+    const month = parseInt(ddmmyyyy[1], 10) - 1;
+    const year = parseInt(ddmmyyyy[2], 10);
+
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      const parsed = new Date(year, month, day);
+      if (!isNaN(parsed.getTime())) {
+        parsed.setHours(0, 0, 0, 0);
+        return parsed;
+      }
+    }
+  }
+
+  // Fallback: "day month year" format (e.g., "21 feb 2027") — for existing production data
   const monthMap: Record<string, number> = {
     jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
     jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
@@ -93,52 +111,52 @@ export function buildSimExpiryNotification(
   // 15 days before expiry
   if (diffDays === 15) {
     return {
-      title: `SIM Recharge Expiring in 15 Days - ${deviceName}`,
-      message: `Your SIM recharge for device ${deviceName} expires in 15 days (${expiryDateStr}). Please plan your recharge.`,
+      title: `🔔 Recharge Alert`,
+      message: `${deviceName} - Recharge expires on ${expiryDateStr}. 15 days remaining.`,
     };
   }
   // Before expiry (positive diffDays)
   if (diffDays === 3) {
     return {
-      title: `SIM Recharge Expiring Soon - ${deviceName}`,
-      message: `Your SIM recharge for device ${deviceName} expires in 3 days (${expiryDateStr}). Please recharge soon.`,
+      title: `🔔 Recharge Alert`,
+      message: `${deviceName} - Recharge expires on ${expiryDateStr}. 3 days remaining.`,
     };
   }
   if (diffDays === 2) {
     return {
-      title: `SIM Recharge Expiring Soon - ${deviceName}`,
-      message: `Your SIM recharge for device ${deviceName} expires in 2 days (${expiryDateStr}). Please recharge soon.`,
+      title: `🔔 Recharge Alert`,
+      message: `${deviceName} - Recharge expires on ${expiryDateStr}. 2 days remaining.`,
     };
   }
   if (diffDays === 1) {
     return {
-      title: `SIM Recharge Expiring Tomorrow - ${deviceName}`,
-      message: `Your SIM recharge for device ${deviceName} expires tomorrow (${expiryDateStr}). Please recharge immediately.`,
+      title: `🔔 Recharge Alert`,
+      message: `${deviceName} - Recharge expires tomorrow (${expiryDateStr}). 1 day remaining.`,
     };
   }
   if (diffDays === 0) {
     return {
-      title: `SIM Recharge Expires Today - ${deviceName}`,
-      message: `Your SIM recharge for device ${deviceName} expires today (${expiryDateStr}). Please recharge immediately.`,
+      title: `🔔 Recharge Alert`,
+      message: `${deviceName} - Recharge expires today (${expiryDateStr}). Please recharge now.`,
     };
   }
   // After expiry (negative diffDays)
   if (diffDays === -1) {
     return {
-      title: `SIM Recharge Expired - ${deviceName}`,
-      message: `Your SIM recharge for device ${deviceName} expired 1 day ago (${expiryDateStr}). Please recharge immediately.`,
+      title: `🔔 Recharge Alert`,
+      message: `${deviceName} - Recharge expired on ${expiryDateStr}. Overdue by 1 day.`,
     };
   }
   if (diffDays === -2) {
     return {
-      title: `SIM Recharge Expired - ${deviceName}`,
-      message: `Your SIM recharge for device ${deviceName} expired 2 days ago (${expiryDateStr}). Please recharge immediately.`,
+      title: `🔔 Recharge Alert`,
+      message: `${deviceName} - Recharge expired on ${expiryDateStr}. Overdue by 2 days.`,
     };
   }
   if (diffDays === -3) {
     return {
-      title: `SIM Recharge Expired - ${deviceName}`,
-      message: `Your SIM recharge for device ${deviceName} expired 3 days ago (${expiryDateStr}). Please recharge immediately.`,
+      title: `🔔 Recharge Alert`,
+      message: `${deviceName} - Recharge expired on ${expiryDateStr}. Overdue by 3 days.`,
     };
   }
   return null;
@@ -183,15 +201,17 @@ async function sendExpiryNotifications(
   return count;
 }
 
-async function sendDeviceInfoRequests(
-  starters: Awaited<ReturnType<typeof getStartersWithSimRechargeExpiry>>,
-): Promise<void> {
-  const deviceInfoPromises = starters.map((starter) => {
-    const payload = { T: 10, S: randomSequenceNumber(), D: 1 };
-    return publishMultipleTimesInBackground(payload, starter as any);
-  });
-  await Promise.allSettled(deviceInfoPromises);
-}
+// Previously used to publish MQTT device info request topic for expired devices
+// Topic is no longer available after enhancement — commented out
+// async function sendDeviceInfoRequests(
+//   starters: Awaited<ReturnType<typeof getStartersWithSimRechargeExpiry>>,
+// ): Promise<void> {
+//   const deviceInfoPromises = starters.map((starter) => {
+//     const payload = { T: 10, S: randomSequenceNumber(), D: 1 };
+//     return publishMultipleTimesInBackground(payload, starter as any);
+//   });
+//   await Promise.allSettled(deviceInfoPromises);
+// }
 
 export async function processSimRechargeExpiryNotifications(): Promise<number> {
   const today = new Date();
@@ -199,40 +219,20 @@ export async function processSimRechargeExpiryNotifications(): Promise<number> {
 
   const starters = await getStartersWithSimRechargeExpiry();
 
-  // Collect all expired devices (day <= 0) for device info request
-  const expiredStarters: typeof starters = [];
-  const directNotify: typeof starters = [];
+  // Send notifications for all starters in notification range (-3 to +3 days, and 15 days)
+  const notificationsSent = await sendExpiryNotifications(starters, today);
 
-  for (const starter of starters) {
-    if (!starter.sim_recharge_expires_at || !starter.created_by) continue;
-
-    const diffDays = getExpiryDiffDays(starter.sim_recharge_expires_at, today);
-    if (diffDays === null) continue;
-
-    if (needsDeviceInfoRequest(diffDays)) {
-      expiredStarters.push(starter);
-    } else if (isSimExpiryInNotificationRange(diffDays)) {
-      directNotify.push(starter);
-    }
-  }
-
-  // Step 1: Notify pre-expiry devices directly (day 1, 2, 3)
-  let notificationsSent = await sendExpiryNotifications(directNotify, today);
-
-  // Step 2: Send device info request to ALL expired devices (day 0, -1, -2, ... -30, etc.)
-  if (expiredStarters.length > 0) {
-    await sendDeviceInfoRequests(expiredStarters);
-
-    // Step 3: Re-read fresh data, notify only -3 to 0 range
-    const freshStarters = await getStartersWithSimRechargeExpiry();
-    const freshMap = new Map(freshStarters.map(s => [s.id, s]));
-
-    const refreshedTargets = expiredStarters
-      .map(s => freshMap.get(s.id))
-      .filter((s): s is NonNullable<typeof s> => !!s);
-
-    notificationsSent += await sendExpiryNotifications(refreshedTargets, today);
-  }
+  // Previously, device info requests were sent via MQTT topic for expired devices
+  // Topic is no longer available after enhancement — publish logic removed
+  // if (expiredStarters.length > 0) {
+  //   await sendDeviceInfoRequests(expiredStarters);
+  //   const freshStarters = await getStartersWithSimRechargeExpiry();
+  //   const freshMap = new Map(freshStarters.map(s => [s.id, s]));
+  //   const refreshedTargets = expiredStarters
+  //     .map(s => freshMap.get(s.id))
+  //     .filter((s): s is NonNullable<typeof s> => !!s);
+  //   notificationsSent += await sendExpiryNotifications(refreshedTargets, today);
+  // }
 
   return notificationsSent;
 }
