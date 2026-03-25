@@ -74,6 +74,13 @@ export function parseSimExpiryDate(dateStr) {
     return parsed;
 }
 export function buildSimExpiryNotification(diffDays, deviceName, expiryDateStr) {
+    // 15 days before expiry
+    if (diffDays === 15) {
+        return {
+            title: `SIM Recharge Expiring in 15 Days - ${deviceName}`,
+            message: `Your SIM recharge for device ${deviceName} expires in 15 days (${expiryDateStr}). Please plan your recharge.`,
+        };
+    }
     // Before expiry (positive diffDays)
     if (diffDays === 3) {
         return {
@@ -120,9 +127,9 @@ export function buildSimExpiryNotification(diffDays, deviceName, expiryDateStr) 
     }
     return null;
 }
-/** Check if diffDays falls within notification range (-3 to +3) */
+/** Check if diffDays falls within notification range (-3 to +3, or exactly 15) */
 export function isSimExpiryInNotificationRange(diffDays) {
-    return diffDays >= -3 && diffDays <= 3;
+    return (diffDays >= -3 && diffDays <= 3) || diffDays === 15;
 }
 /** Check if device info request is needed (expiry day or any time past expiry) */
 export function needsDeviceInfoRequest(diffDays) {
