@@ -333,26 +333,36 @@ export function buildScheduleData(data: {
   };
 }
 
-export function formatMotorScheduleResponse(record: any): any {
+export function formatMotorScheduleResponse(record: any, queryDate?: number): any {
   if (!record || typeof record !== "object") return record;
 
   const { schedule_mode, repeat_type, ...rest } = record;
   const scheduleType = normalizeScheduleType(rest.schedule_type) ?? rest.schedule_type;
 
+  // Compute display status based on queried date vs today
+  let displayStatus = rest.schedule_status;
+  if (queryDate) {
+    const today = todayAsYYMMDD();
+    if (queryDate > today && (displayStatus === "RUNNING" || displayStatus === "WAITING_NEXT_CYCLE")) {
+      displayStatus = "SCHEDULED";
+    }
+  }
+
   return {
     ...rest,
     schedule_type: scheduleType,
+    schedule_status: displayStatus,
     days_of_week: Array.isArray(rest.days_of_week) ? rest.days_of_week : [],
   };
 }
 
-export function formatMotorScheduleListResponse(result: any): any {
+export function formatMotorScheduleListResponse(result: any, queryDate?: number): any {
   if (!result || typeof result !== "object") return result;
   if (!Array.isArray(result.records)) return result;
 
   return {
     ...result,
-    records: result.records.map((record: any) => formatMotorScheduleResponse(record)),
+    records: result.records.map((record: any) => formatMotorScheduleResponse(record, queryDate)),
   };
 }
 

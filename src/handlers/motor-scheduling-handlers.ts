@@ -140,9 +140,10 @@ export class MotorScheduleHandler {
       const limit = +(query.limit) || 10;
 
       const filters = buildMotorScheduleFilters(query);
+      const queryDate = filters.schedule_start_date;
 
       const result = await findSchedulesByFilters(filters, page, limit);
-      return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result));
+      return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result, queryDate));
     } catch (error: any) {
       console.error("Error at motor Schedule List:", error.message);
       throw error;

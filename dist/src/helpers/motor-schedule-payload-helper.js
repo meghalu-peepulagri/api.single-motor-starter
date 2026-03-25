@@ -294,25 +294,34 @@ export function buildScheduleData(data, scheduleStartDate) {
         power_loss_recovery_time: data.power_loss_recovery_time ?? 30,
     };
 }
-export function formatMotorScheduleResponse(record) {
+export function formatMotorScheduleResponse(record, queryDate) {
     if (!record || typeof record !== "object")
         return record;
     const { schedule_mode, repeat_type, ...rest } = record;
     const scheduleType = normalizeScheduleType(rest.schedule_type) ?? rest.schedule_type;
+    // Compute display status based on queried date vs today
+    let displayStatus = rest.schedule_status;
+    if (queryDate) {
+        const today = todayAsYYMMDD();
+        if (queryDate > today && (displayStatus === "RUNNING" || displayStatus === "WAITING_NEXT_CYCLE")) {
+            displayStatus = "SCHEDULED";
+        }
+    }
     return {
         ...rest,
         schedule_type: scheduleType,
+        schedule_status: displayStatus,
         days_of_week: Array.isArray(rest.days_of_week) ? rest.days_of_week : [],
     };
 }
-export function formatMotorScheduleListResponse(result) {
+export function formatMotorScheduleListResponse(result, queryDate) {
     if (!result || typeof result !== "object")
         return result;
     if (!Array.isArray(result.records))
         return result;
     return {
         ...result,
-        records: result.records.map((record) => formatMotorScheduleResponse(record)),
+        records: result.records.map((record) => formatMotorScheduleResponse(record, queryDate)),
     };
 }
 // =================== COMPACT DEVICE SYNC PAYLOAD ===================
