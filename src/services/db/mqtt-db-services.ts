@@ -17,7 +17,7 @@ import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
+import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
 // Live data
@@ -148,8 +148,9 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
         const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
         const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
         const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
+        const isFirstRecord = !shouldTrackMotorRuntime && motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
 
-        if (shouldTrackMotorRuntime) {
+        if (shouldTrackMotorRuntime || isFirstRecord) {
           await trackMotorRunTime({
             starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: updateData.state ?? prevState,
             mode_description, time_stamp, previous_power_state: power, new_power_state: power_present
@@ -314,7 +315,8 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
     const hasModeChanged = mode_description && mode_description !== prevMode;
 
     const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
-    if (shouldTrackMotorRuntime) {
+    const isFirstRecord = !shouldTrackMotorRuntime && motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+    if (shouldTrackMotorRuntime || isFirstRecord) {
       await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
     }
 
@@ -390,7 +392,8 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
     const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
     const hasStateChanged = typeof motor_state === "number" && motor_state !== prevState;
     const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
-    if (shouldTrackMotorRuntime) {
+    const isFirstRecord = !shouldTrackMotorRuntime && motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+    if (shouldTrackMotorRuntime || isFirstRecord) {
       await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
     }
 
@@ -453,7 +456,8 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
     const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);
     const shouldTrackMotorRuntime = hasMotorStateChanged || hasPowerChanged;
-    if (shouldTrackMotorRuntime) {
+    const isFirstRecord = !shouldTrackMotorRuntime && motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+    if (shouldTrackMotorRuntime || isFirstRecord) {
       await trackMotorRunTime({ starter_id, motor_id, location_id: locationId, previous_state: prevState, new_state: motor_state, mode_description, time_stamp, previous_power_state: power, new_power_state: power_present }, trx);
     }
 
@@ -512,6 +516,11 @@ export async function motorControlAckHandler(message: any, topic: string) {
         await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor.id));
 
         await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+      } else {
+        const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+        if (isFirstRecord) {
+          await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+        }
       }
 
       // Always log ACK (changed or not)
