@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, index, integer, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgEnum, pgTable, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { motors } from "./motors.js";
 import { starterBoxes } from "./starter-boxes.js";
 import { statusEnum } from "../../constants/enum-types.js";
@@ -54,13 +54,14 @@ export const motorSchedules = pgTable("motor_schedules", {
     deleted_by: integer("deleted_by").references(() => users.id), // user_id of who deleted (if applicable)
     status: statusEnum().default("ACTIVE").notNull(),
     priority: integer("priority").default(2).notNull(),
+    deleted_at: timestamp("deleted_at"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, (table) => [
     index("motor_schedule_motor_id_idx").on(table.motor_id),
     index("motor_schedule_starter_id_idx").on(table.starter_id),
     index("motor_schedule_status_idx").on(table.schedule_status),
-    uniqueIndex("motor_schedule_unique_idx").on(table.motor_id, table.schedule_id),
+    index("motor_schedule_unique_idx").on(table.motor_id, table.schedule_id),
 ]);
 export const motorScheduleRelations = relations(motorSchedules, ({ one }) => ({
     motor: one(motors, {

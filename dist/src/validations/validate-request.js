@@ -9,6 +9,7 @@ import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWe
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
+import { vAddStarterDispatch } from "./schema/starter-dispatch-validations.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 const schemaMap = {
     "signup": vSignUp,
@@ -30,7 +31,8 @@ const schemaMap = {
     "update-deployed-status": vUpdateDeployedStatus,
     "assign-location-to-starter": vAssignLocationToStarter,
     "update-default-settings": vUpdateDefaultSettings,
-    "update-default-settings-limits": vUpdateDefaultSettingsLimits
+    "update-default-settings-limits": vUpdateDefaultSettingsLimits,
+    "add-starter-dispatch": vAddStarterDispatch
 };
 export async function validatedRequest(actionType, reqData, errorMessage) {
     const schema = schemaMap[actionType];

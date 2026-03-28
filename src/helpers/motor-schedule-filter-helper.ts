@@ -5,8 +5,8 @@ export interface MotorScheduleFilters {
   motor_id?: number;
   status?: string;
   type?: string;
-  start_date?: number;
-  end_date?: number;
+  schedule_start_date?: number;
+  schedule_end_date?: number;
   repeat?: number;
   enabled?: boolean;
   day_of_week?: number;
@@ -40,17 +40,17 @@ export function buildMotorScheduleFilters(query: Record<string, string>): MotorS
     filters.type = query.type;
   }
 
-  if (query.start_date) {
-    const sd = +query.start_date;
+  if (query.schedule_start_date) {
+    const sd = +query.schedule_start_date;
     if (!Number.isNaN(sd) && Number.isInteger(sd)) {
-      filters.start_date = sd;
+      filters.schedule_start_date = sd;
     }
   }
 
-  if (query.end_date) {
-    const ed = +query.end_date;
+  if (query.schedule_end_date) {
+    const ed = +query.schedule_end_date;
     if (!Number.isNaN(ed) && Number.isInteger(ed)) {
-      filters.end_date = ed;
+      filters.schedule_end_date = ed;
     }
   }
 

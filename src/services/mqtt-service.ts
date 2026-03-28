@@ -8,7 +8,6 @@ import mqtt from "mqtt";
 import { findTopicACKByType } from "../helpers/packet-types-helper.js";
 import { selectTopicAck } from "./db/mqtt-db-services.js";
 import { logger } from "../utils/logger.js";
-import type { preparedLiveData } from "../types/app-types.js";
 
 export class MqttService {
   private client: MqttClient | null = null;

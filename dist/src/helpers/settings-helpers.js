@@ -3,7 +3,6 @@ import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { publishData } from "../services/db/mqtt-db-services.js";
 import { logger } from "../utils/logger.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
-import { ACK_TYPES } from "./packet-types-helper.js";
 import { pendingAckMap, publishingMap } from "./ack-tracker-hepler.js";
 /**
  * Enhanced validation helpers with comprehensive type checking and constraints
@@ -349,12 +348,6 @@ export const prepareHardWareVersion = (starterDetails) => {
             "hw": starterDetails.hardware_version,
         }
     };
-};
-const validateSettingsAck = (payload, expectedSequence) => {
-    return (payload &&
-        payload.T === ACK_TYPES.ADMIN_CONFIG_DATA_REQUEST_ACK &&
-        payload.S === expectedSequence &&
-        (payload.D === 0 || payload.D === 1));
 };
 export const publishMultipleTimesInBackground = async (devicePayload, starterDetails) => {
     // Prevent duplicate publishing

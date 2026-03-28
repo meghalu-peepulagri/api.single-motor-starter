@@ -5,6 +5,7 @@ import { locations } from "../../database/schemas/locations.js";
 import { motorsRunTime } from "../../database/schemas/motor-runtime.js";
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { formatDuration, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
@@ -12,7 +13,6 @@ import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-help
 import type { OrderByQueryData, WhereQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
-import { log } from "node:util";
 
 // Extract transaction type from Drizzle's db.transaction callback
 type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
@@ -152,6 +152,18 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
 }
 
 
+export async function hasMotorRunTimeRecord(motorId: number, starterId: number, trx?: DbTransaction): Promise<boolean> {
+  const queryBuilder = trx || db;
+  const [record] = await queryBuilder.select({ id: motorsRunTime.id })
+    .from(motorsRunTime)
+    .where(and(
+      eq(motorsRunTime.motor_id, motorId),
+      eq(motorsRunTime.starter_box_id, starterId)
+    ))
+    .limit(1);
+  return !!record;
+}
+
 export async function trackMotorRunTime(params: {
   starter_id: number;
   motor_id: number;
@@ -182,7 +194,7 @@ export async function trackMotorRunTime(params: {
   const formattedDate = now.toISOString();
 
   const action = async (trx: DbTransaction) => {
-    // Fetch the most recent open record for this motor
+    // Fetch the most recent open record for this motor (by id to handle same start_time)
     const [openRecord] = await trx
       .select()
       .from(motorsRunTime)
@@ -193,7 +205,7 @@ export async function trackMotorRunTime(params: {
           isNull(motorsRunTime.end_time)
         )
       )
-      .orderBy(desc(motorsRunTime.start_time))
+      .orderBy(desc(motorsRunTime.id))
       .limit(1);
 
     // Detect state changes
@@ -239,24 +251,29 @@ export async function trackMotorRunTime(params: {
       powerDurationFormatted = formatDuration(powerDurationMs);
     }
 
-    // Case 2: Motor state changed
+    // Case 2: Motor state changed (power may or may not have changed)
     if (motorStateChanged) {
-      // Close the current motor session
+      // Close ALL open records for this motor (older ones left open by Case 3 power changes)
       await trx
         .update(motorsRunTime)
         .set({
           end_time: now,
           duration: motorDurationFormatted,
           motor_mode: mode_description,
-          time_stamp: formattedDate,
-          // Close power session ONLY if power state also changed
+          // Close power session ONLY if power also changed
           power_end: powerStateChanged ? formattedDate : openRecord.power_end,
           power_duration: powerStateChanged ? powerDurationFormatted : openRecord.power_duration,
           updated_at: now,
         })
-        .where(eq(motorsRunTime.id, openRecord.id));
+        .where(
+          and(
+            eq(motorsRunTime.motor_id, motor_id),
+            eq(motorsRunTime.starter_box_id, starter_id),
+            isNull(motorsRunTime.end_time)
+          )
+        );
 
-      // Start a new motor session
+      // New record: new motor_state, power carries forward if unchanged
       await trx.insert(motorsRunTime).values({
         motor_id,
         starter_box_id: starter_id,
@@ -267,8 +284,6 @@ export async function trackMotorRunTime(params: {
         motor_state: new_state,
         motor_mode: mode_description,
         time_stamp: formattedDate,
-        // If power state changed: start new power session
-        // If power state NOT changed: carry forward the existing power_start from previous record
         power_start: powerStateChanged ? formattedDate : openRecord.power_start,
         power_end: null,
         power_state: powerStateChanged ? new_power_state : openRecord.power_state,
@@ -278,32 +293,29 @@ export async function trackMotorRunTime(params: {
     }
 
     // Case 3: Only power state changed (motor state same)
+    // Only update power fields — motor session (end_time, duration) stays untouched
     if (powerStateChanged && !motorStateChanged) {
-      // Close the current motor + power session and start a new segment
       await trx
         .update(motorsRunTime)
         .set({
-          end_time: now,
-          duration: motorDurationFormatted,
           power_end: formattedDate,
           power_duration: powerDurationFormatted,
-          time_stamp: formattedDate,
           updated_at: now,
         })
         .where(eq(motorsRunTime.id, openRecord.id));
 
-      // Create a new record with new power session (motor session continues)
+      // New record: carry forward motor session (start_time, motor_state), new power session
       await trx.insert(motorsRunTime).values({
         motor_id,
         starter_box_id: starter_id,
         location_id,
-        start_time: now,
+        start_time: openRecord.start_time,
         end_time: null,
         duration: null,
-        motor_state: new_state, // Same motor state
+        motor_state: new_state,
         motor_mode: mode_description,
         time_stamp: formattedDate,
-        power_start: formattedDate, // New power session starts
+        power_start: formattedDate,
         power_end: null,
         power_state: new_power_state,
         power_duration: null,
@@ -464,8 +476,25 @@ export async function getMotorRunTime(starterId: number, fromDateUTC: string, to
     }
   });
 
+  // Enrich open records with live values (response only, not saved to DB)
+  const now = new Date();
+  const enrichedRecords = records.map(record => {
+    if (record.end_time !== null) return record;
+
+    const liveDurationMs = now.getTime() - new Date(record.start_time).getTime();
+    const livePowerDurationMs = record.power_start ? now.getTime() - new Date(record.power_start).getTime() : null;
+
+    return {
+      ...record,
+      end_time: now,
+      duration: formatDuration(liveDurationMs),
+      power_end: record.power_end ?? (record.power_start ? now.toISOString() : null),
+      power_duration: record.power_duration ?? (livePowerDurationMs !== null ? formatDuration(livePowerDurationMs) : null),
+    };
+  });
+
   // Clamp records to the requested date range and split cross-midnight records
-  const splitRecords = splitRuntimeRecordsByDate(records, from, to);
+  const splitRecords = splitRuntimeRecordsByDate(enrichedRecords, from, to);
 
   const totalOnSeconds = splitRecords.reduce((sum, record) => {
     if (record.motor_state !== 1 || !record.duration) return sum;
@@ -483,10 +512,11 @@ export async function getMotorsTotalRunOnTime(motorIds: number[]) {
 
   // Default to today's date range in IST
   const IST = "Asia/Kolkata";
-  const moment = (await import("moment-timezone")).default;
-  const now = moment().tz(IST);
-  const fromDateObj = now.clone().startOf("day").utc().toDate();
-  const toDateObj = now.clone().endOf("day").utc().toDate();
+  const { toZonedTime, fromZonedTime } = await import("date-fns-tz");
+  const { startOfDay, endOfDay } = await import("date-fns");
+  const nowIST = toZonedTime(new Date(), IST);
+  const fromDateObj = fromZonedTime(startOfDay(nowIST), IST);
+  const toDateObj = fromZonedTime(endOfDay(nowIST), IST);
 
   // Only fetch records that have an actual end_time (completed sessions)
   const records = await db.query.motorsRunTime.findMany({
@@ -626,4 +656,28 @@ export async function getMotorBasedStarterDetails(motorId: number) {
     console.error("Error fetching motor-based starter details:", error);
     throw error;
   }
+}
+
+/**
+ * Get active schedule counts grouped by motor_id.
+ * Excludes ARCHIVED status and DELETED/CANCELLED schedule_status.
+ */
+export async function getMotorsActiveScheduleCount(motorIds: number[]): Promise<Record<number, number>> {
+  if (!motorIds.length) return {};
+
+  const rows = await db
+    .select({ motor_id: motorSchedules.motor_id, count: sql<number>`count(*)::int` })
+    .from(motorSchedules)
+    .where(and(
+      inArray(motorSchedules.motor_id, motorIds),
+      ne(motorSchedules.status, "ARCHIVED"),
+      sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`,
+    ))
+    .groupBy(motorSchedules.motor_id);
+
+  const map: Record<number, number> = {};
+  for (const row of rows) {
+    map[row.motor_id] = row.count;
+  }
+  return map;
 }

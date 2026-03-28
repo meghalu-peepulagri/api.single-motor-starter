@@ -13,21 +13,21 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { starterFilters } from "../helpers/starter-helper.js";
+import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsPaginated, getUnifiedLogsCount } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
-import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import { generateUploadUrl, generateDownloadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
+import { starterDispatch } from "../database/schemas/starter-dispatch.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBoxHandler = async (c) => {
@@ -200,6 +200,7 @@ export class StarterHandlers {
                 }
                 else {
                     await updateRecordById(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
+                    await updateRecordById(starterDispatch, starterId, { status: "ARCHIVED" }, trx);
                 }
                 if (motor) {
                     await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
@@ -438,6 +439,10 @@ export class StarterHandlers {
             const userId = c.get("user_payload").id;
             await db.transaction(async (trx) => {
                 const updatedStarter = await updateRecordById(starterBoxes, starter.id, validatedReqData, trx);
+                await updateRecordById(starterDispatch, starter.id, {
+                    pcb_number: validatedReqData.pcb_number, box_serial_no: validatedReqData.starter_number,
+                    sim_no: validatedReqData.device_mobile_number
+                }, trx);
                 await ActivityService.writeStarterUpdatedLog(userId, starterId, {
                     name: starter.name,
                     pcb_number: starter.pcb_number,
@@ -541,30 +546,10 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             const currentCount = starter.allocation_status_count ?? 0;
-            const previousAllocation = starter.device_allocation ?? "false";
             if (userPayload.user_type !== "SUPER_ADMIN" && allocationStatus === "true" && starter.device_allocation === "false" && currentCount >= 1) {
                 throw new UnauthorizedException("Unauthorized");
             }
-            if (allocationStatus === previousAllocation) {
-                return sendResponse(c, 200, "Device allocation status updated successfully");
-            }
-            const newCount = (allocationStatus === "true" && previousAllocation === "false") ? currentCount + 1 : currentCount;
-            let allocationAction = null;
-            let messageLog = null;
-            if (previousAllocation === "false" && allocationStatus === "true") {
-                allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
-                messageLog = newCount === 1 ? "Device Allocated" : "Device Reallocated";
-            }
-            else if (previousAllocation === "true" && allocationStatus === "false") {
-                allocationAction = "DEVICE_DEALLOCATED";
-                messageLog = "Device Deallocated";
-            }
-            await db.transaction(async (trx) => {
-                await updateRecordByIdWithTrx(starterBoxes, starterId, { device_allocation: allocationStatus, allocation_status_count: newCount }, trx);
-                if (allocationAction && messageLog) {
-                    await ActivityService.writeDeviceAllocationLog(userPayload.id, starterId, allocationAction, { device_allocation: previousAllocation, allocation_status_count: currentCount }, { device_allocation: allocationStatus, allocation_status_count: newCount }, messageLog, trx);
-                }
-            });
+            await applyDeviceAllocation(starterId, allocationStatus, userPayload.id);
             return sendResponse(c, 200, "Device allocation status updated successfully");
         }
         catch (error) {
@@ -597,8 +582,8 @@ export class StarterHandlers {
     };
     starterCountBasedOnStatusHandler = async (c) => {
         try {
-            const notArchived = ne(starterBoxes.status, "ARCHIVED");
-            const baseFilters = [notArchived];
+            const query = c.req.query();
+            const baseFilters = starterCountFilters(query);
             const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
                 getRecordsCount(starterBoxes, [...baseFilters]),
                 getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.status, "ACTIVE")]),
@@ -665,65 +650,7 @@ export class StarterHandlers {
     };
     simRechargeExpiryNotificationHandler = async (c) => {
         try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            // Fetch all assigned starters with motor alias_name via left join
-            const starters = await db.select({
-                id: starterBoxes.id,
-                starter_number: starterBoxes.starter_number,
-                sim_recharge_expires_at: starterBoxes.sim_recharge_expires_at,
-                motor_alias_name: motors.alias_name,
-                motor_created_by: motors.created_by,
-                created_by: starterBoxes.created_by,
-                motor_id: motors.id
-            }).from(starterBoxes)
-                .leftJoin(motors, and(eq(motors.starter_id, starterBoxes.id), ne(motors.status, "ARCHIVED")))
-                .where(and(ne(starterBoxes.status, "ARCHIVED"), isNotNull(starterBoxes.sim_recharge_expires_at)));
-            let notificationsSent = 0;
-            for (const starter of starters) {
-                if (!starter.sim_recharge_expires_at || !starter.created_by)
-                    continue;
-                // Parse date format "16 FEB 2025" (case-insensitive)
-                const monthMap = {
-                    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-                    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-                };
-                const parts = starter.sim_recharge_expires_at.trim().split(/\s+/);
-                const day = parseInt(parts[0], 10);
-                const month = monthMap[parts[1]?.toLowerCase()];
-                const year = parseInt(parts[2], 10);
-                const expiryDate = (parts.length === 3 && !isNaN(day) && month !== undefined && !isNaN(year)) ? new Date(year, month, day) : new Date(starter.sim_recharge_expires_at);
-                if (isNaN(expiryDate.getTime())) {
-                    continue;
-                }
-                expiryDate.setHours(0, 0, 0, 0);
-                const diffTime = expiryDate.getTime() - today.getTime();
-                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                const deviceName = starter.motor_alias_name ?? starter.starter_number;
-                const userId = starter.motor_created_by ?? starter.created_by;
-                let title = "";
-                let message = "";
-                if (diffDays === 3) {
-                    title = `SIM Recharge Expiring Soon - ${deviceName}`;
-                    message = `Your SIM recharge for device ${deviceName} expires in 3 days (${starter.sim_recharge_expires_at}). Please recharge soon.`;
-                }
-                else if (diffDays === 2) {
-                    title = `SIM Recharge Expiring Soon - ${deviceName}`;
-                    message = `Your SIM recharge for device ${deviceName} expires in 2 days (${starter.sim_recharge_expires_at}). Please recharge soon.`;
-                }
-                else if (diffDays === 1) {
-                    title = `SIM Recharge Expiring Tomorrow - ${deviceName}`;
-                    message = `Your SIM recharge for device ${deviceName} expires tomorrow (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
-                }
-                else if (diffDays === 0) {
-                    title = `SIM Recharge Expires Today - ${deviceName}`;
-                    message = `Your SIM recharge for device ${deviceName} expires today (${starter.sim_recharge_expires_at}). Please recharge immediately.`;
-                }
-                if (title && userId && starter.motor_id) {
-                    await sendUserNotification(userId, title, message, starter.motor_id, starter.id);
-                    notificationsSent++;
-                }
-            }
+            const notificationsSent = await processSimRechargeExpiryNotifications();
             return sendResponse(c, 200, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, { notifications_sent: notificationsSent });
         }
         catch (error) {

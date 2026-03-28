@@ -18,8 +18,11 @@ import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-help
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { ActivityService } from "./activity-service.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
+import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
+import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
@@ -39,6 +42,8 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
     );
 
     await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
+    const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
+    publishMultipleTimesInBackground(deviceInfoPayload, starter);
     return starter;
   });
 }
@@ -55,7 +60,8 @@ export async function assignStarterWithTransaction(payload: AssignStarterType, u
 
   const action = async (trx: any) => {
     const starterUpdateData: Record<string, any> = {
-      user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt
+      user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt,
+      device_installed_location: payload.device_installed_location
     };
     if (payload.installation_photo_key) {
       starterUpdateData.installation_photo_key = payload.installation_photo_key;
@@ -427,6 +433,8 @@ export async function starterConnectedMotors(starterId: number) {
       sim_recharge_expires_at: true,
       hardware_version: true,
       installation_photo_key: true,
+      device_installed_location: true,
+      warranty_expiry_date: true,
     },
     with: {
       motors: {
@@ -445,6 +453,13 @@ export async function starterConnectedMotors(starterId: number) {
         columns: {
           id: true,
           name: true,
+        },
+      },
+      createdBy: {
+        where: ne(users.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          full_name: true,
         },
       },
     },
@@ -524,3 +539,83 @@ export async function updateStarterStatus(starterIds: number[]) {
     activeStarterIds: activeStarterIds.map(row => row.id),
   };
 };
+
+export async function getStartersWithSimRechargeExpiry() {
+  return await db.select({
+    id: starterBoxes.id,
+    starter_number: starterBoxes.starter_number,
+    sim_recharge_expires_at: starterBoxes.sim_recharge_expires_at,
+    mac_address: starterBoxes.mac_address,
+    pcb_number: starterBoxes.pcb_number,
+    device_allocation: starterBoxes.device_allocation,
+    motor_alias_name: motors.alias_name,
+    motor_created_by: motors.created_by,
+    created_by: starterBoxes.created_by,
+    motor_id: motors.id,
+  }).from(starterBoxes)
+    .leftJoin(motors, and(eq(motors.starter_id, starterBoxes.id), ne(motors.status, "ARCHIVED")))
+    .where(
+      and(
+        ne(starterBoxes.status, "ARCHIVED"),
+        isNotNull(starterBoxes.sim_recharge_expires_at),
+      )
+    );
+}
+
+/**
+ * Shared device allocation handler — uses SELECT FOR UPDATE to prevent
+ * duplicate logs when frontend API and MQTT ack race each other.
+ * Returns true if allocation was actually changed, false if already in target state.
+ */
+export async function applyDeviceAllocation(
+  starterId: number,
+  newAllocation: "true" | "false",
+  userId: number,
+): Promise<boolean> {
+  return await db.transaction(async (trx) => {
+    // Lock the row to prevent race between API and MQTT ack
+    const [latestStarter] = await trx
+      .select({
+        device_allocation: starterBoxes.device_allocation,
+        allocation_status_count: starterBoxes.allocation_status_count,
+      })
+      .from(starterBoxes)
+      .where(and(eq(starterBoxes.id, starterId), ne(starterBoxes.status, "ARCHIVED")))
+      .for("update");
+
+    if (!latestStarter || latestStarter.device_allocation === newAllocation) return false;
+
+    const previousAllocation = latestStarter.device_allocation ?? "false";
+    const currentCount = latestStarter.allocation_status_count ?? 0;
+    const newCount = (newAllocation === "true" && previousAllocation === "false") ? currentCount + 1 : currentCount;
+
+    let allocationAction: "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED";
+    let messageLog: string;
+
+    if (previousAllocation === "false" && newAllocation === "true") {
+      allocationAction = newCount === 1 ? "DEVICE_ALLOCATED" : "DEVICE_REALLOCATED";
+      messageLog = newCount === 1 ? "Device Allocated" : "Device Reallocated";
+    } else {
+      allocationAction = "DEVICE_DEALLOCATED";
+      messageLog = "Device Deallocated";
+    }
+
+    await updateRecordByIdWithTrx<StarterBoxTable>(
+      starterBoxes, starterId,
+      { device_allocation: newAllocation, allocation_status_count: newCount },
+      trx,
+    );
+
+    await ActivityService.writeDeviceAllocationLog(
+      userId,
+      starterId,
+      allocationAction,
+      { device_allocation: previousAllocation, allocation_status_count: currentCount },
+      { device_allocation: newAllocation, allocation_status_count: newCount },
+      messageLog,
+      trx,
+    );
+
+    return true;
+  });
+}

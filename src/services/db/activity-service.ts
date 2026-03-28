@@ -2,11 +2,7 @@ import { userActivityLogs, type NewUserActivityLog } from "../../database/schema
 import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
-import type { Motor } from "../../database/schemas/motors.js";
-import type { StarterBox } from "../../database/schemas/starter-boxes.js";
-import type { Location } from "../../database/schemas/locations.js";
 import type { User } from "../../database/schemas/users.js";
-import { log } from "node:console";
 
 type Transaction = any; // Placeholder for now, but will use more specific types for data
 
@@ -352,6 +348,29 @@ export class ActivityService {
       entityType: "LOCATION",
       entityId: locationId,
       action: "LOCATION_DELETED"
+    });
+    await this.saveActivityLogs([log], trx);
+  }
+
+  /**
+   * Logs a fault cleared event
+   */
+  static async writeFaultClearedLog(
+    userId: number,
+    motorId: number,
+    starterId: number,
+    oldData: { fault_code: number },
+    trx?: Transaction
+  ) {
+    const log = prepareActionLog({
+      userId,
+      action: "FAULT_CLEARED",
+      entityType: "MOTOR",
+      entityId: motorId,
+      deviceId: starterId,
+      oldData,
+      newData: { fault_code: 0 },
+      message: `Fault cleared - No more faults`
     });
     await this.saveActivityLogs([log], trx);
   }

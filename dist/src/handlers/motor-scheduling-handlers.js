@@ -12,7 +12,7 @@ import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-help
 import { buildDeviceSyncPayloads, buildScheduleData, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, todayAsYYMMDD, } from "../helpers/motor-schedule-payload-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { batchUpdateScheduleStatuses, cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findSchedulesByFilters, getNextScheduleIdForMotor, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
-import { publishData } from "../services/db/mqtt-db-services.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -32,10 +32,12 @@ export class MotorScheduleHandler {
             validateScheduleTypeRules(data);
             // Use user-provided schedule_start_date for one-time schedules, fallback to today
             const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
-            // Conflict detection: fetch potential conflicts by date/days, then check time overlap
-            const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
-            const existingSchedules = await findConflictingSchedules(existedMotor.id, conflictDate, data.days_of_week || []);
-            checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate }, existingSchedules);
+            const scheduleEndDate = data.schedule_end_date || scheduleStartDate;
+            // Conflict detection: fetch potential conflicts by date range/days, then check time overlap
+            const conflictStartDate = data.repeat === 1 ? null : scheduleStartDate;
+            const conflictEndDate = data.repeat === 1 ? null : scheduleEndDate;
+            const existingSchedules = await findConflictingSchedules(existedMotor.id, conflictStartDate, conflictEndDate, data.days_of_week || []);
+            checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate, schedule_end_date: scheduleEndDate }, existingSchedules);
             // Auto-increment schedule_id per motor
             const nextScheduleId = await getNextScheduleIdForMotor(data.motor_id);
             // Prepare and save
@@ -64,8 +66,9 @@ export class MotorScheduleHandler {
             const page = +(query.page) || 1;
             const limit = +(query.limit) || 10;
             const filters = buildMotorScheduleFilters(query);
+            const queryDate = filters.schedule_start_date;
             const result = await findSchedulesByFilters(filters, page, limit);
-            return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result));
+            return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result, queryDate));
         }
         catch (error) {
             console.error("Error at motor Schedule List:", error.message);
@@ -103,11 +106,13 @@ export class MotorScheduleHandler {
                 throw new BadRequestException(CANNOT_EDIT_RUNNING_SCHEDULE);
             }
             validateScheduleTypeRules(data);
-            // Conflict detection: fetch potential conflicts by date/days, then check time overlap
+            // Conflict detection: fetch potential conflicts by date range/days, then check time overlap
             const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
-            const conflictDate = data.repeat === 1 ? null : scheduleStartDate;
-            const existingSchedules = await findConflictingSchedules(existedSchedule.motor_id, conflictDate, data.days_of_week || [], scheduleId);
-            checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate }, existingSchedules);
+            const scheduleEndDate = data.schedule_end_date || scheduleStartDate;
+            const conflictStartDate = data.repeat === 1 ? null : scheduleStartDate;
+            const conflictEndDate = data.repeat === 1 ? null : scheduleEndDate;
+            const existingSchedules = await findConflictingSchedules(existedSchedule.motor_id, conflictStartDate, conflictEndDate, data.days_of_week || [], scheduleId);
+            checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate, schedule_end_date: scheduleEndDate }, existingSchedules);
             // Update
             const updateData = buildScheduleData(data, scheduleStartDate);
             await updateRecordById(motorSchedules, scheduleId, updateData);
@@ -134,10 +139,11 @@ export class MotorScheduleHandler {
             if (existed.schedule_status === "RUNNING") {
                 await stopScheduleById(scheduleId);
             }
-            // Soft delete: mark as DELETED with deleted_by user
+            // Soft delete: mark as DELETED with deleted_by user and deleted_at timestamp
             await updateRecordById(motorSchedules, existed.id, {
                 schedule_status: "DELETED",
                 deleted_by: userPayload.id,
+                deleted_at: new Date(),
                 status: "ARCHIVED",
                 enabled: false,
             });
@@ -216,7 +222,7 @@ export class MotorScheduleHandler {
             const existingDays = existed.days_of_week || [];
             const mergedDays = [...new Set([...existingDays, ...data.days_of_week])].sort();
             // Re-check conflicts with expanded days
-            const conflicts = await findConflictingSchedules(existed.motor_id, null, mergedDays, scheduleId);
+            const conflicts = await findConflictingSchedules(existed.motor_id, null, null, mergedDays, scheduleId);
             checkMotorScheduleConflict({ start_time: existed.start_time, end_time: existed.end_time, repeat: 1, days_of_week: mergedDays }, conflicts);
             await updateRecordById(motorSchedules, scheduleId, {
                 days_of_week: mergedDays,
@@ -308,20 +314,32 @@ export class MotorScheduleHandler {
             const starterIds = grouped.map(g => g.starter_id);
             const startersData = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, starterIds));
             const starterMap = new Map(startersData.map(s => [s.id, s]));
-            let totalPublished = 0;
+            let totalDevices = 0;
             for (const { starter_id, chunks } of grouped) {
                 const starterData = starterMap.get(starter_id);
                 if (!starterData) {
                     console.error(`Starter not found for id=${starter_id}, skipping publish`);
                     continue;
                 }
-                for (const chunk of chunks) {
-                    publishData(chunk, starterData);
-                    totalPublished++;
-                    console.log(`Published chunk to starter_id=${starter_id}, items=${chunk.length}, bytes=${Buffer.byteLength(JSON.stringify(chunk), "utf8")}`);
+                totalDevices++;
+                // Publish all chunks sequentially — await each so publishingMap clears before next chunk
+                for (const { payload, dbIds } of chunks) {
+                    const ackSuccess = await publishMultipleTimesInBackground(payload, starterData);
+                    if (ackSuccess) {
+                        await db.update(motorSchedules)
+                            .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+                            .where(inArray(motorSchedules.id, dbIds));
+                        console.log(`Schedule chunk ACK success for starter_id=${starter_id}, idx=${payload.D.idx}, marked ${dbIds.length} schedules as SCHEDULED`);
+                    }
+                    else {
+                        console.warn(`Schedule chunk ACK failed for starter_id=${starter_id}, idx=${payload.D.idx}, keeping ${dbIds.length} schedules for retry`);
+                    }
                 }
             }
-            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: grouped.length, payloads_published: totalPublished });
+            return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, {
+                devices: totalDevices,
+                total_chunks: grouped.reduce((sum, g) => sum + g.chunks.length, 0),
+            });
         }
         catch (error) {
             console.error("Error at get pending schedules for sync:", error.message);

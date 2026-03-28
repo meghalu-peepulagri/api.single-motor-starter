@@ -1,8 +1,8 @@
-import moment from "moment";
+import { addMinutes } from "date-fns";
 function prepareOTPData(inputPhone, action, expireInMin = 15) {
     const DUMMY_PHONE = "6300303057";
     const OTP = inputPhone === DUMMY_PHONE ? "1234" : randomOTP(); // For testing, use a fixed OTP. In production, use randomOTP().
-    const expires_at = moment().utc().add(expireInMin, "minutes");
+    const expires_at = addMinutes(new Date(), expireInMin);
     const data = { action, otp: OTP, expires_at, phone: inputPhone };
     return data;
 }
