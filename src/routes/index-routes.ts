@@ -10,6 +10,7 @@ import userRoutes from "./user-routes.js";
 import settingsRoutes from "./settings-routes.js";
 import activityRoutes from "./activities.js";
 import analyticsRoutes from "./analytics-routes.js";
+import starterDispatchRoutes from "./starter-dispatch-routes.js";
 import syncDataRoutes from "./sync-routes.js";
 
 const indexRoute = new Hono();
@@ -26,5 +27,6 @@ indexRoute.route("/settings", settingsRoutes);
 indexRoute.route("/analytics", analyticsRoutes);
 indexRoute.route("/sync-data", syncDataRoutes);
 indexRoute.route("/bridge", bridgeRoutes);
+indexRoute.route("/starter-dispatch", starterDispatchRoutes);
 
 export default indexRoute;

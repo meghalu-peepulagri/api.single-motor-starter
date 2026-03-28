@@ -36,6 +36,8 @@ export const starterBoxes = pgTable("starter_boxes", {
     device_reset_status: varchar("device_reset_status").default("false"), // need to write in boolean
     sim_recharge_expires_at: varchar("sim_recharge_expires_at"),
     installation_photo_key: varchar("installation_photo_key"),
+    device_installed_location: varchar("device_installed_location"),
+    warranty_expiry_date: varchar("warranty_expiry_date"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
@@ -58,6 +60,10 @@ export const starterBoxes = pgTable("starter_boxes", {
 export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => ({
     user: one(users, {
         fields: [starterBoxes.user_id],
+        references: [users.id],
+    }),
+    createdBy: one(users, {
+        fields: [starterBoxes.created_by],
         references: [users.id],
     }),
     gateway: one(gateways, {

@@ -198,7 +198,7 @@ export function areTimeRangesTooClose(startA, endA, startB, endB, gapMinutes = 5
 }
 /**
  * Check if a new schedule's date/days actually overlap with an existing schedule.
- * - For one-time schedules (repeat=0): must share the same schedule_start_date
+ * - For one-time schedules (repeat=0): check date RANGE overlap (newStart <= existEnd AND newEnd >= existStart)
  * - For repeat schedules (repeat=1): must share at least one common day_of_week
  */
 function hasDateOrDayOverlap(newSchedule, existing) {
@@ -211,12 +211,15 @@ function hasDateOrDayOverlap(newSchedule, existing) {
             return true; // no day info, assume conflict
         return newDays.some(d => existingDays.includes(d));
     }
-    // One-time schedule: conflict only if same schedule_start_date
-    const newDate = newSchedule.schedule_start_date;
-    const existingDate = existing.schedule_start_date;
-    if (!newDate || !existingDate)
+    // One-time / TIME_BASED schedule: check date range overlap
+    const newStart = newSchedule.schedule_start_date;
+    const newEnd = newSchedule.schedule_end_date ?? newSchedule.schedule_start_date;
+    const existStart = existing.schedule_start_date;
+    const existEnd = existing.schedule_end_date ?? existing.schedule_start_date;
+    if (!newStart || !existStart)
         return true; // no date info, assume conflict
-    return newDate === existingDate;
+    // Date range overlap: newStart <= existEnd AND newEnd >= existStart
+    return (newStart <= (existEnd ?? existStart)) && ((newEnd ?? newStart) >= existStart);
 }
 /**
  * Full conflict check against an array of existing schedules.

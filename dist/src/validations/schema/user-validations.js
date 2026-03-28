@@ -1,4 +1,4 @@
-import { ADDRESS_STRING, MOBILE_NUMBER_ALREADY_EXIST, MOBILE_NUMBER_UNIQUE, REFEREED_BY_REQUIRED } from "../../constants/app-constants.js";
+import { ADDRESS_STRING, REFEREED_BY_REQUIRED } from "../../constants/app-constants.js";
 import { emailValidator, nameValidator, otpValidator, passwordValidator, phoneValidator, requiredNumberOptional, userTypeValidator } from "./common-validations.js";
 import * as v from "valibot";
 export const vSignUp = v.pipe(v.object({

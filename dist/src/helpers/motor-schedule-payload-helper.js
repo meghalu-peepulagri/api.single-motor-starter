@@ -294,66 +294,70 @@ export function buildScheduleData(data, scheduleStartDate) {
         power_loss_recovery_time: data.power_loss_recovery_time ?? 30,
     };
 }
-export function formatMotorScheduleResponse(record) {
+export function formatMotorScheduleResponse(record, queryDate) {
     if (!record || typeof record !== "object")
         return record;
     const { schedule_mode, repeat_type, ...rest } = record;
     const scheduleType = normalizeScheduleType(rest.schedule_type) ?? rest.schedule_type;
+    // Compute display status based on queried date vs today
+    let displayStatus = rest.schedule_status;
+    if (queryDate) {
+        const today = todayAsYYMMDD();
+        if (queryDate > today && (displayStatus === "RUNNING" || displayStatus === "WAITING_NEXT_CYCLE")) {
+            displayStatus = "SCHEDULED";
+        }
+    }
     return {
         ...rest,
         schedule_type: scheduleType,
+        schedule_status: displayStatus,
         days_of_week: Array.isArray(rest.days_of_week) ? rest.days_of_week : [],
     };
 }
-export function formatMotorScheduleListResponse(result) {
+export function formatMotorScheduleListResponse(result, queryDate) {
     if (!result || typeof result !== "object")
         return result;
     if (!Array.isArray(result.records))
         return result;
     return {
         ...result,
-        records: result.records.map((record) => formatMotorScheduleResponse(record)),
+        records: result.records.map((record) => formatMotorScheduleResponse(record, queryDate)),
     };
 }
 // =================== COMPACT DEVICE SYNC PAYLOAD ===================
-const MAX_PAYLOAD_BYTES = 800;
-const MAX_PAYLOADS_PER_DEVICE = 6;
-/** Format a single schedule record into compact device payload "D" object */
+const MAX_SCHEDULES_PER_DEVICE = 12;
+const MAX_ITEMS_PER_CHUNK = 8;
+/** Format a single schedule record into compact m1 item based on schedule type */
 function toCompactSchedule(record) {
+    // Skip schedules without valid start date
+    if (!record.schedule_start_date)
+        return null;
     const isCyclic = record.schedule_type === "CYCLIC";
-    const days = record.bit_wise_days ?? 0;
-    if (isCyclic) {
-        return {
-            sch_type: 2,
-            id: record.schedule_id,
-            start: record.start_time,
-            end: record.end_time,
-            on: record.cycle_on_minutes ?? 0,
-            off: record.cycle_off_minutes ?? 0,
-            rep: record.repeat ?? 0,
-            days,
-            en: record.enabled ? 1 : 0,
-        };
-    }
-    return {
-        sch_type: 1,
+    // TIME_BASED format: {id, sd, ed, st, et, en, pwr_rec}
+    const item = {
         id: record.schedule_id,
-        start: record.start_time,
-        end: record.end_time,
-        dur: record.runtime_minutes ?? 0,
-        rep: record.repeat ?? 0,
-        days,
-        pwr_rec: record.power_loss_recovery ? 1 : 0,
+        sd: record.schedule_start_date,
+        ed: record.schedule_end_date ?? record.schedule_start_date,
+        st: parseInt(record.start_time, 10),
+        et: parseInt(record.end_time, 10),
         en: record.enabled ? 1 : 0,
+        pwr_rec: record.power_loss_recovery ? 1 : 0,
     };
+    // CYCLIC format adds: {cy, on, off}
+    if (isCyclic) {
+        item.cy = 1;
+        item.on = record.cycle_on_minutes ?? 0;
+        item.off = record.cycle_off_minutes ?? 0;
+    }
+    return item;
 }
 /**
  * Build compact device sync payloads from schedule records.
- * Groups by starter_id, formats each schedule as compact "D" object,
- * splits into chunks of max 800 bytes, max 6 payloads per device.
+ * Groups by starter_id, takes first 10 schedules per device,
+ * splits into chunks of max 8 items each.
  *
- * Returns: Array of { T: starter_id, S: schedule.id, D: {...} }[]
- * grouped per starter as chunks.
+ * Each chunk is a single payload object:
+ * { T: "SCHEDULE CREATION", S: seq, D: { idx, last, sch_cnt, plr, m1: [...] } }
  */
 export function buildDeviceSyncPayloads(records) {
     // Group schedules by starter_id
@@ -367,35 +371,42 @@ export function buildDeviceSyncPayloads(records) {
     }
     const result = [];
     for (const [starterId, schedules] of grouped) {
-        // Build individual compact items
-        const items = schedules.map((sch) => ({
-            T: 23,
-            S: randomSequenceNumber(),
-            D: toCompactSchedule(sch),
-        }));
-        // Split into chunks that fit within MAX_PAYLOAD_BYTES
+        // Limit to first MAX_SCHEDULES_PER_DEVICE schedules per device, skip invalid
+        const limited = schedules.slice(0, MAX_SCHEDULES_PER_DEVICE);
+        const compactPairs = limited
+            .map((r) => ({ record: r, compact: toCompactSchedule(r) }))
+            .filter((p) => p.compact !== null);
+        const compactItems = compactPairs.map(p => p.compact);
+        const validRecords = compactPairs.map(p => p.record);
+        // sch_cnt = total valid schedules being sent to this device in this sync call
+        const totalCount = compactItems.length;
+        if (compactItems.length === 0)
+            continue;
+        // Get plr from the first valid schedule (default 30)
+        const plr = validRecords[0]?.power_loss_recovery_time ?? 30;
+        // Split into chunks of MAX_ITEMS_PER_CHUNK
         const chunks = [];
-        let currentChunk = [];
-        let currentSize = 2; // for "[]"
-        for (const item of items) {
-            const itemSize = Buffer.byteLength(JSON.stringify(item), "utf8");
-            const separatorSize = currentChunk.length > 0 ? 1 : 0; // comma
-            if (currentSize + separatorSize + itemSize > MAX_PAYLOAD_BYTES && currentChunk.length > 0) {
-                chunks.push(currentChunk);
-                currentChunk = [item];
-                currentSize = 2 + itemSize;
-            }
-            else {
-                currentChunk.push(item);
-                currentSize += separatorSize + itemSize;
-            }
+        for (let i = 0; i < compactItems.length; i += MAX_ITEMS_PER_CHUNK) {
+            const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK);
+            const dbIds = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK).map((r) => r.id);
+            const chunkIdx = chunks.length + 1;
+            const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
+            chunks.push({
+                payload: {
+                    T: 3,
+                    S: randomSequenceNumber(),
+                    D: {
+                        idx: chunkIdx,
+                        last: isLast,
+                        sch_cnt: totalCount,
+                        plr,
+                        m1: slice,
+                    },
+                },
+                dbIds,
+            });
         }
-        if (currentChunk.length > 0) {
-            chunks.push(currentChunk);
-        }
-        // Limit to MAX_PAYLOADS_PER_DEVICE chunks per device
-        const limitedChunks = chunks.slice(0, MAX_PAYLOADS_PER_DEVICE);
-        result.push({ starter_id: starterId, chunks: limitedChunks });
+        result.push({ starter_id: starterId, chunks });
     }
     return result;
 }

@@ -1,5 +1,5 @@
 import argon2 from "argon2";
-import moment from "moment";
+import { isBefore } from "date-fns";
 import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, MOBILE_NUMBER_ALREADY_EXIST, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
 import db from "../database/configuration.js";
@@ -15,13 +15,13 @@ import { checkInternalPhoneUniqueness } from "../helpers/user-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord } from "../services/db/base-db-services.js";
 import { OtpService } from "../services/db/otp-services.js";
-import { SmsService } from "../services/sms/sms-service.js";
 import { genJWTTokensForUser } from "../utils/jwt-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import { checkPhoneUniqueness, checkPhoneUniquenessVerify } from "../services/db/user-services.js";
+import { SmsService } from "../services/sms/sms-service.js";
 const paramsValidateException = new ParamsValidateException();
 const otpService = new OtpService();
 const smsService = new SmsService();
@@ -129,10 +129,10 @@ export class AuthHandlers {
             if (user === true)
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = await otpService.fetchOtp({ phone: validReqData.phone });
-            const now = moment.utc();
+            const now = new Date();
             const otpValidationErrors = {};
             let otp = otpData[0];
-            if (!otp || otp.otp !== validReqData.otp || !otp.expires_at || moment.utc(otp.expires_at).isBefore(now)) {
+            if (!otp || otp.otp !== validReqData.otp || !otp.expires_at || isBefore(new Date(otp.expires_at), now)) {
                 otpValidationErrors.otp = INVALID_OTP;
             }
             if (Object.keys(otpValidationErrors).length > 0) {

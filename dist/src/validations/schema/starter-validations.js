@@ -17,6 +17,7 @@ export const vAssignStarter = v.object({
     motor_name: motorNameValidator,
     location_id: requiredNumber(LOCATION_REQUIRED),
     hp: hpValidator,
+    device_installed_location: v.nullish(v.optional(v.string())),
 });
 export const vReplaceStarter = v.object({
     starter_id: requiredNumber(DEVICE_ID_REQUIRED),

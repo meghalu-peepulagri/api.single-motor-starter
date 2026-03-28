@@ -2,7 +2,6 @@ import { userActivityLogs } from "../../database/schemas/user-activity-logs.js";
 import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
-import { log } from "node:console";
 /**
  * Service to handle Database Level Activity Logs (Audit Trail)
  */
@@ -269,6 +268,22 @@ export class ActivityService {
             entityType: "LOCATION",
             entityId: locationId,
             action: "LOCATION_DELETED"
+        });
+        await this.saveActivityLogs([log], trx);
+    }
+    /**
+     * Logs a fault cleared event
+     */
+    static async writeFaultClearedLog(userId, motorId, starterId, oldData, trx) {
+        const log = prepareActionLog({
+            userId,
+            action: "FAULT_CLEARED",
+            entityType: "MOTOR",
+            entityId: motorId,
+            deviceId: starterId,
+            oldData,
+            newData: { fault_code: 0 },
+            message: `Fault cleared - No more faults`
         });
         await this.saveActivityLogs([log], trx);
     }
