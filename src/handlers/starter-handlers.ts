@@ -14,7 +14,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { processSimRechargeExpiryNotifications, starterFilters } from "../helpers/starter-helper.js";
+import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
 
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsPaginated, getUnifiedLogsCount } from "../services/db/alerts-services.js";
@@ -649,14 +649,8 @@ export class StarterHandlers {
 
   starterCountBasedOnStatusHandler = async (c: Context) => {
     try {
-      const notArchived = ne(starterBoxes.status, "ARCHIVED");
       const query = c.req.query();
-
-      const baseFilters = [notArchived];
-
-      if (query.user_id) {
-        baseFilters.push(eq(starterBoxes.user_id, Number(query.user_id)));
-      }
+      const baseFilters = starterCountFilters(query);
 
       const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
         getRecordsCount(starterBoxes, [...baseFilters]),

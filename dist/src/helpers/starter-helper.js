@@ -57,6 +57,34 @@ export function starterFilters(query, user) {
         filters.push(eq(starterBoxes.user_id, user.id));
     return filters;
 }
+export function starterCountFilters(query) {
+    const filters = [];
+    filters.push(ne(starterBoxes.status, "ARCHIVED"));
+    if (query.search_string?.trim()) {
+        const s = `%${query.search_string.trim()}%`;
+        filters.push(sql `(
+        ${starterBoxes.pcb_number} ILIKE ${s}
+        OR ${starterBoxes.starter_number} ILIKE ${s}
+        OR ${starterBoxes.mac_address} ILIKE ${s}
+      )`);
+    }
+    if (query.user_id)
+        filters.push(eq(starterBoxes.user_id, Number(query.user_id)));
+    if (query.location_id)
+        filters.push(eq(starterBoxes.location_id, Number(query.location_id)));
+    if (query.status) {
+        filters.push(eq(starterBoxes.status, query.status));
+    }
+    if (query.device_status) {
+        filters.push(eq(starterBoxes.device_status, query.device_status));
+    }
+    if (query.power) {
+        const powerValue = query.power === "ON" ? 1 : query.power === "OFF" ? 0 : undefined;
+        if (powerValue !== undefined)
+            filters.push(eq(starterBoxes.power, powerValue));
+    }
+    return filters;
+}
 export function parseSimExpiryDate(dateStr) {
     // DD-MM-YYYY format (e.g., "21-02-2027") — primary format from dispatch
     const ddmmyyyy = dateStr.trim().split("-");
