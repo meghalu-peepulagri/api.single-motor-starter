@@ -737,7 +737,7 @@ export class StarterHandlers {
       const allDevices = await db.query.starterBoxes.findMany({
         where: ne(starterBoxes.status, "ARCHIVED"),
       });
- 
+
       const BATCH_SIZE = 10;
       const BATCH_DELAY_MS = 60 * 1000; // 1 minute between batches
 
@@ -763,7 +763,7 @@ export class StarterHandlers {
       })();
 
       const totalBatches = Math.ceil(allDevices.length / BATCH_SIZE);
-      return sendResponse(c, 200, DEVICE_INFO_REQUEST_SENT, {
+      return sendResponse(c, 200, "Device info", {
         total_devices: allDevices.length,
         batch_size: BATCH_SIZE,
         total_batches: totalBatches,

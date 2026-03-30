@@ -41,7 +41,7 @@ function normalizeScheduleType(value) {
  * Normalize any time input to 4-digit zero-padded HHMM string.
  * Accepts: number 600, string "5", "25", "600", "0005", "06:00" → returns "0600", "0005" etc.
  */
-function normalizeTime(value) {
+export function normalizeTime(value) {
     let h;
     let m;
     if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 2359) {
@@ -80,7 +80,7 @@ function formatTimeFromMinutes(totalMinutes) {
     const minutes = normalized % 60;
     return `${String(hours).padStart(2, "0")}${String(minutes).padStart(2, "0")}`;
 }
-function addMinutesToTime(hhmm, minutesToAdd) {
+export function addMinutesToTime(hhmm, minutesToAdd) {
     const h = parseInt(hhmm.substring(0, 2), 10);
     const m = parseInt(hhmm.substring(2, 4), 10);
     return formatTimeFromMinutes((h * 60) + m + minutesToAdd);
