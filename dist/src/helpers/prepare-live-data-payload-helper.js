@@ -15,7 +15,7 @@ export function prepareLiveDataPayload(validatedData, starterData) {
     const sch = data.sch && typeof data.sch === "object" && Object.keys(data.sch).length > 0 ? data.sch : null;
     const schStartTime = sch ? (normalizeTime(sch.st) ?? null) : null;
     const schRuntime = sch ? (sch.rt ?? null) : null;
-    const schEndTime = schStartTime && schRuntime ? addMinutesToTime(schStartTime, schRuntime) : null;
+    const schEndTime = sch.et ? (normalizeTime(sch.et) ?? null) : null;
     const llvSource = data.llv || data.ll_v || [];
     const llv = cleanThreeNumberArray(llvSource);
     const amp = cleanThreeNumberArray(data.amp || []);

@@ -110,6 +110,10 @@ export function validateAndExtractLiveData(payload) {
                 cleaned[key] = num;
             }
         }
+        // Pass through optional fields not in required list
+        if (groupData.sch !== undefined) {
+            cleaned.sch = groupData.sch;
+        }
     }
     return {
         T: typeof T === "number" ? T : null,
