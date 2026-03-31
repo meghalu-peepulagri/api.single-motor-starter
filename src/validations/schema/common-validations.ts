@@ -18,9 +18,7 @@ const simNumberValidator = v.pipe(
   v.trim(),
   v.nonEmpty(SIM_NUMBER_REQUIRED),
   v.regex(/^\d+$/, INVALID_SIM_NUMBER),
-  v.regex(/^[6-9]/, INVALID_SIM),
-  v.regex(/^\d{10}$/, INVALID_SIM_NUMBER_VALID_LENGTH),
-  v.regex(/^(?!(\d)\1{9}$).+$/, INVALID_SIM),
+  v.regex(/^\d{1,40}$/, INVALID_SIM_NUMBER_VALID_LENGTH),
 );
 
 
