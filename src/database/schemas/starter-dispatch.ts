@@ -9,7 +9,7 @@ export const paymentStatusEnum = pgEnum("payment_status", ["RECEIVED", "PENDING"
 export const starterDispatch = pgTable("starter_dispatch", {
   // System fields
   id: serial("id").primaryKey(),
-  starter_id: integer("starter_id").notNull().references(() => starterBoxes.id),
+  starter_id: integer("starter_id").references(() => starterBoxes.id),
 
   // Device details (snapshot at dispatch time)
   part_no: varchar("part_no"),

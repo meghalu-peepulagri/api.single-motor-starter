@@ -1,0 +1,1 @@
+ALTER TABLE "starter_dispatch" ALTER COLUMN "starter_id" DROP NOT NULL;

@@ -19,19 +19,23 @@ export class StarterDispatchHandlers {
             const dispatchPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(dispatchPayload);
             const validDispatchReq = await validatedRequest("add-starter-dispatch", dispatchPayload, STARTER_DISPATCH_VALIDATION_CRITERIA);
-            const existedStarter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validDispatchReq.starter_id, "ARCHIVED"]);
-            if (!existedStarter)
-                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            let existedStarter = null;
+            if (validDispatchReq.starter_id != null) {
+                existedStarter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validDispatchReq.starter_id, "ARCHIVED"]);
+                if (!existedStarter)
+                    throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            }
             const existedSimNumberRecord = await getSingleRecordByMultipleColumnValues(starterDispatch, ["sim_no", "status"], ["=", "!="], [validDispatchReq.sim_no, "ARCHIVED"]);
             if (existedSimNumberRecord) {
                 throw new ConflictException(`SIM number already existed.`);
             }
             const preparedPayload = preparedPayloadOfDispatchData(validDispatchReq, userPayload.id);
-            const starterBoxUpdate = preparedStarterBoxUpdateData(preparedPayload);
-            await Promise.all([
-                updateRecordById(starterBoxes, existedStarter.id, starterBoxUpdate),
-                saveSingleRecord(starterDispatch, preparedPayload)
-            ]);
+            const operations = [saveSingleRecord(starterDispatch, preparedPayload)];
+            if (existedStarter) {
+                const starterBoxUpdate = preparedStarterBoxUpdateData(preparedPayload);
+                operations.push(updateRecordById(starterBoxes, existedStarter.id, starterBoxUpdate));
+            }
+            await Promise.all(operations);
             return sendResponse(c, 201, STARTER_DISPATCH_ADDED_SUCCESSFULLY);
         }
         catch (error) {

@@ -36,7 +36,7 @@ const contactNumberValidator = v.pipe(v.string(CONTACT_NUMBER_REQUIRED), v.trim(
 const paymentStatusValidator = v.pipe(v.string(PAYMENT_STATUS_REQUIRED), v.trim(), v.nonEmpty(PAYMENT_STATUS_REQUIRED), v.picklist(paymentStatusEnum.enumValues, INVALID_PAYMENT_STATUS));
 export const vAddStarterDispatch = v.object({
     // Required fields
-    starter_id: requiredNumber(STARTER_ID_REQUIRED),
+    starter_id: v.nullish(requiredNumber(STARTER_ID_REQUIRED)),
     part_no: requiredStr(PART_NO_REQUIRED),
     box_serial_no: requiredStr(BOX_SERIAL_NO_REQUIRED),
     pcb_number: requiredStr(PCB_NUMBER_REQUIRED),

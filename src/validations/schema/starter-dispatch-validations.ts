@@ -62,7 +62,7 @@ const paymentStatusValidator = v.pipe(
 
 export const vAddStarterDispatch = v.object({
   // Required fields
-  starter_id: requiredNumber(STARTER_ID_REQUIRED),
+  starter_id: v.nullish(requiredNumber(STARTER_ID_REQUIRED)),
   part_no: requiredStr(PART_NO_REQUIRED),
   box_serial_no: requiredStr(BOX_SERIAL_NO_REQUIRED),
   pcb_number: requiredStr(PCB_NUMBER_REQUIRED),

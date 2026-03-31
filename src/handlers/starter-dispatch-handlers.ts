@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { EXPIRING_DISPATCH_FETCHED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
-import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
+import { starterBoxes, type StarterBox, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { starterDispatch, type StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
@@ -28,10 +28,12 @@ export class StarterDispatchHandlers {
         "add-starter-dispatch", dispatchPayload, STARTER_DISPATCH_VALIDATION_CRITERIA
       );
 
-      const existedStarter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes,
-        ["id", "status"], ["=", "!="], [validDispatchReq.starter_id, "ARCHIVED"]);
-
-      if (!existedStarter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+      let existedStarter: StarterBox | null = null;
+      if (validDispatchReq.starter_id != null) {
+        existedStarter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes,
+          ["id", "status"], ["=", "!="], [validDispatchReq.starter_id, "ARCHIVED"]);
+        if (!existedStarter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+      }
 
       const existedSimNumberRecord = await getSingleRecordByMultipleColumnValues<StarterDispatchTable>(starterDispatch,
         ["sim_no", "status"], ["=", "!="], [validDispatchReq.sim_no, "ARCHIVED"]);
@@ -41,12 +43,13 @@ export class StarterDispatchHandlers {
       }
 
       const preparedPayload = preparedPayloadOfDispatchData(validDispatchReq, userPayload.id);
-      const starterBoxUpdate = preparedStarterBoxUpdateData(preparedPayload);
 
-      await Promise.all([
-        updateRecordById(starterBoxes, existedStarter.id, starterBoxUpdate),
-        saveSingleRecord<StarterDispatchTable>(starterDispatch, preparedPayload)
-      ]);
+      const operations: Promise<any>[] = [saveSingleRecord<StarterDispatchTable>(starterDispatch, preparedPayload)];
+      if (existedStarter) {
+        const starterBoxUpdate = preparedStarterBoxUpdateData(preparedPayload);
+        operations.push(updateRecordById(starterBoxes, existedStarter.id, starterBoxUpdate));
+      }
+      await Promise.all(operations);
 
       return sendResponse(c, 201, STARTER_DISPATCH_ADDED_SUCCESSFULLY);
     } catch (error: any) {
