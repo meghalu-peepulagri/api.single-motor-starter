@@ -1,5 +1,7 @@
 import { and, eq, gte, inArray, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
+
+type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
 import { motorSchedules, type MotorSchedule } from "../../database/schemas/motor-schedules.js";
 import type { MotorScheduleFilters } from "../../helpers/motor-schedule-filter-helper.js";
 import { dateToYYMMDD } from "../../helpers/motor-schedule-payload-helper.js";
@@ -428,4 +430,38 @@ export async function findEvaluatableSchedules() {
       enabled: true,
     },
   });
+}
+
+// =================== ACTUAL SCHEDULE FIELDS ===================
+
+export async function updateActualScheduleFields(
+  motorId: number,
+  starterId: number,
+  scheduleId: number,
+  actualData: {
+    actual_start_time: string | null;
+    actual_end_time: string | null;
+    actual_run_time: number | null;
+    actual_type: "TIME_BASED" | "CYCLIC" | null;
+  },
+  trx: DbTransaction
+) {
+  await trx
+    .update(motorSchedules)
+    .set({
+      actual_start_time: actualData.actual_start_time,
+      actual_end_time: actualData.actual_end_time,
+      actual_run_time: actualData.actual_run_time,
+      actual_type: actualData.actual_type,
+      updated_at: new Date(),
+    })
+    .where(
+      and(
+        eq(motorSchedules.motor_id, motorId),
+        eq(motorSchedules.starter_id, starterId),
+        eq(motorSchedules.schedule_id, scheduleId),
+        sql`${motorSchedules.status} != 'ARCHIVED'`,
+        sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`,
+      )
+    );
 }

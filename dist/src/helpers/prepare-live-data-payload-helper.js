@@ -4,6 +4,7 @@ import { logger } from "../utils/logger.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 import { addMinutesToTime, normalizeTime } from "./motor-schedule-payload-helper.js";
 export function prepareLiveDataPayload(validatedData, starterData) {
+    console.log('validatedData: ', validatedData);
     if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
         logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
         console.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
@@ -19,6 +20,7 @@ export function prepareLiveDataPayload(validatedData, starterData) {
     const llv = cleanThreeNumberArray(llvSource);
     const amp = cleanThreeNumberArray(data.amp || []);
     const motorStateValue = cleanScalar(data.m_s ?? data.mtr_sts) || 0;
+    const activeScheduleType = sch ? (sch.cy === 1 ? "CYCLIC" : "TIME_BASED") : null;
     return {
         payload_version: cleanScalar(data.p_v) || 0,
         packet_number: validatedData.T,
@@ -59,7 +61,7 @@ export function prepareLiveDataPayload(validatedData, starterData) {
         motor_id: starterData.motors[0].id || null,
         // Schedule
         active_schedule_id: sch?.id ?? null,
-        active_schedule_type: sch ? (sch.cy === 1 ? "CYCLIC" : "TIME_BASED") : null,
+        active_schedule_type: activeScheduleType,
         active_schedule_start_time: schStartTime,
         active_schedule_runtime_minutes: schRuntime,
         active_schedule_end_time: schEndTime,

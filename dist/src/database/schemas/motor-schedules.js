@@ -48,6 +48,11 @@ export const motorSchedules = pgTable("motor_schedules", {
     schedule_status: scheduleStatusEnum().default("PENDING").notNull(),
     acknowledgement: integer("acknowledgement").default(0), // 0 = Not Acknowledged, 1 = Acknowledged
     acknowledged_at: timestamp("acknowledged_at"),
+    // Actual execution values reported by the device (may differ from configured values)
+    actual_start_time: varchar("actual_start_time"), // HHMM — actual time device started the schedule
+    actual_end_time: varchar("actual_end_time"), // HHMM — actual end time reported by device (start + runtime)
+    actual_run_time: integer("actual_run_time"), // minutes — actual runtime device is executing
+    actual_type: scheduleTypeEnum("actual_type"), // actual schedule type device executed
     last_started_at: timestamp("last_started_at"),
     last_stopped_at: timestamp("last_stopped_at"),
     created_by: integer("created_by").references(() => users.id), // user_id of the creator

@@ -272,6 +272,13 @@ export type preparedLiveData = {
   gateway_id: number;
   user_id: number;
   motor_id: number,
+
+  // Schedule fields from device payload
+  active_schedule_id: number | null;
+  active_schedule_type: "TIME_BASED" | "CYCLIC" | null;
+  active_schedule_start_time: string | null;      // HHMM — actual start time device is using
+  active_schedule_runtime_minutes: number | null; // minutes
+  active_schedule_end_time: string | null;        // HHMM — computed (start + runtime)
 };
 
 export type previousPreparedLiveData = {

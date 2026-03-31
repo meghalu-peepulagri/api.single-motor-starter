@@ -763,7 +763,7 @@ export class StarterHandlers {
       })();
 
       const totalBatches = Math.ceil(allDevices.length / BATCH_SIZE);
-      return sendResponse(c, 200, "Device info", {
+      return sendResponse(c, 200, "Device info request sended successfully", {
         total_devices: allDevices.length,
         batch_size: BATCH_SIZE,
         total_batches: totalBatches,

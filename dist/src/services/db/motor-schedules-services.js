@@ -328,3 +328,16 @@ export async function findEvaluatableSchedules() {
         },
     });
 }
+// =================== ACTUAL SCHEDULE FIELDS ===================
+export async function updateActualScheduleFields(motorId, starterId, scheduleId, actualData, trx) {
+    await trx
+        .update(motorSchedules)
+        .set({
+        actual_start_time: actualData.actual_start_time,
+        actual_end_time: actualData.actual_end_time,
+        actual_run_time: actualData.actual_run_time,
+        actual_type: actualData.actual_type,
+        updated_at: new Date(),
+    })
+        .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), eq(motorSchedules.schedule_id, scheduleId), sql `${motorSchedules.status} != 'ARCHIVED'`, sql `${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`));
+}
