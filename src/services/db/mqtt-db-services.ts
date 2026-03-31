@@ -6,6 +6,7 @@ import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
 import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
+import { handleSchedulingAck, handleScheduleDataAck } from "../mqtt/schedule-ack-handler.js";
 import { controlMode, getFaultNotificationMessage } from "../../helpers/control-helpers.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
@@ -79,7 +80,10 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
       await deviceInfoAckHandler(payload, topic);
       break;
     case "SCHEDULING_ACK":
-      scheduleCreationAckResolver(payload, topic);
+      handleSchedulingAck(payload, topic);
+      break;
+    case "SCHEDULING_DATA_REQUEST_ACK":
+      handleScheduleDataAck(payload, topic);
       break;
     default:
       return null;
