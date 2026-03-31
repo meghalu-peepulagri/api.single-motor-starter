@@ -121,7 +121,7 @@ export const USER_DETAILS_WITH_LOCATIONS_FETCHED = "User details with locations 
 export const SIM_NUMBER_REQUIRED = "Sim Number is required";
 export const INVALID_SIM_NUMBER = "Invalid Sim Number(digits only)";
 export const INVALID_SIM = "Invalid Sim Number";
-export const INVALID_SIM_NUMBER_VALID_LENGTH = "Invalid Sim Number (10 digits required)";
+export const INVALID_SIM_NUMBER_VALID_LENGTH = "Invalid Sim Number (max 40 digits allowed)";
 
 
 // Token  
