@@ -5,7 +5,7 @@ import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
-import { starterDispatch } from "../../database/schemas/starter-dispatch.js";
+import { starterDispatch, type StarterDispatchTable } from "../../database/schemas/starter-dispatch.js";
 import { StarterDefaultSettingsLimits } from "../../database/schemas/starter-default-settings-limits.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
@@ -19,7 +19,7 @@ import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-help
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { ActivityService } from "./activity-service.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
@@ -27,7 +27,8 @@ import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
-  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload);
+  const existedStarterDispatch = await getSingleRecordByMultipleColumnValues<StarterDispatchTable>(starterDispatch, ["box_serial_no", "status"], ["=", "!="], [starterBoxPayload.starter_number, "ARCHIVED"]);
+  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload,existedStarterDispatch);
   const defaultSettings = await getStarterDefaultSettings();
   const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
   const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
@@ -42,10 +43,7 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
       trx
     );
 
-    await trx.update(starterDispatch)
-      .set({ starter_id: starter.id })
-      .where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
-
+    await trx.update(starterDispatch).set({ starter_id: starter.id}).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
     await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
     const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
     publishMultipleTimesInBackground(deviceInfoPayload, starter);

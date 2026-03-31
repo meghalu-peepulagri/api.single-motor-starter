@@ -17,13 +17,14 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { ActivityService } from "./activity-service.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
-    const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
+    const existedStarterDispatch = await getSingleRecordByMultipleColumnValues(starterDispatch, ["box_serial_no", "status"], ["=", "!="], [starterBoxPayload.starter_number, "ARCHIVED"]);
+    const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload, existedStarterDispatch);
     const defaultSettings = await getStarterDefaultSettings();
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
     const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
@@ -32,9 +33,7 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload) 
         const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
         await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
         await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
-        await trx.update(starterDispatch)
-            .set({ starter_id: starter.id })
-            .where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
+        await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
         await saveSingleRecord(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
         const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
         publishMultipleTimesInBackground(deviceInfoPayload, starter);

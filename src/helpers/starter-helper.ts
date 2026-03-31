@@ -8,16 +8,20 @@ import type { starterBoxPayloadType } from "../types/app-types.js";
 // import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import { getStartersWithSimRechargeExpiry } from "../services/db/starter-services.js";
+import type { StarterDispatch } from "../database/schemas/starter-dispatch.js";
 
 
-export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
+export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User, dispatchDetails?: StarterDispatch | null) {
 
   const motorDetails = {
     name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
     hp: 2,
   };
 
-  return { ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails }
+  return { ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails
+    , sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,
+     device_mobile_number: dispatchDetails?.sim_no, hardware_version: dispatchDetails?.hardware_version,
+   }
 };
 
 export function starterFilters(query: any, user: any) {
