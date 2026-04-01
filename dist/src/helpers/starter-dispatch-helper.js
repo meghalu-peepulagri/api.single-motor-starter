@@ -94,6 +94,7 @@ export function preparedPayloadOfDispatchData(validDispatchReq, createdBy) {
         payment_status: validDispatchReq.payment_status,
         invoice_no: validDispatchReq.invoice_no,
         invoice_date: validDispatchReq.invoice_date,
+        invoice_document: validDispatchReq.invoice_document,
         // Audit
         created_by: createdBy,
     };

@@ -39,6 +39,7 @@ export const starterDispatch = pgTable("starter_dispatch", {
   payment_status: paymentStatusEnum().notNull().default("PENDING"),
   invoice_no: varchar("invoice_no"),
   invoice_date: varchar("invoice_date"),
+  invoice_document: varchar("invoice_document"), // S3 key of uploaded invoice document
 
   // Audit fields
   status: statusEnum().notNull().default("ACTIVE"),

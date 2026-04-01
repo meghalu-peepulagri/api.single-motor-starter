@@ -1,4 +1,4 @@
-import { EXPIRING_DISPATCH_FETCHED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { EXPIRING_DISPATCH_FETCHED, INVOICE_UPLOAD_URL_GENERATED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { starterDispatch } from "../database/schemas/starter-dispatch.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
@@ -11,6 +11,7 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ConflictException from "../exceptions/conflict-exception.js";
+import { generateInvoiceUploadUrl } from "../services/s3/s3-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDispatchHandlers {
     addStarterDispatchHandler = async (c) => {
@@ -43,6 +44,17 @@ export class StarterDispatchHandlers {
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
+            throw error;
+        }
+    };
+    uploadInvoiceHandler = async (c) => {
+        try {
+            const contentType = c.req.header("Content-Type") ?? "application/pdf";
+            const { uploadUrl, key } = await generateInvoiceUploadUrl(Date.now(), contentType);
+            return sendResponse(c, 200, INVOICE_UPLOAD_URL_GENERATED, { uploadUrl, key });
+        }
+        catch (error) {
+            console.error("Error at upload invoice :", error);
             throw error;
         }
     };

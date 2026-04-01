@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { EXPIRING_DISPATCH_FETCHED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { EXPIRING_DISPATCH_FETCHED, INVOICE_UPLOAD_URL_GENERATED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { starterDispatch, type StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
@@ -13,6 +13,7 @@ import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedAddStarterDispatch } from "../validations/schema/starter-dispatch-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ConflictException from "../exceptions/conflict-exception.js";
+import { generateInvoiceUploadUrl } from "../services/s3/s3-service.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -57,6 +58,19 @@ export class StarterDispatchHandlers {
       handleJsonParseError(error);
       parseDatabaseError(error);
       handleForeignKeyViolationError(error);
+      throw error;
+    }
+  };
+
+  uploadInvoiceHandler = async (c: Context) => {
+    try {
+      const contentType = c.req.header("Content-Type") ?? "application/pdf";
+
+      const { uploadUrl, key } = await generateInvoiceUploadUrl(Date.now(), contentType);
+
+      return sendResponse(c, 200, INVOICE_UPLOAD_URL_GENERATED, { uploadUrl, key });
+    } catch (error: any) {
+      console.error("Error at upload invoice :", error);
       throw error;
     }
   };

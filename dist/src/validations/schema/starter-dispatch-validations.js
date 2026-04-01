@@ -60,4 +60,5 @@ export const vAddStarterDispatch = v.object({
     // sim_recharge_end_date and warranty_end_date are auto-calculated from invoice_date + 12 months
     tracking_details: v.nullish(v.optional(v.string())),
     remarks: v.nullish(v.optional(v.string())),
+    invoice_document: v.nullish(v.optional(v.string())), // S3 key returned from invoice-upload-url endpoint
 });
