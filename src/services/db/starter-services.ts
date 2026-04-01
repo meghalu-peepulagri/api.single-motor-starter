@@ -28,7 +28,7 @@ import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
   const existedStarterDispatch = await getSingleRecordByMultipleColumnValues<StarterDispatchTable>(starterDispatch, ["box_serial_no", "status"], ["=", "!="], [starterBoxPayload.starter_number, "ARCHIVED"]);
-  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload,existedStarterDispatch);
+  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload, existedStarterDispatch);
   const defaultSettings = await getStarterDefaultSettings();
   const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
   const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
@@ -43,7 +43,7 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
       trx
     );
 
-    await trx.update(starterDispatch).set({ starter_id: starter.id}).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
+    await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
     await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
     const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
     publishMultipleTimesInBackground(deviceInfoPayload, starter);
@@ -463,6 +463,12 @@ export async function starterConnectedMotors(starterId: number) {
         columns: {
           id: true,
           full_name: true,
+        },
+      },
+      dispatch: {
+        where: ne(starterDispatch.status, "ARCHIVED"),
+        columns: {
+          invoice_document: true,
         },
       },
     },

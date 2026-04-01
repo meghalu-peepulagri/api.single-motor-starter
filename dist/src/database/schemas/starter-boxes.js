@@ -6,6 +6,7 @@ import { locations } from "./locations.js";
 import { motors } from "./motors.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { users } from "./users.js";
+import { starterDispatch } from "./starter-dispatch.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY", "TEST"]);
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
 export const starterBoxes = pgTable("starter_boxes", {
@@ -75,5 +76,9 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => 
     location: one(locations, {
         fields: [starterBoxes.location_id],
         references: [locations.id],
-    })
+    }),
+    dispatch: one(starterDispatch, {
+        fields: [starterBoxes.id],
+        references: [starterDispatch.starter_id],
+    }),
 }));

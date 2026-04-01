@@ -389,6 +389,12 @@ export async function starterConnectedMotors(starterId) {
                     full_name: true,
                 },
             },
+            dispatch: {
+                where: ne(starterDispatch.status, "ARCHIVED"),
+                columns: {
+                    invoice_document: true,
+                },
+            },
         },
     });
 }

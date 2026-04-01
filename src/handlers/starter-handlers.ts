@@ -438,6 +438,10 @@ export class StarterHandlers {
         connectedMotors.installation_photo_url = await generateDownloadUrl(connectedMotors.installation_photo_key);
       }
 
+      if (connectedMotors?.dispatch?.invoice_document) {
+        connectedMotors.dispatch.invoice_document_url = await generateDownloadUrl(connectedMotors.dispatch.invoice_document);
+      }
+
       return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
     } catch (error: any) {
       console.error("Error at starter connected motors :", error);
