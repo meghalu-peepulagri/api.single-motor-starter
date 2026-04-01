@@ -682,7 +682,7 @@ export class StarterHandlers {
                 logger.info(`Device info request: all ${allDevices.length} devices processed`);
             })();
             const totalBatches = Math.ceil(allDevices.length / BATCH_SIZE);
-            return sendResponse(c, 200, "Device info request sended successfully", {
+            return sendResponse(c, 200, "Device info request sended", {
                 total_devices: allDevices.length,
                 batch_size: BATCH_SIZE,
                 total_batches: totalBatches,
