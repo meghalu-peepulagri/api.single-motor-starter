@@ -3,7 +3,7 @@ import db from "../../database/configuration.js";
 import { starterDispatch } from "../../database/schemas/starter-dispatch.js";
 import { users } from "../../database/schemas/users.js";
 export async function getStarterDispatchByStarterId(starterId) {
-    return await db.query.starterDispatch.findMany({
+    return await db.query.starterDispatch.findFirst({
         where: and(eq(starterDispatch.starter_id, starterId), ne(starterDispatch.status, "ARCHIVED")),
         with: {
             createdBy: {

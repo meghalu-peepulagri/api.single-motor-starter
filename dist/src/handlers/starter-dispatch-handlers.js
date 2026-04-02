@@ -83,7 +83,7 @@ export class StarterDispatchHandlers {
             const starterId = +c.req.param("starterId");
             paramsValidateException.validateId(starterId, "Starter id");
             const dispatchRecords = await getStarterDispatchByStarterId(starterId);
-            if (!dispatchRecords || dispatchRecords.length === 0) {
+            if (!dispatchRecords) {
                 throw new NotFoundException(STARTER_DISPATCH_NOT_FOUND);
             }
             return sendResponse(c, 200, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, dispatchRecords);

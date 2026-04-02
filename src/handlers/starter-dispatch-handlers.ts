@@ -106,7 +106,7 @@ export class StarterDispatchHandlers {
 
       const dispatchRecords = await getStarterDispatchByStarterId(starterId);
 
-      if (!dispatchRecords || dispatchRecords.length === 0) {
+      if (!dispatchRecords) {
         throw new NotFoundException(STARTER_DISPATCH_NOT_FOUND);
       }
 
