@@ -5,7 +5,7 @@ import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
-import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
+import { starterBoxes, type StarterBox, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { users, type User, type UsersTable } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
@@ -49,8 +49,9 @@ export class StarterHandlers {
         if (!existedGateway) throw new BadRequestException(GATEWAY_NOT_FOUND);
       }
 
-      await addStarterWithTransaction(validStarterBoxReq, userPayload);
-      return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY);
+      const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload);
+      const { id, ...restStarterData } = starter as StarterBox;
+      return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY, { id });
     } catch (error: any) {
       console.error("Error at add starter box :", error);
       handleJsonParseError(error);

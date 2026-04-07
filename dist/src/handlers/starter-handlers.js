@@ -41,8 +41,9 @@ export class StarterHandlers {
                 if (!existedGateway)
                     throw new BadRequestException(GATEWAY_NOT_FOUND);
             }
-            await addStarterWithTransaction(validStarterBoxReq, userPayload);
-            return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY);
+            const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload);
+            const { id, ...restStarterData } = starter;
+            return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY, { id });
         }
         catch (error) {
             console.error("Error at add starter box :", error);

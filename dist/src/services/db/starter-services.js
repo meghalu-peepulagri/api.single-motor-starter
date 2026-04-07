@@ -29,7 +29,7 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload) 
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
     const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
     const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
-    await db.transaction(async (trx) => {
+    return await db.transaction(async (trx) => {
         const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
         await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
         await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
