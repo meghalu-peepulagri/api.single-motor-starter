@@ -11,7 +11,7 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ConflictException from "../exceptions/conflict-exception.js";
-import { generateInvoiceUploadUrl } from "../services/s3/s3-service.js";
+import { generateDownloadUrl, generateInvoiceUploadUrl } from "../services/s3/s3-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDispatchHandlers {
     addStarterDispatchHandler = async (c) => {
@@ -86,7 +86,14 @@ export class StarterDispatchHandlers {
             if (!dispatchRecords) {
                 throw new NotFoundException(STARTER_DISPATCH_NOT_FOUND);
             }
-            return sendResponse(c, 200, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, dispatchRecords);
+            const invoiceDocumentUrl = dispatchRecords.invoice_document
+                ? await generateDownloadUrl(dispatchRecords.invoice_document)
+                : undefined;
+            const responseData = {
+                ...dispatchRecords,
+                ...(invoiceDocumentUrl ? { invoice_document_url: invoiceDocumentUrl } : {}),
+            };
+            return sendResponse(c, 200, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, responseData);
         }
         catch (error) {
             console.error("Error at get starter dispatch :", error);
