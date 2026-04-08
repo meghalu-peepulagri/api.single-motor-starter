@@ -1,9 +1,9 @@
-import { EXPIRING_DISPATCH_FETCHED, INVOICE_UPLOAD_URL_GENERATED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { EXPIRING_DISPATCH_FETCHED, INVOICE_UPLOAD_URL_GENERATED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_UPDATED_SUCCESSFULLY, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { starterDispatch } from "../database/schemas/starter-dispatch.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { formatExpiringRecords, preparedPayloadOfDispatchData, preparedStarterBoxUpdateData } from "../helpers/starter-dispatch-helper.js";
+import { formatExpiringRecords, preparedPayloadOfDispatchData, preparedStarterBoxUpdateData, preparedUpdatePayloadOfDispatchData } from "../helpers/starter-dispatch-helper.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getExpiringDispatches, getExpiringDispatchesCount, getStarterDispatchByStarterId } from "../services/db/starter-dispatch-services.js";
@@ -13,6 +13,37 @@ import { validatedRequest } from "../validations/validate-request.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import { generateDownloadUrl, generateInvoiceUploadUrl } from "../services/s3/s3-service.js";
 const paramsValidateException = new ParamsValidateException();
+const hasOwn = (obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop);
+async function requireActiveDispatch(dispatchId) {
+    const dispatch = await getSingleRecordByMultipleColumnValues(starterDispatch, ["id", "status"], ["=", "!="], [dispatchId, "ARCHIVED"]);
+    if (!dispatch) {
+        throw new NotFoundException(STARTER_DISPATCH_NOT_FOUND);
+    }
+    return dispatch;
+}
+async function requireActiveStarterBoxIfAny(starterId) {
+    if (starterId == null)
+        return null;
+    const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+    if (!starter) {
+        throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+    }
+    return starter;
+}
+async function ensureUniqueSimNoForUpdate(simNo, dispatchId) {
+    const existedSimNumberRecord = await getSingleRecordByMultipleColumnValues(starterDispatch, ["sim_no", "id", "status"], ["=", "!=", "!="], [simNo, dispatchId, "ARCHIVED"]);
+    if (existedSimNumberRecord) {
+        throw new ConflictException(`SIM number already existed.`);
+    }
+}
+function applyOptionalDispatchFields(dispatchUpdate, rawPayload, validDispatchReq) {
+    if (hasOwn(rawPayload, "tracking_details"))
+        dispatchUpdate.tracking_details = validDispatchReq.tracking_details;
+    if (hasOwn(rawPayload, "remarks"))
+        dispatchUpdate.remarks = validDispatchReq.remarks;
+    if (hasOwn(rawPayload, "invoice_document"))
+        dispatchUpdate.invoice_document = validDispatchReq.invoice_document;
+}
 export class StarterDispatchHandlers {
     addStarterDispatchHandler = async (c) => {
         try {
@@ -41,6 +72,35 @@ export class StarterDispatchHandlers {
         }
         catch (error) {
             console.error("Error at add starter dispatch :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            throw error;
+        }
+    };
+    updateStarterDispatchHandler = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const dispatchId = +c.req.param("id");
+            paramsValidateException.validateId(dispatchId, "Dispatch id");
+            const dispatchPayload = await c.req.json();
+            paramsValidateException.emptyBodyValidation(dispatchPayload);
+            const validDispatchReq = await validatedRequest("update-starter-dispatch", dispatchPayload, STARTER_DISPATCH_VALIDATION_CRITERIA);
+            const existedDispatch = await requireActiveDispatch(dispatchId);
+            const starterIdProvided = hasOwn(dispatchPayload, "starter_id");
+            const nextStarterId = starterIdProvided ? validDispatchReq.starter_id : existedDispatch.starter_id;
+            const existedStarter = await requireActiveStarterBoxIfAny(nextStarterId);
+            await ensureUniqueSimNoForUpdate(validDispatchReq.sim_no, dispatchId);
+            const { dispatchUpdate, starterBoxUpdate } = preparedUpdatePayloadOfDispatchData(validDispatchReq, userPayload.id, starterIdProvided ? validDispatchReq.starter_id : undefined);
+            applyOptionalDispatchFields(dispatchUpdate, dispatchPayload, validDispatchReq);
+            await Promise.all([
+                updateRecordById(starterDispatch, dispatchId, dispatchUpdate),
+                ...(existedStarter ? [updateRecordById(starterBoxes, existedStarter.id, starterBoxUpdate)] : []),
+            ]);
+            return sendResponse(c, 200, STARTER_DISPATCH_UPDATED_SUCCESSFULLY);
+        }
+        catch (error) {
+            console.error("Error at update starter dispatch :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);

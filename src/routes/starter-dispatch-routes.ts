@@ -6,6 +6,7 @@ const starterDispatchHandlers = new StarterDispatchHandlers();
 const starterDispatchRoutes = factory.createApp();
 
 starterDispatchRoutes.post("/", isAuthorized, starterDispatchHandlers.addStarterDispatchHandler);
+starterDispatchRoutes.patch("/:id", isAuthorized, starterDispatchHandlers.updateStarterDispatchHandler);
 starterDispatchRoutes.post("/upload-invoice", isAuthorized, starterDispatchHandlers.uploadInvoiceHandler);
 starterDispatchRoutes.get("/expiring", isAuthorized, starterDispatchHandlers.getExpiringDispatchHandler);
 starterDispatchRoutes.get("/:starterId", isAuthorized, starterDispatchHandlers.getStarterDispatchByStarterIdHandler);

@@ -35,7 +35,8 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "assign-location-to-starter": vAssignLocationToStarter,
   "update-default-settings": vUpdateDefaultSettings,
   "update-default-settings-limits": vUpdateDefaultSettingsLimits,
-  "add-starter-dispatch": vAddStarterDispatch
+  "add-starter-dispatch": vAddStarterDispatch,
+  "update-starter-dispatch": vAddStarterDispatch,
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(
