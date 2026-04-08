@@ -62,10 +62,12 @@ export class StarterDispatchHandlers {
         try {
             const query = c.req.query();
             const type = query.type;
+            const order_by = query.order_by;
+            const order_type = query.order_type;
             const { page, pageSize, offset } = getPaginationOffParams(query);
             const totalRecords = await getExpiringDispatchesCount(type);
             const paginationInfo = getPaginationData(page, pageSize, totalRecords);
-            const expiringRecords = await getExpiringDispatches(type, offset, pageSize);
+            const expiringRecords = await getExpiringDispatches(type, offset, pageSize, order_by, order_type);
             const formattedRecords = formatExpiringRecords(expiringRecords, type);
             const response = {
                 pagination: paginationInfo,

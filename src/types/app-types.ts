@@ -1,4 +1,5 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { starterDispatch } from "../database/schemas/starter-dispatch.js";
 import type { ValidatedUpdateDefaultSettingsLimits } from "../validations/schema/default-settings-limits.js";
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import type { validatedAddField } from "../validations/schema/field-validations.js";
@@ -304,6 +305,20 @@ export type motorBasedStarterDetails = {
   id: number;
   assigned_at: Date | null;
 }
+
+// =================== DISPATCH SORTABLE COLUMNS ===================
+export const DISPATCH_SORTABLE_COLUMNS: Record<string, any> = {
+  id: starterDispatch.id,
+  starter_id: starterDispatch.starter_id,
+  customer_name: starterDispatch.customer_name,
+  contact_number: starterDispatch.contact_number,
+  address: starterDispatch.address,
+  location: starterDispatch.location,
+  sim_no: starterDispatch.sim_no,
+  sim_recharge_end_date: starterDispatch.sim_recharge_end_date,
+  warranty_end_date: starterDispatch.warranty_end_date,
+  created_at: starterDispatch.created_at,
+};
 
 // =================== RUNTIME TYPES ===================
 export interface RuntimeRecord {
