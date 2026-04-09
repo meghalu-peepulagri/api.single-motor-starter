@@ -4,7 +4,6 @@ import { logger } from "../utils/logger.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 import { addMinutesToTime, normalizeTime } from "./motor-schedule-payload-helper.js";
 export function prepareLiveDataPayload(validatedData, starterData) {
-    console.log('validatedData: ', validatedData);
     if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
         logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
         console.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
@@ -15,7 +14,7 @@ export function prepareLiveDataPayload(validatedData, starterData) {
     const sch = data.sch && typeof data.sch === "object" && Object.keys(data.sch).length > 0 ? data.sch : null;
     const schStartTime = sch ? (normalizeTime(sch.st) ?? null) : null;
     const schRuntime = sch ? (sch.rt ?? null) : null;
-    const schEndTime = sch.et ? (normalizeTime(sch.et) ?? null) : null;
+    const schEndTime = sch?.et ? (normalizeTime(sch.et) ?? null) : null;
     const llvSource = data.llv || data.ll_v || [];
     const llv = cleanThreeNumberArray(llvSource);
     const amp = cleanThreeNumberArray(data.amp || []);

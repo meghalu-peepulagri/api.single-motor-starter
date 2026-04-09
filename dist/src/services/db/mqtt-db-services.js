@@ -83,7 +83,6 @@ export async function selectTopicAck(topicType, payload, topic) {
 const VALID_MODES = ["AUTO", "MANUAL"];
 export async function updateStates(insertedData, previousData) {
     const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current, active_schedule_id, active_schedule_type, active_schedule_start_time, active_schedule_runtime_minutes, active_schedule_end_time } = insertedData;
-    console.log('insertedData: ', insertedData);
     const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
     if (!starter_id)
         return null;
@@ -92,7 +91,7 @@ export async function updateStates(insertedData, previousData) {
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
     try {
         const notificationData = await db.transaction(async (trx) => {
-            await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+            const result = await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
             await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
             const starterBoxUpdates = {};
             let trackPowerChange = false;
@@ -226,7 +225,7 @@ export async function updateStates(insertedData, previousData) {
     }
 }
 export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current, active_schedule_id, active_schedule_start_time, active_schedule_end_time, active_schedule_runtime_minutes, active_schedule_type } = insertedData;
     const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
@@ -286,6 +285,15 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         };
         if (alert_code || fault) {
             await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
+        }
+        // Update actual schedule fields with device-reported values
+        if (active_schedule_id && motor_id && starter_id) {
+            await updateActualScheduleFields(motor_id, starter_id, active_schedule_id, {
+                actual_start_time: active_schedule_start_time,
+                actual_end_time: active_schedule_end_time,
+                actual_run_time: active_schedule_runtime_minutes,
+                actual_type: active_schedule_type,
+            }, trx);
         }
         const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(motor, motor_state, mode_description, starter_id, starter_number) : null;
         const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) : null;
