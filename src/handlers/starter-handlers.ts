@@ -798,8 +798,8 @@ export class StarterHandlers {
       const orderBy: OrderByQueryData<StarterBoxParametersTable> = { columns: ["id"], values: ["desc"] };
 
       const faultRecord = await getSingleRecordByMultipleColumnValues<StarterBoxParametersTable>(starterBoxParameters,
-        ["starter_id", "motor_id", "fault", "fault_cleared"], ["=", "=", "=", "="],
-        [starterId, motorId, 1, false], ["id"], orderBy
+        ["starter_id", "motor_id", "fault", "fault_cleared"], ["=", "=", "!=", "="],
+        [starterId, motorId, 0, false], ["id"], orderBy
       );
 
       if (!faultRecord) throw new NotFoundException(NO_ACTIVE_FAULT_FOUND);

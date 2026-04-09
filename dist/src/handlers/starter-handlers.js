@@ -712,7 +712,7 @@ export class StarterHandlers {
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
             const orderBy = { columns: ["id"], values: ["desc"] };
-            const faultRecord = await getSingleRecordByMultipleColumnValues(starterBoxParameters, ["starter_id", "motor_id", "fault", "fault_cleared"], ["=", "=", "=", "="], [starterId, motorId, 1, false], ["id"], orderBy);
+            const faultRecord = await getSingleRecordByMultipleColumnValues(starterBoxParameters, ["starter_id", "motor_id", "fault", "fault_cleared"], ["=", "=", "!=", "="], [starterId, motorId, 0, false], ["id"], orderBy);
             if (!faultRecord)
                 throw new NotFoundException(NO_ACTIVE_FAULT_FOUND);
             await updateRecordById(starterBoxParameters, faultRecord.id, { fault_cleared: true });
