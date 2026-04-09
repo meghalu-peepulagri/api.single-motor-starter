@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_INFO_REQUEST_SENT, DEVICE_NOT_ALLOCATED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_INFO_REQUEST_SENT, DEVICE_NOT_ALLOCATED, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
 import { gateways } from "../database/schemas/gateways.js";
@@ -28,6 +28,7 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
 import { starterDispatch } from "../database/schemas/starter-dispatch.js";
+import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBoxHandler = async (c) => {
@@ -695,6 +696,30 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at device info request handler :", error);
+            throw error;
+        }
+    };
+    faultClearedHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("starter_id");
+            const motorId = +c.req.param("motor_id");
+            paramsValidateException.validateId(starterId, "Device id");
+            paramsValidateException.validateId(motorId, "Motor id");
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+            if (!motor)
+                throw new NotFoundException(MOTOR_NOT_FOUND);
+            const orderBy = { columns: ["id"], values: ["desc"] };
+            const faultRecord = await getSingleRecordByMultipleColumnValues(starterBoxParameters, ["starter_id", "motor_id", "fault", "fault_cleared"], ["=", "=", "=", "="], [starterId, motorId, 1, false], ["id"], orderBy);
+            if (!faultRecord)
+                throw new NotFoundException(NO_ACTIVE_FAULT_FOUND);
+            await updateRecordById(starterBoxParameters, faultRecord.id, { fault_cleared: true });
+            return sendResponse(c, 200, FAULT_CLEARED_SUCCESSFULLY);
+        }
+        catch (error) {
+            console.error("Error at fault cleared handler :", error);
             throw error;
         }
     };

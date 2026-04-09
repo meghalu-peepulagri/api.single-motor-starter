@@ -285,6 +285,8 @@ export const SETTINGS_SYNC_STATUS_UPDATED = "Settings synced successfully";
 export const DEVICE_RESET_SUCCESSFULLY = "Device reset successfully";
 export const SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT = "SIM recharge expiry notifications sent";
 export const DEVICE_INFO_REQUEST_SENT = "Device info request sent successfully";
+export const FAULT_CLEARED_SUCCESSFULLY = "Fault cleared successfully";
+export const NO_ACTIVE_FAULT_FOUND = "No active fault record found for this motor and starter";
 
 // Starter Dispatch
 export const STARTER_DISPATCH_VALIDATION_CRITERIA = "Starter dispatch details provided do not meet the required validation criteria";

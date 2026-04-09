@@ -253,6 +253,13 @@
       "when": 1775041935477,
       "tag": "0035_gray_lady_ursula",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1775716192904,
+      "tag": "0036_lucky_nemesis",
+      "breakpoints": true
     }
   ]
 }
