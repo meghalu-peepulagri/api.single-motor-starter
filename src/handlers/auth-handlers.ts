@@ -38,7 +38,6 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
 
             const validUserReq = await validatedRequest<ValidatedSignUpUser>("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
-
             const allPhones = checkInternalPhoneUniqueness(validUserReq);
 
             const isPhoneUnique = await checkPhoneUniqueness(allPhones);
@@ -47,7 +46,6 @@ export class AuthHandlers {
             }
 
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
-
             const isAdmin = userPayload?.user_type === "ADMIN" || userPayload?.user_type === "SUPER_ADMIN";
             const user_verified = isAdmin ? true : false;
 
