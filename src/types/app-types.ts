@@ -346,3 +346,10 @@ export interface SplitRuntimeRecord {
   power_duration: string | null;
   power_state: number | null;
 }
+
+export type MotorStateData = {
+  state?: number;
+  mode?: string;
+  last_on_description?: string;
+  last_off_description?: string;
+};

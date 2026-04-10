@@ -82,7 +82,7 @@ export async function selectTopicAck(topicType, payload, topic) {
 }
 const VALID_MODES = ["AUTO", "MANUAL"];
 export async function updateStates(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current, active_schedule_id, active_schedule_type, active_schedule_start_time, active_schedule_runtime_minutes, active_schedule_end_time } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current, active_schedule_id, active_schedule_type, active_schedule_start_time, active_schedule_runtime_minutes, active_schedule_end_time, last_off_description, last_on_description } = insertedData;
     const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
     if (!starter_id)
         return null;
@@ -91,7 +91,7 @@ export async function updateStates(insertedData, previousData) {
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
     try {
         const notificationData = await db.transaction(async (trx) => {
-            const result = await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+            await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
             await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
             const starterBoxUpdates = {};
             let trackPowerChange = false;
@@ -124,7 +124,9 @@ export async function updateStates(insertedData, previousData) {
                 }
                 if (shouldUpdateMotor) {
                     await updateRecordByIdWithTrx(motors, motor_id, updateData, trx);
-                    await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: mode_description }, trx, starter_id);
+                    await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, {
+                        state: motor_state, mode: mode_description, last_on_description, last_off_description
+                    }, trx, starter_id);
                 }
                 const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
                 const hasMotorStateChanged = typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1);

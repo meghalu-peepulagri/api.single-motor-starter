@@ -14,6 +14,24 @@ function meaningfulStateMessage(state, mode) {
     }
     return `State not updated due to '${motorState(state)}'`;
 }
+function meaningfulLastOffOnStateMessage(state, lastOnDesc, lastOffDesc) {
+    const formatDesc = (desc) => desc?.trim();
+    // STATE = ON
+    if (state === 1) {
+        const desc = formatDesc(lastOnDesc);
+        if (!desc)
+            return "Pump is ON";
+        return desc.toLowerCase().includes("pump") ? desc : `Pump is ON via ${desc}`;
+    }
+    // STATE = OFF
+    if (state === 0) {
+        const desc = formatDesc(lastOffDesc);
+        if (!desc)
+            return "Pump is OFF";
+        return desc.toLowerCase().includes("pump") ? desc : `Pump is OFF due to ${desc}`;
+    }
+    return `State not updated due to '${motorState(state)}'`;
+}
 export function meaningfulModeMessage(oldMode, newMode) {
     if (newMode === "MANUAL" || newMode === "AUTO") {
         return `Pump switched from ${oldMode} to ${newMode} mode.`;
@@ -235,8 +253,9 @@ export function prepareActionLog(data) {
  */
 export function prepareMotorSyncLogs(data) {
     const logs = [];
-    if (data.newData.state !== undefined && data.newData.state !== data.oldData.state) {
-        const mode = data.newData.mode ?? data.oldData.mode;
+    //  STATE CHANGE LOG
+    if (data.newData.state !== undefined &&
+        data.newData.state !== data.oldData.state) {
         logs.push(ActivityService.prepareActivityLog({
             performedBy: data.userId,
             action: "MOTOR_STATE_SYNC",
@@ -245,10 +264,12 @@ export function prepareMotorSyncLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: meaningfulStateMessage(Number(data.newData.state), mode)
+            message: meaningfulLastOffOnStateMessage(Number(data.newData.state), data.newData.last_on_description, data.newData.last_off_description)
         }));
     }
-    if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
+    //  MODE CHANGE LOG
+    if (data.newData.mode !== undefined &&
+        data.newData.mode !== data.oldData.mode) {
         logs.push(ActivityService.prepareActivityLog({
             performedBy: data.userId,
             action: "MOTOR_MODE_SYNC",
@@ -277,7 +298,7 @@ export function prepareMotorAckLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: meaningfulStateMessage(Number(data.newData.state), mode)
+            message: meaningfulLastOffOnStateMessage(Number(data.newData.state))
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
