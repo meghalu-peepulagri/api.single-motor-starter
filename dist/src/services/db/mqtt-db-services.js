@@ -698,8 +698,8 @@ export async function deviceInfoAckHandler(message, topic) {
             console.error(`Invalid message data in device info ack`);
             return null;
         }
-        if (message.D.fw && message.D.fw !== validMac.hardware_version) {
-            updatedFields.hardware_version = message.D.fw;
+        if (message.D.version && message.D.version !== validMac.hardware_version) {
+            updatedFields.hardware_version = message.D.version;
         }
         const hasValue = (value) => value !== undefined && value !== null &&
             typeof value === "string" && value.trim() !== "";

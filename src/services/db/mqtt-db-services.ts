@@ -838,8 +838,8 @@ export async function deviceInfoAckHandler(message: any, topic: string) {
       return null;
     }
 
-    if (message.D.fw && message.D.fw !== validMac.hardware_version) {
-      updatedFields.hardware_version = message.D.fw;
+    if (message.D.version && message.D.version !== validMac.hardware_version) {
+      updatedFields.hardware_version = message.D.version;
     }
 
     const hasValue = (value: any) => value !== undefined && value !== null &&
