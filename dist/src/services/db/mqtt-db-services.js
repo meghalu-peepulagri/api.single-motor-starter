@@ -677,8 +677,8 @@ export async function deviceInfoAckHandler(message, topic) {
             console.error(`Invalid message data in device info ack`);
             return null;
         }
-        if (message.D.fw && message.D.fw !== validMac.hardware_version) {
-            updatedFields.hardware_version = message.D.fw;
+        if (message.D.version && message.D.version !== validMac.hardware_version) {
+            updatedFields.hardware_version = message.D.version;
         }
         const hasValue = (value) => value !== undefined && value !== null &&
             typeof value === "string" && value.trim() !== "";
@@ -686,11 +686,11 @@ export async function deviceInfoAckHandler(message, topic) {
         if (hasValue(message.D.val) && message.D.val !== validMac.sim_recharge_expires_at) {
             updatedFields.sim_recharge_expires_at = message.D.val;
         }
-        // SIM mobile number (validated) — strip country code, take last 10 digits
+        // SIM number (validated) — strip country code, take up to 40 digits
         if (hasValue(message.D.sim_num)) {
             const rawSim = String(message.D.sim_num).replace(/^\+91/, ''); // remove +91 country code
-            const simNumber = rawSim.slice(0, 10); // take first 10 digits
-            if (simNumber.length === 10 && simNumber !== validMac.device_mobile_number) {
+            const simNumber = rawSim.slice(0, 40); // take up to 40 digits
+            if (simNumber.length >= 1 && simNumber.length <= 40 && simNumber !== validMac.device_mobile_number) {
                 updatedFields.device_mobile_number = simNumber;
             }
         }
