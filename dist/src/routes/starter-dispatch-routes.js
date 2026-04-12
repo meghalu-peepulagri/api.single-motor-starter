@@ -3,6 +3,7 @@ import { StarterDispatchHandlers } from "../handlers/starter-dispatch-handlers.j
 import { isAuthorized } from "../middlewares/isAuthorized.js";
 const starterDispatchHandlers = new StarterDispatchHandlers();
 const starterDispatchRoutes = factory.createApp();
+starterDispatchRoutes.get("/", isAuthorized, starterDispatchHandlers.getAllDispatchHandler);
 starterDispatchRoutes.post("/", isAuthorized, starterDispatchHandlers.addStarterDispatchHandler);
 starterDispatchRoutes.patch("/:id", isAuthorized, starterDispatchHandlers.updateStarterDispatchHandler);
 starterDispatchRoutes.post("/upload-invoice", isAuthorized, starterDispatchHandlers.uploadInvoiceHandler);

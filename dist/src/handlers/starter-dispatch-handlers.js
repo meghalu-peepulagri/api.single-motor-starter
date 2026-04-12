@@ -1,4 +1,4 @@
-import { EXPIRING_DISPATCH_FETCHED, INVOICE_UPLOAD_URL_GENERATED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_UPDATED_SUCCESSFULLY, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ALL_DISPATCHES_FETCHED_SUCCESSFULLY, EXPIRING_DISPATCH_FETCHED, INVOICE_UPLOAD_URL_GENERATED, STARTER_BOX_NOT_FOUND, STARTER_DISPATCH_ADDED_SUCCESSFULLY, STARTER_DISPATCH_FETCHED_SUCCESSFULLY, STARTER_DISPATCH_NOT_FOUND, STARTER_DISPATCH_UPDATED_SUCCESSFULLY, STARTER_DISPATCH_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { starterDispatch } from "../database/schemas/starter-dispatch.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
@@ -6,7 +6,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { formatExpiringRecords, preparedPayloadOfDispatchData, preparedStarterBoxUpdateData, preparedUpdatePayloadOfDispatchData } from "../helpers/starter-dispatch-helper.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { getExpiringDispatches, getExpiringDispatchesCount, getStarterDispatchByStarterId } from "../services/db/starter-dispatch-services.js";
+import { getAllDispatches, getExpiringDispatches, getExpiringDispatchesCount, getStarterDispatchByStarterId } from "../services/db/starter-dispatch-services.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -45,6 +45,20 @@ function applyOptionalDispatchFields(dispatchUpdate, rawPayload, validDispatchRe
         dispatchUpdate.invoice_document = validDispatchReq.invoice_document;
 }
 export class StarterDispatchHandlers {
+    getAllDispatchHandler = async (c) => {
+        try {
+            const query = c.req.query();
+            const search = query.search_string?.trim();
+            const order_by = query.order_by;
+            const order_type = query.order_type;
+            const records = await getAllDispatches(search, order_by, order_type);
+            return sendResponse(c, 200, ALL_DISPATCHES_FETCHED_SUCCESSFULLY, records);
+        }
+        catch (error) {
+            console.error("Error at get all dispatches :", error);
+            throw error;
+        }
+    };
     addStarterDispatchHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");

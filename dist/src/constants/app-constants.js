@@ -269,6 +269,7 @@ export const STARTER_DISPATCH_ADDED_SUCCESSFULLY = "Dispatch details added succe
 export const STARTER_DISPATCH_UPDATED_SUCCESSFULLY = "Dispatch details updated successfully";
 export const STARTER_DISPATCH_FETCHED_SUCCESSFULLY = "Dispatch details fetched successfully";
 export const STARTER_DISPATCH_NOT_FOUND = "Dispatch details not found";
+export const ALL_DISPATCHES_FETCHED_SUCCESSFULLY = "All dispatch records fetched successfully";
 export const EXPIRING_DISPATCH_FETCHED = "Expiring dispatch details fetched successfully";
 export const INVOICE_UPLOAD_URL_GENERATED = "Invoice upload URL generated successfully";
 // Bridge Service

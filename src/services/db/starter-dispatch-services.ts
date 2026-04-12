@@ -1,4 +1,4 @@
-import { and, ne, eq, sql, or, count, desc, asc } from "drizzle-orm";
+import { and, ne, eq, sql, or, count, desc, asc, ilike } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { starterDispatch } from "../../database/schemas/starter-dispatch.js";
 import { users } from "../../database/schemas/users.js";
@@ -36,6 +36,44 @@ function getExpiryCondition(type?: string) {
   if (type === "recharge") return simExpiryCondition;
   if (type === "warranty") return warrantyExpiryCondition;
   return or(simExpiryCondition, warrantyExpiryCondition);
+}
+
+export async function getAllDispatches(search?: string, order_by?: string, order_type?: string) {
+  const column = (order_by && DISPATCH_SORTABLE_COLUMNS[order_by]) ? DISPATCH_SORTABLE_COLUMNS[order_by] : starterDispatch.created_at;
+  const orderByClause = order_type?.toLowerCase() === "asc" ? asc(column) : desc(column);
+
+  const searchCondition = search
+    ? or(
+        ilike(starterDispatch.customer_name, `%${search}%`),
+        ilike(starterDispatch.contact_number, `%${search}%`),
+        ilike(starterDispatch.sim_no, `%${search}%`),
+        ilike(starterDispatch.address, `%${search}%`),
+        ilike(starterDispatch.location, `%${search}%`),
+        ilike(starterDispatch.pcb_number, `%${search}%`),
+        ilike(starterDispatch.box_serial_no, `%${search}%`),
+      )
+    : undefined;
+
+  return await db.query.starterDispatch.findMany({
+    where: and(ne(starterDispatch.status, "ARCHIVED"), searchCondition),
+    orderBy: orderByClause,
+    with: {
+      createdBy: {
+        where: ne(users.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          full_name: true,
+        },
+      },
+      updatedBy: {
+        where: ne(users.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          full_name: true,
+        },
+      },
+    },
+  } as any);
 }
 
 export async function getExpiringDispatchesCount(type?: string) {
