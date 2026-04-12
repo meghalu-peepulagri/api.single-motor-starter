@@ -52,7 +52,13 @@ export class StarterDispatchHandlers {
             const order_by = query.order_by;
             const order_type = query.order_type;
             const records = await getAllDispatches(search, order_by, order_type);
-            return sendResponse(c, 200, ALL_DISPATCHES_FETCHED_SUCCESSFULLY, records);
+            const recordsWithUrls = await Promise.all(records.map(async (record) => {
+                if (!record.invoice_document)
+                    return record;
+                const invoice_document_url = await generateDownloadUrl(record.invoice_document);
+                return { ...record, invoice_document_url };
+            }));
+            return sendResponse(c, 200, ALL_DISPATCHES_FETCHED_SUCCESSFULLY, recordsWithUrls);
         }
         catch (error) {
             console.error("Error at get all dispatches :", error);
