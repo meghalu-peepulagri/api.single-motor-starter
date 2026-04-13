@@ -118,6 +118,73 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
         records: motorsList,
     };
 }
+/**
+ * For each motor in motorIds, fetch the latest motorsRunTime record (by start_time DESC).
+ * Returns a map of motor_id → "ON" | "OFF" based on the latest motor_state.
+ */
+export async function getMotorsLatestRuntime(motorIds) {
+    if (!motorIds.length)
+        return {};
+    const rows = await db
+        .selectDistinctOn([motorsRunTime.motor_id], {
+        motor_id: motorsRunTime.motor_id,
+        motor_state: motorsRunTime.motor_state,
+        start_time: motorsRunTime.start_time,
+        end_time: motorsRunTime.end_time,
+    })
+        .from(motorsRunTime)
+        .where(inArray(motorsRunTime.motor_id, motorIds))
+        .orderBy(motorsRunTime.motor_id, desc(motorsRunTime.start_time));
+    const now = new Date();
+    // ✅ Today 12 AM (for new motors)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const map = {};
+    // ✅ Handle motors WITH records
+    for (const row of rows) {
+        if (!row.motor_id || !row.start_time)
+            continue;
+        const start = new Date(row.start_time);
+        let durationMs = 0;
+        let state = row.motor_state === 1 ? "ON" : "OFF";
+        // 🔹 CASE 1: ON + no end_time → currently running
+        if (row.motor_state === 1 && !row.end_time) {
+            durationMs = now.getTime() - start.getTime();
+        }
+        // 🔹 CASE 2: ON + end_time → completed run
+        else if (row.motor_state === 1 && row.end_time) {
+            durationMs =
+                new Date(row.end_time).getTime() - start.getTime();
+        }
+        // 🔹 CASE 3: OFF + end_time → stopped
+        else if (row.motor_state === 0 && row.end_time) {
+            durationMs =
+                now.getTime() - new Date(row.end_time).getTime();
+        }
+        // 🔥 CASE 4: OFF + no end_time → IMPORTANT FIX (your case)
+        else if (row.motor_state === 0 && !row.end_time) {
+            durationMs = now.getTime() - start.getTime();
+        }
+        // ✅ Safety check
+        if (durationMs < 0)
+            durationMs = 0;
+        map[row.motor_id] = {
+            state,
+            duration: formatDuration(durationMs),
+        };
+    }
+    // ✅ Handle motors with NO records (New Motors)
+    for (const motorId of motorIds) {
+        if (!map[motorId]) {
+            const durationMs = now.getTime() - startOfToday.getTime();
+            map[motorId] = {
+                state: "OFF",
+                duration: formatDuration(durationMs),
+            };
+        }
+    }
+    return map;
+}
 export async function hasMotorRunTimeRecord(motorId, starterId, trx) {
     const queryBuilder = trx || db;
     const [record] = await queryBuilder.select({ id: motorsRunTime.id })
@@ -400,21 +467,22 @@ export async function getMotorsTotalRunOnTime(motorIds) {
     const nowIST = toZonedTime(new Date(), IST);
     const fromDateObj = fromZonedTime(startOfDay(nowIST), IST);
     const toDateObj = fromZonedTime(endOfDay(nowIST), IST);
-    // Only fetch records that have an actual end_time (completed sessions)
-    const records = await db.query.motorsRunTime.findMany({
+    const now = new Date();
+    // Fetch completed records that overlap today's range
+    const completedRecords = await db.query.motorsRunTime.findMany({
         where: and(inArray(motorsRunTime.motor_id, motorIds), isNotNull(motorsRunTime.end_time), lte(motorsRunTime.start_time, toDateObj), gte(motorsRunTime.end_time, fromDateObj)),
-        columns: {
-            motor_id: true,
-            start_time: true,
-            end_time: true,
-            duration: true,
-            motor_state: true,
-        },
+        columns: { motor_id: true, start_time: true, end_time: true, motor_state: true },
         orderBy: asc(motorsRunTime.start_time),
     });
-    // Group records by motor_id
+    // Fetch open/ongoing records (no end_time) where motor is ON and started before today ends
+    const openRecords = await db.query.motorsRunTime.findMany({
+        where: and(inArray(motorsRunTime.motor_id, motorIds), isNull(motorsRunTime.end_time), eq(motorsRunTime.motor_state, 1), lte(motorsRunTime.start_time, toDateObj)),
+        columns: { motor_id: true, start_time: true, end_time: true, motor_state: true },
+    });
+    const allRecords = [...completedRecords, ...openRecords];
+    // Group by motor_id
     const groupedByMotor = {};
-    for (const record of records) {
+    for (const record of allRecords) {
         if (!record.motor_id)
             continue;
         if (!groupedByMotor[record.motor_id])
@@ -424,15 +492,13 @@ export async function getMotorsTotalRunOnTime(motorIds) {
     const runTimeMap = {};
     for (const [motorIdStr, motorRecords] of Object.entries(groupedByMotor)) {
         let totalSeconds = 0;
-        for (let i = 0; i < motorRecords.length; i++) {
-            const record = motorRecords[i];
+        for (const record of motorRecords) {
             if (record.motor_state !== 1)
                 continue;
-            if (!record.end_time)
-                continue;
             const start = new Date(record.start_time);
-            const end = new Date(record.end_time);
-            // Clamp to date range
+            // For open records: use now as end; for completed: use actual end_time
+            const end = record.end_time ? new Date(record.end_time) : now;
+            // Clamp to today's range
             const segmentStart = start > fromDateObj ? start : fromDateObj;
             const segmentEnd = end < toDateObj ? end : toDateObj;
             if (segmentEnd > segmentStart) {
