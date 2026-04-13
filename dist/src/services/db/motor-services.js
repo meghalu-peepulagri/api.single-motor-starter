@@ -96,6 +96,8 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
                             id: true,
                             time_stamp: true,
                             fault: true,
+                            fault_description: true,
+                            fault_cleared: true,
                             line_voltage_r: true,
                             line_voltage_y: true,
                             line_voltage_b: true,

@@ -34,6 +34,7 @@ export const starterBoxParameters = pgTable("starter_parameters", {
     last_on_description: varchar("last_on_description").notNull(),
     last_off_code: integer("last_off_code").notNull(),
     last_off_description: varchar("last_off_description").notNull(),
+    fault_cleared: boolean("fault_cleared").notNull().default(false),
     // time stamp
     time_stamp: varchar("time_stamp").notNull(),
     // References
