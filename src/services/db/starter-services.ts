@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
@@ -628,3 +628,29 @@ export async function applyDeviceAllocation(
     return true;
   });
 }
+
+export async function getDeviceWithDispatchDetails(search: string) {
+  return await db.query.starterBoxes.findFirst({
+    where: or(
+      ilike(starterBoxes.starter_number, `%${search}%`),
+      ilike(starterBoxes.mac_address, `%${search}%`),
+      ilike(starterBoxes.pcb_number, `%${search}%`)
+    ),
+    columns: {
+      id: true,
+      starter_number: true,
+      mac_address: true,
+      pcb_number: true,
+    },
+    with: {
+      dispatch: {
+        where: ne(starterDispatch.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          box_serial_no: true,
+        },
+      },
+    },
+  } as any);
+} 
+ 
