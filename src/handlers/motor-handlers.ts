@@ -181,7 +181,7 @@ export class MotorHandlers {
 
       const records = motorsData.records.map((motor: any) => ({
         ...motor,
-        runtime: {
+        run_time: {
           last_state: latestRuntimeMap[motor.id]?.state,
           state_duration: latestRuntimeMap[motor.id]?.duration,
         }
