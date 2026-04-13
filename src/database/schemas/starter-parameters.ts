@@ -42,6 +42,7 @@ export const starterBoxParameters = pgTable("starter_parameters", {
   last_on_description: varchar("last_on_description").notNull(),
   last_off_code: integer("last_off_code").notNull(),
   last_off_description: varchar("last_off_description").notNull(),
+  fault_cleared: boolean("fault_cleared").notNull().default(false),
 
   // time stamp
   time_stamp: varchar("time_stamp").notNull(),
@@ -55,7 +56,6 @@ export const starterBoxParameters = pgTable("starter_parameters", {
   payload_errors: jsonb('payload_errors').notNull().default(sql`'[]'::jsonb`),
   group_id: varchar("group_id"),
   temperature: real("temperature").default(0),
-  fault_cleared: boolean("fault_cleared").notNull().default(false),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
