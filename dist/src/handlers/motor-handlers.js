@@ -157,8 +157,10 @@ export class MotorHandlers {
             const latestRuntimeMap = await getMotorsLatestRuntime(motorIds);
             const records = motorsData.records.map((motor) => ({
                 ...motor,
-                last_state: latestRuntimeMap[motor.id]?.state,
-                state_duration: latestRuntimeMap[motor.id]?.duration,
+                run_time: {
+                    last_state: latestRuntimeMap[motor.id]?.state,
+                    state_duration: latestRuntimeMap[motor.id]?.duration,
+                },
             }));
             return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, {
                 ...motorsData,
