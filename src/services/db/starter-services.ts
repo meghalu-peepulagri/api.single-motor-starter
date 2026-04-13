@@ -634,7 +634,8 @@ export async function getDeviceWithDispatchDetails(search: string) {
     where: or(
       ilike(starterBoxes.starter_number, `%${search}%`),
       ilike(starterBoxes.mac_address, `%${search}%`),
-      ilike(starterBoxes.pcb_number, `%${search}%`)
+      ilike(starterBoxes.pcb_number, `%${search}%`),
+      ne(starterBoxes.status, "ARCHIVED"),
     ),
     columns: {
       id: true,
@@ -652,5 +653,4 @@ export async function getDeviceWithDispatchDetails(search: string) {
       },
     },
   } as any);
-} 
- 
+}

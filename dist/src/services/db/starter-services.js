@@ -500,7 +500,7 @@ export async function applyDeviceAllocation(starterId, newAllocation, userId) {
 }
 export async function getDeviceWithDispatchDetails(search) {
     return await db.query.starterBoxes.findFirst({
-        where: or(ilike(starterBoxes.starter_number, `%${search}%`), ilike(starterBoxes.mac_address, `%${search}%`), ilike(starterBoxes.pcb_number, `%${search}%`)),
+        where: or(ilike(starterBoxes.starter_number, `%${search}%`), ilike(starterBoxes.mac_address, `%${search}%`), ilike(starterBoxes.pcb_number, `%${search}%`), ne(starterBoxes.status, "ARCHIVED")),
         columns: {
             id: true,
             starter_number: true,
