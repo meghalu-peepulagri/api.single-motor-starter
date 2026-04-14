@@ -3,8 +3,9 @@ import db from "../../database/configuration.js";
 import type { Gateway } from "../../database/schemas/gateways.js";
 import { gateways, type GatewayTable } from "../../database/schemas/gateways.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
-import { GATEWAY_ALREADY_ASSIGNED } from "../../constants/app-constants.js";
-import { getSingleRecordConditionallyWithOr, updateRecordById } from "./base-db-services.js";
+import { GATEWAY_ALREADY_ASSIGNED, GATEWAY_NOT_FOUND, UNIQUE_INDEX_MESSAGES } from "../../constants/app-constants.js";
+import ConflictException from "../../exceptions/conflict-exception.js";
+import { getSingleRecordByMultipleColumnValues, getSingleRecordConditionallyWithOr, updateRecordById } from "./base-db-services.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 
@@ -149,4 +150,73 @@ export async function assignGatewayToUser(data: {
   await updateRecordById<GatewayTable>(gateways, gateway.id, { user_id: data.targetUserId }, trx);
 
   return { gateway_id: gateway.id, name: gateway.name, old_user_id: gateway.user_id };
+}
+
+export async function gatewayConflicts(gatewayId?: number): Promise<Gateway | null> {
+  if (gatewayId == null) {
+    return null;
+  }
+
+  const existingGateway: Gateway | null = await getSingleRecordByMultipleColumnValues(
+    gateways,
+    ["id", "status"],
+    ["=", "!="],
+    [gatewayId, "ARCHIVED"],
+  );
+
+  if (!existingGateway) {
+    throw new BadRequestException(GATEWAY_NOT_FOUND);
+  }
+
+  return existingGateway;
+}
+
+export async function assertGatewayIdentifiersUnique(data: {
+  macLower: string;
+  pcbLower: string;
+  gatewayNumberLower: string | null;
+}, trx?: any) {
+  const queryBuilder = trx || db;
+
+  const orConditions = [
+    sql`lower(${gateways.mac_address}) = ${data.macLower}`,
+    sql`lower(${gateways.pcb_number}) = ${data.pcbLower}`,
+  ];
+  if (data.gatewayNumberLower) {
+    orConditions.push(sql`lower(${gateways.gateway_number}) = ${data.gatewayNumberLower}`);
+  }
+
+  const matched = await queryBuilder
+    .select({
+      mac_address: gateways.mac_address,
+      pcb_number: gateways.pcb_number,
+      gateway_number: gateways.gateway_number,
+    })
+    .from(gateways)
+    .where(and(
+      ne(gateways.status, "ARCHIVED"),
+      sql`(${sql.join(orConditions, sql` OR `)})`,
+    ))
+    .limit(1);
+
+  if (!Array.isArray(matched) || matched.length === 0) {
+    return;
+  }
+
+  const duplicate = matched[0];
+  const existingMacLower = duplicate.mac_address?.trim().toLowerCase() ?? null;
+  const existingPcbLower = duplicate.pcb_number?.trim().toLowerCase() ?? null;
+  const existingGatewayNumberLower = duplicate.gateway_number?.trim().toLowerCase() ?? null;
+
+  if (data.gatewayNumberLower && existingGatewayNumberLower === data.gatewayNumberLower) {
+    throw new ConflictException(UNIQUE_INDEX_MESSAGES["validate_gateway_number"]);
+  }
+  if (existingPcbLower === data.pcbLower) {
+    throw new ConflictException(UNIQUE_INDEX_MESSAGES["validate_gateway_pcb_number"]);
+  }
+  if (existingMacLower === data.macLower) {
+    throw new ConflictException(UNIQUE_INDEX_MESSAGES["validate_gateway_mac_address"]);
+  }
+
+  throw new ConflictException();
 }

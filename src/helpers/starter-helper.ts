@@ -11,17 +11,18 @@ import { getStartersWithSimRechargeExpiry } from "../services/db/starter-service
 import type { StarterDispatch } from "../database/schemas/starter-dispatch.js";
 
 
-export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User, dispatchDetails?: StarterDispatch | null) {
+export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User, dispatchDetails?: StarterDispatch | null, gatewayId?: number) {
 
   const motorDetails = {
     name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
     hp: 2,
   };
 
-  return { ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails
+  return {
+    ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails
     , sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,
-     device_mobile_number: dispatchDetails?.sim_no, hardware_version: dispatchDetails?.hardware_version,
-   }
+    device_mobile_number: dispatchDetails?.sim_no, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
+  }
 };
 
 export function starterFilters(query: any, user: any) {

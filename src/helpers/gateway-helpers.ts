@@ -1,6 +1,18 @@
 import { eq, ilike, ne, or } from "drizzle-orm";
 import { gateways } from "../database/schemas/gateways.js";
 
+export function getGatewayIdentifierLowers(data: {
+  mac_address: string;
+  pcb_number: string;
+  gateway_number?: string | null;
+}) {
+  const macLower = data.mac_address.trim().toLowerCase();
+  const pcbLower = data.pcb_number.trim().toLowerCase();
+  const gatewayNumberLower = data.gateway_number?.trim().toLowerCase() ?? null;
+
+  return { macLower, pcbLower, gatewayNumberLower };
+}
+
 export function gatewayFilters(query: any, userId?: number) {
   const filters: any[] = [];
   filters.push(ne(gateways.status, "ARCHIVED"));

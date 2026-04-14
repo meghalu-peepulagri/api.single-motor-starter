@@ -26,9 +26,9 @@ import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 
 
-export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User): Promise<StarterBox> {
+export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User, gatewayId?: number): Promise<StarterBox> {
   const existedStarterDispatch = await getSingleRecordByMultipleColumnValues<StarterDispatchTable>(starterDispatch, ["box_serial_no", "status"], ["=", "!="], [starterBoxPayload.starter_number, "ARCHIVED"]);
-  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload, existedStarterDispatch);
+  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload, existedStarterDispatch, gatewayId);
   const defaultSettings = await getStarterDefaultSettings();
   const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
   const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);

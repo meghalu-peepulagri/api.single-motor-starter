@@ -23,6 +23,8 @@ export const gateways = pgTable("gateways", {
     index("gateway_location_id_idx").on(table.location_id),
     uniqueIndex("validate_gateway_name").on(sql `lower(${table.name})`).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("validate_gateway_number").on(sql `lower(${table.gateway_number})`).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("validate_gateway_mac_address").on(sql `lower(${table.mac_address})`).where(sql `${table.status} != 'ARCHIVED'`),
+    uniqueIndex("validate_gateway_pcb_number").on(sql `lower(${table.pcb_number})`).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
 export const gatewaysRelations = relations(gateways, ({ one }) => ({
     location: one(locations, {

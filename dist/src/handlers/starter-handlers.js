@@ -2,7 +2,6 @@ import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
-import { gateways } from "../database/schemas/gateways.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { users } from "../database/schemas/users.js";
@@ -18,6 +17,7 @@ import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
@@ -37,12 +37,8 @@ export class StarterHandlers {
             const starterBoxPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(starterBoxPayload);
             const validStarterBoxReq = await validatedRequest("add-starter", starterBoxPayload, STARTER_BOX_VALIDATION_CRITERIA);
-            if (validStarterBoxReq.gateway_id) {
-                const existedGateway = await getSingleRecordByMultipleColumnValues(gateways, ["id", "status"], ["=", "!="], [validStarterBoxReq.gateway_id, "ARCHIVED"]);
-                if (!existedGateway)
-                    throw new BadRequestException(GATEWAY_NOT_FOUND);
-            }
-            const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload);
+            const existedGateway = await gatewayConflicts(validStarterBoxReq.gateway_id ?? undefined);
+            const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload, existedGateway?.id);
             const { id, ...restStarterData } = starter;
             return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY, { id });
         }

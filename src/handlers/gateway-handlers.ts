@@ -7,10 +7,10 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDeletedLog, prepareGatewayLabelUpdatedLog, prepareGatewayNumberUpdatedLog, prepareGatewayRenamedLog } from "../helpers/gateway-activity-helper.js";
-import { gatewayFilters } from "../helpers/gateway-helpers.js";
+import { gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysList } from "../services/db/gateway-services.js";
+import { assertGatewayIdentifiersUnique, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysList } from "../services/db/gateway-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -22,18 +22,22 @@ const paramsValidateException = new ParamsValidateException();
 
 export class GatewayHandlers {
 
-  addGatewayHandler = async (c: Context) => {
-    try {
-      const userPayload = c.get("user_payload");
-      const gatewayPayload = await c.req.json();
-      paramsValidateException.emptyBodyValidation(gatewayPayload);
+	  addGatewayHandler = async (c: Context) => {
+	    try {
+		      const userPayload = c.get("user_payload");
+		      const gatewayPayload = await c.req.json();
+		      paramsValidateException.emptyBodyValidation(gatewayPayload);
 
-      const validGatewayReq = await validatedRequest<ValidatedAddGateway>("add-gateway", gatewayPayload, GATEWAY_VALIDATION_CRITERIA);
-      const newGateway = {
-        ...validGatewayReq,
-        user_id: null,
-        created_by: userPayload.id,
-      };
+		      const validGatewayReq = await validatedRequest<ValidatedAddGateway>("add-gateway", gatewayPayload, GATEWAY_VALIDATION_CRITERIA);
+
+		      const identifiers = getGatewayIdentifierLowers(validGatewayReq);
+		      await assertGatewayIdentifiersUnique(identifiers);
+
+		      const newGateway = {
+		        ...validGatewayReq,
+		        user_id: null,
+	        created_by: userPayload.id,
+	      };
 
       await db.transaction(async (tx) => {
         const createdGateway = await saveSingleRecord<GatewayTable>(gateways, newGateway, tx);

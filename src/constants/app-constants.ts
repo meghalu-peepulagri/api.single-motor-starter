@@ -42,6 +42,8 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "valid_starter_box_name": "Name already exist.",
   "validate_gateway_name": "Gateway name already exist.",
   "validate_gateway_number": "Gateway number already exist.",
+  "validate_gateway_mac_address": "Gateway MAC address already exist.",
+  "validate_gateway_pcb_number": "Gateway PCB Number already exist.",
   "unique_motor_alias_name_per_location": "Pump name already exist.",
   "validate_device_mobile_number": "Mobile number already exist.",
   "motor_schedule_unique_idx": "Schedule already exists with a pump same type & time",

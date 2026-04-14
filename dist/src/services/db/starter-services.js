@@ -22,9 +22,9 @@ import { ActivityService } from "./activity-service.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
-export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
+export async function addStarterWithTransaction(starterBoxPayload, userPayload, gatewayId) {
     const existedStarterDispatch = await getSingleRecordByMultipleColumnValues(starterDispatch, ["box_serial_no", "status"], ["=", "!="], [starterBoxPayload.starter_number, "ARCHIVED"]);
-    const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload, existedStarterDispatch);
+    const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload, existedStarterDispatch, gatewayId);
     const defaultSettings = await getStarterDefaultSettings();
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
     const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
