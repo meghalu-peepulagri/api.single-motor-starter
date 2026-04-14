@@ -132,6 +132,7 @@ export async function gatewayConflicts(gatewayId) {
 export async function assertGatewayIdentifiersUnique(data, trx) {
     const queryBuilder = trx || db;
     const orConditions = [
+        sql `lower(${gateways.name}) = ${data.nameLower}`,
         sql `lower(${gateways.mac_address}) = ${data.macLower}`,
         sql `lower(${gateways.pcb_number}) = ${data.pcbLower}`,
     ];
@@ -140,6 +141,7 @@ export async function assertGatewayIdentifiersUnique(data, trx) {
     }
     const matched = await queryBuilder
         .select({
+        name: gateways.name,
         mac_address: gateways.mac_address,
         pcb_number: gateways.pcb_number,
         gateway_number: gateways.gateway_number,
@@ -151,9 +153,13 @@ export async function assertGatewayIdentifiersUnique(data, trx) {
         return;
     }
     const duplicate = matched[0];
+    const existingNameLower = duplicate.name?.trim().toLowerCase() ?? null;
     const existingMacLower = duplicate.mac_address?.trim().toLowerCase() ?? null;
     const existingPcbLower = duplicate.pcb_number?.trim().toLowerCase() ?? null;
     const existingGatewayNumberLower = duplicate.gateway_number?.trim().toLowerCase() ?? null;
+    if (existingNameLower === data.nameLower) {
+        throw new ConflictException(UNIQUE_INDEX_MESSAGES["validate_gateway_name"]);
+    }
     if (data.gatewayNumberLower && existingGatewayNumberLower === data.gatewayNumberLower) {
         throw new ConflictException(UNIQUE_INDEX_MESSAGES["validate_gateway_number"]);
     }

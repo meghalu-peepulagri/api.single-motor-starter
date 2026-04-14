@@ -2,15 +2,17 @@ import { eq, ilike, ne, or } from "drizzle-orm";
 import { gateways } from "../database/schemas/gateways.js";
 
 export function getGatewayIdentifierLowers(data: {
+  name: string;
   mac_address: string;
   pcb_number: string;
   gateway_number?: string | null;
 }) {
+  const nameLower = data.name.trim().toLowerCase();
   const macLower = data.mac_address.trim().toLowerCase();
   const pcbLower = data.pcb_number.trim().toLowerCase();
   const gatewayNumberLower = data.gateway_number?.trim().toLowerCase() ?? null;
 
-  return { macLower, pcbLower, gatewayNumberLower };
+  return { nameLower, macLower, pcbLower, gatewayNumberLower };
 }
 
 export function gatewayFilters(query: any, userId?: number) {
