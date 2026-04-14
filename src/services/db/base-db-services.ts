@@ -4,8 +4,8 @@ import { DB_ID_INVALID, DB_SAVE_DATA_FAILED, DB_UPDATE_DATA_FAILED } from "../..
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 import UnprocessableEntityException from "../../exceptions/unprocessable-entity-exception.js";
-import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData } from "../../types/db-types.js";
-import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions } from "../../utils/db-utils.js";
+import type { DBNewRecord, DBRecord, DBTable, InQueryData, OrderByQueryData, PaginationInfo, Relations, UpdateRecordData, WhereQueryData, WhereQueryDataWithOr } from "../../types/db-types.js";
+import { executeQuery, prepareInQueryCondition, prepareOrderByQueryConditions, prepareSelectColumnsForQuery, prepareWhereQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
 
 async function getRecordById<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, id: number, columnsToSelect?: any): Promise<DBRecord<T> | Pick<DBRecord<T>, C> | null> {
   const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
@@ -36,6 +36,28 @@ async function getRecordsConditionally<T extends DBTable, C extends keyof DBReco
   const results = await executeQuery<T, C>(table, whereQuery, columnsRequired, orderByConditions, inQueryCondition);
 
   return results;
+}
+
+async function getSingleRecordConditionallyWithOr<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(
+  table: T,
+  whereQueryData?: WhereQueryDataWithOr<T>,
+  columnsToSelect?: any,
+  orderByQueryData?: OrderByQueryData<T>,
+  inQueryData?: InQueryData<T>,
+): Promise<DBRecord<T> | Pick<DBRecord<T>, C> | null> {
+  const columnsRequired = prepareSelectColumnsForQuery(table, columnsToSelect);
+  const whereConditions = prepareWhereQueryConditionsWithOr(table, whereQueryData);
+  const inQueryCondition = prepareInQueryCondition(table, inQueryData);
+  const orderByConditions = prepareOrderByQueryConditions(table, orderByQueryData);
+
+  const whereQuery = whereConditions ? and(...whereConditions) : null;
+  const results = await executeQuery<T, C>(table, whereQuery, columnsRequired, orderByConditions, inQueryCondition);
+
+  if (!results || results.length === 0) {
+    return null;
+  }
+
+  return results[0] as DBRecord<T> | Pick<DBRecord<T>, C>;
 }
 
 async function getPaginatedRecordsConditionally<T extends DBTable, C extends keyof DBRecord<T> = keyof DBRecord<T>>(table: T, page: number, pageSize: number, orderByQueryData?: OrderByQueryData<T>, whereQueryData?: WhereQueryData<T>, columnsToSelect?: any, inQueryData?: InQueryData<T>) {
@@ -405,6 +427,7 @@ export {
   getPaginatedRecordsConditionally,
   getRecordById,
   getRecordsConditionally,
+  getSingleRecordConditionallyWithOr,
   getRecordsCount,
   getSingleRecordByAColumnValue,
   getSingleRecordByMultipleColumnValues, saveRecords, saveSingleRecord, softDeleteRecordById,

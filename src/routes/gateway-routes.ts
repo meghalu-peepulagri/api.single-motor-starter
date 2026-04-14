@@ -1,8 +1,11 @@
+
 import factory from "../factory.js";
 import { GatewayHandlers } from "../handlers/gateway-handlers.js";
 import { isAuthorized } from "../middlewares/isAuthorized.js";
+
 const gatewayHandlers = new GatewayHandlers();
 const gatewayRoutes = factory.createApp();
+
 gatewayRoutes.post("/", isAuthorized, gatewayHandlers.addGatewayHandler);
 gatewayRoutes.get("/", isAuthorized, gatewayHandlers.listGatewaysHandler);
 gatewayRoutes.get("/:id", isAuthorized, gatewayHandlers.getGatewayDetailsHandler);
@@ -11,4 +14,5 @@ gatewayRoutes.post("/:id/label", isAuthorized, gatewayHandlers.updateGatewayLabe
 gatewayRoutes.post("/:id/rename", isAuthorized, gatewayHandlers.renameGatewayHandler);
 gatewayRoutes.post("/:id/number", isAuthorized, gatewayHandlers.updateGatewayNumberHandler);
 gatewayRoutes.patch("/:id", isAuthorized, gatewayHandlers.deleteGatewayHandler);
+
 export default gatewayRoutes;

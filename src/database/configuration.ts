@@ -7,6 +7,7 @@ import * as benchedStarterParametersSchema from "./schemas/benched-starter-param
 import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
 import * as deviceTokensSchema from "./schemas/device-tokens.js";
 import * as fieldsSchema from "./schemas/fields.js";
+import * as gatewaysSchema from "./schemas/gateways.js";
 import * as locationsSchema from "./schemas/locations.js";
 import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
 import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
@@ -45,6 +46,7 @@ const db = drizzle(dbClient, {
     ...locationsSchema,
     ...motorsSchema,
     ...fieldsSchema,
+    ...gatewaysSchema,
     ...otpSchema,
     ...deviceTokensSchema,
     ...userActivityLogsSchema,

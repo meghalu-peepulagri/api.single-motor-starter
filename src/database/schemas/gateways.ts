@@ -9,9 +9,12 @@ import { statusEnum } from "../../constants/enum-types.js";
 export const gateways = pgTable("gateways", {
   id: serial("id").primaryKey(),
   name: varchar("name").notNull(),
+  gateway_number: varchar("gateway_number"),
   label: varchar("label"),
-  location_id: integer("location_id").notNull().references(() => locations.id),
-  user_id: integer("user_id").notNull().references(() => users.id),
+  mac_address: varchar("mac_address"),
+  pcb_number: varchar("pcb_number"),
+  location_id: integer("location_id").references(() => locations.id),
+  user_id: integer("user_id").references(() => users.id),
   created_by: integer("created_by").notNull().references(() => users.id),
   status: statusEnum().notNull().default("ACTIVE"),
   created_at: timestamp("created_at").notNull().defaultNow(),
@@ -22,6 +25,7 @@ export const gateways = pgTable("gateways", {
   index("gateway_location_id_idx").on(table.location_id),
 
   uniqueIndex("validate_gateway_name").on(sql`lower(${table.name})`).where(sql`${table.status} != 'ARCHIVED'`),
+  uniqueIndex("validate_gateway_number").on(sql`lower(${table.gateway_number})`).where(sql`${table.status} != 'ARCHIVED'`),
 ]);
 
 export type Gateway = typeof gateways.$inferSelect;

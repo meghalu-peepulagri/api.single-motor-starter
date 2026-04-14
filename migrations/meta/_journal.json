@@ -260,6 +260,20 @@
       "when": 1775716192904,
       "tag": "0036_lucky_nemesis",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1776154878843,
+      "tag": "0037_normal_menace",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1776157510044,
+      "tag": "0038_fixed_victor_mancha",
+      "breakpoints": true
     }
   ]
 }

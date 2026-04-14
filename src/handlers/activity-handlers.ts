@@ -26,16 +26,20 @@ export class ActivityHandlers {
         // When device_id is provided, use it directly as a filter
         paramsValidateException.validateId(Number(query.device_id), "device id");
       } else {
-        // Existing flow: require entity_id and look up starter details
+        // Require entity_id (for non-device queries)
         const entityId = Number(query.entity_id);
         paramsValidateException.validateId(entityId, "entity id");
-        const deviceDetails = await getMotorBasedStarterDetails(entityId);
 
-        if (!deviceDetails || !deviceDetails.starter) {
-          throw new BadRequestException("Starter details not found");
+        // Only needed for `is_assigned=true` filtering (device timeline)
+        if (query.is_assigned === "true") {
+          const deviceDetails = await getMotorBasedStarterDetails(entityId);
+
+          if (!deviceDetails || !deviceDetails.starter) {
+            throw new BadRequestException("Starter details not found");
+          }
+
+          deviceAssignedAt = deviceDetails.starter;
         }
-
-        deviceAssignedAt = deviceDetails.starter;
       }
 
       const whereQueryData = activityFilters(query, userPayload, deviceAssignedAt);

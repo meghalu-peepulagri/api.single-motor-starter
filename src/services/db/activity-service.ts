@@ -18,7 +18,7 @@ export class ActivityService {
     userId?: number;
     performedBy: number;
     action: string;
-    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION';
+    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
     entityId?: number;
     deviceId?: number;
     oldData?: Record<string, unknown> | null;
@@ -67,7 +67,7 @@ export class ActivityService {
     userId?: number;
     performedBy: number;
     action: string;
-    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION';
+    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
     entityId?: number;
     oldData?: Record<string, unknown>;
     newData?: Record<string, unknown>;

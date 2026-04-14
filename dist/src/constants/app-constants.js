@@ -36,6 +36,8 @@ export const UNIQUE_INDEX_MESSAGES = {
     "validate_starter_number": "Starter Number already exist.",
     "validate_pcb_number": "PCB number already exist.",
     "valid_starter_box_name": "Name already exist.",
+    "validate_gateway_name": "Gateway name already exist.",
+    "validate_gateway_number": "Gateway number already exist.",
     "unique_motor_alias_name_per_location": "Pump name already exist.",
     "validate_device_mobile_number": "Mobile number already exist.",
     "motor_schedule_unique_idx": "Schedule already exists with a pump same type & time",
@@ -59,6 +61,7 @@ export const REPLACE_STARTER_BOX_VALIDATION_CRITERIA = "Replace starter box deta
 export const UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA = "Update default settings details provided do not meet the required validation criteria";
 export const INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA = "Insert starter settings details provided do not meet the required validation criteria";
 export const UPDATE_STARTER_SETTINGS_LIMITS_VALIDATION_CRITERIA = "Update starter settings limits details provided do not meet the required validation criteria";
+export const GATEWAY_VALIDATION_CRITERIA = "Gateway details provided do not meet the required validation criteria";
 // Database
 export const DB_RECORD_NOT_FOUND = "Database record not found";
 export const DB_SAVE_DATA_FAILED = "Failed to save data in database";
@@ -279,6 +282,22 @@ export const BRIDGE_RESULT_FETCHED = "Bridge result fetched successfully";
 // Gateway
 export const GATEWAY_REQUIRED = "Gateway is required";
 export const GATEWAY_NOT_FOUND = "Gateway not found";
+export const GATEWAYS_FETCHED = "Gateways fetched successfully";
+export const GATEWAY_ADDED = "Gateway added successfully";
+export const GATEWAY_DETAILS_FETCHED = "Gateway details fetched successfully";
+export const GATEWAY_DELETED = "Gateway deleted successfully";
+export const GATEWAY_LABEL_UPDATED = "Gateway label updated successfully";
+export const GATEWAY_RENAMED = "Gateway renamed successfully";
+export const GATEWAY_NUMBER_UPDATED = "Gateway number updated successfully";
+export const GATEWAY_NAME_REQUIRED = "Gateway name is required";
+export const GATEWAY_NAME_MIN_LEN = "Gateway name should be min 3 characters";
+export const GATEWAY_LABEL_REQUIRED = "Gateway label is required";
+export const GATEWAY_LABEL_MIN_LEN = "Gateway label should be min 3 characters";
+export const GATEWAY_NUMBER_REQUIRED = "Gateway number is required";
+export const GATEWAY_NUMBER_MIN_LEN = "Gateway number should be min 3 characters";
+export const GATEWAY_IDENTIFIER_REQUIRED = "Mac address / PCB number / Gateway number / Gateway name is required";
+export const GATEWAY_ASSIGNED_SUCCESSFULLY = "Gateway assigned successfully";
+export const GATEWAY_ALREADY_ASSIGNED = "Gateway already assigned";
 // Motor schedule 
 export const SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"];
 export const SCHEDULE_TYPE_CODES = [1, 2]; // 1 = TIME_BASED, 2 = CYCLIC
