@@ -19,6 +19,8 @@ export const motors = pgTable("motors", {
   mode: modeEnum().default("AUTO").notNull(),
   created_by: integer("created_by").references(() => users.id),
   starter_id: integer("starter_id").references(() => starterBoxes.id),
+  motor_index: integer("motor_index").default(1),
+
   status: statusEnum().default("ACTIVE"),
   test_run_status: testRunStatusEnum().default("IN_TEST"),
   created_at: timestamp("created_at").notNull().defaultNow(),

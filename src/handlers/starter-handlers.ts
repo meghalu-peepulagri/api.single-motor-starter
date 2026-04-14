@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_INFO_REQUEST_SENT, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
@@ -16,8 +16,9 @@ import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
 
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsPaginated, getUnifiedLogsCount } from "../services/db/alerts-services.js";
+import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
@@ -25,15 +26,14 @@ import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
-import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 
-import { generateUploadUrl, generateDownloadUrl } from "../services/s3/s3-service.js";
+import { starterDispatch, type StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
+import { starterBoxParameters, type StarterBoxParametersTable } from "../database/schemas/starter-parameters.js";
+import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
+import { generateDownloadUrl, generateUploadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
-import { starterDispatch, type StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
-import { starterBoxParameters, type StarterBoxParameters, type StarterBoxParametersTable } from "../database/schemas/starter-parameters.js";
 const paramsValidateException = new ParamsValidateException();
 
 export class StarterHandlers {

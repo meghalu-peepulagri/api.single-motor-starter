@@ -9,6 +9,8 @@ import { users } from "./users.js";
 import { starterDispatch } from "./starter-dispatch.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY", "TEST"]);
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
+export const motorSupportTypeEnum = pgEnum("motor_support_type", ["SINGLE_MOTOR", "MULTIPLE_MOTORS"]);
+
 
 export const starterBoxes = pgTable("starter_boxes", {
   id: serial("id").primaryKey(),
@@ -28,6 +30,8 @@ export const starterBoxes = pgTable("starter_boxes", {
   signal_quality: integer("signal_quality").notNull().default(0),
   network_type: varchar("network_type"),
   starter_type: starterType().notNull().default("SINGLE_STARTER"),
+  motor_support_type: motorSupportTypeEnum().notNull().default("SINGLE_MOTOR"),
+
   hardware_version: varchar("hardware_version"),
   temperature: real("temperature").default(0),
   limit: real("limit"),
