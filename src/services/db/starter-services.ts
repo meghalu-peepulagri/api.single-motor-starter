@@ -24,6 +24,7 @@ import { ActivityService } from "./activity-service.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
+import { gateways } from "../../database/schemas/gateways.js";
 
 
 export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User, gatewayId?: number): Promise<StarterBox> {
@@ -440,6 +441,15 @@ export async function starterConnectedMotors(starterId: number) {
       warranty_expiry_date: true,
     },
     with: {
+      gateway: {
+        where: ne(gateways.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          name: true,
+          mac_address: true,
+          pcb_number: true,
+        },
+      },
       motors: {
         where: ne(motors.status, "ARCHIVED"),
         columns: {
