@@ -1,4 +1,4 @@
-import { eq, ilike, ne, or } from "drizzle-orm";
+import { eq, ilike, isNull, ne, or } from "drizzle-orm";
 import { gateways } from "../database/schemas/gateways.js";
 
 export function getGatewayIdentifierLowers(data: {
@@ -38,5 +38,31 @@ export function gatewayFilters(query: any, userId?: number) {
   if (typeof userId === "number") {
     filters.push(or(eq(gateways.user_id, userId), eq(gateways.created_by, userId)));
   }
+  return filters;
+}
+
+export function gatewayDropdownFilters(query: any, userId?: number) {
+  const filters: any[] = [];
+  filters.push(ne(gateways.status, "ARCHIVED"));
+
+  const search = (query.search_string ?? query.search ?? "").trim();
+  if (search) {
+    const s = `%${search}%`;
+    filters.push(or(ilike(gateways.pcb_number, s), ilike(gateways.mac_address, s)));
+  }
+
+  const onlyUnassignedRaw = query.only_unassigned ?? query.unassigned;
+  const onlyUnassigned =
+    onlyUnassignedRaw == null
+      ? true
+      : ["1", "true", "yes"].includes(String(onlyUnassignedRaw).toLowerCase());
+  if (onlyUnassigned) {
+    filters.push(isNull(gateways.user_id));
+  }
+
+  if (typeof userId === "number") {
+    filters.push(or(eq(gateways.user_id, userId), eq(gateways.created_by, userId)));
+  }
+
   return filters;
 }

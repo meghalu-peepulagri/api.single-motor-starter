@@ -7,10 +7,10 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDeletedLog, prepareGatewayLabelUpdatedLog, prepareGatewayNumberUpdatedLog, prepareGatewayRenamedLog } from "../helpers/gateway-activity-helper.js";
-import { gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
+import { gatewayDropdownFilters, gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { assertGatewayIdentifiersUnique, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysList } from "../services/db/gateway-services.js";
+import { assertGatewayIdentifiersUnique, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysDropdownList, getGatewaysList } from "../services/db/gateway-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -128,6 +128,25 @@ export class GatewayHandlers {
       return sendResponse(c, 200, GATEWAYS_FETCHED, gatewaysList);
     } catch (error: any) {
       console.error("Error at list of gateways :", error);
+      throw error;
+    }
+  }
+
+  listGatewaysDropdownHandler = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const query = c.req.query();
+      const paginationParams = getPaginationOffParams(query);
+
+      const isAdmin = userPayload?.user_type === "ADMIN" || userPayload?.user_type === "SUPER_ADMIN";
+      const requestedUserId = query.user_id && !isNaN(Number(query.user_id)) ? Number(query.user_id) : undefined;
+      const userIdFilter = isAdmin ? requestedUserId : Number(userPayload.id);
+
+      const whereQueryData = gatewayDropdownFilters(query, userIdFilter);
+      const result = await getGatewaysDropdownList(whereQueryData, paginationParams);
+      return sendResponse(c, 200, GATEWAYS_FETCHED, result);
+    } catch (error: any) {
+      console.error("Error at list gateways dropdown :", error);
       throw error;
     }
   }

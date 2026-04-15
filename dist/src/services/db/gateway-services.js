@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { gateways } from "../../database/schemas/gateways.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
@@ -49,6 +49,28 @@ export async function getGatewaysList(whereQueryData, orderQueryData, pageParams
         pagination_info: pageParams
             ? getPaginationData(pageParams.page, pageParams.pageSize, gatewaysCount.gateways_count)
             : undefined,
+        records,
+    };
+}
+export async function getGatewaysDropdownList(whereQueryData, pageParams) {
+    const whereQuery = whereQueryData && whereQueryData.length > 0 ? and(...whereQueryData) : undefined;
+    const records = await db.query.gateways.findMany({
+        where: whereQuery,
+        orderBy: [desc(gateways.created_at)],
+        limit: pageParams.pageSize,
+        offset: pageParams.offset,
+        columns: {
+            id: true,
+            pcb_number: true,
+            mac_address: true,
+        },
+    });
+    const [gatewaysCount] = await db.select({
+        gateways_count: sql `CAST(count(*) AS INTEGER)`,
+    }).from(gateways).where(whereQuery);
+    return {
+        gateways_count: gatewaysCount.gateways_count,
+        pagination_info: getPaginationData(pageParams.page, pageParams.pageSize, gatewaysCount.gateways_count),
         records,
     };
 }

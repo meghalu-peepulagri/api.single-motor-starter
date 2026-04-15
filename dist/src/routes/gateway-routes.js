@@ -5,6 +5,7 @@ const gatewayHandlers = new GatewayHandlers();
 const gatewayRoutes = factory.createApp();
 gatewayRoutes.post("/", isAuthorized, gatewayHandlers.addGatewayHandler);
 gatewayRoutes.get("/", isAuthorized, gatewayHandlers.listGatewaysHandler);
+gatewayRoutes.get("/basic-details", isAuthorized, gatewayHandlers.listGatewaysDropdownHandler);
 gatewayRoutes.get("/:id", isAuthorized, gatewayHandlers.getGatewayDetailsHandler);
 gatewayRoutes.patch("/assign", isAuthorized, gatewayHandlers.assignGatewayToUserHandler);
 gatewayRoutes.post("/:id/label", isAuthorized, gatewayHandlers.updateGatewayLabelHandler);
