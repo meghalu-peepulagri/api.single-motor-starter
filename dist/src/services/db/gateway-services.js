@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { gateways } from "../../database/schemas/gateways.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
@@ -198,4 +198,10 @@ export async function assertGatewayIdentifiersUnique(data, trx) {
         throw new ConflictException(UNIQUE_INDEX_MESSAGES["validate_gateway_mac_address"]);
     }
     throw new ConflictException();
+}
+export async function getGatewayByIdentifier(identifier) {
+    const upperId = identifier.trim().toUpperCase();
+    return await db.query.gateways.findFirst({
+        where: and(or(eq(gateways.mac_address, upperId), eq(gateways.pcb_number, upperId)), ne(gateways.status, "ARCHIVED")),
+    });
 }

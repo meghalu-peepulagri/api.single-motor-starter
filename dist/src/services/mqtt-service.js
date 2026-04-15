@@ -38,7 +38,8 @@ export class MqttService {
         });
         this.client.on("connect", () => {
             this.subscribe([
-                "peepul/+/status"
+                "peepul/+/status",
+                "peepul/+/+/status"
             ]);
         });
         this.client.on("error", (error) => {

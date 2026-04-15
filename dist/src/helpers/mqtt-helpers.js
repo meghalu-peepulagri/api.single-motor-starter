@@ -1,4 +1,5 @@
 import { DEVICE_SCHEMA } from "../constants/app-constants.js";
+import { getGatewayByIdentifier } from "../services/db/gateway-services.js";
 import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { logger } from "../utils/logger.js";
@@ -8,7 +9,8 @@ export async function liveDataHandler(parsedMessage, topic) {
     try {
         if (!parsedMessage)
             return;
-        const mac = typeof topic === "string" && topic.includes("/") ? topic.split("/")[1] : null;
+        const { gatewayId: gatewayMac, deviceId: deviceMac } = getIdentifiersFromTopic(topic);
+        const mac = deviceMac || gatewayMac;
         if (!mac) {
             logger.error("Invalid MQTT topic or missing MAC", undefined, { mac, topic });
             return null;
@@ -18,6 +20,19 @@ export async function liveDataHandler(parsedMessage, topic) {
         if (!validMac) {
             logger.error("Starter not found for MAC", undefined, { mac, topic });
             return null;
+        }
+        // Handle Dual-Segment Format (STRICT VALIDATION)
+        if (gatewayMac && deviceMac) {
+            const gateway = await getGatewayByIdentifier(gatewayMac);
+            if (!gateway) {
+                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                return null;
+            }
+            // We already have validMac (the device) fetched via 'mac'
+            if (validMac.gateway_id !== gateway.id) {
+                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+                return null;
+            }
         }
         // Format raw payload 
         const formatted = validateLiveDataFormat(parsedMessage, topic);
@@ -38,6 +53,18 @@ export async function liveDataHandler(parsedMessage, topic) {
         logger.error("Error at live data topic handler", err);
         return null;
     }
+}
+export function getIdentifiersFromTopic(topic) {
+    const segments = topic.split("/");
+    if (segments.length === 4) {
+        // peepul/{gateway}/{device}/status
+        return { gatewayId: segments[1], deviceId: segments[2] };
+    }
+    else if (segments.length === 3) {
+        // peepul/{device}/status
+        return { gatewayId: segments[1], deviceId: null };
+    }
+    return { gatewayId: null, deviceId: null };
 }
 export function randomSequenceNumber() {
     let lastNumber = null;
