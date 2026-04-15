@@ -8,9 +8,14 @@ import ConflictException from "../../exceptions/conflict-exception.js";
 import { getSingleRecordByMultipleColumnValues, getSingleRecordConditionallyWithOr, updateRecordById } from "./base-db-services.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
+import { getPaginationData } from "../../helpers/pagination-helper.js";
 
 
-export async function getGatewaysList(whereQueryData: any, orderQueryData: OrderByQueryData<GatewayTable>) {
+export async function getGatewaysList(
+  whereQueryData: any,
+  orderQueryData: OrderByQueryData<GatewayTable>,
+  pageParams?: { page: number; pageSize: number; offset: number },
+) {
   const whereQuery = whereQueryData && whereQueryData.length > 0 ? and(...whereQueryData) : undefined;
 
   const orderQuery = prepareOrderByQueryConditions<GatewayTable>(gateways, orderQueryData);
@@ -18,6 +23,8 @@ export async function getGatewaysList(whereQueryData: any, orderQueryData: Order
   const records = await db.query.gateways.findMany({
     where: whereQuery,
     orderBy: orderQuery,
+    limit: pageParams?.pageSize,
+    offset: pageParams?.offset,
     columns: {
       id: true,
       name: true,
@@ -51,6 +58,9 @@ export async function getGatewaysList(whereQueryData: any, orderQueryData: Order
 
   return {
     gateways_count: gatewaysCount.gateways_count,
+    pagination_info: pageParams
+      ? getPaginationData(pageParams.page, pageParams.pageSize, gatewaysCount.gateways_count)
+      : undefined,
     records,
   };
 }

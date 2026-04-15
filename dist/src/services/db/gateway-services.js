@@ -6,12 +6,15 @@ import { GATEWAY_ALREADY_ASSIGNED, GATEWAY_NOT_FOUND, UNIQUE_INDEX_MESSAGES } fr
 import ConflictException from "../../exceptions/conflict-exception.js";
 import { getSingleRecordByMultipleColumnValues, getSingleRecordConditionallyWithOr, updateRecordById } from "./base-db-services.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-export async function getGatewaysList(whereQueryData, orderQueryData) {
+import { getPaginationData } from "../../helpers/pagination-helper.js";
+export async function getGatewaysList(whereQueryData, orderQueryData, pageParams) {
     const whereQuery = whereQueryData && whereQueryData.length > 0 ? and(...whereQueryData) : undefined;
     const orderQuery = prepareOrderByQueryConditions(gateways, orderQueryData);
     const records = await db.query.gateways.findMany({
         where: whereQuery,
         orderBy: orderQuery,
+        limit: pageParams?.pageSize,
+        offset: pageParams?.offset,
         columns: {
             id: true,
             name: true,
@@ -43,6 +46,9 @@ export async function getGatewaysList(whereQueryData, orderQueryData) {
     }).from(gateways).where(whereQuery);
     return {
         gateways_count: gatewaysCount.gateways_count,
+        pagination_info: pageParams
+            ? getPaginationData(pageParams.page, pageParams.pageSize, gatewaysCount.gateways_count)
+            : undefined,
         records,
     };
 }

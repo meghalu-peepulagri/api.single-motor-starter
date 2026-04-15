@@ -15,6 +15,7 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ForbiddenException from "../exceptions/forbidden-exception.js";
+import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 const paramsValidateException = new ParamsValidateException();
 export class GatewayHandlers {
     addGatewayHandler = async (c) => {
@@ -23,10 +24,14 @@ export class GatewayHandlers {
             const gatewayPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(gatewayPayload);
             const validGatewayReq = await validatedRequest("add-gateway", gatewayPayload, GATEWAY_VALIDATION_CRITERIA);
-            const identifiers = getGatewayIdentifierLowers(validGatewayReq);
+            const gatewayName = validGatewayReq.name?.trim()
+                ? validGatewayReq.name.trim()
+                : validGatewayReq.gateway_number.trim();
+            const identifiers = getGatewayIdentifierLowers({ ...validGatewayReq, name: gatewayName });
             await assertGatewayIdentifiersUnique(identifiers);
             const newGateway = {
                 ...validGatewayReq,
+                name: gatewayName,
                 user_id: null,
                 created_by: userPayload.id,
             };
@@ -94,12 +99,13 @@ export class GatewayHandlers {
         try {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
+            const paginationParams = getPaginationOffParams(query);
             const isAdmin = userPayload?.user_type === "ADMIN" || userPayload?.user_type === "SUPER_ADMIN";
             const requestedUserId = query.user_id && !isNaN(Number(query.user_id)) ? Number(query.user_id) : undefined;
             const userIdFilter = isAdmin ? requestedUserId : Number(userPayload.id);
             const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);
             const whereQueryData = gatewayFilters(query, userIdFilter);
-            const gatewaysList = await getGatewaysList(whereQueryData, orderQueryData);
+            const gatewaysList = await getGatewaysList(whereQueryData, orderQueryData, paginationParams);
             return sendResponse(c, 200, GATEWAYS_FETCHED, gatewaysList);
         }
         catch (error) {

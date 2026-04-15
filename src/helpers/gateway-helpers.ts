@@ -22,6 +22,9 @@ export function gatewayFilters(query: any, userId?: number) {
   if (query.search_string?.trim()) {
     const s = `%${query.search_string.trim()}%`;
     filters.push(ilike(gateways.name, s));
+    filters.push(ilike(gateways.pcb_number, s));
+    filters.push(ilike(gateways.mac_address, s));
+    filters.push(ilike(gateways.gateway_number, s));
   }
 
   if (query.status) {

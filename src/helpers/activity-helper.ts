@@ -42,7 +42,7 @@ function meaningfulLastOffOnStateMessage(
     return desc.toLowerCase().includes("pump") ? desc : `Pump is OFF due to ${desc}`;
   }
 
-  return `State not updated due to '${motorState(state)}'`;
+  return "Pump control failed. Try again.";
 }
 
 export function meaningfulModeMessage(oldMode: string | undefined | null, newMode: string): string {
@@ -257,7 +257,7 @@ export function prepareMotorUpdateLogs(data: {
       deviceId: data.deviceId,
       oldData: { state: data.oldData.state },
       newData: { state: data.newData.state },
-      message: meaningfulStateMessage(Number(data.newData.state), mode)
+      message: meaningfulLastOffOnStateMessage(Number(data.newData.state))
     }));
   }
 

@@ -1,8 +1,8 @@
 import * as v from "valibot";
 import { GATEWAY_IDENTIFIER_REQUIRED, GATEWAY_LABEL_MIN_LEN, GATEWAY_LABEL_REQUIRED, GATEWAY_NUMBER_MIN_LEN, GATEWAY_NUMBER_REQUIRED, INVALID_USER_ID, GATEWAY_NAME_REQUIRED, GATEWAY_NAME_MIN_LEN, MAC_MIN_LEN, MAC_REQUIRED, PCB_MIN_LEN, PCB_NUMBER_REQUIRED } from "../../constants/app-constants.js";
 export const vAddGateway = v.object({
-    name: v.pipe(v.string(GATEWAY_NAME_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(GATEWAY_NAME_REQUIRED), v.minLength(3, GATEWAY_NAME_MIN_LEN)),
-    gateway_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, GATEWAY_NUMBER_MIN_LEN)))),
+    name: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, GATEWAY_NAME_MIN_LEN)))),
+    gateway_number: v.pipe(v.string(GATEWAY_NUMBER_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(GATEWAY_NUMBER_REQUIRED), v.minLength(3, GATEWAY_NUMBER_MIN_LEN)),
     label: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim())))),
     mac_address: v.pipe(v.string(MAC_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(MAC_REQUIRED), v.minLength(3, MAC_MIN_LEN)),
     pcb_number: v.pipe(v.string(PCB_NUMBER_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(PCB_NUMBER_REQUIRED), v.minLength(3, PCB_MIN_LEN)),
