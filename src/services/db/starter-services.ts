@@ -156,6 +156,10 @@ export async function paginatedStarterList(
       device_mobile_number: true,
     },
     with: {
+      gateway: {
+        where: ne(gateways.status, "ARCHIVED"),
+        columns: { id: true, name: true, mac_address: true, pcb_number: true },
+      },
       user: {
         where: ne(users.status, "ARCHIVED"),
         columns: { id: true, full_name: true },
