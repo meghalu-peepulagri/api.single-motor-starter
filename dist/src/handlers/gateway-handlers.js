@@ -121,7 +121,7 @@ export class GatewayHandlers {
             const isAdmin = userPayload?.user_type === "ADMIN" || userPayload?.user_type === "SUPER_ADMIN";
             const requestedUserId = query.user_id && !isNaN(Number(query.user_id)) ? Number(query.user_id) : undefined;
             const userIdFilter = isAdmin ? requestedUserId : Number(userPayload.id);
-            const whereQueryData = gatewayDropdownFilters(query, userIdFilter);
+            const whereQueryData = gatewayDropdownFilters(query, userIdFilter, isAdmin);
             const result = await getGatewaysDropdownList(whereQueryData, paginationParams);
             return sendResponse(c, 200, GATEWAYS_FETCHED, result);
         }

@@ -23,26 +23,26 @@ const paramsValidateException = new ParamsValidateException();
 
 export class GatewayHandlers {
 
-	  addGatewayHandler = async (c: Context) => {
-	    try {
-		      const userPayload = c.get("user_payload");
-		      const gatewayPayload = await c.req.json();
-		      paramsValidateException.emptyBodyValidation(gatewayPayload);
+  addGatewayHandler = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const gatewayPayload = await c.req.json();
+      paramsValidateException.emptyBodyValidation(gatewayPayload);
 
-		      const validGatewayReq = await validatedRequest<ValidatedAddGateway>("add-gateway", gatewayPayload, GATEWAY_VALIDATION_CRITERIA);
+      const validGatewayReq = await validatedRequest<ValidatedAddGateway>("add-gateway", gatewayPayload, GATEWAY_VALIDATION_CRITERIA);
 
-		      const gatewayName = validGatewayReq.name?.trim()
-		        ? validGatewayReq.name.trim()
-		        : validGatewayReq.gateway_number.trim();
-		      const identifiers = getGatewayIdentifierLowers({ ...validGatewayReq, name: gatewayName });
-		      await assertGatewayIdentifiersUnique(identifiers);
+      const gatewayName = validGatewayReq.name?.trim()
+        ? validGatewayReq.name.trim()
+        : validGatewayReq.gateway_number.trim();
+      const identifiers = getGatewayIdentifierLowers({ ...validGatewayReq, name: gatewayName });
+      await assertGatewayIdentifiersUnique(identifiers);
 
-		      const newGateway = {
-		        ...validGatewayReq,
-		        name: gatewayName,
-		        user_id: null,
-	        created_by: userPayload.id,
-	      };
+      const newGateway = {
+        ...validGatewayReq,
+        name: gatewayName,
+        user_id: null,
+        created_by: userPayload.id,
+      };
 
       await db.transaction(async (tx) => {
         const createdGateway = await saveSingleRecord<GatewayTable>(gateways, newGateway, tx);
@@ -142,7 +142,7 @@ export class GatewayHandlers {
       const requestedUserId = query.user_id && !isNaN(Number(query.user_id)) ? Number(query.user_id) : undefined;
       const userIdFilter = isAdmin ? requestedUserId : Number(userPayload.id);
 
-      const whereQueryData = gatewayDropdownFilters(query, userIdFilter);
+      const whereQueryData = gatewayDropdownFilters(query, userIdFilter, isAdmin);
       const result = await getGatewaysDropdownList(whereQueryData, paginationParams);
       return sendResponse(c, 200, GATEWAYS_FETCHED, result);
     } catch (error: any) {

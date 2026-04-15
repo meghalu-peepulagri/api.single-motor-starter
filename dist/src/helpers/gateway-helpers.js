@@ -28,23 +28,33 @@ export function gatewayFilters(query, userId) {
     }
     return filters;
 }
-export function gatewayDropdownFilters(query, userId) {
+export function gatewayDropdownFilters(query, userId, isAdmin) {
     const filters = [];
+    // Exclude archived
     filters.push(ne(gateways.status, "ARCHIVED"));
+    //  Search
     const search = (query.search_string ?? query.search ?? "").trim();
     if (search) {
         const s = `%${search}%`;
         filters.push(or(ilike(gateways.pcb_number, s), ilike(gateways.mac_address, s)));
     }
-    const onlyUnassignedRaw = query.only_unassigned ?? query.unassigned;
-    const onlyUnassigned = onlyUnassignedRaw == null
-        ? true
-        : ["1", "true", "yes"].includes(String(onlyUnassignedRaw).toLowerCase());
-    if (onlyUnassigned) {
-        filters.push(isNull(gateways.user_id));
+    // Role-based logic
+    if (isAdmin) {
+        // Admin / Super Admin
+        if (typeof userId === "number") {
+            // If user_id passed → assigned gateways
+            filters.push(eq(gateways.user_id, userId));
+        }
+        else {
+            // If no user_id → only unassigned
+            filters.push(isNull(gateways.user_id));
+        }
     }
-    if (typeof userId === "number") {
-        filters.push(or(eq(gateways.user_id, userId), eq(gateways.created_by, userId)));
+    else {
+        // Normal User
+        if (typeof userId === "number") {
+            filters.push(eq(gateways.user_id, userId));
+        }
     }
     return filters;
 }
