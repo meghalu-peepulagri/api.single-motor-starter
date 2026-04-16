@@ -25,4 +25,6 @@ motorScheduleRoute.delete("/:id", isAuthorized, motorScheduleHandler.deleteMotor
 motorScheduleRoute.post("/", isAuthorized, motorScheduleHandler.createMotorScheduleHandler);
 // Ack schedule (mark as acknowledged)
 motorScheduleRoute.patch("/:id/ack", isAuthorized, motorScheduleHandler.updateAcknowledgementHandler);
+// Bulk Ack schedules
+motorScheduleRoute.patch("/bulk/ack", isAuthorized, motorScheduleHandler.bulkUpdateAcknowledgementHandler);
 export default motorScheduleRoute;

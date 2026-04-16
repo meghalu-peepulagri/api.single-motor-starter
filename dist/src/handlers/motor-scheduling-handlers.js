@@ -183,6 +183,22 @@ export class MotorScheduleHandler {
             handleAppError(error, "update acknowledgement");
         }
     };
+    bulkUpdateAcknowledgementHandler = async (c) => {
+        try {
+            const data = await c.req.json();
+            const scheduleIds = data.schedule_ids;
+            if (!scheduleIds || !Array.isArray(scheduleIds) || scheduleIds.length === 0) {
+                throw new BadRequestException("Array of schedule ids required");
+            }
+            await db.update(motorSchedules)
+                .set({ acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" })
+                .where(inArray(motorSchedules.id, scheduleIds));
+            return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
+        }
+        catch (error) {
+            handleAppError(error, "bulk update acknowledgement");
+        }
+    };
     // =================== SYNC STATUSES ===================
     syncScheduleStatusesHandler = async (c) => {
         try {
