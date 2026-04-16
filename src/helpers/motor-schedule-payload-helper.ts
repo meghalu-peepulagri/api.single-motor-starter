@@ -1,3 +1,4 @@
+import { getFailureReason } from "./control-helpers.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 
 type ScheduleType = "TIME_BASED" | "CYCLIC";
@@ -356,6 +357,8 @@ export function formatMotorScheduleResponse(record: any, queryDate?: number): an
     start_time: rest.actual_start_time ?? rest.start_time,
     end_time: rest.actual_end_time ?? rest.end_time,
     runtime_minutes: rest.actual_run_time ?? rest.runtime_minutes,
+    failure_reason_description: getFailureReason(rest.failure_reason),
+    failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
   };
 }
 

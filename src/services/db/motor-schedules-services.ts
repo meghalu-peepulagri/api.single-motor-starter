@@ -465,6 +465,9 @@ export async function updateActualScheduleFields(
     actual_end_time: string | null;
     actual_run_time: number | null;
     actual_type: "TIME_BASED" | "CYCLIC" | null;
+    missed_minutes?: number | null;
+    failure_at?: Date | null;
+    failure_reason?: string | null;
   },
   trx: DbTransaction
 ) {
@@ -475,6 +478,9 @@ export async function updateActualScheduleFields(
       actual_end_time: actualData.actual_end_time,
       actual_run_time: actualData.actual_run_time,
       actual_type: actualData.actual_type,
+      missed_minutes: actualData.missed_minutes ?? 0,
+      failure_at: actualData.failure_at ?? null,
+      failure_reason: actualData.failure_reason ?? null,
       updated_at: new Date(),
     })
     .where(

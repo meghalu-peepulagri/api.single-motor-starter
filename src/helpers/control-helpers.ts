@@ -64,6 +64,25 @@ export function motorState(code: number) {
   }
 }
 
+export function getFailureReason(code: number | null | undefined) {
+  switch (code) {
+    case 0:
+      return "No Failure";
+    case 1:
+      return "Power Loss";
+    case 2:
+      return "Fault";
+    case 3:
+      return "Mode Change";
+    case 4:
+      return "Overlap";
+    case 5:
+      return "Invalid timings";
+    default:
+      return "Invalid failure reason";
+  }
+};
+
 const faultCodes: Record<string, { short: string; detailed: string }> = {
   "0x01": { short: "Dry Run", detailed: "Dry Run Protection Detected - No water flow detected." },
   "0x02": { short: "Overload", detailed: "Overload Threshold Detected - Check pump load." },

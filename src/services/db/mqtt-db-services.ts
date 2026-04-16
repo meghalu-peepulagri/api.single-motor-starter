@@ -93,7 +93,9 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current,
     active_schedule_id, active_schedule_type, active_schedule_start_time,
-    active_schedule_runtime_minutes, active_schedule_end_time, last_off_description, last_on_description } = insertedData;
+    active_schedule_runtime_minutes, active_schedule_end_time,
+    active_schedule_missed_minutes, active_schedule_failure_at,
+    active_schedule_failure_reason, last_off_description, last_on_description } = insertedData;
 
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id) return null;
@@ -219,6 +221,9 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
           actual_end_time: active_schedule_end_time,
           actual_run_time: active_schedule_runtime_minutes,
           actual_type: active_schedule_type,
+          missed_minutes: active_schedule_missed_minutes,
+          failure_at: active_schedule_failure_at,
+          failure_reason: active_schedule_failure_reason,
         }, trx);
       }
 
@@ -268,7 +273,8 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current,
     active_schedule_id, active_schedule_start_time, active_schedule_end_time,
-    active_schedule_runtime_minutes, active_schedule_type } = insertedData;
+    active_schedule_runtime_minutes, active_schedule_type,
+    active_schedule_missed_minutes, active_schedule_failure_at, active_schedule_failure_reason } = insertedData;
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
@@ -355,6 +361,9 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
         actual_end_time: active_schedule_end_time,
         actual_run_time: active_schedule_runtime_minutes,
         actual_type: active_schedule_type,
+        missed_minutes: active_schedule_missed_minutes,
+        failure_at: active_schedule_failure_at,
+        failure_reason: active_schedule_failure_reason,
       }, trx);
     }
 

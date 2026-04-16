@@ -343,6 +343,9 @@ export async function updateActualScheduleFields(motorId, starterId, scheduleId,
         actual_end_time: actualData.actual_end_time,
         actual_run_time: actualData.actual_run_time,
         actual_type: actualData.actual_type,
+        missed_minutes: actualData.missed_minutes ?? 0,
+        failure_at: actualData.failure_at ?? null,
+        failure_reason: actualData.failure_reason ?? null,
         updated_at: new Date(),
     })
         .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), eq(motorSchedules.schedule_id, scheduleId), sql `${motorSchedules.status} != 'ARCHIVED'`, sql `${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`));

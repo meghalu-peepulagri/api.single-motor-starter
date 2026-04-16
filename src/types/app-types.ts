@@ -281,6 +281,9 @@ export type preparedLiveData = {
   active_schedule_start_time: string | null;      // HHMM — actual start time device is using
   active_schedule_runtime_minutes: number | null; // minutes
   active_schedule_end_time: string | null;        // HHMM — computed (start + runtime)
+  active_schedule_missed_minutes: number | null;
+  active_schedule_failure_at: Date | null;
+  active_schedule_failure_reason: string | null;
 };
 
 export type previousPreparedLiveData = {

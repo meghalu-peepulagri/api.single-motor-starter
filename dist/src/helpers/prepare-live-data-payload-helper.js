@@ -1,8 +1,8 @@
-import { controlMode, getAlertDescription, getFaultDescription, lastOff, lastOn, motorState } from "./control-helpers.js";
-import { parseTimestamp } from "./dns-helpers.js";
 import { logger } from "../utils/logger.js";
+import { controlMode, getAlertDescription, getFailureReason, getFaultDescription, lastOff, lastOn, motorState } from "./control-helpers.js";
+import { parseTimestamp } from "./dns-helpers.js";
+import { normalizeTime } from "./motor-schedule-payload-helper.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
-import { addMinutesToTime, normalizeTime } from "./motor-schedule-payload-helper.js";
 export function prepareLiveDataPayload(validatedData, starterData) {
     if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
         logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
@@ -64,5 +64,8 @@ export function prepareLiveDataPayload(validatedData, starterData) {
         active_schedule_start_time: schStartTime,
         active_schedule_runtime_minutes: schRuntime,
         active_schedule_end_time: schEndTime,
+        active_schedule_missed_minutes: sch?.mm ?? 0,
+        active_schedule_failure_at: sch?.fe ? new Date(String(sch.fe).length === 13 ? Number(sch.fe) : Number(sch.fe) * 1000) : null,
+        active_schedule_failure_reason: getFailureReason(cleanScalar(sch?.fr)),
     };
 }
