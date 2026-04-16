@@ -1,10 +1,32 @@
 import { and, eq, gte, inArray, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
+import BadRequestException from "../../exceptions/bad-request-exception.js";
 
 type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
 import { motorSchedules, type MotorSchedule } from "../../database/schemas/motor-schedules.js";
 import type { MotorScheduleFilters } from "../../helpers/motor-schedule-filter-helper.js";
-import { dateToYYMMDD } from "../../helpers/motor-schedule-payload-helper.js";
+import {
+  buildScheduleData,
+  dateToYYMMDD,
+  normalizeMotorSchedulePayload,
+  todayAsYYMMDD
+} from "../../helpers/motor-schedule-payload-helper.js";
+import {
+  checkIntraArrayConflicts,
+  checkMotorScheduleConflict,
+  validateScheduleTypeRules
+} from "../../helpers/motor-helper.js";
+import { validatedRequest } from "../../validations/validate-request.js";
+import {
+  CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
+  MOTOR_NOT_FOUND
+} from "../../constants/app-constants.js";
+import {
+  getSingleRecordByMultipleColumnValues,
+  saveRecords
+} from "./base-db-services.js";
+import { motors } from "../../database/schemas/motors.js";
+import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../../validations/schema/motor-schedule-validators.js";
 
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
 
@@ -464,4 +486,72 @@ export async function updateActualScheduleFields(
         sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`,
       )
     );
+}
+
+export async function bulkCreateMotorSchedules(
+  rawPayload: any | any[],
+  userId: number,
+) {
+  // 1. Normalize and Validate the entire batch
+  const normalized = normalizeMotorSchedulePayload(rawPayload);
+  const items = await validatedRequest<ValidatedMotorScheduleArray>(
+    "create-bulk-motor-schedule",
+    normalized,
+    CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
+  );
+
+  if (items.length === 0) throw new BadRequestException("Payload cannot be empty");
+
+  // 2. Ensure all schedules belong to the same motor
+  const motorId = items[0].motor_id;
+  if (!items.every((item) => item.motor_id === motorId)) {
+    throw new BadRequestException("All schedules in a bulk request must belong to the same motor");
+  }
+
+  // Verify motor exists and is active
+  const existedMotor = await getSingleRecordByMultipleColumnValues(
+    motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"], ["id"],
+  );
+  if (!existedMotor) throw new BadRequestException(MOTOR_NOT_FOUND);
+
+  // 3. Normalize dates and apply schedule-specific business rules
+  const preparedList = items.map((data) => {
+    validateScheduleTypeRules(data);
+    const scheduleStartDate = data.schedule_start_date || todayAsYYMMDD();
+    const scheduleEndDate = data.schedule_end_date || scheduleStartDate;
+    return { ...data, schedule_start_date: scheduleStartDate, schedule_end_date: scheduleEndDate };
+  });
+
+  // 4. Multi-layer Conflict Detection
+  // Layer A: Check for overlaps within the requested batch itself
+  checkIntraArrayConflicts(preparedList);
+
+  // Layer B: Check against existing schedules in the database
+  const startDates = preparedList.map((s) => s.schedule_start_date!);
+  const endDates = preparedList.map((s) => s.schedule_end_date!);
+  const allDays = Array.from(new Set(preparedList.flatMap((s) => s.days_of_week || [])));
+
+  const existingInDb = await findConflictingSchedules(
+    motorId,
+    Math.min(...startDates),
+    Math.max(...endDates),
+    allDays,
+  );
+
+  for (const schedule of preparedList) {
+    checkMotorScheduleConflict(schedule, existingInDb);
+  }
+
+  // 5. Finalize data and perform Bulk Database Insertion
+  const startingScheduleId = await getNextScheduleIdForMotor(motorId);
+
+  const finalPayload = preparedList.map((item, index) => ({
+    ...buildScheduleData(item, item.schedule_start_date!),
+    schedule_id: startingScheduleId + index,
+    created_by: userId,
+    enabled: item.enabled ?? true,
+    schedule_status: item.schedule_status ?? "PENDING",
+  }));
+
+  return await saveRecords(motorSchedules, finalPayload as any);
 }

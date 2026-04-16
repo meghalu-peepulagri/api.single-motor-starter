@@ -305,11 +305,14 @@ export const SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"];
 export const SCHEDULE_TYPE_CODES = [1, 2]; // 1 = TIME_BASED, 2 = CYCLIC
 export const DAYS_OF_WEEK_ENUM = [0, 1, 2, 3, 4, 5, 6]; // 0=Sunday ... 6=Saturday
 export const SCHEDULED_CREATED = "Motor schedule created successfully";
+export const MULTIPLE_SCHEDULES_CREATED = "Multiple schedules created successfully";
 export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with same time";
 export const SCHEDULE_TYPE_IS_REQUIRED = "Schedule type is required";
 export const INVALID_SCHEDULED_TYPE = "Invalid schedule type";
 export const SCHEDULE_DATE_REQUIRED = "Schedule date is required";
 export const SCHEDULE_DATE_FORMAT = "Schedule date must be in YYYY-MM-DD format";
+export const SCHEDULE_START_DATE_REQUIRED = "Schedule start date is required";
+export const SCHEDULE_END_DATE_REQUIRED = "Schedule end date is required";
 export const SCHEDULE_START_DATE_FORMAT = "Schedule start date must be in YYYY-MM-DD format";
 export const SCHEDULE_END_DATE_FORMAT = "Schedule end date must be in YYYY-MM-DD format";
 export const SCHEDULE_END_DATE_PAST = "Schedule end date cannot be in the past";

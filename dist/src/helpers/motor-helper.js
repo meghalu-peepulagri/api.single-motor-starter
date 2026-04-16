@@ -196,6 +196,20 @@ export function areTimeRangesTooClose(startA, endA, startB, endB, gapMinutes = 5
     }
     return false;
 }
+/** Format "HHMM" to "HH:mm" */
+export function formatHHMM(hhmm) {
+    if (!hhmm || hhmm.length !== 4)
+        return hhmm;
+    return `${hhmm.substring(0, 2)}:${hhmm.substring(2, 4)}`;
+}
+/** Format numeric YYMMDD to "DD-MM-YYYY" */
+export function formatYYMMDD(yymmdd) {
+    const str = String(yymmdd).padStart(6, "0");
+    const yy = str.substring(0, 2);
+    const mm = str.substring(2, 4);
+    const dd = str.substring(4, 6);
+    return `${dd}-${mm}-20${yy}`;
+}
 /**
  * Check if a new schedule's date/days actually overlap with an existing schedule.
  * - For one-time schedules (repeat=0): check date RANGE overlap (newStart <= existEnd AND newEnd >= existStart)
@@ -239,17 +253,52 @@ export function checkMotorScheduleConflict(newSchedule, existingSchedules) {
             existing_date: existing.schedule_start_date || null,
             existing_days: existing.days_of_week || [],
         };
+        const dateStr = existing.schedule_start_date ? ` on ${formatYYMMDD(existing.schedule_start_date)}` : "";
+        const rangeStr = `${formatHHMM(existing.start_time)}–${formatHHMM(existing.end_time)}`;
         // Check exact match
         if (newSchedule.start_time === existing.start_time && newSchedule.end_time === existing.end_time) {
-            throw new ConflictException(`${ALREADY_SCHEDULED_EXISTS} (${existing.start_time} - ${existing.end_time})`, conflictInfo);
+            throw new ConflictException(`${ALREADY_SCHEDULED_EXISTS} (${rangeStr}${dateStr})`, conflictInfo);
         }
         // Check direct overlap
         if (doTimeRangesOverlap(newSchedule.start_time, newSchedule.end_time, existing.start_time, existing.end_time)) {
-            throw new ConflictException(`${SCHEDULE_OVERLAP_CONFLICT} (conflicts with ${existing.start_time} - ${existing.end_time})`, conflictInfo);
+            throw new ConflictException(`${SCHEDULE_OVERLAP_CONFLICT} (conflicts with ${rangeStr}${dateStr})`, conflictInfo);
         }
         // Check 5-min gap
         if (areTimeRangesTooClose(newSchedule.start_time, newSchedule.end_time, existing.start_time, existing.end_time, 5)) {
-            throw new ConflictException(`${SCHEDULE_GAP_CONFLICT} (too close to ${existing.start_time} - ${existing.end_time})`, conflictInfo);
+            throw new ConflictException(`${SCHEDULE_GAP_CONFLICT} (too close to ${rangeStr}${dateStr})`, conflictInfo);
+        }
+    }
+}
+/**
+ * Check for conflicts within a provided array of schedules.
+ * Throws ConflictException if any overlap or gap violation is found.
+ */
+export function checkIntraArrayConflicts(schedules) {
+    if (!schedules || schedules.length <= 1)
+        return;
+    // Sort by date then start time for efficient checking
+    const sorted = [...schedules].sort((a, b) => {
+        const dateA = a.schedule_start_date || 0;
+        const dateB = b.schedule_start_date || 0;
+        if (dateA !== dateB)
+            return dateA - dateB;
+        return parseInt(a.start_time, 10) - parseInt(b.start_time, 10);
+    });
+    for (let i = 0; i < sorted.length; i++) {
+        for (let j = i + 1; j < sorted.length; j++) {
+            const scheduleA = sorted[i];
+            const scheduleB = sorted[j];
+            if (hasDateOrDayOverlap(scheduleA, scheduleB)) {
+                const rangeA = `${formatHHMM(scheduleA.start_time)}–${formatHHMM(scheduleA.end_time)}`;
+                const rangeB = `${formatHHMM(scheduleB.start_time)}–${formatHHMM(scheduleB.end_time)}`;
+                const dateStr = scheduleA.schedule_start_date ? ` on ${formatYYMMDD(scheduleA.schedule_start_date)}` : "";
+                if (doTimeRangesOverlap(scheduleA.start_time, scheduleA.end_time, scheduleB.start_time, scheduleB.end_time)) {
+                    throw new ConflictException(`${SCHEDULE_OVERLAP_CONFLICT} between ${rangeA} and ${rangeB}${dateStr}`);
+                }
+                if (areTimeRangesTooClose(scheduleA.start_time, scheduleA.end_time, scheduleB.start_time, scheduleB.end_time, 5)) {
+                    throw new ConflictException(`${SCHEDULE_GAP_CONFLICT} between ${rangeA} and ${rangeB}${dateStr}`);
+                }
+            }
         }
     }
 }
