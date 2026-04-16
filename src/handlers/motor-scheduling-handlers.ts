@@ -82,7 +82,7 @@ export class MotorScheduleHandler {
       const userPayload = c.get("user_payload");
       const reqData = await c.req.json();
 
-      const savedSchedules = await bulkCreateMotorSchedules(reqData, userPayload.id);
+      await bulkCreateMotorSchedules(reqData, userPayload.id);
 
       const isBulk = Array.isArray(reqData) && reqData.length > 1;
       return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED);

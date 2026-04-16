@@ -19,7 +19,6 @@ export function prepareLiveDataPayload(validatedData, starterData) {
     const llv = cleanThreeNumberArray(llvSource);
     const amp = cleanThreeNumberArray(data.amp || []);
     const motorStateValue = cleanScalar(data.m_s ?? data.mtr_sts) || 0;
-    const activeScheduleType = sch ? (sch.cy === 1 ? "CYCLIC" : "TIME_BASED") : null;
     return {
         payload_version: cleanScalar(data.p_v) || 0,
         packet_number: validatedData.T,
@@ -60,7 +59,7 @@ export function prepareLiveDataPayload(validatedData, starterData) {
         motor_id: starterData.motors[0].id || null,
         // Schedule
         active_schedule_id: sch?.id ?? null,
-        active_schedule_type: activeScheduleType,
+        active_schedule_type: null,
         active_schedule_start_time: schStartTime,
         active_schedule_runtime_minutes: schRuntime,
         active_schedule_end_time: schEndTime,
