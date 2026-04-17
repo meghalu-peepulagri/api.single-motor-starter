@@ -9,7 +9,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { checkMotorScheduleConflict, validateScheduleTypeRules } from "../helpers/motor-helper.js";
 import { buildMotorScheduleFilters, buildScheduleHistoryFilters } from "../helpers/motor-schedule-filter-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { buildDeviceSyncPayloads, buildScheduleData, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, todayAsYYMMDD, } from "../helpers/motor-schedule-payload-helper.js";
+import { buildDeviceSyncPayloads, buildScheduleData, buildScheduleTimeline, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, todayAsYYMMDD, } from "../helpers/motor-schedule-payload-helper.js";
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
@@ -18,40 +18,6 @@ import { handleAppError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
-function buildScheduleTimeline(record) {
-    const events = [];
-    if (record.created_at)
-        events.push({ event: "CREATED", timestamp: new Date(record.created_at).toISOString() });
-    if (record.acknowledged_at)
-        events.push({ event: "SCHEDULED", timestamp: new Date(record.acknowledged_at).toISOString() });
-    if (record.last_started_at)
-        events.push({ event: "RUNNING", timestamp: new Date(record.last_started_at).toISOString() });
-    if (record.paused_at)
-        events.push({ event: "PAUSED", timestamp: new Date(record.paused_at).toISOString() });
-    if (record.restarted_at)
-        events.push({ event: "RESTARTED", timestamp: new Date(record.restarted_at).toISOString() });
-    if (record.last_stopped_at)
-        events.push({ event: "STOPPED", timestamp: new Date(record.last_stopped_at).toISOString() });
-    if (record.failure_at)
-        events.push({ event: "FAILED", timestamp: new Date(record.failure_at).toISOString() });
-    if (record.deleted_at)
-        events.push({ event: "DELETED", timestamp: new Date(record.deleted_at).toISOString() });
-    events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-    return {
-        id: record.id,
-        schedule_id: record.schedule_id,
-        motor_id: record.motor_id,
-        starter_id: record.starter_id,
-        schedule_type: record.schedule_type,
-        schedule_status: record.schedule_status,
-        start_time: record.start_time,
-        end_time: record.end_time,
-        schedule_start_date: record.schedule_start_date,
-        schedule_end_date: record.schedule_end_date,
-        repeat: record.repeat,
-        events,
-    };
-}
 export class MotorScheduleHandler {
     // =================== CREATE SCHEDULE ===================
     createMotorScheduleHandler = async (c) => {
@@ -243,8 +209,8 @@ export class MotorScheduleHandler {
             const result = await findScheduleHistoryByMotorAndStarter(filters, pageParams);
             const records = result.records.map((record) => buildScheduleTimeline(record));
             return sendResponse(c, 200, SCHEDULE_HISTORY_FETCHED, {
-                records,
                 pagination: result.pagination,
+                records
             });
         }
         catch (error) {
