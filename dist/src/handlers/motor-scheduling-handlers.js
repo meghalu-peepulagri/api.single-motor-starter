@@ -1,5 +1,5 @@
 import { inArray } from "drizzle-orm";
-import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, INVALID_SCHEDULE_CMD, MOTOR_NOT_FOUND, MULTIPLE_SCHEDULES_CREATED, NO_ACTIVE_SCHEDULE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STATUS_SYNC_COMPLETED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, BULK_SCHEDULE_IDS_REQUIRED, BULK_SCHEDULES_DELETED, BULK_SCHEDULES_RESTARTED, BULK_SCHEDULES_STOPPED, CANNOT_EDIT_RUNNING_SCHEDULE, INVALID_SCHEDULE_CMD, MOTOR_NOT_FOUND, MULTIPLE_SCHEDULES_CREATED, NO_ACTIVE_SCHEDULE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_HISTORY_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_RESTARTED, SCHEDULE_STATUS_SYNC_COMPLETED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, SCHEDULED_LIST_FETCHED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
@@ -7,16 +7,51 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { checkMotorScheduleConflict, validateScheduleTypeRules } from "../helpers/motor-helper.js";
-import { buildMotorScheduleFilters } from "../helpers/motor-schedule-filter-helper.js";
+import { buildMotorScheduleFilters, buildScheduleHistoryFilters } from "../helpers/motor-schedule-filter-helper.js";
+import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { buildDeviceSyncPayloads, buildScheduleData, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, todayAsYYMMDD, } from "../helpers/motor-schedule-payload-helper.js";
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
-import { batchUpdateScheduleStatuses, bulkCreateMotorSchedules, cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findSchedulesByFilters, restartScheduleById, stopScheduleById } from "../services/db/motor-schedules-services.js";
+import { batchUpdateScheduleStatuses, bulkCreateMotorSchedules, cancelSchedulesByIds, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findScheduleHistoryByMotorAndStarter, findSchedulesByFilters, restartScheduleById, restartSchedulesByIds, stopScheduleById } from "../services/db/motor-schedules-services.js";
 import { handleAppError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
+function buildScheduleTimeline(record) {
+    const events = [];
+    if (record.created_at)
+        events.push({ event: "CREATED", timestamp: new Date(record.created_at).toISOString() });
+    if (record.acknowledged_at)
+        events.push({ event: "SCHEDULED", timestamp: new Date(record.acknowledged_at).toISOString() });
+    if (record.last_started_at)
+        events.push({ event: "RUNNING", timestamp: new Date(record.last_started_at).toISOString() });
+    if (record.paused_at)
+        events.push({ event: "PAUSED", timestamp: new Date(record.paused_at).toISOString() });
+    if (record.restarted_at)
+        events.push({ event: "RESTARTED", timestamp: new Date(record.restarted_at).toISOString() });
+    if (record.last_stopped_at)
+        events.push({ event: "STOPPED", timestamp: new Date(record.last_stopped_at).toISOString() });
+    if (record.failure_at)
+        events.push({ event: "FAILED", timestamp: new Date(record.failure_at).toISOString() });
+    if (record.deleted_at)
+        events.push({ event: "DELETED", timestamp: new Date(record.deleted_at).toISOString() });
+    events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    return {
+        id: record.id,
+        schedule_id: record.schedule_id,
+        motor_id: record.motor_id,
+        starter_id: record.starter_id,
+        schedule_type: record.schedule_type,
+        schedule_status: record.schedule_status,
+        start_time: record.start_time,
+        end_time: record.end_time,
+        schedule_start_date: record.schedule_start_date,
+        schedule_end_date: record.schedule_end_date,
+        repeat: record.repeat,
+        events,
+    };
+}
 export class MotorScheduleHandler {
     // =================== CREATE SCHEDULE ===================
     createMotorScheduleHandler = async (c) => {
@@ -197,6 +232,68 @@ export class MotorScheduleHandler {
         }
         catch (error) {
             handleAppError(error, "bulk update acknowledgement");
+        }
+    };
+    // =================== SCHEDULE HISTORY ===================
+    getScheduleHistoryHandler = async (c) => {
+        try {
+            const query = c.req.query();
+            const filters = buildScheduleHistoryFilters(query);
+            const pageParams = getPaginationOffParams(query);
+            const result = await findScheduleHistoryByMotorAndStarter(filters, pageParams);
+            const records = result.records.map((record) => buildScheduleTimeline(record));
+            return sendResponse(c, 200, SCHEDULE_HISTORY_FETCHED, {
+                records,
+                pagination: result.pagination,
+            });
+        }
+        catch (error) {
+            handleAppError(error, "get schedule history");
+        }
+    };
+    // =================== BULK STOP SCHEDULES ===================
+    bulkStopSchedulesHandler = async (c) => {
+        try {
+            const { ids } = await c.req.json();
+            if (!ids || !Array.isArray(ids) || ids.length === 0)
+                throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
+            await cancelSchedulesByIds(ids);
+            return sendResponse(c, 200, BULK_SCHEDULES_STOPPED, { stopped_count: ids.length });
+        }
+        catch (error) {
+            handleAppError(error, "bulk stop schedules");
+            throw error;
+        }
+    };
+    // =================== BULK RESTART SCHEDULES ===================
+    bulkRestartSchedulesHandler = async (c) => {
+        try {
+            const { ids } = await c.req.json();
+            if (!ids || !Array.isArray(ids) || ids.length === 0)
+                throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
+            await restartSchedulesByIds(ids);
+            return sendResponse(c, 200, BULK_SCHEDULES_RESTARTED, { restarted_count: ids.length });
+        }
+        catch (error) {
+            handleAppError(error, "bulk restart schedules");
+            throw error;
+        }
+    };
+    // =================== BULK DELETE SCHEDULES ===================
+    bulkDeleteSchedulesHandler = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const { ids } = await c.req.json();
+            if (!ids || !Array.isArray(ids) || ids.length === 0)
+                throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
+            await db.update(motorSchedules)
+                .set({ schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false, updated_at: new Date() })
+                .where(inArray(motorSchedules.id, ids));
+            return sendResponse(c, 200, BULK_SCHEDULES_DELETED, { deleted_count: ids.length });
+        }
+        catch (error) {
+            handleAppError(error, "bulk delete schedules");
+            throw error;
         }
     };
     // =================== SYNC STATUSES ===================

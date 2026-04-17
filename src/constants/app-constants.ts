@@ -393,6 +393,11 @@ export const SCHEDULE_RESTARTED = "Motor schedule restarted successfully";
 export const ALL_SCHEDULES_STOPPED = "All active schedules stopped for this motor";
 export const NO_ACTIVE_SCHEDULE = "No active schedule found to stop";
 export const INVALID_SCHEDULE_CMD = "Invalid cmd. Use 1 for stop, 2 for restart";
+export const BULK_SCHEDULES_STOPPED = "Bulk schedules stopped successfully";
+export const BULK_SCHEDULES_RESTARTED = "Bulk schedules restarted successfully";
+export const BULK_SCHEDULES_DELETED = "Bulk schedules deleted successfully";
+export const BULK_SCHEDULE_IDS_REQUIRED = "Array of schedule ids required";
+export const SCHEDULE_HISTORY_FETCHED = "Schedule history fetched successfully";
 export const SCHEDULE_CMD_REQUIRED = "cmd is required";
 
 // Schedule date validation

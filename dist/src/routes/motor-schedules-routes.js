@@ -6,6 +6,8 @@ const motorScheduleRoute = factory.createApp();
 // =================== GET ROUTES ===================
 // Pending schedules for device sync (no auth)
 motorScheduleRoute.get("/sync/pending", motorScheduleHandler.getPendingSchedulesForSyncHandler);
+// Schedule history by motor_id and starter_id (?motor_id=&starter_id=&page=&limit=)
+motorScheduleRoute.get("/history", isAuthorized, motorScheduleHandler.getScheduleHistoryHandler);
 // List schedules with filters (?starter_id=&motor_id=&status=&page=&limit=)
 motorScheduleRoute.get("/", isAuthorized, motorScheduleHandler.motorScheduleListHandler);
 // Get single schedule by id
@@ -19,6 +21,12 @@ motorScheduleRoute.post("/stop-all/:motor_id", isAuthorized, motorScheduleHandle
 motorScheduleRoute.post("/update-status/:id", isAuthorized, motorScheduleHandler.updateScheduleStatusHandler);
 // Create a single or bulk schedules
 motorScheduleRoute.post("/", isAuthorized, motorScheduleHandler.createMotorScheduleHandler);
+// Bulk stop schedules by ids
+motorScheduleRoute.post("/bulk/stop", isAuthorized, motorScheduleHandler.bulkStopSchedulesHandler);
+// Bulk restart schedules by ids
+motorScheduleRoute.post("/bulk/restart", isAuthorized, motorScheduleHandler.bulkRestartSchedulesHandler);
+// Bulk delete schedules by ids
+motorScheduleRoute.delete("/bulk", isAuthorized, motorScheduleHandler.bulkDeleteSchedulesHandler);
 // =================== PATCH ROUTES ===================
 // Bulk Ack schedules
 motorScheduleRoute.patch("/bulk/ack", isAuthorized, motorScheduleHandler.bulkUpdateAcknowledgementHandler);

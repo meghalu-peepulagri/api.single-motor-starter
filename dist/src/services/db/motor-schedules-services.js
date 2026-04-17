@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, lte, ne, SQL, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
+import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { buildScheduleData, dateToYYMMDD, normalizeMotorSchedulePayload, todayAsYYMMDD } from "../../helpers/motor-schedule-payload-helper.js";
 import { checkIntraArrayConflicts, checkMotorScheduleConflict, validateScheduleTypeRules } from "../../helpers/motor-helper.js";
 import { validatedRequest } from "../../validations/validate-request.js";
@@ -124,12 +125,15 @@ export async function findAllActiveSchedulesForMotor(motorId) {
 export async function cancelSchedulesByIds(scheduleIds) {
     if (scheduleIds.length === 0)
         return;
+    const now = new Date();
     return await db
         .update(motorSchedules)
         .set({
         schedule_status: "STOPPED",
         manually_stopped: true,
-        updated_at: new Date(),
+        paused_at: now,
+        last_stopped_at: now,
+        updated_at: now,
     })
         .where(inArray(motorSchedules.id, scheduleIds))
         .returning();
@@ -138,12 +142,15 @@ export async function cancelSchedulesByIds(scheduleIds) {
  * Stop a single schedule (mark as STOPPED + manually_stopped).
  */
 export async function stopScheduleById(scheduleId) {
+    const now = new Date();
     return await db
         .update(motorSchedules)
         .set({
         schedule_status: "STOPPED",
         manually_stopped: true,
-        updated_at: new Date(),
+        paused_at: now,
+        last_stopped_at: now,
+        updated_at: now,
     })
         .where(eq(motorSchedules.id, scheduleId))
         .returning();
@@ -152,14 +159,34 @@ export async function stopScheduleById(scheduleId) {
  * Restart a schedule (mark as SCHEDULED + clear manually_stopped).
  */
 export async function restartScheduleById(scheduleId) {
+    const now = new Date();
     return await db
         .update(motorSchedules)
         .set({
         schedule_status: "SCHEDULED",
         manually_stopped: false,
-        updated_at: new Date(),
+        restarted_at: now,
+        updated_at: now,
     })
         .where(eq(motorSchedules.id, scheduleId))
+        .returning();
+}
+/**
+ * Restart multiple schedules by ids (mark as SCHEDULED + clear manually_stopped).
+ */
+export async function restartSchedulesByIds(scheduleIds) {
+    if (scheduleIds.length === 0)
+        return;
+    const now = new Date();
+    return await db
+        .update(motorSchedules)
+        .set({
+        schedule_status: "SCHEDULED",
+        manually_stopped: false,
+        restarted_at: now,
+        updated_at: now,
+    })
+        .where(inArray(motorSchedules.id, scheduleIds))
         .returning();
 }
 // =================== MAX END DATE FOR DATE RANGE FILTER ===================
@@ -393,4 +420,45 @@ export async function bulkCreateMotorSchedules(rawPayload, userId) {
         schedule_status: item.schedule_status ?? "PENDING",
     }));
     return await saveRecords(motorSchedules, finalPayload);
+}
+// =================== SCHEDULE HISTORY ===================
+export async function findScheduleHistoryByMotorAndStarter(filters, pageParams) {
+    const conditions = and(eq(motorSchedules.motor_id, filters.motor_id), eq(motorSchedules.starter_id, filters.starter_id), filters.from_date ? gte(motorSchedules.created_at, filters.from_date) : undefined, filters.to_date ? lte(motorSchedules.created_at, filters.to_date) : undefined);
+    const [records, countResult] = await Promise.all([
+        db.select({
+            id: motorSchedules.id,
+            schedule_id: motorSchedules.schedule_id,
+            motor_id: motorSchedules.motor_id,
+            starter_id: motorSchedules.starter_id,
+            schedule_type: motorSchedules.schedule_type,
+            schedule_status: motorSchedules.schedule_status,
+            start_time: motorSchedules.start_time,
+            end_time: motorSchedules.end_time,
+            schedule_start_date: motorSchedules.schedule_start_date,
+            schedule_end_date: motorSchedules.schedule_end_date,
+            repeat: motorSchedules.repeat,
+            manually_stopped: motorSchedules.manually_stopped,
+            created_at: motorSchedules.created_at,
+            acknowledged_at: motorSchedules.acknowledged_at,
+            last_started_at: motorSchedules.last_started_at,
+            paused_at: motorSchedules.paused_at,
+            restarted_at: motorSchedules.restarted_at,
+            last_stopped_at: motorSchedules.last_stopped_at,
+            failure_at: motorSchedules.failure_at,
+            failure_reason: motorSchedules.failure_reason,
+            deleted_at: motorSchedules.deleted_at,
+            updated_at: motorSchedules.updated_at,
+        })
+            .from(motorSchedules)
+            .where(conditions)
+            .orderBy(sql `${motorSchedules.created_at} DESC`)
+            .limit(pageParams.pageSize)
+            .offset(pageParams.offset),
+        db.select({ count: sql `COUNT(*)` })
+            .from(motorSchedules)
+            .where(conditions),
+    ]);
+    const total = Number(countResult[0]?.count ?? 0);
+    const pagination = getPaginationData(pageParams.page, pageParams.pageSize, total);
+    return { records, pagination };
 }
