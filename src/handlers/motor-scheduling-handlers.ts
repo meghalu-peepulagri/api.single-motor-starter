@@ -184,7 +184,7 @@ export class MotorScheduleHandler {
   };
 
   // =================== UPDATE SCHEDULE STATUS ===================
-  updateScheduleStatusHandler = async (c: Context) => {
+    updateScheduleStatusHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
