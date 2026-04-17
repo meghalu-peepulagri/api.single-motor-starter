@@ -348,7 +348,7 @@ export class MotorScheduleHandler {
 
       return sendResponse(c, 200, BULK_SCHEDULES_DELETED, { deleted_count: ids.length });
     } catch (error: any) {
-      handleAppError(error, "bulk delete schedules");
+      handleAppError(error, "bulk delete schedules"); 
       throw error;
     }
   };

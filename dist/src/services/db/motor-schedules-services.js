@@ -132,6 +132,7 @@ export async function cancelSchedulesByIds(scheduleIds) {
         schedule_status: "STOPPED",
         manually_stopped: true,
         paused_at: now,
+        enabled: false,
         last_stopped_at: now,
         updated_at: now,
     })
@@ -184,6 +185,7 @@ export async function restartSchedulesByIds(scheduleIds) {
         schedule_status: "SCHEDULED",
         manually_stopped: false,
         restarted_at: now,
+        enabled: true,
         updated_at: now,
     })
         .where(inArray(motorSchedules.id, scheduleIds))
