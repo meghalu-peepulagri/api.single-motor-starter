@@ -1,4 +1,5 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { starterDispatch } from "../database/schemas/starter-dispatch.js";
 import type { ValidatedUpdateDefaultSettingsLimits } from "../validations/schema/default-settings-limits.js";
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import type { validatedAddField } from "../validations/schema/field-validations.js";
@@ -8,12 +9,13 @@ import type { validatedAddMotor, validatedUpdateMotor, validatedUpdateMotorTestR
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { ValidatedAddStarterDispatch } from "../validations/schema/starter-dispatch-validations.js";
+import type { ValidatedAddGateway, ValidatedAssignGatewayToUser, ValidatedRenameGateway, ValidatedUpdateGatewayLabel, ValidatedUpdateGatewayNumber } from "../validations/schema/gateway-validations.js";
 
 export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
-  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch;
+  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber;
 
-export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
-  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch";
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
+  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number";
 
 export interface IResp {
   status: ContentfulStatusCode;
@@ -272,6 +274,16 @@ export type preparedLiveData = {
   gateway_id: number;
   user_id: number;
   motor_id: number,
+
+  // Schedule fields from device payload
+  active_schedule_id: number | null;
+  active_schedule_type: "TIME_BASED" | "CYCLIC" | null;
+  active_schedule_start_time: string | null;      // HHMM — actual start time device is using
+  active_schedule_runtime_minutes: number | null; // minutes
+  active_schedule_end_time: string | null;        // HHMM — computed (start + runtime)
+  active_schedule_missed_minutes: number | null;
+  active_schedule_failure_at: Date | null;
+  active_schedule_failure_reason: string | null;
 };
 
 export type previousPreparedLiveData = {
@@ -297,6 +309,20 @@ export type motorBasedStarterDetails = {
   id: number;
   assigned_at: Date | null;
 }
+
+// =================== DISPATCH SORTABLE COLUMNS ===================
+export const DISPATCH_SORTABLE_COLUMNS: Record<string, any> = {
+  id: starterDispatch.id,
+  starter_id: starterDispatch.starter_id,
+  customer_name: starterDispatch.customer_name,
+  contact_number: starterDispatch.contact_number,
+  address: starterDispatch.address,
+  location: starterDispatch.location,
+  sim_no: starterDispatch.sim_no,
+  sim_recharge_end_date: starterDispatch.sim_recharge_end_date,
+  warranty_end_date: starterDispatch.warranty_end_date,
+  created_at: starterDispatch.created_at,
+};
 
 // =================== RUNTIME TYPES ===================
 export interface RuntimeRecord {
@@ -324,3 +350,10 @@ export interface SplitRuntimeRecord {
   power_duration: string | null;
   power_state: number | null;
 }
+
+export type MotorStateData = {
+  state?: number;
+  mode?: string;
+  last_on_description?: string;
+  last_off_description?: string;
+};

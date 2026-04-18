@@ -3,6 +3,7 @@ import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareM
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
 import type { User } from "../../database/schemas/users.js";
+import type { MotorStateData } from "../../types/app-types.js";
 
 type Transaction = any; // Placeholder for now, but will use more specific types for data
 
@@ -17,7 +18,7 @@ export class ActivityService {
     userId?: number;
     performedBy: number;
     action: string;
-    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION';
+    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
     entityId?: number;
     deviceId?: number;
     oldData?: Record<string, unknown> | null;
@@ -66,7 +67,7 @@ export class ActivityService {
     userId?: number;
     performedBy: number;
     action: string;
-    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION';
+    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
     entityId?: number;
     oldData?: Record<string, unknown>;
     newData?: Record<string, unknown>;
@@ -149,7 +150,10 @@ export class ActivityService {
   /**
    * Logs motor state/mode sync from MQTT
    */
-  static async writeMotorSyncLogs(userId: number, motorId: number, oldData: { state?: number; mode?: string }, newData: { state?: number; mode?: string }, trx?: any, deviceId?: number) {
+  static async writeMotorSyncLogs(userId: number, motorId: number, oldData: MotorStateData, newData: MotorStateData,
+    trx?: any,
+    deviceId?: number
+  ) {
     const logs = prepareMotorSyncLogs({
       userId,
       entityId: motorId,

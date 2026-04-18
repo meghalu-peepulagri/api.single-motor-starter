@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
+import { starterDispatch, type StarterDispatchTable } from "../../database/schemas/starter-dispatch.js";
 import { StarterDefaultSettingsLimits } from "../../database/schemas/starter-default-settings-limits.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { starterSettingsLimits, type StarterSettingsLimitsTable } from "../../database/schemas/starter-settings-limits.js";
@@ -18,21 +19,23 @@ import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-help
 import type { AssignStarterType, starterBoxPayloadType } from "../../types/app-types.js";
 import type { OrderByQueryData } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { ActivityService } from "./activity-service.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
+import { gateways } from "../../database/schemas/gateways.js";
 
 
-export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User) {
-  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload);
+export async function addStarterWithTransaction(starterBoxPayload: starterBoxPayloadType, userPayload: User, gatewayId?: number): Promise<StarterBox> {
+  const existedStarterDispatch = await getSingleRecordByMultipleColumnValues<StarterDispatchTable>(starterDispatch, ["box_serial_no", "status"], ["=", "!="], [starterBoxPayload.starter_number, "ARCHIVED"]);
+  const preparedStarerData: any = prepareStarterData(starterBoxPayload, userPayload, existedStarterDispatch, gatewayId);
   const defaultSettings = await getStarterDefaultSettings();
   const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
   const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
   const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
 
-  await db.transaction(async (trx: any) => {
+  return await db.transaction(async (trx: any) => {
     const starter = await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData, trx);
     await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
 
@@ -41,10 +44,11 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
       trx
     );
 
+    await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
     await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
     const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
     publishMultipleTimesInBackground(deviceInfoPayload, starter);
-    return starter;
+    return starter as StarterBox;
   });
 }
 
@@ -152,6 +156,10 @@ export async function paginatedStarterList(
       device_mobile_number: true,
     },
     with: {
+      gateway: {
+        where: ne(gateways.status, "ARCHIVED"),
+        columns: { id: true, name: true, mac_address: true, pcb_number: true },
+      },
       user: {
         where: ne(users.status, "ARCHIVED"),
         columns: { id: true, full_name: true },
@@ -437,6 +445,15 @@ export async function starterConnectedMotors(starterId: number) {
       warranty_expiry_date: true,
     },
     with: {
+      gateway: {
+        where: ne(gateways.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          name: true,
+          mac_address: true,
+          pcb_number: true,
+        },
+      },
       motors: {
         where: ne(motors.status, "ARCHIVED"),
         columns: {
@@ -460,6 +477,12 @@ export async function starterConnectedMotors(starterId: number) {
         columns: {
           id: true,
           full_name: true,
+        },
+      },
+      dispatch: {
+        where: ne(starterDispatch.status, "ARCHIVED"),
+        columns: {
+          invoice_document: true,
         },
       },
     },
@@ -618,4 +641,30 @@ export async function applyDeviceAllocation(
 
     return true;
   });
+}
+
+export async function getDeviceWithDispatchDetails(search: string) {
+  return await db.query.starterBoxes.findFirst({
+    where: or(
+      ilike(starterBoxes.starter_number, `%${search}%`),
+      ilike(starterBoxes.mac_address, `%${search}%`),
+      ilike(starterBoxes.pcb_number, `%${search}%`),
+      ne(starterBoxes.status, "ARCHIVED"),
+    ),
+    columns: {
+      id: true,
+      starter_number: true,
+      mac_address: true,
+      pcb_number: true,
+    },
+    with: {
+      dispatch: {
+        where: ne(starterDispatch.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          box_serial_no: true,
+        },
+      },
+    },
+  } as any);
 }

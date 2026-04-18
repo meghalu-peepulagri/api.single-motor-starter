@@ -65,7 +65,7 @@ export interface LiveDataResult {
   S: number | null;
   ct: string | null;
   group: GroupKey | null;
-  data: Record<string, number | [number, number, number]>;
+  data: Record<string, any>;
   errors: string[];
   validated_payload: boolean;
 }
@@ -92,7 +92,7 @@ export function validateAndExtractLiveData(payload: any): LiveDataResult {
     (k): k is GroupKey => k in D && D[k] && typeof D[k] === "object"
   ) || null;
 
-  const cleaned: Record<string, number | [number, number, number]> = {};
+  const cleaned: Record<string, any> = {};
 
   if (!groupKey) {
     errors.push("No valid group found");
@@ -142,6 +142,11 @@ export function validateAndExtractLiveData(payload: any): LiveDataResult {
       } else {
         cleaned[key] = num;
       }
+    }
+
+    // Pass through optional fields not in required list
+    if (groupData.sch !== undefined) {
+      cleaned.sch = groupData.sch;
     }
   }
 

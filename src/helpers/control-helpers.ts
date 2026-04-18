@@ -1,18 +1,32 @@
 export function lastOn(code: number) {
   switch (code) {
-    case 0: return "MANUAL";
-    case 1: return "AUTO";
-    default: return "Unknown";
+    case 0: return "None";
+    case 1: return "Manual";
+    case 2: return "Auto";
+    case 3: return "Remote";
+    case 4: return "Schedule";
+    case 5: return "SMS";
+    case 6: return "Auto to Manual";
+    case 7: return "Power Off";
+    case 8: return "Fault";
+    case 9: return "Fault Retry";
+    default: return "Invalid";
   }
 }
 
 export function lastOff(code: number) {
   switch (code) {
-    case 0: return "MANUAL";
-    case 1: return "AUTO";
-    case 2: return "Power Off";
-    case 3: return "Fault";
-    default: return "Unknown";
+    case 0: return "None";
+    case 1: return "Manual";
+    case 2: return "Auto";
+    case 3: return "Remote";
+    case 4: return "Schedule";
+    case 5: return "SMS";
+    case 6: return "Auto to Manual";
+    case 7: return "Power Off";
+    case 8: return "Fault";
+    case 9: return "Fault Retry";
+    default: return "Invalid";
   }
 }
 
@@ -49,6 +63,25 @@ export function motorState(code: number) {
     default: return "Unknown state";
   }
 }
+
+export function getFailureReason(code: number | null | undefined) {
+  switch (code) {
+    case 0:
+      return "No Failure";
+    case 1:
+      return "Power Loss";
+    case 2:
+      return "Fault";
+    case 3:
+      return "Mode Change";
+    case 4:
+      return "Overlap";
+    case 5:
+      return "Invalid timings";
+    default:
+      return "Invalid failure reason";
+  }
+};
 
 const faultCodes: Record<string, { short: string; detailed: string }> = {
   "0x01": { short: "Dry Run", detailed: "Dry Run Protection Detected - No water flow detected." },

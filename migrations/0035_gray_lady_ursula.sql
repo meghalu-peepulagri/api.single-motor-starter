@@ -1,0 +1,1 @@
+ALTER TABLE "starter_dispatch" ADD COLUMN "invoice_document" varchar;

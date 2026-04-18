@@ -66,11 +66,53 @@ export async function deleteObject(key: string) {
   }
 }
 
+/**
+ * Upload a file buffer directly to S3 and return the key
+ */
+export async function uploadObject(key: string, buffer: Buffer, contentType: string) {
+  try {
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    });
+
+    await s3Client.send(command);
+
+    return key;
+  } catch (error: any) {
+    throw new S3ErrorException(500, `Failed to upload file: ${error.message}`);
+  }
+}
+
+/**
+ * Generate a pre-signed PUT URL for uploading an invoice document
+ */
+export async function generateInvoiceUploadUrl(dispatchId: number | string, contentType: string = "application/pdf", expiresIn: number = 900) {
+  try {
+    const key = `iDhara/invoices/${dispatchId}/${Date.now()}.${getExtension(contentType)}`;
+
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn });
+
+    return { uploadUrl, key };
+  } catch (error: any) {
+    throw new S3ErrorException(500, `Failed to generate invoice upload URL: ${error.message}`);
+  }
+}
+
 function getExtension(contentType: string): string {
   const map: Record<string, string> = {
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
+    "application/pdf": "pdf",
   };
-  return map[contentType] || "jpg";
+  return map[contentType] || "pdf";
 }

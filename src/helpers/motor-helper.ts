@@ -17,8 +17,6 @@ import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import type { arrayOfMotorInputType } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
-import { meaningfulModeMessage } from "./activity-helper.js";
-import { motorState } from "./control-helpers.js";
 
 
 
@@ -248,6 +246,21 @@ export function areTimeRangesTooClose(
   return false;
 }
 
+/** Format "HHMM" to "HH:mm" */
+export function formatHHMM(hhmm: string): string {
+  if (!hhmm || hhmm.length !== 4) return hhmm;
+  return `${hhmm.substring(0, 2)}:${hhmm.substring(2, 4)}`;
+}
+
+/** Format numeric YYMMDD to "DD-MM-YYYY" */
+export function formatYYMMDD(yymmdd: number): string {
+  const str = String(yymmdd).padStart(6, "0");
+  const yy = str.substring(0, 2);
+  const mm = str.substring(2, 4);
+  const dd = str.substring(4, 6);
+  return `${dd}-${mm}-20${yy}`;
+}
+
 /**
  * Check if a new schedule's date/days actually overlap with an existing schedule.
  * - For one-time schedules (repeat=0): check date RANGE overlap (newStart <= existEnd AND newEnd >= existStart)
@@ -324,10 +337,13 @@ export function checkMotorScheduleConflict(
       existing_days: existing.days_of_week || [],
     };
 
+    const dateStr = existing.schedule_start_date ? ` on ${formatYYMMDD(existing.schedule_start_date)}` : "";
+    const rangeStr = `${formatHHMM(existing.start_time)}–${formatHHMM(existing.end_time)}`;
+
     // Check exact match
     if (newSchedule.start_time === existing.start_time && newSchedule.end_time === existing.end_time) {
       throw new ConflictException(
-        `${ALREADY_SCHEDULED_EXISTS} (${existing.start_time} - ${existing.end_time})`,
+        `${ALREADY_SCHEDULED_EXISTS} (${rangeStr}${dateStr})`,
         conflictInfo,
       );
     }
@@ -338,7 +354,7 @@ export function checkMotorScheduleConflict(
       existing.start_time, existing.end_time,
     )) {
       throw new ConflictException(
-        `${SCHEDULE_OVERLAP_CONFLICT} (conflicts with ${existing.start_time} - ${existing.end_time})`,
+        `${SCHEDULE_OVERLAP_CONFLICT} (conflicts with ${rangeStr}${dateStr})`,
         conflictInfo,
       );
     }
@@ -350,9 +366,50 @@ export function checkMotorScheduleConflict(
       5,
     )) {
       throw new ConflictException(
-        `${SCHEDULE_GAP_CONFLICT} (too close to ${existing.start_time} - ${existing.end_time})`,
+        `${SCHEDULE_GAP_CONFLICT} (too close to ${rangeStr}${dateStr})`,
         conflictInfo,
       );
+    }
+  }
+}
+
+/**
+ * Check for conflicts within a provided array of schedules.
+ * Throws ConflictException if any overlap or gap violation is found.
+ */
+export function checkIntraArrayConflicts(schedules: any[]): void {
+  if (!schedules || schedules.length <= 1) return;
+
+  // Sort by date then start time for efficient checking
+  const sorted = [...schedules].sort((a, b) => {
+    const dateA = a.schedule_start_date || 0;
+    const dateB = b.schedule_start_date || 0;
+    if (dateA !== dateB) return dateA - dateB;
+    return parseInt(a.start_time, 10) - parseInt(b.start_time, 10);
+  });
+
+  for (let i = 0; i < sorted.length; i++) {
+    for (let j = i + 1; j < sorted.length; j++) {
+      const scheduleA = sorted[i];
+      const scheduleB = sorted[j];
+
+      if (hasDateOrDayOverlap(scheduleA, scheduleB)) {
+        const rangeA = `${formatHHMM(scheduleA.start_time)}–${formatHHMM(scheduleA.end_time)}`;
+        const rangeB = `${formatHHMM(scheduleB.start_time)}–${formatHHMM(scheduleB.end_time)}`;
+        const dateStr = scheduleA.schedule_start_date ? ` on ${formatYYMMDD(scheduleA.schedule_start_date)}` : "";
+
+        if (doTimeRangesOverlap(scheduleA.start_time, scheduleA.end_time, scheduleB.start_time, scheduleB.end_time)) {
+          throw new ConflictException(
+            `${SCHEDULE_OVERLAP_CONFLICT} between ${rangeA} and ${rangeB}${dateStr}`,
+          );
+        }
+
+        if (areTimeRangesTooClose(scheduleA.start_time, scheduleA.end_time, scheduleB.start_time, scheduleB.end_time, 5)) {
+          throw new ConflictException(
+            `${SCHEDULE_GAP_CONFLICT} between ${rangeA} and ${rangeB}${dateStr}`,
+          );
+        }
+      }
     }
   }
 }
@@ -388,32 +445,24 @@ export function validateScheduleAdvanceTime(
 
 //prepare motor control notification
 export function prepareMotorStateControlNotificationData(motor: Motor, newState: number, mode_description: string, starter_id: number, starter_number: string): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string } | null {
+  if (newState !== 0 && newState !== 1) return null;
+
   const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
-  const title = newState === 1
-    ? `Pump ${pumpName} state turned ON${mode_description ? ` with mode ${mode_description}` : ""}`
-    : newState === 0
-      ? `Pump ${pumpName} state turned OFF${mode_description ? ` with mode ${mode_description}` : ""}`
-      : `Pump ${pumpName} state Unable to update due to: ${motorState(Number(newState))}`;
+  const modeLabel = (mode_description === "AUTO" || mode_description === "MANUAL") ? mode_description : null;
+  const stateLabel = newState === 1 ? "ON" : "OFF";
 
-  // Prepare notification message
-  let messageContent: string;
-  if (newState === 1) {
-    messageContent = mode_description === "AUTO"
-      ? "The pump is now ON in AUTO mode after power recovery."
-      : "The pump is running in MANUAL mode.";
-  } else if (newState === 0) {
-    messageContent = mode_description === "AUTO"
-      ? "The pump is OFF in AUTO mode due to power failure."
-      : "The pump is stopped in MANUAL mode.";
-  } else {
-    messageContent = `State not updated due to '${motorState(Number(newState))}'`;
-  }
+  const title = modeLabel
+    ? `Pump ${pumpName} is ${stateLabel} in ${modeLabel} mode`
+    : `Pump ${pumpName} is ${stateLabel}`;
 
-  // Check if user exists (allow 0 as valid user ID)
+  const messageContent = modeLabel
+    ? `${pumpName} pump turned ${stateLabel} in ${modeLabel}`
+    : `${pumpName} pump turned ${stateLabel}`;
+
   if (motor.created_by !== null && motor.created_by !== undefined) {
     return {
       userId: motor.created_by,
-      title: title,
+      title,
       message: messageContent,
       motorId: motor.id,
       starterId: starter_id,
@@ -426,11 +475,15 @@ export function prepareMotorStateControlNotificationData(motor: Motor, newState:
 
 export function prepareMotorModeControlNotificationData(motor: any, mode_description: string, starter_id: number, starter_number: string): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string } | null {
   const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
-  const title = mode_description === "MANUAL" || mode_description === "AUTO" ? `Pump ${pumpName} mode updated to from ${motor.mode} to ${mode_description}`
-    : `Pump ${pumpName} Mode not updated due to ${mode_description}`;
+  const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO";
 
-  // Prepare notification message
-  const messageContent = meaningfulModeMessage(motor.mode, mode_description);
+  const title = isValidMode
+    ? `Pump ${pumpName} mode changed to ${mode_description}`
+    : `Pump ${pumpName} mode not updated`;
+
+  const messageContent = isValidMode
+    ? `${pumpName} pump switched from ${motor.mode} to ${mode_description}`
+    : `Mode not updated — ${mode_description}`;
 
   // Check if user exists (allow 0 as valid user ID)
   if (motor.created_by !== null && motor.created_by !== undefined) {

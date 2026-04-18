@@ -1,17 +1,17 @@
 import BadRequestException from "../exceptions/bad-request-exception.js";
-
 import { safeParseAsync, type BaseSchema } from "valibot";
 import type { AppActivity, ValidatedRequest } from "../types/app-types.js";
 import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
-import { vAddMotorSchedule, vAddRepeatDays, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
+import { vAddMotorSchedule, vAddRepeatDays, vArrayOfMotorScheduleValidators, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
 import { vAddMotor, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
 import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
 import { vAddStarterDispatch } from "./schema/starter-dispatch-validations.js";
+import { vAddGateway, vAssignGatewayToUser, vRenameGateway, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 
 const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
@@ -26,6 +26,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "update-motor-test-run-status": vUpdateMotorTestRunStatus,
   "add-starter": vAddStarter,
   "create-motor-schedule": vAddMotorSchedule,
+  "create-bulk-motor-schedule": vArrayOfMotorScheduleValidators,
   "update-motor-schedule": vUpdateMotorSchedule,
   "add-repeat-days": vAddRepeatDays,
   "assign-starter": vAssignStarter,
@@ -35,7 +36,13 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "assign-location-to-starter": vAssignLocationToStarter,
   "update-default-settings": vUpdateDefaultSettings,
   "update-default-settings-limits": vUpdateDefaultSettingsLimits,
-  "add-starter-dispatch": vAddStarterDispatch
+  "add-starter-dispatch": vAddStarterDispatch,
+  "update-starter-dispatch": vAddStarterDispatch,
+  "add-gateway": vAddGateway,
+  "update-gateway-label": vUpdateGatewayLabel,
+  "rename-gateway": vRenameGateway,
+  "assign-gateway": vAssignGatewayToUser,
+  "update-gateway-number": vUpdateGatewayNumber,
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(

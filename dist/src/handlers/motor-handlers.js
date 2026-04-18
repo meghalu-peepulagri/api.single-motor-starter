@@ -8,7 +8,7 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { motorFilters } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { getMotorsActiveScheduleCount, getMotorsTotalRunOnTime, paginatedMotorsList } from "../services/db/motor-services.js";
+import { getMotorsLatestRuntime, getMotorsTotalRunOnTime, paginatedMotorsList } from "../services/db/motor-services.js";
 import { getMotorWithStarterDetails } from "../services/db/motor-starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -154,14 +154,13 @@ export class MotorHandlers {
             const whereQueryData = motorFilters(query, userPayload);
             const motorsData = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
             const motorIds = motorsData.records.map((m) => m.id).filter(Boolean);
-            const [runTimeMap, scheduleCountMap] = await Promise.all([
-                getMotorsTotalRunOnTime(motorIds),
-                getMotorsActiveScheduleCount(motorIds),
-            ]);
+            const latestRuntimeMap = await getMotorsLatestRuntime(motorIds);
             const records = motorsData.records.map((motor) => ({
                 ...motor,
-                run_time_duration: runTimeMap[motor.id] || "0 h 0 m 0 sec",
-                schedule_count: scheduleCountMap[motor.id] || 0,
+                run_time: {
+                    last_state: latestRuntimeMap[motor.id]?.state,
+                    state_duration: latestRuntimeMap[motor.id]?.duration,
+                },
             }));
             return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, {
                 ...motorsData,

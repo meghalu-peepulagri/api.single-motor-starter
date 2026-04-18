@@ -6,6 +6,7 @@ import { FOREIGN_KEY_MESSAGES, UNIQUE_INDEX_MESSAGES } from "../constants/app-co
 import { INTERNAL_SERVER_ERROR, OK } from "../constants/http-status-codes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
+import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 
 export function getValidationErrors(issues: BaseIssue<unknown>[] = []) {
   const errors: Record<string, string> = {};
@@ -30,12 +31,30 @@ export function validationErrors(issues: BaseIssue<unknown>[] = []) {
   return issues.reduce((acc, issue) => {
     const fullPath = issue.path
       ? issue.path
-        .map((p) => (p.key !== undefined ? p.key : 'index' in p ? p.index : ''))
-        .filter(Boolean)
-        .join('.')
-      : '';
+        .map((p) => {
+          // Check for numeric index in either 'index' property or 'key' property
+          const rawIndex = ("index" in p && typeof p.index === "number")
+            ? p.index
+            : (typeof p.key === "number" ? p.key : undefined);
 
-    const key = fullPath || '_error';
+          if (rawIndex !== undefined) {
+            // Return 1-based index wrapped in brackets
+            return `[${rawIndex + 1}]`;
+          }
+
+          if (p.key !== undefined) return String(p.key);
+          return "";
+        })
+        .filter((val) => val !== "")
+        // Join with dot, but we'll clean up the ".[" case if needed
+        .reduce((path, part) => {
+          if (!path) return part;
+          if (part.startsWith("[")) return `${path}${part}`;
+          return `${path}.${part}`;
+        }, "")
+      : "";
+
+    const key = fullPath || "_error";
     acc[key] = issue.message;
     return acc;
   }, {} as Record<string, string>);
@@ -97,5 +116,16 @@ export function handleForeignKeyViolationError(error: Error & { cause?: Error & 
   throw error;
 }
 
+
+export function handleAppError(error: any, context: string) {
+  console.error(`Error at ${context}:`, error.message);
+  if (error instanceof BadRequestException || error instanceof ParamsValidateException) {
+    throw error;
+  }
+  handleJsonParseError(error);
+  parseDatabaseError(error);
+  handleForeignKeyViolationError(error);
+  throw error;
+}
 
 export default onError;

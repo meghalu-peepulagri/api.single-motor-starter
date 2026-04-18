@@ -1,4 +1,37 @@
 import BadRequestException from "../exceptions/bad-request-exception.js";
+import { MOTOR_ID_REQUIRED, STARTER_ID_REQUIRED } from "../constants/app-constants.js";
+
+export interface ScheduleHistoryFilters {
+  motor_id: number;
+  starter_id: number;
+  from_date?: Date;
+  to_date?: Date;
+}
+
+export function buildScheduleHistoryFilters(query: Record<string, string>): ScheduleHistoryFilters {
+  const motorId = +query.motor_id;
+  const starterId = +query.starter_id;
+
+  if (!motorId || Number.isNaN(motorId) || motorId <= 0) throw new BadRequestException(MOTOR_ID_REQUIRED);
+  if (!starterId || Number.isNaN(starterId) || starterId <= 0) throw new BadRequestException(STARTER_ID_REQUIRED);
+
+  let from_date: Date | undefined;
+  let to_date: Date | undefined;
+
+  if (query.from_date) {
+    from_date = new Date(query.from_date);
+    if (isNaN(from_date.getTime())) throw new BadRequestException("Invalid from_date. Use YYYY-MM-DD format");
+    from_date.setHours(0, 0, 0, 0);
+  }
+
+  if (query.to_date) {
+    to_date = new Date(query.to_date);
+    if (isNaN(to_date.getTime())) throw new BadRequestException("Invalid to_date. Use YYYY-MM-DD format");
+    to_date.setHours(23, 59, 59, 999);
+  }
+
+  return { motor_id: motorId, starter_id: starterId, from_date, to_date };
+}
 
 export interface MotorScheduleFilters {
   starter_id?: number;

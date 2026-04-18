@@ -6,8 +6,11 @@ import { locations } from "./locations.js";
 import { motors } from "./motors.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { users } from "./users.js";
+import { starterDispatch } from "./starter-dispatch.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY", "TEST"]);
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
+export const motorSupportTypeEnum = pgEnum("motor_support_type", ["SINGLE_MOTOR", "MULTIPLE_MOTORS"]);
+
 
 export const starterBoxes = pgTable("starter_boxes", {
   id: serial("id").primaryKey(),
@@ -27,6 +30,8 @@ export const starterBoxes = pgTable("starter_boxes", {
   signal_quality: integer("signal_quality").notNull().default(0),
   network_type: varchar("network_type"),
   starter_type: starterType().notNull().default("SINGLE_STARTER"),
+  motor_support_type: motorSupportTypeEnum().notNull().default("SINGLE_MOTOR"),
+
   hardware_version: varchar("hardware_version"),
   temperature: real("temperature").default(0),
   limit: real("limit"),
@@ -38,7 +43,7 @@ export const starterBoxes = pgTable("starter_boxes", {
   device_reset_status: varchar("device_reset_status").default("false"), // need to write in boolean
   sim_recharge_expires_at: varchar("sim_recharge_expires_at"),
   installation_photo_key: varchar("installation_photo_key"),
-  device_installed_location : varchar("device_installed_location"),
+  device_installed_location: varchar("device_installed_location"),
   warranty_expiry_date: varchar("warranty_expiry_date"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   assigned_at: timestamp("assigned_at"),
@@ -70,7 +75,7 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => 
     fields: [starterBoxes.user_id],
     references: [users.id],
   }),
-  createdBy : one(users, {
+  createdBy: one(users, {
     fields: [starterBoxes.created_by],
     references: [users.id],
   }),
@@ -84,7 +89,11 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => 
   location: one(locations, {
     fields: [starterBoxes.location_id],
     references: [locations.id],
-  })
+  }),
+
+  dispatch: one(starterDispatch, {
+    fields: [starterBoxes.id],
+    references: [starterDispatch.starter_id],
+  }),
 
 }));
-

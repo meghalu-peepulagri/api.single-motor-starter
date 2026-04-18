@@ -1,22 +1,30 @@
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import type { NewUserActivityLog, UserActivityLogsTable } from "../database/schemas/user-activity-logs.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import type { motorBasedStarterDetails } from "../types/app-types.js";
+import type { motorBasedStarterDetails, MotorStateData } from "../types/app-types.js";
 import type { WhereQueryData } from "../types/db-types.js";
-import { motorState } from "./control-helpers.js";
 
-function meaningfulStateMessage(state: number, mode: string | undefined | null): string {
+function meaningfulLastOffOnStateMessage(
+  state: number,
+  mode?: string,
+  lastOnDesc?: string,
+  lastOffDesc?: string
+): string {
+  const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode}` : "";
+
   if (state === 1) {
-    return mode === "AUTO"
-      ? "The pump is now ON in AUTO mode after power recovery."
-      : "The pump is running in MANUAL mode.";
+    const desc = lastOnDesc?.trim();
+    if (!desc || desc === "None") return `Pump turned ON${modeLabel}`;
+    return `Pump turned ON${modeLabel} via ${desc}`;
   }
+
   if (state === 0) {
-    return mode === "AUTO"
-      ? "The pump is OFF in AUTO mode due to power failure."
-      : "The pump is stopped in MANUAL mode.";
+    const desc = lastOffDesc?.trim();
+    if (!desc || desc === "None") return `Pump turned OFF${modeLabel}`;
+    return `Pump turned OFF${modeLabel} due to ${desc}`;
   }
-  return `State not updated due to '${motorState(state)}'`;
+
+  return "Pump control failed. Try again.";
 }
 
 export function meaningfulModeMessage(oldMode: string | undefined | null, newMode: string): string {
@@ -231,7 +239,7 @@ export function prepareMotorUpdateLogs(data: {
       deviceId: data.deviceId,
       oldData: { state: data.oldData.state },
       newData: { state: data.newData.state },
-      message: meaningfulStateMessage(Number(data.newData.state), mode)
+      message: meaningfulLastOffOnStateMessage(Number(data.newData.state), mode ?? undefined)
     }));
   }
 
@@ -304,36 +312,56 @@ export function prepareMotorSyncLogs(data: {
   userId: number;
   entityId: number;
   deviceId?: number;
-  oldData: { state?: number; mode?: string };
-  newData: { state?: number; mode?: string };
+  oldData: MotorStateData;
+  newData: MotorStateData;
 }): NewUserActivityLog[] {
+
   const logs: NewUserActivityLog[] = [];
 
-  if (data.newData.state !== undefined && data.newData.state !== data.oldData.state) {
-    const mode = data.newData.mode ?? data.oldData.mode;
-    logs.push(ActivityService.prepareActivityLog({
-      performedBy: data.userId,
-      action: "MOTOR_STATE_SYNC",
-      entityType: "MOTOR",
-      entityId: data.entityId,
-      deviceId: data.deviceId,
-      oldData: { state: data.oldData.state },
-      newData: { state: data.newData.state },
-      message: meaningfulStateMessage(Number(data.newData.state), mode)
-    }));
+  //  STATE CHANGE LOG
+  if (
+    data.newData.state !== undefined &&
+    data.newData.state !== data.oldData.state
+  ) {
+    logs.push(
+      ActivityService.prepareActivityLog({
+        performedBy: data.userId,
+        action: "MOTOR_STATE_SYNC",
+        entityType: "MOTOR",
+        entityId: data.entityId,
+        deviceId: data.deviceId,
+        oldData: { state: data.oldData.state },
+        newData: { state: data.newData.state },
+        message: meaningfulLastOffOnStateMessage(
+          Number(data.newData.state),
+          data.newData.mode ?? data.oldData.mode,
+          data.newData.last_on_description,
+          data.newData.last_off_description
+        )
+      })
+    );
   }
 
-  if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
-    logs.push(ActivityService.prepareActivityLog({
-      performedBy: data.userId,
-      action: "MOTOR_MODE_SYNC",
-      entityType: "MOTOR",
-      entityId: data.entityId,
-      deviceId: data.deviceId,
-      oldData: { mode: data.oldData.mode },
-      newData: { mode: data.newData.mode },
-      message: meaningfulModeMessage(data.oldData.mode, data.newData.mode)
-    }));
+  //  MODE CHANGE LOG
+  if (
+    data.newData.mode !== undefined &&
+    data.newData.mode !== data.oldData.mode
+  ) {
+    logs.push(
+      ActivityService.prepareActivityLog({
+        performedBy: data.userId,
+        action: "MOTOR_MODE_SYNC",
+        entityType: "MOTOR",
+        entityId: data.entityId,
+        deviceId: data.deviceId,
+        oldData: { mode: data.oldData.mode },
+        newData: { mode: data.newData.mode },
+        message: meaningfulModeMessage(
+          data.oldData.mode,
+          data.newData.mode
+        )
+      })
+    );
   }
 
   return logs;
@@ -362,7 +390,7 @@ export function prepareMotorAckLogs(data: {
       deviceId: data.deviceId,
       oldData: { state: data.oldData.state },
       newData: { state: data.newData.state },
-      message: meaningfulStateMessage(Number(data.newData.state), mode)
+      message: meaningfulLastOffOnStateMessage(Number(data.newData.state), mode ?? undefined)
     }));
   }
 

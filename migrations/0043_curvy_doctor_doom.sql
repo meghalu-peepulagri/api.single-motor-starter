@@ -1,0 +1,1 @@
+ALTER TABLE "motor_schedules" ADD COLUMN "restarted_at" timestamp;

@@ -1,0 +1,1 @@
+ALTER TABLE "starter_parameters" ADD COLUMN "fault_cleared" boolean DEFAULT false NOT NULL;

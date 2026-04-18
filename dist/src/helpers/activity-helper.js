@@ -1,18 +1,20 @@
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { motorState } from "./control-helpers.js";
-function meaningfulStateMessage(state, mode) {
+function meaningfulLastOffOnStateMessage(state, mode, lastOnDesc, lastOffDesc) {
+    const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode}` : "";
     if (state === 1) {
-        return mode === "AUTO"
-            ? "The pump is now ON in AUTO mode after power recovery."
-            : "The pump is running in MANUAL mode.";
+        const desc = lastOnDesc?.trim();
+        if (!desc || desc === "None")
+            return `Pump turned ON${modeLabel}`;
+        return `Pump turned ON${modeLabel} via ${desc}`;
     }
     if (state === 0) {
-        return mode === "AUTO"
-            ? "The pump is OFF in AUTO mode due to power failure."
-            : "The pump is stopped in MANUAL mode.";
+        const desc = lastOffDesc?.trim();
+        if (!desc || desc === "None")
+            return `Pump turned OFF${modeLabel}`;
+        return `Pump turned OFF${modeLabel} due to ${desc}`;
     }
-    return `State not updated due to '${motorState(state)}'`;
+    return "Pump control failed. Try again.";
 }
 export function meaningfulModeMessage(oldMode, newMode) {
     if (newMode === "MANUAL" || newMode === "AUTO") {
@@ -185,7 +187,7 @@ export function prepareMotorUpdateLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: meaningfulStateMessage(Number(data.newData.state), mode)
+            message: meaningfulLastOffOnStateMessage(Number(data.newData.state), mode ?? undefined)
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== null && data.newData.mode !== data.oldData.mode) {
@@ -235,8 +237,9 @@ export function prepareActionLog(data) {
  */
 export function prepareMotorSyncLogs(data) {
     const logs = [];
-    if (data.newData.state !== undefined && data.newData.state !== data.oldData.state) {
-        const mode = data.newData.mode ?? data.oldData.mode;
+    //  STATE CHANGE LOG
+    if (data.newData.state !== undefined &&
+        data.newData.state !== data.oldData.state) {
         logs.push(ActivityService.prepareActivityLog({
             performedBy: data.userId,
             action: "MOTOR_STATE_SYNC",
@@ -245,10 +248,12 @@ export function prepareMotorSyncLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: meaningfulStateMessage(Number(data.newData.state), mode)
+            message: meaningfulLastOffOnStateMessage(Number(data.newData.state), data.newData.mode ?? data.oldData.mode, data.newData.last_on_description, data.newData.last_off_description)
         }));
     }
-    if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
+    //  MODE CHANGE LOG
+    if (data.newData.mode !== undefined &&
+        data.newData.mode !== data.oldData.mode) {
         logs.push(ActivityService.prepareActivityLog({
             performedBy: data.userId,
             action: "MOTOR_MODE_SYNC",
@@ -277,7 +282,7 @@ export function prepareMotorAckLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: meaningfulStateMessage(Number(data.newData.state), mode)
+            message: meaningfulLastOffOnStateMessage(Number(data.newData.state), mode ?? undefined)
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {

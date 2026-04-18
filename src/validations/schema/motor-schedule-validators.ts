@@ -17,6 +17,8 @@ import {
   SCHEDULE_END_TIME_REQUIRED,
   SCHEDULE_START_DATE_FORMAT,
   SCHEDULE_END_DATE_FORMAT,
+  SCHEDULE_START_DATE_REQUIRED,
+  SCHEDULE_END_DATE_REQUIRED,
   SCHEDULE_START_TIME_INVALID,
   SCHEDULE_START_TIME_REQUIRED,
   SCHEDULE_STATUS,
@@ -81,7 +83,7 @@ export const vAddMotorSchedule = v.pipe(
     // Schedule start date (numeric YYMMDD, e.g., 260415)
     schedule_start_date:
       v.pipe(
-        v.number(SCHEDULE_START_DATE_FORMAT),
+        v.number(SCHEDULE_START_DATE_REQUIRED),
         v.custom(
           (val: unknown) => typeof val === "number" && Number.isInteger(val) && val >= 0 && val <= 991231,
           SCHEDULE_START_DATE_FORMAT,
@@ -91,7 +93,7 @@ export const vAddMotorSchedule = v.pipe(
     // Schedule end date (numeric YYMMDD, e.g., 260416)
     schedule_end_date:
       v.pipe(
-        v.number(SCHEDULE_END_DATE_FORMAT),
+        v.number(SCHEDULE_END_DATE_REQUIRED),
         v.custom(
           (val: unknown) => typeof val === "number" && Number.isInteger(val) && val >= 0 && val <= 991231,
           SCHEDULE_END_DATE_FORMAT,

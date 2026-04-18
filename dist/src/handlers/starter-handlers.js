@@ -1,8 +1,7 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_INFO_REQUEST_SENT, DEVICE_NOT_ALLOCATED, DEVICE_RESET_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
-import { gateways } from "../database/schemas/gateways.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { users } from "../database/schemas/users.js";
@@ -14,20 +13,22 @@ import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
+import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsPaginated, getUnifiedLogsCount } from "../services/db/alerts-services.js";
+import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
-import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
-import { generateUploadUrl, generateDownloadUrl } from "../services/s3/s3-service.js";
+import { starterDispatch } from "../database/schemas/starter-dispatch.js";
+import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
+import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
+import { generateDownloadUrl, generateUploadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
-import { starterDispatch } from "../database/schemas/starter-dispatch.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterHandlers {
     addStarterBoxHandler = async (c) => {
@@ -36,13 +37,10 @@ export class StarterHandlers {
             const starterBoxPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(starterBoxPayload);
             const validStarterBoxReq = await validatedRequest("add-starter", starterBoxPayload, STARTER_BOX_VALIDATION_CRITERIA);
-            if (validStarterBoxReq.gateway_id) {
-                const existedGateway = await getSingleRecordByMultipleColumnValues(gateways, ["id", "status"], ["=", "!="], [validStarterBoxReq.gateway_id, "ARCHIVED"]);
-                if (!existedGateway)
-                    throw new BadRequestException(GATEWAY_NOT_FOUND);
-            }
-            await addStarterWithTransaction(validStarterBoxReq, userPayload);
-            return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY);
+            const existedGateway = await gatewayConflicts(validStarterBoxReq.gateway_id ?? undefined);
+            const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload, existedGateway?.id);
+            const { id, ...restStarterData } = starter;
+            return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY, { id });
         }
         catch (error) {
             console.error("Error at add starter box :", error);
@@ -390,6 +388,9 @@ export class StarterHandlers {
             if (connectedMotors?.installation_photo_key) {
                 connectedMotors.installation_photo_url = await generateDownloadUrl(connectedMotors.installation_photo_key);
             }
+            if (connectedMotors?.dispatch?.invoice_document) {
+                connectedMotors.dispatch.invoice_document_url = await generateDownloadUrl(connectedMotors.dispatch.invoice_document);
+            }
             return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
         }
         catch (error) {
@@ -682,7 +683,7 @@ export class StarterHandlers {
                 logger.info(`Device info request: all ${allDevices.length} devices processed`);
             })();
             const totalBatches = Math.ceil(allDevices.length / BATCH_SIZE);
-            return sendResponse(c, 200, DEVICE_INFO_REQUEST_SENT, {
+            return sendResponse(c, 200, "Device info request sended", {
                 total_devices: allDevices.length,
                 batch_size: BATCH_SIZE,
                 total_batches: totalBatches,
@@ -691,6 +692,44 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at device info request handler :", error);
+            throw error;
+        }
+    };
+    faultClearedHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("starter_id");
+            const motorId = +c.req.param("motor_id");
+            paramsValidateException.validateId(starterId, "Device id");
+            paramsValidateException.validateId(motorId, "Motor id");
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+            if (!motor)
+                throw new NotFoundException(MOTOR_NOT_FOUND);
+            const orderBy = { columns: ["id"], values: ["desc"] };
+            const faultRecord = await getSingleRecordByMultipleColumnValues(starterBoxParameters, ["starter_id", "motor_id", "fault", "fault_cleared"], ["=", "=", "!=", "="], [starterId, motorId, 0, false], ["id"], orderBy);
+            if (!faultRecord)
+                throw new NotFoundException(NO_ACTIVE_FAULT_FOUND);
+            await updateRecordById(starterBoxParameters, faultRecord.id, { fault_cleared: true });
+            return sendResponse(c, 200, FAULT_CLEARED_SUCCESSFULLY);
+        }
+        catch (error) {
+            console.error("Error at fault cleared handler :", error);
+            throw error;
+        }
+    };
+    getDeviceDetailsHandler = async (c) => {
+        try {
+            const body = await c.req.json();
+            const deviceDetails = await getDeviceWithDispatchDetails(body.search);
+            if (!deviceDetails) {
+                throw new NotFoundException(DEVICE_NOT_FOUND);
+            }
+            return sendResponse(c, 200, "Device details fetched successfully", deviceDetails);
+        }
+        catch (error) {
+            console.error("Error at get device details handler:", error);
             throw error;
         }
     };

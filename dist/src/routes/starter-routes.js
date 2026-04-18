@@ -11,6 +11,7 @@ starterRoutes.get("/dashboard-counts", isAuthorized, starterHandlers.starterCoun
 starterRoutes.get("/latest-pcb-number", isAuthorized, starterHandlers.getLatestPcbNumberHandler);
 starterRoutes.get("/sim-recharge-expiry-notifications", starterHandlers.simRechargeExpiryNotificationHandler);
 starterRoutes.get("/device-info-request", starterHandlers.deviceInfoRequestHandler);
+starterRoutes.post("/check-details", isAuthorized, starterHandlers.getDeviceDetailsHandler);
 starterRoutes.patch("/assign", isAuthorized, starterHandlers.assignStarterMobileHandler);
 starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWebHandler);
 starterRoutes.patch("/assign-location", isAuthorized, starterHandlers.assignLocationToStarterHandler);
@@ -22,6 +23,7 @@ starterRoutes.get("/:id/motors", isAuthorized, starterHandlers.starterConnectedM
 starterRoutes.get("/:id/temperature", isAuthorized, starterHandlers.getTemperatureHandler);
 starterRoutes.get("/:starter_id/motors/:motor_id/alerts-faults", isAuthorized, starterHandlers.getConsecutiveAlertsFaultsHandler);
 starterRoutes.get("/:starter_id/motors/:motor_id/logs", isAuthorized, starterHandlers.getUnifiedLogsHandler);
+starterRoutes.patch("/:starter_id/motors/:motor_id/fault-clear", isAuthorized, starterHandlers.faultClearedHandler);
 starterRoutes.patch("/:id/deploy-status", isAuthorized, starterHandlers.updateDeployStatusHandler);
 starterRoutes.patch("/:id/details", isAuthorized, starterHandlers.updateStarterDetailsHandler);
 starterRoutes.patch("/:id/allocation", isAuthorized, starterHandlers.updateDeviceAllocationHandler);

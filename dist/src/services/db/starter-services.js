@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { starterDispatch } from "../../database/schemas/starter-dispatch.js";
 import { StarterDefaultSettingsLimits } from "../../database/schemas/starter-default-settings-limits.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { starterSettingsLimits } from "../../database/schemas/starter-settings-limits.js";
@@ -16,21 +17,24 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { prepareStarterData } from "../../helpers/starter-helper.js";
 import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
-import { getRecordsCount, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
+import { getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { ActivityService } from "./activity-service.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
-export async function addStarterWithTransaction(starterBoxPayload, userPayload) {
-    const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload);
+import { gateways } from "../../database/schemas/gateways.js";
+export async function addStarterWithTransaction(starterBoxPayload, userPayload, gatewayId) {
+    const existedStarterDispatch = await getSingleRecordByMultipleColumnValues(starterDispatch, ["box_serial_no", "status"], ["=", "!="], [starterBoxPayload.starter_number, "ARCHIVED"]);
+    const preparedStarerData = prepareStarterData(starterBoxPayload, userPayload, existedStarterDispatch, gatewayId);
     const defaultSettings = await getStarterDefaultSettings();
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
     const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
     const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
-    await db.transaction(async (trx) => {
+    return await db.transaction(async (trx) => {
         const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
         await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
         await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
+        await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
         await saveSingleRecord(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
         const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
         publishMultipleTimesInBackground(deviceInfoPayload, starter);
@@ -127,6 +131,10 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             device_mobile_number: true,
         },
         with: {
+            gateway: {
+                where: ne(gateways.status, "ARCHIVED"),
+                columns: { id: true, name: true, mac_address: true, pcb_number: true },
+            },
             user: {
                 where: ne(users.status, "ARCHIVED"),
                 columns: { id: true, full_name: true },
@@ -361,6 +369,15 @@ export async function starterConnectedMotors(starterId) {
             warranty_expiry_date: true,
         },
         with: {
+            gateway: {
+                where: ne(gateways.status, "ARCHIVED"),
+                columns: {
+                    id: true,
+                    name: true,
+                    mac_address: true,
+                    pcb_number: true,
+                },
+            },
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
                 columns: {
@@ -384,6 +401,12 @@ export async function starterConnectedMotors(starterId) {
                 columns: {
                     id: true,
                     full_name: true,
+                },
+            },
+            dispatch: {
+                where: ne(starterDispatch.status, "ARCHIVED"),
+                columns: {
+                    invoice_document: true,
                 },
             },
         },
@@ -487,5 +510,25 @@ export async function applyDeviceAllocation(starterId, newAllocation, userId) {
         await updateRecordByIdWithTrx(starterBoxes, starterId, { device_allocation: newAllocation, allocation_status_count: newCount }, trx);
         await ActivityService.writeDeviceAllocationLog(userId, starterId, allocationAction, { device_allocation: previousAllocation, allocation_status_count: currentCount }, { device_allocation: newAllocation, allocation_status_count: newCount }, messageLog, trx);
         return true;
+    });
+}
+export async function getDeviceWithDispatchDetails(search) {
+    return await db.query.starterBoxes.findFirst({
+        where: or(ilike(starterBoxes.starter_number, `%${search}%`), ilike(starterBoxes.mac_address, `%${search}%`), ilike(starterBoxes.pcb_number, `%${search}%`), ne(starterBoxes.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            starter_number: true,
+            mac_address: true,
+            pcb_number: true,
+        },
+        with: {
+            dispatch: {
+                where: ne(starterDispatch.status, "ARCHIVED"),
+                columns: {
+                    id: true,
+                    box_serial_no: true,
+                },
+            },
+        },
     });
 }

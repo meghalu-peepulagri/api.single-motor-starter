@@ -1,3 +1,4 @@
+import { getFailureReason } from "./control-helpers.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 const VALID_SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"];
 function isObject(value) {
@@ -41,7 +42,7 @@ function normalizeScheduleType(value) {
  * Normalize any time input to 4-digit zero-padded HHMM string.
  * Accepts: number 600, string "5", "25", "600", "0005", "06:00" → returns "0600", "0005" etc.
  */
-function normalizeTime(value) {
+export function normalizeTime(value) {
     let h;
     let m;
     if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 2359) {
@@ -80,7 +81,7 @@ function formatTimeFromMinutes(totalMinutes) {
     const minutes = normalized % 60;
     return `${String(hours).padStart(2, "0")}${String(minutes).padStart(2, "0")}`;
 }
-function addMinutesToTime(hhmm, minutesToAdd) {
+export function addMinutesToTime(hhmm, minutesToAdd) {
     const h = parseInt(hhmm.substring(0, 2), 10);
     const m = parseInt(hhmm.substring(2, 4), 10);
     return formatTimeFromMinutes((h * 60) + m + minutesToAdd);
@@ -312,6 +313,11 @@ export function formatMotorScheduleResponse(record, queryDate) {
         schedule_type: scheduleType,
         schedule_status: displayStatus,
         days_of_week: Array.isArray(rest.days_of_week) ? rest.days_of_week : [],
+        start_time: rest.actual_start_time ?? rest.start_time,
+        end_time: rest.actual_end_time ?? rest.end_time,
+        runtime_minutes: rest.actual_run_time ?? rest.runtime_minutes,
+        failure_reason_description: getFailureReason(rest.failure_reason),
+        failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
     };
 }
 export function formatMotorScheduleListResponse(result, queryDate) {
@@ -322,6 +328,40 @@ export function formatMotorScheduleListResponse(result, queryDate) {
     return {
         ...result,
         records: result.records.map((record) => formatMotorScheduleResponse(record, queryDate)),
+    };
+}
+export function buildScheduleTimeline(record) {
+    const events = [];
+    if (record.created_at)
+        events.push({ event: "CREATED", timestamp: new Date(record.created_at).toISOString() });
+    if (record.acknowledged_at)
+        events.push({ event: "SCHEDULED", timestamp: new Date(record.acknowledged_at).toISOString() });
+    if (record.last_started_at)
+        events.push({ event: "RUNNING", timestamp: new Date(record.last_started_at).toISOString() });
+    if (record.paused_at)
+        events.push({ event: "PAUSED", timestamp: new Date(record.paused_at).toISOString() });
+    if (record.restarted_at)
+        events.push({ event: "RESTARTED", timestamp: new Date(record.restarted_at).toISOString() });
+    if (record.last_stopped_at)
+        events.push({ event: "STOPPED", timestamp: new Date(record.last_stopped_at).toISOString() });
+    if (record.failure_at)
+        events.push({ event: "FAILED", timestamp: new Date(record.failure_at).toISOString() });
+    if (record.deleted_at)
+        events.push({ event: "DELETED", timestamp: new Date(record.deleted_at).toISOString() });
+    events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    return {
+        id: record.id,
+        schedule_id: record.schedule_id,
+        motor_id: record.motor_id,
+        starter_id: record.starter_id,
+        schedule_type: record.schedule_type,
+        schedule_status: record.schedule_status,
+        start_time: record.start_time,
+        end_time: record.end_time,
+        schedule_start_date: record.schedule_start_date,
+        schedule_end_date: record.schedule_end_date,
+        repeat: record.repeat,
+        events,
     };
 }
 // =================== COMPACT DEVICE SYNC PAYLOAD ===================

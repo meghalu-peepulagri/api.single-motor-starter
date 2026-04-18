@@ -1,6 +1,7 @@
-import { controlMode, getAlertDescription, getFaultDescription, lastOff, lastOn, motorState } from "./control-helpers.js";
-import { parseTimestamp } from "./dns-helpers.js";
 import { logger } from "../utils/logger.js";
+import { controlMode, getAlertDescription, getFailureReason, getFaultDescription, lastOff, lastOn, motorState } from "./control-helpers.js";
+import { parseTimestamp } from "./dns-helpers.js";
+import { normalizeTime } from "./motor-schedule-payload-helper.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 export function prepareLiveDataPayload(validatedData, starterData) {
     if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
@@ -10,6 +11,10 @@ export function prepareLiveDataPayload(validatedData, starterData) {
     }
     ;
     const data = validatedData.data;
+    const sch = data.sch && typeof data.sch === "object" && Object.keys(data.sch).length > 0 ? data.sch : null;
+    const schStartTime = sch ? (normalizeTime(sch.st) ?? null) : null;
+    const schRuntime = sch ? (sch.rt ?? null) : null;
+    const schEndTime = sch?.et ? (normalizeTime(sch.et) ?? null) : null;
     const llvSource = data.llv || data.ll_v || [];
     const llv = cleanThreeNumberArray(llvSource);
     const amp = cleanThreeNumberArray(data.amp || []);
@@ -52,5 +57,14 @@ export function prepareLiveDataPayload(validatedData, starterData) {
         gateway_id: starterData.gateway_id || null,
         user_id: starterData.created_by || null,
         motor_id: starterData.motors[0].id || null,
+        // Schedule
+        active_schedule_id: sch?.id ?? null,
+        active_schedule_type: null,
+        active_schedule_start_time: schStartTime,
+        active_schedule_runtime_minutes: schRuntime,
+        active_schedule_end_time: schEndTime,
+        active_schedule_missed_minutes: sch?.mm ?? 0,
+        active_schedule_failure_at: sch?.fe ? new Date(String(sch.fe).length === 13 ? Number(sch.fe) : Number(sch.fe) * 1000) : null,
+        active_schedule_failure_reason: getFailureReason(cleanScalar(sch?.fr)),
     };
 }
