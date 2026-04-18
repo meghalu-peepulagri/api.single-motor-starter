@@ -1,34 +1,18 @@
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { motorState } from "./control-helpers.js";
-function meaningfulStateMessage(state, mode) {
+function meaningfulLastOffOnStateMessage(state, mode, lastOnDesc, lastOffDesc) {
+    const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode}` : "";
     if (state === 1) {
-        return mode === "AUTO"
-            ? "The pump is now ON in AUTO mode after power recovery."
-            : "The pump is running in MANUAL mode.";
+        const desc = lastOnDesc?.trim();
+        if (!desc || desc === "None")
+            return `Pump turned ON${modeLabel}`;
+        return `Pump turned ON${modeLabel} via ${desc}`;
     }
     if (state === 0) {
-        return mode === "AUTO"
-            ? "The pump is OFF in AUTO mode due to power failure."
-            : "The pump is stopped in MANUAL mode.";
-    }
-    return `State not updated due to '${motorState(state)}'`;
-}
-function meaningfulLastOffOnStateMessage(state, lastOnDesc, lastOffDesc) {
-    const formatDesc = (desc) => desc?.trim();
-    // STATE = ON
-    if (state === 1) {
-        const desc = formatDesc(lastOnDesc);
-        if (!desc)
-            return "Pump is ON";
-        return desc.toLowerCase().includes("pump") ? desc : `Pump is ON via ${desc}`;
-    }
-    // STATE = OFF
-    if (state === 0) {
-        const desc = formatDesc(lastOffDesc);
-        if (!desc)
-            return "Pump is OFF";
-        return desc.toLowerCase().includes("pump") ? desc : `Pump is OFF due to ${desc}`;
+        const desc = lastOffDesc?.trim();
+        if (!desc || desc === "None")
+            return `Pump turned OFF${modeLabel}`;
+        return `Pump turned OFF${modeLabel} due to ${desc}`;
     }
     return "Pump control failed. Try again.";
 }
@@ -203,7 +187,7 @@ export function prepareMotorUpdateLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: meaningfulLastOffOnStateMessage(Number(data.newData.state))
+            message: meaningfulLastOffOnStateMessage(Number(data.newData.state), mode ?? undefined)
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== null && data.newData.mode !== data.oldData.mode) {
@@ -264,7 +248,7 @@ export function prepareMotorSyncLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: meaningfulLastOffOnStateMessage(Number(data.newData.state), data.newData.last_on_description, data.newData.last_off_description)
+            message: meaningfulLastOffOnStateMessage(Number(data.newData.state), data.newData.mode ?? data.oldData.mode, data.newData.last_on_description, data.newData.last_off_description)
         }));
     }
     //  MODE CHANGE LOG
@@ -298,7 +282,7 @@ export function prepareMotorAckLogs(data) {
             deviceId: data.deviceId,
             oldData: { state: data.oldData.state },
             newData: { state: data.newData.state },
-            message: meaningfulLastOffOnStateMessage(Number(data.newData.state))
+            message: meaningfulLastOffOnStateMessage(Number(data.newData.state), mode ?? undefined)
         }));
     }
     if (data.newData.mode !== undefined && data.newData.mode !== data.oldData.mode) {
