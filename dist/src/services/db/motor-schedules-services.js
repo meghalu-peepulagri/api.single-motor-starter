@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, SQL, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
@@ -9,6 +9,7 @@ import { validatedRequest } from "../../validations/validate-request.js";
 import { CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND } from "../../constants/app-constants.js";
 import { getSingleRecordByMultipleColumnValues, saveRecords } from "./base-db-services.js";
 import { motors } from "../../database/schemas/motors.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"];
 // =================== AUTO-INCREMENT SCHEDULE ID PER MOTOR ===================
 /**
@@ -221,8 +222,6 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
         conditions.push(eq(motorSchedules.schedule_type, filters.type));
     }
     if (filters.schedule_start_date) {
-        // Find schedules whose date range contains the given start date:
-        // schedule_start_date <= filter_date AND schedule_end_date >= filter_date
         conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_start_date));
         conditions.push(gte(motorSchedules.schedule_end_date, filters.schedule_start_date));
     }
@@ -247,7 +246,9 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
         db
             .select({ count: sql `count(*)::int` })
             .from(motorSchedules)
-            .where(whereClause ? and(whereClause, eq(motorSchedules.schedule_status, "RUNNING")) : eq(motorSchedules.schedule_status, "RUNNING")),
+            .where(whereClause
+            ? and(whereClause, eq(motorSchedules.schedule_status, "RUNNING"))
+            : eq(motorSchedules.schedule_status, "RUNNING")),
     ]);
     const total_records = countResult[0]?.count || 0;
     const running_count = runningCountResult[0]?.count || 0;
@@ -268,12 +269,32 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
     if (total_records === 0) {
         return { pagination_info, schedule_summary, records: [] };
     }
-    const records = await db.query.motorSchedules.findMany({
-        where: whereClause,
-        orderBy: (ms, { desc }) => [desc(ms.created_at)],
-        limit,
-        offset,
-    });
+    //  FIXED QUERY WITH JOIN
+    const rawRecords = await db
+        .select({
+        ...getTableColumns(motorSchedules),
+        starter_device_allocation: starterBoxes.device_allocation,
+        starter_pcb_number: starterBoxes.pcb_number,
+        starter_mac_address: starterBoxes.mac_address,
+    })
+        .from(motorSchedules)
+        .leftJoin(starterBoxes, eq(motorSchedules.starter_id, starterBoxes.id))
+        .where(whereClause)
+        .orderBy(desc(motorSchedules.created_at))
+        .limit(limit)
+        .offset(offset);
+    //  CLEAN MAPPING (no null-object issue)
+    const records = rawRecords.map((record) => ({
+        ...record,
+        starter_box: record.starter_id
+            ? {
+                starter_id: record.starter_id,
+                device_allocation: record.starter_device_allocation,
+                pcb_number: record.starter_pcb_number,
+                mac_address: record.starter_mac_address,
+            }
+            : null,
+    }));
     return { pagination_info, schedule_summary, records };
 }
 // =================== PENDING SCHEDULES FOR DEVICE SYNC ===================

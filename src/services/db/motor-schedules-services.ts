@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, SQL, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
@@ -28,6 +28,7 @@ import {
 } from "./base-db-services.js";
 import { motors } from "../../database/schemas/motors.js";
 import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../../validations/schema/motor-schedule-validators.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
 
@@ -287,7 +288,8 @@ export async function getMaxEndDate(motorId: number, starterId: number): Promise
  */
 export async function findSchedulesByFilters(
   filters: MotorScheduleFilters,
-  page = 1, limit = 10,
+  page = 1,
+  limit = 10,
 ) {
   const conditions: SQL[] = [ne(motorSchedules.status, "ARCHIVED")];
 
@@ -298,18 +300,32 @@ export async function findSchedulesByFilters(
     conditions.push(eq(motorSchedules.motor_id, filters.motor_id));
   }
   if (filters.schedule_status) {
-    conditions.push(eq(motorSchedules.schedule_status, filters.schedule_status as MotorSchedule["schedule_status"]));
+    conditions.push(
+      eq(
+        motorSchedules.schedule_status,
+        filters.schedule_status as MotorSchedule["schedule_status"]
+      )
+    );
   }
   if (filters.type) {
-    conditions.push(eq(motorSchedules.schedule_type, filters.type as MotorSchedule["schedule_type"]));
+    conditions.push(
+      eq(
+        motorSchedules.schedule_type,
+        filters.type as MotorSchedule["schedule_type"]
+      )
+    );
   }
   if (filters.schedule_start_date) {
-    // Find schedules whose date range contains the given start date:
-    // schedule_start_date <= filter_date AND schedule_end_date >= filter_date
-    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_start_date));
-    conditions.push(gte(motorSchedules.schedule_end_date, filters.schedule_start_date));
+    conditions.push(
+      lte(motorSchedules.schedule_start_date, filters.schedule_start_date)
+    );
+    conditions.push(
+      gte(motorSchedules.schedule_end_date, filters.schedule_start_date)
+    );
   } else if (filters.schedule_end_date) {
-    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_end_date));
+    conditions.push(
+      lte(motorSchedules.schedule_start_date, filters.schedule_end_date)
+    );
   }
   if (filters.repeat !== undefined) {
     conditions.push(eq(motorSchedules.repeat, filters.repeat));
@@ -318,7 +334,9 @@ export async function findSchedulesByFilters(
     conditions.push(eq(motorSchedules.enabled, filters.enabled));
   }
   if (filters.day_of_week !== undefined) {
-    conditions.push(sql`${motorSchedules.days_of_week} @> ARRAY[${filters.day_of_week}]::int[]`);
+    conditions.push(
+      sql`${motorSchedules.days_of_week} @> ARRAY[${filters.day_of_week}]::int[]`
+    );
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -331,7 +349,14 @@ export async function findSchedulesByFilters(
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(motorSchedules)
-      .where(whereClause ? and(whereClause, eq(motorSchedules.schedule_status, "RUNNING")) : eq(motorSchedules.schedule_status, "RUNNING")),
+      .where(
+        whereClause
+          ? and(
+            whereClause,
+            eq(motorSchedules.schedule_status, "RUNNING")
+          )
+          : eq(motorSchedules.schedule_status, "RUNNING")
+      ),
   ]);
 
   const total_records = countResult[0]?.count || 0;
@@ -357,12 +382,36 @@ export async function findSchedulesByFilters(
     return { pagination_info, schedule_summary, records: [] };
   }
 
-  const records = await db.query.motorSchedules.findMany({
-    where: whereClause,
-    orderBy: (ms, { desc }) => [desc(ms.created_at)],
-    limit,
-    offset,
-  });
+  //  FIXED QUERY WITH JOIN
+  const rawRecords = await db
+    .select({
+      ...getTableColumns(motorSchedules),
+      starter_device_allocation: starterBoxes.device_allocation,
+      starter_pcb_number: starterBoxes.pcb_number,
+      starter_mac_address: starterBoxes.mac_address,
+    })
+    .from(motorSchedules)
+    .leftJoin(
+      starterBoxes,
+      eq(motorSchedules.starter_id, starterBoxes.id)
+    )
+    .where(whereClause)
+    .orderBy(desc(motorSchedules.created_at))
+    .limit(limit)
+    .offset(offset);
+
+  //  CLEAN MAPPING (no null-object issue)
+  const records = rawRecords.map((record) => ({
+    ...record,
+    starter_box: record.starter_id
+      ? {
+        starter_id: record.starter_id,
+        device_allocation: record.starter_device_allocation,
+        pcb_number: record.starter_pcb_number,
+        mac_address: record.starter_mac_address,
+      }
+      : null,
+  }));
 
   return { pagination_info, schedule_summary, records };
 }
