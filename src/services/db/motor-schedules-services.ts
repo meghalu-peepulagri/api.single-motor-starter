@@ -65,13 +65,6 @@ export async function getNextScheduleIdForMotor(motorId: number): Promise<number
   return (result[0]?.maxId ?? 0) + 1;
 }
 
-// =================== CONFLICT DETECTION QUERIES ===================
-
-/**
- * Find active schedules for a motor that could conflict.
- * Filters by date range overlap and/or overlapping days_of_week.
- * Optionally excludes a specific schedule ID (for updates).
- */
 export async function findConflictingSchedules(
   motorId: number,
   scheduleStartDate?: number | null,
