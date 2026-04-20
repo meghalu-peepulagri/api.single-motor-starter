@@ -446,7 +446,7 @@ export async function bulkCreateMotorSchedules(rawPayload, userId) {
 }
 // =================== SCHEDULE HISTORY ===================
 export async function findScheduleHistoryByMotorAndStarter(filters, pageParams) {
-    const conditions = and(eq(motorSchedules.motor_id, filters.motor_id), eq(motorSchedules.starter_id, filters.starter_id), filters.from_date ? gte(motorSchedules.created_at, filters.from_date) : undefined, filters.to_date ? lte(motorSchedules.created_at, filters.to_date) : undefined);
+    const conditions = and(eq(motorSchedules.motor_id, filters.motor_id), eq(motorSchedules.starter_id, filters.starter_id), filters.from_date ? gte(motorSchedules.schedule_start_date, dateToYYMMDD(filters.from_date)) : undefined, filters.to_date ? lte(motorSchedules.schedule_start_date, dateToYYMMDD(filters.to_date)) : undefined);
     const [records, countResult] = await Promise.all([
         db.select({
             id: motorSchedules.id,
