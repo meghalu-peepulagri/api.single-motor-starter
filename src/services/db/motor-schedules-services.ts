@@ -647,18 +647,11 @@ export async function findScheduleHistoryByMotorAndStarter(
   filters: ScheduleHistoryFilters,
   pageParams: { page: number; pageSize: number; offset: number },
 ) {
-  const toYYMMDD = (d: Date) => {
-    const yy = String(d.getFullYear()).slice(2);
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return Number(`${yy}${mm}${dd}`);
-  };
-
   const conditions = and(
     eq(motorSchedules.motor_id, filters.motor_id),
     eq(motorSchedules.starter_id, filters.starter_id),
-    filters.from_date ? gte(motorSchedules.schedule_start_date, toYYMMDD(filters.from_date)) : undefined,
-    filters.to_date ? lte(motorSchedules.schedule_start_date, toYYMMDD(filters.to_date)) : undefined,
+    filters.from_date ? gte(motorSchedules.schedule_start_date, dateToYYMMDD(filters.from_date)) : undefined,
+    filters.to_date ? lte(motorSchedules.schedule_start_date, dateToYYMMDD(filters.to_date)) : undefined,
   );
 
   const [records, countResult] = await Promise.all([
