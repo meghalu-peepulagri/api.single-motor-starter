@@ -32,13 +32,6 @@ import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
 
-// =================== AUTO-INCREMENT SCHEDULE ID PER MOTOR ===================
-
-/**
- * Get the next schedule_id for a given motor.
- * First tries to reuse the lowest schedule_id from ARCHIVED/DELETED schedules.
- * If no reusable ID found, returns max(schedule_id) + 1, or 1 if no schedules exist.
- */
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
   // Find the lowest schedule_id from deleted/archived rows
   // that is NOT used by any active row for the same motor
