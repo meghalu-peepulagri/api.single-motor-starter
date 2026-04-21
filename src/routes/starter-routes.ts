@@ -36,6 +36,7 @@ starterRoutes.patch("/:id/allocation", isAuthorized, starterHandlers.updateDevic
 starterRoutes.patch("/:id/settings-sync", isAuthorized, starterHandlers.updateSettingsSyncStatusHandler);
 starterRoutes.patch("/:id/reset", isAuthorized, starterHandlers.deviceResetHandler);
 starterRoutes.get("/:id/installation-photo/upload-url", isAuthorized, starterHandlers.getInstallationPhotoUploadUrlHandler);
+starterRoutes.patch("/:id/installed-location", isAuthorized, starterHandlers.updateInstalledLocationHandler);
 
 starterRoutes.patch("/:id", isAuthorized, starterHandlers.deleteStarterBoxHandler);
 

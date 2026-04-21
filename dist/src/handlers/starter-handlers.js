@@ -170,7 +170,13 @@ export class StarterHandlers {
             const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type, "assigned_at", "desc");
             const whereQueryData = starterFilters(query, userPayload);
             const starterList = await paginatedStarterListForMobile(whereQueryData, orderQueryData, paginationParams);
-            return sendResponse(c, 200, STARTER_LIST_FETCHED, starterList);
+            const records = await Promise.all(starterList.records.map(async (starter) => {
+                if (starter.installation_photo_key) {
+                    starter.installation_photo_url = await generateDownloadUrl(starter.installation_photo_key);
+                }
+                return starter;
+            }));
+            return sendResponse(c, 200, STARTER_LIST_FETCHED, { ...starterList, records });
         }
         catch (error) {
             console.error("Error at starter list for mobile :", error);
@@ -627,6 +633,23 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at device reset handler :", error);
+            throw error;
+        }
+    };
+    updateInstalledLocationHandler = async (c) => {
+        try {
+            const starterId = +c.req.param("id");
+            paramsValidateException.validateId(starterId, "Device id");
+            const { device_installed_location } = await c.req.json();
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            await updateRecordById(starterBoxes, starterId, { device_installed_location });
+            return sendResponse(c, 200, "Device installed location updated successfully");
+        }
+        catch (error) {
+            console.error("Error at update installed location handler :", error);
+            handleJsonParseError(error);
             throw error;
         }
     };

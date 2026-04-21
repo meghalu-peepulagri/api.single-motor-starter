@@ -198,7 +198,17 @@ export class StarterHandlers {
       const orderQueryData = parseOrderByQueryCondition<StarterBoxTable>(query.order_by, query.order_type, "assigned_at", "desc");
       const whereQueryData = starterFilters(query, userPayload);
       const starterList = await paginatedStarterListForMobile(whereQueryData, orderQueryData, paginationParams);
-      return sendResponse(c, 200, STARTER_LIST_FETCHED, starterList);
+
+      const records = await Promise.all(
+        starterList.records.map(async (starter: any) => {
+          if (starter.installation_photo_key) {
+            starter.installation_photo_url = await generateDownloadUrl(starter.installation_photo_key);
+          }
+          return starter;
+        })
+      );
+
+      return sendResponse(c, 200, STARTER_LIST_FETCHED, { ...starterList, records });
     } catch (error: any) {
       console.error("Error at starter list for mobile :", error);
       throw error;
@@ -701,6 +711,25 @@ export class StarterHandlers {
       return sendResponse(c, 200, DEVICE_RESET_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at device reset handler :", error);
+      throw error;
+    }
+  }
+
+  updateInstalledLocationHandler = async (c: Context) => {
+    try {
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const { device_installed_location } = await c.req.json();
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_installed_location });
+      return sendResponse(c, 200, "Device installed location updated successfully");
+    } catch (error: any) {
+      console.error("Error at update installed location handler :", error);
+      handleJsonParseError(error);
       throw error;
     }
   }
