@@ -1,0 +1,1 @@
+ALTER TABLE "motors" ADD COLUMN "test_run_completed_at" timestamp;

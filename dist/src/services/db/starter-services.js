@@ -149,6 +149,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     mode: true,
                     alias_name: true,
                     test_run_status: true,
+                    test_run_completed_at: true,
                 },
                 with: {
                     location: {

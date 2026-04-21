@@ -21,6 +21,7 @@ export const motors = pgTable("motors", {
     motor_index: integer("motor_index").default(1),
     status: statusEnum().default("ACTIVE"),
     test_run_status: testRunStatusEnum().default("IN_TEST"),
+    test_run_completed_at: timestamp("test_run_completed_at"),
     created_at: timestamp("created_at").notNull().defaultNow(),
     assigned_at: timestamp("assigned_at"),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
