@@ -2,6 +2,90 @@ import { sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 
 
+// export async function getConsecutiveGroupsPaginated(
+//   starterId: number,
+//   motorId: number,
+//   offset: number,
+//   limit: number,
+//   type: "alert" | "fault",
+//   assigned_at: Date | null = null
+// ) {
+//   const codeColumn = type === "alert" ? "alert_code" : "fault_code";
+//   const descColumn = type === "alert" ? "alert_description" : "fault_description";
+//   const excludeValues =
+//     type === "alert"
+//       ? ["Unknown Alert", "No Alert"]
+//       : ["Unknown Fault", "No Fault"];
+
+//   const clearedLabel = "Fault cleared - No more faults";
+
+//   // For fault type: include fault_code=0 in the island-gap so cleared records
+//   // get the same consecutive grouping (MAX timestamp per consecutive run of 0s).
+//   // For alert type: no cleared concept — filter out 0 and bad descriptions as before.
+//   const innerFilter = type === "fault"
+//     ? sql`
+//         AND fault_code IS NOT NULL
+//         AND (
+//           fault_code = 0
+//           OR (
+//             fault_code <> 0
+//             AND fault_description IS NOT NULL
+//             AND fault_description NOT IN (${sql.join(excludeValues, sql`, `)})
+//           )
+//         )
+//       `
+//     : sql`
+//         AND ${sql.raw(codeColumn)} IS NOT NULL
+//         AND ${sql.raw(codeColumn)} <> 0
+//         AND ${sql.raw(descColumn)} IS NOT NULL
+//         AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
+//       `;
+
+//   const descExpr = type === "fault"
+//     ? sql`CASE WHEN fault_code = 0 THEN ${clearedLabel} ELSE fault_description END`
+//     : sql`${sql.raw(descColumn)}`;
+
+//   const query = sql`
+//     SELECT
+//       MAX(id) AS id,
+//       starter_id,
+//       motor_id,
+//       ${sql.raw(codeColumn)} AS code,
+//       ${descExpr} AS description,
+//       MAX(timestamp) AS timestamp
+//     FROM (
+//       SELECT *,
+//         (
+//           row_number() OVER (
+//             PARTITION BY starter_id, motor_id, ${sql.raw(codeColumn)}
+//             ORDER BY timestamp
+//           ) -
+//           row_number() OVER (
+//             PARTITION BY starter_id, motor_id
+//             ORDER BY timestamp
+//           )
+//         ) AS grp
+//       FROM alerts_faults
+//       WHERE starter_id = ${starterId}
+//         AND motor_id = ${motorId}
+//         ${innerFilter}
+//         ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
+//     ) t
+//     GROUP BY
+//       starter_id,
+//       motor_id,
+//       ${sql.raw(codeColumn)},
+//       ${descExpr},
+//       grp
+//     ORDER BY MAX(timestamp) DESC
+//     LIMIT ${limit}
+//     OFFSET ${offset}
+//   `;
+
+//   const results = await db.execute(query);
+//   return results.rows ?? results;
+// }
+
 export async function getConsecutiveGroupsPaginated(
   starterId: number,
   motorId: number,
@@ -12,10 +96,26 @@ export async function getConsecutiveGroupsPaginated(
 ) {
   const codeColumn = type === "alert" ? "alert_code" : "fault_code";
   const descColumn = type === "alert" ? "alert_description" : "fault_description";
-  const excludeValues =
+
+  const clearedLabel =
     type === "alert"
-      ? ["Unknown Alert", "No Alert"]
-      : ["Unknown Fault", "No Fault"];
+      ? "Alert cleared - No more alerts"
+      : "Fault cleared - No more faults";
+
+  const innerFilter = sql`
+    AND ${sql.raw(codeColumn)} IS NOT NULL
+    AND ${sql.raw(codeColumn)} >= 0
+  `;
+
+  // ✅ FIX: use MAX() here
+  const descExpr = sql`
+    MAX(
+      CASE 
+        WHEN ${sql.raw(codeColumn)} = 0 THEN ${clearedLabel}
+        ELSE COALESCE(${sql.raw(descColumn)}, '')
+      END
+    )
+  `;
 
   const query = sql`
     SELECT
@@ -23,7 +123,7 @@ export async function getConsecutiveGroupsPaginated(
       starter_id,
       motor_id,
       ${sql.raw(codeColumn)} AS code,
-      ${sql.raw(descColumn)} AS description,
+      ${descExpr} AS description,
       MAX(timestamp) AS timestamp
     FROM (
       SELECT *,
@@ -40,17 +140,13 @@ export async function getConsecutiveGroupsPaginated(
       FROM alerts_faults
       WHERE starter_id = ${starterId}
         AND motor_id = ${motorId}
-        AND ${sql.raw(codeColumn)} IS NOT NULL
-        AND ${sql.raw(codeColumn)} <> 0
-        AND ${sql.raw(descColumn)} IS NOT NULL
-        AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
+        ${innerFilter}
         ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
     ) t
     GROUP BY
       starter_id,
       motor_id,
       ${sql.raw(codeColumn)},
-      ${sql.raw(descColumn)},
       grp
     ORDER BY MAX(timestamp) DESC
     LIMIT ${limit}
@@ -59,6 +155,45 @@ export async function getConsecutiveGroupsPaginated(
 
   const results = await db.execute(query);
   return results.rows ?? results;
+}
+
+
+/**
+ * Returns raw record counts from alerts_faults before grouping — used for diagnostics.
+ */
+export async function getRawAlertFaultCounts(
+  starterId: number,
+  motorId: number,
+  type: "alert" | "fault",
+  assigned_at: Date | null = null
+) {
+  const codeColumn = type === "alert" ? "alert_code" : "fault_code";
+  const descColumn = type === "alert" ? "alert_description" : "fault_description";
+  const excludeValues = type === "alert" ? ["Unknown Alert", "No Alert"] : ["Unknown Fault", "No Fault"];
+
+  const rawCountQuery = sql`
+    SELECT
+      COUNT(*) AS total_raw,
+      COUNT(DISTINCT ${sql.raw(codeColumn)}) AS distinct_codes,
+      MIN(timestamp) AS earliest,
+      MAX(timestamp) AS latest
+    FROM alerts_faults
+    WHERE starter_id = ${starterId}
+      AND motor_id = ${motorId}
+      AND ${sql.raw(codeColumn)} IS NOT NULL
+      AND ${sql.raw(codeColumn)} <> 0
+      AND ${sql.raw(descColumn)} IS NOT NULL
+      AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
+      ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
+  `;
+
+  const res = await db.execute(rawCountQuery);
+  return (res.rows?.[0] ?? {}) as {
+    total_raw: string;
+    distinct_codes: string;
+    earliest: Date | null;
+    latest: Date | null;
+  };
 }
 
 
@@ -86,6 +221,31 @@ export async function getConsecutiveGroupsCount(
       ? ["Unknown Alert", "No Alert"]
       : ["Unknown Fault", "No Fault"];
 
+  const clearedLabel = "Fault cleared - No more faults";
+
+  const innerFilter = type === "fault"
+    ? sql`
+        AND fault_code IS NOT NULL
+        AND (
+          fault_code = 0
+          OR (
+            fault_code <> 0
+            AND fault_description IS NOT NULL
+            AND fault_description NOT IN (${sql.join(excludeValues, sql`, `)})
+          )
+        )
+      `
+    : sql`
+        AND ${sql.raw(codeColumn)} IS NOT NULL
+        AND ${sql.raw(codeColumn)} <> 0
+        AND ${sql.raw(descColumn)} IS NOT NULL
+        AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
+      `;
+
+  const descExpr = type === "fault"
+    ? sql`CASE WHEN fault_code = 0 THEN ${clearedLabel} ELSE fault_description END`
+    : sql`${sql.raw(descColumn)}`;
+
   const countQuery = sql`
     SELECT COUNT(*) AS total_groups
     FROM (
@@ -93,6 +253,7 @@ export async function getConsecutiveGroupsCount(
       FROM (
         SELECT
           ${sql.raw(codeColumn)},
+          ${descExpr} AS description,
           (
             row_number() OVER (
               PARTITION BY starter_id, motor_id, ${sql.raw(codeColumn)}
@@ -106,10 +267,7 @@ export async function getConsecutiveGroupsCount(
         FROM alerts_faults
         WHERE starter_id = ${starterId}
           AND motor_id = ${motorId}
-          AND ${sql.raw(codeColumn)} IS NOT NULL
-          AND ${sql.raw(codeColumn)} <> 0
-          AND ${sql.raw(descColumn)} IS NOT NULL
-          AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
+          ${innerFilter}
           ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
       ) t
     ) grouped
@@ -176,6 +334,7 @@ export async function getUnifiedLogsPaginated(
   const parts: ReturnType<typeof sql>[] = [];
 
   if (includeActivity) {
+    // All activity logs except FAULT_CLEARED — returned individually as-is
     parts.push(sql`
       SELECT
         id,
@@ -190,83 +349,145 @@ export async function getUnifiedLogsPaginated(
       FROM user_activity_logs
       WHERE device_id = ${starterId}
         AND (entity_type = 'STARTER' OR entity_id = ${motorId})
+        AND action <> 'FAULT_CLEARED'
         ${assignedAtFilter}
         ${activityActionFilter}
     `);
+
+    // FAULT_CLEARED from activity logs — island-gap grouping, code=0 hardcoded
+    if (types.includes("activity")) {
+      parts.push(sql`
+        SELECT
+          MAX(id) AS id,
+          'activity' AS log_type,
+          action,
+          entity_type,
+          message,
+          0::integer AS code,
+          'Fault cleared - No more faults' AS description,
+          MAX(performed_by) AS performed_by,
+          MAX(created_at) AS timestamp
+        FROM (
+          SELECT *,
+            (
+              row_number() OVER (
+                PARTITION BY device_id, entity_id, action
+                ORDER BY created_at
+              ) -
+              row_number() OVER (
+                PARTITION BY device_id, entity_id
+                ORDER BY created_at
+              )
+            ) AS grp
+          FROM user_activity_logs
+          WHERE device_id = ${starterId}
+            AND entity_id = ${motorId}
+            AND action = 'FAULT_CLEARED'
+            AND message IS NOT NULL
+            ${assignedAtFilter}
+        ) fc
+        GROUP BY action, entity_type, message, grp
+      `);
+    }
   }
 
   if (includeAlert) {
     parts.push(sql`
-      SELECT
-        MAX(id) AS id,
-        'alert' AS log_type,
-        'ALERT' AS action,
-        'STARTER' AS entity_type,
-        alert_description AS message,
-        alert_code AS code,
-        alert_description AS description,
-        NULL::integer AS performed_by,
-        MAX(timestamp) AS timestamp
-      FROM (
-        SELECT *,
-          (
-            row_number() OVER (
-              PARTITION BY starter_id, motor_id, alert_code
-              ORDER BY timestamp
-            ) -
-            row_number() OVER (
-              PARTITION BY starter_id, motor_id
-              ORDER BY timestamp
-            )
-          ) AS grp
-        FROM alerts_faults
-        WHERE starter_id = ${starterId}
-          AND motor_id = ${motorId}
-          AND alert_code IS NOT NULL
-          AND alert_code <> 0
-          AND alert_description IS NOT NULL
-          AND alert_description NOT IN ('Unknown Alert', 'No Alert')
-          ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
-      ) alert_groups
-      GROUP BY starter_id, motor_id, alert_code, alert_description, grp
-    `);
+  SELECT
+    MAX(id) AS id,
+    'alert' AS log_type,
+    CASE WHEN alert_code = 0 THEN 'ALERT_CLEARED' ELSE 'ALERT' END AS action,
+    'STARTER' AS entity_type,
+    CASE 
+      WHEN alert_code = 0 THEN 'Alert cleared - No more alerts'
+      ELSE COALESCE(alert_description, '')
+    END AS message,
+    alert_code AS code,
+    CASE 
+      WHEN alert_code = 0 THEN 'Alert cleared - No more alerts'
+      ELSE COALESCE(alert_description, '')
+    END AS description,
+    NULL::integer AS performed_by,
+    MAX(timestamp) AS timestamp
+  FROM (
+    SELECT *,
+      (
+        row_number() OVER (
+          PARTITION BY starter_id, motor_id, alert_code
+          ORDER BY timestamp
+        ) -
+        row_number() OVER (
+          PARTITION BY starter_id, motor_id
+          ORDER BY timestamp
+        )
+      ) AS grp
+    FROM alerts_faults
+    WHERE starter_id = ${starterId}
+      AND motor_id = ${motorId}
+      AND alert_code IS NOT NULL
+      AND alert_code >= 0
+      ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+  ) alert_groups
+  GROUP BY
+    starter_id,
+    motor_id,
+    alert_code,
+    CASE 
+      WHEN alert_code = 0 THEN 'Alert cleared - No more alerts'
+      ELSE COALESCE(alert_description, '')
+    END,
+    grp
+`);
   }
 
   if (includeFault) {
+    // fault_code=0 (cleared) goes through the same island-gap consecutive grouping as non-zero codes
     parts.push(sql`
-      SELECT
-        MAX(id) AS id,
-        'fault' AS log_type,
-        'FAULT' AS action,
-        'STARTER' AS entity_type,
-        fault_description AS message,
-        fault_code AS code,
-        fault_description AS description,
-        NULL::integer AS performed_by,
-        MAX(timestamp) AS timestamp
-      FROM (
-        SELECT *,
-          (
-            row_number() OVER (
-              PARTITION BY starter_id, motor_id, fault_code
-              ORDER BY timestamp
-            ) -
-            row_number() OVER (
-              PARTITION BY starter_id, motor_id
-              ORDER BY timestamp
-            )
-          ) AS grp
-        FROM alerts_faults
-        WHERE starter_id = ${starterId}
-          AND motor_id = ${motorId}
-          AND fault_code IS NOT NULL
-          AND fault_code <> 0
-          AND fault_description IS NOT NULL
-          AND fault_description NOT IN ('Unknown Fault', 'No Fault')
-          ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
-      ) fault_groups
-      GROUP BY starter_id, motor_id, fault_code, fault_description, grp
-    `);
+  SELECT
+    MAX(id) AS id,
+    'fault' AS log_type,
+    CASE WHEN fault_code = 0 THEN 'FAULT_CLEARED' ELSE 'FAULT' END AS action,
+    'STARTER' AS entity_type,
+    CASE 
+      WHEN fault_code = 0 THEN 'Fault cleared - No more faults'
+      ELSE COALESCE(fault_description, '')
+    END AS message,
+    fault_code AS code,
+    CASE 
+      WHEN fault_code = 0 THEN 'Fault cleared - No more faults'
+      ELSE COALESCE(fault_description, '')
+    END AS description,
+    NULL::integer AS performed_by,
+    MAX(timestamp) AS timestamp
+  FROM (
+    SELECT *,
+      (
+        row_number() OVER (
+          PARTITION BY starter_id, motor_id, fault_code
+          ORDER BY timestamp
+        ) -
+        row_number() OVER (
+          PARTITION BY starter_id, motor_id
+          ORDER BY timestamp
+        )
+      ) AS grp
+    FROM alerts_faults
+    WHERE starter_id = ${starterId}
+      AND motor_id = ${motorId}
+      AND fault_code IS NOT NULL
+      AND fault_code >= 0
+      ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+  ) fault_groups
+  GROUP BY
+    starter_id,
+    motor_id,
+    fault_code,
+    CASE 
+      WHEN fault_code = 0 THEN 'Fault cleared - No more faults'
+      ELSE COALESCE(fault_description, '')
+    END,
+    grp
+`);
   }
 
   if (parts.length === 0) return [];
@@ -315,15 +536,44 @@ export async function getUnifiedLogsCount(
       FROM user_activity_logs
       WHERE device_id = ${starterId}
         AND (entity_type = 'STARTER' OR entity_id = ${motorId})
+        AND action <> 'FAULT_CLEARED'
         AND message IS NOT NULL
         ${assignedAtFilter}
         ${activityActionFilter}
     `);
+
+    if (types.includes("activity")) {
+      parts.push(sql`
+        SELECT MAX(id) AS id, message
+        FROM (
+          SELECT *,
+            (
+              row_number() OVER (
+                PARTITION BY device_id, entity_id, action
+                ORDER BY created_at
+              ) -
+              row_number() OVER (
+                PARTITION BY device_id, entity_id
+                ORDER BY created_at
+              )
+            ) AS grp
+          FROM user_activity_logs
+          WHERE device_id = ${starterId}
+            AND entity_id = ${motorId}
+            AND action = 'FAULT_CLEARED'
+            AND message IS NOT NULL
+            ${assignedAtFilter}
+        ) fc
+        GROUP BY action, entity_type, message, grp
+      `);
+    }
   }
 
   if (includeAlert) {
     parts.push(sql`
-      SELECT MAX(id) AS id, alert_description AS message
+      SELECT
+        MAX(id) AS id,
+        CASE WHEN alert_code = 0 THEN 'Alert cleared - No more alerts' ELSE COALESCE(alert_description, '') END AS message
       FROM (
         SELECT *,
           (
@@ -340,18 +590,21 @@ export async function getUnifiedLogsCount(
         WHERE starter_id = ${starterId}
           AND motor_id = ${motorId}
           AND alert_code IS NOT NULL
-          AND alert_code <> 0
-          AND alert_description IS NOT NULL
-          AND alert_description NOT IN ('Unknown Alert', 'No Alert')
+          AND alert_code >= 0
           ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
       ) alert_groups
-      GROUP BY starter_id, motor_id, alert_code, alert_description, grp
+      GROUP BY
+        starter_id, motor_id, alert_code,
+        CASE WHEN alert_code = 0 THEN 'Alert cleared - No more alerts' ELSE COALESCE(alert_description, '') END,
+        grp
     `);
   }
 
   if (includeFault) {
     parts.push(sql`
-      SELECT MAX(id) AS id, fault_description AS message
+      SELECT
+        MAX(id) AS id,
+        CASE WHEN fault_code = 0 THEN 'Fault cleared - No more faults' ELSE COALESCE(fault_description, '') END AS message
       FROM (
         SELECT *,
           (
@@ -368,12 +621,13 @@ export async function getUnifiedLogsCount(
         WHERE starter_id = ${starterId}
           AND motor_id = ${motorId}
           AND fault_code IS NOT NULL
-          AND fault_code <> 0
-          AND fault_description IS NOT NULL
-          AND fault_description NOT IN ('Unknown Fault', 'No Fault')
+          AND fault_code >= 0
           ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
       ) fault_groups
-      GROUP BY starter_id, motor_id, fault_code, fault_description, grp
+      GROUP BY
+        starter_id, motor_id, fault_code,
+        CASE WHEN fault_code = 0 THEN 'Fault cleared - No more faults' ELSE COALESCE(fault_description, '') END,
+        grp
     `);
   }
 

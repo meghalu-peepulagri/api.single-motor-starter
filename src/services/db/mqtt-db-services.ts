@@ -167,12 +167,16 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       }
 
       const alertsFaultsRecord = {
-        starter_id, motor_id: motor_id || null, user_id: created_by || device_created_by, alert_code: alert_code ? Number(alert_code) : null,
-        alert_description: alert_description ? String(alert_description) : null, fault_code: fault ? Number(fault) : null,
-        fault_description: fault_description ? String(fault_description) : null, timestamp: new Date(time_stamp)
+        starter_id, motor_id: motor_id ?? null, user_id: created_by ?? device_created_by,
+        alert_code: alert_code != null ? Number(alert_code) : null,
+        fault_code: fault != null ? Number(fault) : null,
+        alert_description: alert_description ?? null,
+        fault_description: fault_description ?? null,
+        timestamp: new Date(time_stamp)
       };
 
-      if (alert_code || fault) {
+      // Save all records including zero values — consecutive grouping is applied at fetch time
+      if (fault != null || alert_code != null) {
         await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
       }
 
@@ -195,11 +199,12 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
         };
       }
 
-      // Check if fault was cleared (fault === 0 and previous fault was non-zero)
-      if (fault === 0 && created_by && motor_id) {
+      // Check if fault was cleared (fault === 0/null and previous fault was non-zero)
+      // — only used for notification and activity log, DB save is handled above
+      if ((fault === 0 || fault === null) && created_by && motor_id) {
         const lastFaultRecord = await trx.select({ fault_code: alertsFaults.fault_code })
           .from(alertsFaults)
-          .where(and(eq(alertsFaults.motor_id, motor_id), eq(alertsFaults.starter_id, starter_id), isNotNull(alertsFaults.fault_code), ne(alertsFaults.fault_code, 0)))
+          .where(and(eq(alertsFaults.motor_id, motor_id), eq(alertsFaults.starter_id, starter_id), isNotNull(alertsFaults.fault_code)))
           .orderBy(desc(alertsFaults.timestamp))
           .limit(1);
 
@@ -345,12 +350,15 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
     }
 
     const alertsFaultsRecord = {
-      starter_id, motor_id: motor_id || null, user_id: created_by || null, alert_code: alert_code ? Number(alert_code) : null,
-      alert_description: alert_description ? String(alert_description) : null, fault_code: fault ? Number(fault) : null,
-      fault_description: fault_description ? String(fault_description) : null, timestamp: new Date(time_stamp)
+      starter_id, motor_id: motor_id || null, user_id: created_by || null,
+      alert_code: alert_code != null ? Number(alert_code) : null,
+      alert_description: alert_description ? String(alert_description) : null,
+      fault_code: fault != null ? Number(fault) : null,
+      fault_description: fault_description ? String(fault_description) : null,
+      timestamp: new Date(time_stamp)
     };
 
-    if (alert_code || fault) {
+    if (fault != null || alert_code != null) {
       await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
     }
 
@@ -435,12 +443,15 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
     }
 
     const alertsFaultsRecord = {
-      starter_id, motor_id: motor_id || null, user_id: created_by || device_created_by, alert_code: alert_code ? Number(alert_code) : null,
-      alert_description: alert_description ? String(alert_description) : null, fault_code: fault ? Number(fault) : null,
-      fault_description: fault_description ? String(fault_description) : null, timestamp: new Date(time_stamp)
+      starter_id, motor_id: motor_id || null, user_id: created_by || device_created_by,
+      alert_code: alert_code != null ? Number(alert_code) : null,
+      alert_description: alert_description ? String(alert_description) : null,
+      fault_code: fault != null ? Number(fault) : null,
+      fault_description: fault_description ? String(fault_description) : null,
+      timestamp: new Date(time_stamp)
     };
 
-    if (alert_code || fault) {
+    if (fault != null || alert_code != null) {
       await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
     }
 
@@ -499,12 +510,15 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
     }
 
     const alertsFaultsRecord = {
-      starter_id, motor_id: motor_id || null, user_id: created_by || null, alert_code: alert_code ? Number(alert_code) : null,
-      alert_description: alert_description ? String(alert_description) : null, fault_code: fault ? Number(fault) : null,
-      fault_description: fault_description ? String(fault_description) : null, timestamp: new Date(time_stamp)
+      starter_id, motor_id: motor_id || null, user_id: created_by || null,
+      alert_code: alert_code != null ? Number(alert_code) : null,
+      alert_description: alert_description ? String(alert_description) : null,
+      fault_code: fault != null ? Number(fault) : null,
+      fault_description: fault_description ? String(fault_description) : null,
+      timestamp: new Date(time_stamp)
     };
 
-    if (alert_code || fault) {
+    if (fault != null || alert_code != null) {
       await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
     }
 

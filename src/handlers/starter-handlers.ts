@@ -17,7 +17,7 @@ import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilt
 
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
+import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getRawAlertFaultCounts, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
@@ -74,16 +74,16 @@ export class StarterHandlers {
       const { page, pageSize, offset } = getPaginationOffParams(query);
       const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
 
-      // Fetch consecutive grouped data
       const assignedAtDate = assignedAt?.assigned_at ?? null;
+
       const data = type === "fault"
         ? await getConsecutiveFaultsPaginated(starterId, motorId, offset, pageSize, assignedAtDate)
         : await getConsecutiveAlertsPaginated(starterId, motorId, offset, pageSize, assignedAtDate);
 
       const message = type === "fault" ? "Faults fetched successfully" : "Alerts fetched successfully";
 
-      // Get total count from service
       const totalRecords = await getConsecutiveGroupsCount(starterId, motorId, type as 'alert' | 'fault', assignedAtDate);
+
       const paginationInfo = getPaginationData(page, pageSize, totalRecords);
 
       const response = {

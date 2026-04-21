@@ -109,8 +109,12 @@ const alertCodes = {
     "0x1000": { short: "Output Phase", detailed: "Output Phase Alert - Check output connections." },
 };
 export function getFaultDescription(faultCode) {
-    if (!faultCode || faultCode === 0)
-        return "No Fault";
+    if (faultCode === 0) {
+        return "Alert cleared - No more alerts";
+    }
+    if (faultCode == null || faultCode === undefined) {
+        return "Unknown Alert";
+    }
     const faults = [];
     for (const [hexCode, description] of Object.entries(faultCodes)) {
         const bit = Number.parseInt(hexCode, 16);
@@ -141,8 +145,12 @@ export function getFaultNotificationMessage(faultCode) {
     return `${faults.map(f => f.short).join(", ")} Faults Detected`;
 }
 export function getAlertDescription(alertCode) {
-    if (!alertCode || alertCode === 0)
-        return "No Alert";
+    if (alertCode === 0) {
+        return "Alert cleared - No more alerts";
+    }
+    if (alertCode == null || alertCode === undefined) {
+        return "Unknown Alert";
+    }
     const alerts = [];
     for (const [hexCode, description] of Object.entries(alertCodes)) {
         const bit = Number.parseInt(hexCode, 16);
