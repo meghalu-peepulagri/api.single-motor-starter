@@ -44,9 +44,19 @@ export const vAssignLocationToStarter = v.object({
   starter_id: requiredNumber(DEVICE_ID_REQUIRED),
 });
 
+export const vUpdateInstalledLocation = v.object({
+  device_installed_location: v.pipe(
+    v.string("Device installed location is required"),
+    v.trim(),
+    v.nonEmpty("Installed location is required"),
+    v.minLength(3, "Installed location has min 3 characters"),
+  ),
+});
+
 export type validatedAddStarter = v.InferOutput<typeof vAddStarter>;
 export type validatedAssignStarter = v.InferOutput<typeof vAssignStarter>;
 export type validatedReplaceStarter = v.InferOutput<typeof vReplaceStarter>;
 export type validatedAssignStarterWeb = v.InferOutput<typeof vAssignStarterWeb>;
 export type validatedUpdateDeployedStatus = v.InferOutput<typeof vUpdateDeployedStatus>;
 export type validatedAssignLocationToStarter = v.InferOutput<typeof vAssignLocationToStarter>;
+export type validatedUpdateInstalledLocation = v.InferOutput<typeof vUpdateInstalledLocation>;

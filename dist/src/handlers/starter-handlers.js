@@ -640,7 +640,8 @@ export class StarterHandlers {
         try {
             const starterId = +c.req.param("id");
             paramsValidateException.validateId(starterId, "Device id");
-            const { device_installed_location } = await c.req.json();
+            const reqData = await c.req.json();
+            const { device_installed_location } = await validatedRequest("update-installed-location", reqData, STARTER_BOX_VALIDATION_CRITERIA);
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
