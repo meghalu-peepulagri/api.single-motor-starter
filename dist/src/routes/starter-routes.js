@@ -2,12 +2,9 @@ import factory from "../factory.js";
 import { StarterHandlers } from "../handlers/starter-handlers.js";
 import { isSuperAdminOrAdmin } from "../middlewares/guards/guardUser.js";
 import { isAuthorized } from "../middlewares/isAuthorized.js";
-
 const starterHandlers = new StarterHandlers();
 const starterRoutes = factory.createApp();
-
 starterRoutes.post("/", isAuthorized, starterHandlers.addStarterBoxHandler);
-
 starterRoutes.get("/mobile", isAuthorized, starterHandlers.starterListMobileHandler);
 starterRoutes.get("/web/all", isAuthorized, isSuperAdminOrAdmin, starterHandlers.starterListWebHandler);
 starterRoutes.get("/dashboard-counts", isAuthorized, starterHandlers.starterCountBasedOnStatusHandler);
@@ -15,18 +12,15 @@ starterRoutes.get("/latest-pcb-number", isAuthorized, starterHandlers.getLatestP
 starterRoutes.get("/sim-recharge-expiry-notifications", starterHandlers.simRechargeExpiryNotificationHandler);
 starterRoutes.get("/device-info-request", starterHandlers.deviceInfoRequestHandler);
 starterRoutes.post("/check-details", isAuthorized, starterHandlers.getDeviceDetailsHandler);
-
 starterRoutes.patch("/assign", isAuthorized, starterHandlers.assignStarterMobileHandler);
 starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWebHandler);
 starterRoutes.patch("/assign-location", isAuthorized, starterHandlers.assignLocationToStarterHandler);
 starterRoutes.patch("/replace", isAuthorized, starterHandlers.replaceStarterLocationHandler);
 starterRoutes.patch("/update-status", starterHandlers.markStarterStatusHandler);
-
 starterRoutes.get("/:id/run-time", isAuthorized, starterHandlers.starterRunTimeHandler);
 starterRoutes.get("/:id/analytics", isAuthorized, starterHandlers.starterAnalyticsHandler);
 starterRoutes.get("/:id/motors", isAuthorized, starterHandlers.starterConnectedMotorsHandler);
 starterRoutes.get("/:id/temperature", isAuthorized, starterHandlers.getTemperatureHandler);
-
 starterRoutes.get("/:starter_id/motors/:motor_id/alerts-faults", isAuthorized, starterHandlers.getConsecutiveAlertsFaultsHandler);
 starterRoutes.get("/:starter_id/motors/:motor_id/logs", isAuthorized, starterHandlers.getUnifiedLogsHandler);
 starterRoutes.patch("/:starter_id/motors/:motor_id/fault-clear", isAuthorized, starterHandlers.faultClearedHandler);
@@ -37,8 +31,5 @@ starterRoutes.patch("/:id/settings-sync", isAuthorized, starterHandlers.updateSe
 starterRoutes.patch("/:id/reset", isAuthorized, starterHandlers.deviceResetHandler);
 starterRoutes.get("/:id/installation-photo/upload-url", isAuthorized, starterHandlers.getInstallationPhotoUploadUrlHandler);
 starterRoutes.patch("/:id/installed-location", isAuthorized, starterHandlers.updateInstalledLocationHandler);
-
 starterRoutes.patch("/:id", isAuthorized, starterHandlers.deleteStarterBoxHandler);
-
-
 export default starterRoutes;
