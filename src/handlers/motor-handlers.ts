@@ -212,7 +212,7 @@ export class MotorHandlers {
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
 
       await db.transaction(async trx => {
-        await updateRecordById<MotorsTable>(motors, motor.id, { test_run_status: validMotorReq.test_run_status }, trx);
+        await updateRecordById<MotorsTable>(motors, motor.id, { test_run_status: validMotorReq.test_run_status, test_run_completed_at: new Date() }, trx);
         await ActivityService.writeMotorTestRunStatusUpdatedLog(
           userPayload.id,
           motor.id,

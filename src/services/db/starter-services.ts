@@ -463,6 +463,7 @@ export async function starterConnectedMotors(starterId: number) {
           state: true,
           mode: true,
           alias_name: true,
+          test_run_completed_at: true,
         },
       },
       location: {
