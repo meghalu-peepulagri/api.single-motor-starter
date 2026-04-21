@@ -114,8 +114,14 @@ const alertCodes: Record<string, { short: string; detailed: string }> = {
 };
 
 export function getFaultDescription(faultCode: number) {
-  if (!faultCode || faultCode === 0)
-    return "No Fault";
+  if (faultCode === 0) {
+    return "Alert cleared - No more alerts";
+  }
+
+  if (faultCode == null || faultCode === undefined) {
+    return "Unknown Alert";
+  }
+
   const faults: { short: string; detailed: string }[] = [];
   for (const [hexCode, description] of Object.entries(faultCodes)) {
     const bit = Number.parseInt(hexCode, 16);
@@ -142,13 +148,20 @@ export function getFaultNotificationMessage(faultCode: number) {
   if (faults.length === 1) return `${faults[0].short} Fault Detected`;
   return `${faults.map(f => f.short).join(", ")} Faults Detected`;
 }
+export function getAlertDescription(alertCode: number | null | undefined) {
+  if (alertCode === 0) {
+    return "Alert cleared - No more alerts";
+  }
 
-export function getAlertDescription(alertCode: number) {
-  if (!alertCode || alertCode === 0)
-    return "No Alert";
+  if (alertCode == null || alertCode === undefined) {
+    return "Unknown Alert";
+  }
+
   const alerts: { short: string; detailed: string }[] = [];
+
   for (const [hexCode, description] of Object.entries(alertCodes)) {
     const bit = Number.parseInt(hexCode, 16);
+
     if ((alertCode & bit) === bit) {
       alerts.push(description);
     }
@@ -156,8 +169,8 @@ export function getAlertDescription(alertCode: number) {
 
   if (alerts.length === 0) return "Unknown Alert";
   if (alerts.length === 1) return alerts[0].detailed;
-  return `${alerts.map(a => a.short).join(", ")} Alerts Detected – Please check the motor.`;
 
+  return `${alerts.map(a => a.short).join(", ")} Alerts Detected – Please check the motor.`;
 }
 
 export function getAlertNotificationMessage(alertCode: number) {

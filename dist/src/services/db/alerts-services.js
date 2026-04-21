@@ -1,7 +1,5 @@
 import { sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
-
-
 // export async function getConsecutiveGroupsPaginated(
 //   starterId: number,
 //   motorId: number,
@@ -16,9 +14,7 @@ import db from "../../database/configuration.js";
 //     type === "alert"
 //       ? ["Unknown Alert", "No Alert"]
 //       : ["Unknown Fault", "No Fault"];
-
 //   const clearedLabel = "Fault cleared - No more faults";
-
 //   // For fault type: include fault_code=0 in the island-gap so cleared records
 //   // get the same consecutive grouping (MAX timestamp per consecutive run of 0s).
 //   // For alert type: no cleared concept — filter out 0 and bad descriptions as before.
@@ -40,11 +36,9 @@ import db from "../../database/configuration.js";
 //         AND ${sql.raw(descColumn)} IS NOT NULL
 //         AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
 //       `;
-
 //   const descExpr = type === "fault"
 //     ? sql`CASE WHEN fault_code = 0 THEN ${clearedLabel} ELSE fault_description END`
 //     : sql`${sql.raw(descColumn)}`;
-
 //   const query = sql`
 //     SELECT
 //       MAX(id) AS id,
@@ -81,34 +75,21 @@ import db from "../../database/configuration.js";
 //     LIMIT ${limit}
 //     OFFSET ${offset}
 //   `;
-
 //   const results = await db.execute(query);
 //   return results.rows ?? results;
 // }
-
-export async function getConsecutiveGroupsPaginated(
-  starterId: number,
-  motorId: number,
-  offset: number,
-  limit: number,
-  type: "alert" | "fault",
-  assigned_at: Date | null = null
-) {
-  const codeColumn = type === "alert" ? "alert_code" : "fault_code";
-  const descColumn = type === "alert" ? "alert_description" : "fault_description";
-
-  const clearedLabel =
-    type === "alert"
-      ? "Alert cleared - No more alerts"
-      : "Fault cleared - No more faults";
-
-  const innerFilter = sql`
+export async function getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, type, assigned_at = null) {
+    const codeColumn = type === "alert" ? "alert_code" : "fault_code";
+    const descColumn = type === "alert" ? "alert_description" : "fault_description";
+    const clearedLabel = type === "alert"
+        ? "Alert cleared - No more alerts"
+        : "Fault cleared - No more faults";
+    const innerFilter = sql `
     AND ${sql.raw(codeColumn)} IS NOT NULL
     AND ${sql.raw(codeColumn)} >= 0
   `;
-
-  // ✅ FIX: use MAX() here
-  const descExpr = sql`
+    // ✅ FIX: use MAX() here
+    const descExpr = sql `
     MAX(
       CASE 
         WHEN ${sql.raw(codeColumn)} = 0 THEN ${clearedLabel}
@@ -116,8 +97,7 @@ export async function getConsecutiveGroupsPaginated(
       END
     )
   `;
-
-  const query = sql`
+    const query = sql `
     SELECT
       MAX(id) AS id,
       starter_id,
@@ -141,7 +121,7 @@ export async function getConsecutiveGroupsPaginated(
       WHERE starter_id = ${starterId}
         AND motor_id = ${motorId}
         ${innerFilter}
-        ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
+        ${assigned_at ? sql `AND created_at >= ${assigned_at}` : sql ``}
     ) t
     GROUP BY
       starter_id,
@@ -152,26 +132,17 @@ export async function getConsecutiveGroupsPaginated(
     LIMIT ${limit}
     OFFSET ${offset}
   `;
-
-  const results = await db.execute(query);
-  return results.rows ?? results;
+    const results = await db.execute(query);
+    return results.rows ?? results;
 }
-
-
 /**
  * Returns raw record counts from alerts_faults before grouping — used for diagnostics.
  */
-export async function getRawAlertFaultCounts(
-  starterId: number,
-  motorId: number,
-  type: "alert" | "fault",
-  assigned_at: Date | null = null
-) {
-  const codeColumn = type === "alert" ? "alert_code" : "fault_code";
-  const descColumn = type === "alert" ? "alert_description" : "fault_description";
-  const excludeValues = type === "alert" ? ["Unknown Alert", "No Alert"] : ["Unknown Fault", "No Fault"];
-
-  const rawCountQuery = sql`
+export async function getRawAlertFaultCounts(starterId, motorId, type, assigned_at = null) {
+    const codeColumn = type === "alert" ? "alert_code" : "fault_code";
+    const descColumn = type === "alert" ? "alert_description" : "fault_description";
+    const excludeValues = type === "alert" ? ["Unknown Alert", "No Alert"] : ["Unknown Fault", "No Fault"];
+    const rawCountQuery = sql `
     SELECT
       COUNT(*) AS total_raw,
       COUNT(DISTINCT ${sql.raw(codeColumn)}) AS distinct_codes,
@@ -183,70 +154,48 @@ export async function getRawAlertFaultCounts(
       AND ${sql.raw(codeColumn)} IS NOT NULL
       AND ${sql.raw(codeColumn)} <> 0
       AND ${sql.raw(descColumn)} IS NOT NULL
-      AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
-      ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
+      AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql `, `)})
+      ${assigned_at ? sql `AND created_at >= ${assigned_at}` : sql ``}
   `;
-
-  const res = await db.execute(rawCountQuery);
-  return (res.rows?.[0] ?? {}) as {
-    total_raw: string;
-    distinct_codes: string;
-    earliest: Date | null;
-    latest: Date | null;
-  };
+    const res = await db.execute(rawCountQuery);
+    return (res.rows?.[0] ?? {});
 }
-
-
 // Backwards compatibility wrappers - now call the consolidated function
-export async function getConsecutiveAlertsPaginated(starterId: number, motorId: number, offset: number, limit: number, assigned_at: Date | null = null) {
-  return getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, 'alert', assigned_at);
+export async function getConsecutiveAlertsPaginated(starterId, motorId, offset, limit, assigned_at = null) {
+    return getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, 'alert', assigned_at);
 }
-
-
-export async function getConsecutiveFaultsPaginated(starterId: number, motorId: number, offset: number, limit: number, assigned_at: Date | null = null) {
-  return getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, 'fault', assigned_at);
+export async function getConsecutiveFaultsPaginated(starterId, motorId, offset, limit, assigned_at = null) {
+    return getConsecutiveGroupsPaginated(starterId, motorId, offset, limit, 'fault', assigned_at);
 }
-
-
-export async function getConsecutiveGroupsCount(
-  starterId: number,
-  motorId: number,
-  type: "alert" | "fault",
-  assigned_at: Date | null = null
-) {
-  const codeColumn = type === "alert" ? "alert_code" : "fault_code";
-  const descColumn = type === "alert" ? "alert_description" : "fault_description";
-  const excludeValues =
-    type === "alert"
-      ? ["Unknown Alert", "No Alert"]
-      : ["Unknown Fault", "No Fault"];
-
-  const clearedLabel = "Fault cleared - No more faults";
-
-  const innerFilter = type === "fault"
-    ? sql`
+export async function getConsecutiveGroupsCount(starterId, motorId, type, assigned_at = null) {
+    const codeColumn = type === "alert" ? "alert_code" : "fault_code";
+    const descColumn = type === "alert" ? "alert_description" : "fault_description";
+    const excludeValues = type === "alert"
+        ? ["Unknown Alert", "No Alert"]
+        : ["Unknown Fault", "No Fault"];
+    const clearedLabel = "Fault cleared - No more faults";
+    const innerFilter = type === "fault"
+        ? sql `
         AND fault_code IS NOT NULL
         AND (
           fault_code = 0
           OR (
             fault_code <> 0
             AND fault_description IS NOT NULL
-            AND fault_description NOT IN (${sql.join(excludeValues, sql`, `)})
+            AND fault_description NOT IN (${sql.join(excludeValues, sql `, `)})
           )
         )
       `
-    : sql`
+        : sql `
         AND ${sql.raw(codeColumn)} IS NOT NULL
         AND ${sql.raw(codeColumn)} <> 0
         AND ${sql.raw(descColumn)} IS NOT NULL
-        AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql`, `)})
+        AND ${sql.raw(descColumn)} NOT IN (${sql.join(excludeValues, sql `, `)})
       `;
-
-  const descExpr = type === "fault"
-    ? sql`CASE WHEN fault_code = 0 THEN ${clearedLabel} ELSE fault_description END`
-    : sql`${sql.raw(descColumn)}`;
-
-  const countQuery = sql`
+    const descExpr = type === "fault"
+        ? sql `CASE WHEN fault_code = 0 THEN ${clearedLabel} ELSE fault_description END`
+        : sql `${sql.raw(descColumn)}`;
+    const countQuery = sql `
     SELECT COUNT(*) AS total_groups
     FROM (
       SELECT DISTINCT ${sql.raw(codeColumn)}, grp
@@ -268,74 +217,56 @@ export async function getConsecutiveGroupsCount(
         WHERE starter_id = ${starterId}
           AND motor_id = ${motorId}
           ${innerFilter}
-          ${assigned_at ? sql`AND created_at >= ${assigned_at}` : sql``}
+          ${assigned_at ? sql `AND created_at >= ${assigned_at}` : sql ``}
       ) t
     ) grouped
   `;
-
-  const countRes = await db.execute(countQuery);
-  return Number((countRes.rows?.[0] as any)?.total_groups ?? 0);
+    const countRes = await db.execute(countQuery);
+    return Number(countRes.rows?.[0]?.total_groups ?? 0);
 }
-
-
-export function buildActivityActionFilter(logTypes: string[]) {
-  const includeOn = logTypes.includes("on");
-  const includeOff = logTypes.includes("off");
-  const includeModeChange = logTypes.includes("mode");
-  const includeAllActivity = logTypes.includes("activity");
-
-  // If only "activity" is present with no specific sub-types, return all activities
-  if (includeAllActivity && !includeOn && !includeOff && !includeModeChange) return sql``;
-
-  // Build OR conditions for specific activity sub-types
-  const conditions: ReturnType<typeof sql>[] = [];
-
-  if (includeOn) {
-    conditions.push(sql`(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND new_data::text LIKE '%"state":1%')`);
-  }
-  if (includeOff) {
-    conditions.push(sql`(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND new_data::text LIKE '%"state":0%')`);
-  }
-  if (includeModeChange) {
-    conditions.push(sql`(action IN ('MOTOR_MODE_SYNC', 'MOTOR_MODE_ACK', 'MOTOR_MODE_UPDATED'))`);
-  }
-  if (includeAllActivity) {
-    // "activity" combined with specific sub-types: include everything else too
-    conditions.push(sql`(action NOT IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK', 'MOTOR_MODE_SYNC', 'MOTOR_MODE_ACK', 'MOTOR_MODE_UPDATED'))`);
-  }
-
-  if (conditions.length === 0) return null; // no activity sub-types requested
-  if (conditions.length === 1) return sql`AND ${conditions[0]}`;
-
-  return sql`AND (${conditions.reduce((acc, cond, i) => i === 0 ? cond : sql`${acc} OR ${cond}`)})`;
+export function buildActivityActionFilter(logTypes) {
+    const includeOn = logTypes.includes("on");
+    const includeOff = logTypes.includes("off");
+    const includeModeChange = logTypes.includes("mode");
+    const includeAllActivity = logTypes.includes("activity");
+    // If only "activity" is present with no specific sub-types, return all activities
+    if (includeAllActivity && !includeOn && !includeOff && !includeModeChange)
+        return sql ``;
+    // Build OR conditions for specific activity sub-types
+    const conditions = [];
+    if (includeOn) {
+        conditions.push(sql `(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND new_data::text LIKE '%"state":1%')`);
+    }
+    if (includeOff) {
+        conditions.push(sql `(action IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK') AND new_data::text LIKE '%"state":0%')`);
+    }
+    if (includeModeChange) {
+        conditions.push(sql `(action IN ('MOTOR_MODE_SYNC', 'MOTOR_MODE_ACK', 'MOTOR_MODE_UPDATED'))`);
+    }
+    if (includeAllActivity) {
+        // "activity" combined with specific sub-types: include everything else too
+        conditions.push(sql `(action NOT IN ('MOTOR_STATE_SYNC', 'MOTOR_CONTROL_ACK', 'MOTOR_MODE_SYNC', 'MOTOR_MODE_ACK', 'MOTOR_MODE_UPDATED'))`);
+    }
+    if (conditions.length === 0)
+        return null; // no activity sub-types requested
+    if (conditions.length === 1)
+        return sql `AND ${conditions[0]}`;
+    return sql `AND (${conditions.reduce((acc, cond, i) => i === 0 ? cond : sql `${acc} OR ${cond}`)})`;
 }
-
-export async function getUnifiedLogsPaginated(
-  starterId: number,
-  motorId: number,
-  offset: number,
-  limit: number,
-  assignedAt: Date | null = null,
-  logTypes: string[] | null = null
-) {
-  // If no logTypes provided, include everything
-  const types = logTypes && logTypes.length > 0 ? logTypes : ["alert", "fault", "activity"];
-
-  const includeAlert = types.includes("alert");
-  const includeFault = types.includes("fault");
-
-  // Check if any activity sub-type is requested
-  const hasActivityType = types.includes("activity") || types.includes("on") || types.includes("off") || types.includes("mode");
-  const activityActionFilter = hasActivityType ? buildActivityActionFilter(types) : null;
-  const includeActivity = activityActionFilter !== null;
-
-  const assignedAtFilter = assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``;
-
-  const parts: ReturnType<typeof sql>[] = [];
-
-  if (includeActivity) {
-    // All activity logs except FAULT_CLEARED — returned individually as-is
-    parts.push(sql`
+export async function getUnifiedLogsPaginated(starterId, motorId, offset, limit, assignedAt = null, logTypes = null) {
+    // If no logTypes provided, include everything
+    const types = logTypes && logTypes.length > 0 ? logTypes : ["alert", "fault", "activity"];
+    const includeAlert = types.includes("alert");
+    const includeFault = types.includes("fault");
+    // Check if any activity sub-type is requested
+    const hasActivityType = types.includes("activity") || types.includes("on") || types.includes("off") || types.includes("mode");
+    const activityActionFilter = hasActivityType ? buildActivityActionFilter(types) : null;
+    const includeActivity = activityActionFilter !== null;
+    const assignedAtFilter = assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``;
+    const parts = [];
+    if (includeActivity) {
+        // All activity logs except FAULT_CLEARED — returned individually as-is
+        parts.push(sql `
       SELECT
         id,
         'activity' AS log_type,
@@ -353,10 +284,9 @@ export async function getUnifiedLogsPaginated(
         ${assignedAtFilter}
         ${activityActionFilter}
     `);
-
-    // FAULT_CLEARED from activity logs — island-gap grouping, code=0 hardcoded
-    if (types.includes("activity")) {
-      parts.push(sql`
+        // FAULT_CLEARED from activity logs — island-gap grouping, code=0 hardcoded
+        if (types.includes("activity")) {
+            parts.push(sql `
         SELECT
           MAX(id) AS id,
           'activity' AS log_type,
@@ -388,11 +318,10 @@ export async function getUnifiedLogsPaginated(
         ) fc
         GROUP BY action, entity_type, message, grp
       `);
+        }
     }
-  }
-
-  if (includeAlert) {
-    parts.push(sql`
+    if (includeAlert) {
+        parts.push(sql `
   SELECT
     MAX(id) AS id,
     'alert' AS log_type,
@@ -426,7 +355,7 @@ export async function getUnifiedLogsPaginated(
       AND motor_id = ${motorId}
       AND alert_code IS NOT NULL
       AND alert_code >= 0
-      ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+      ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
   ) alert_groups
   GROUP BY
     starter_id,
@@ -438,11 +367,10 @@ export async function getUnifiedLogsPaginated(
     END,
     grp
 `);
-  }
-
-  if (includeFault) {
-    // fault_code=0 (cleared) goes through the same island-gap consecutive grouping as non-zero codes
-    parts.push(sql`
+    }
+    if (includeFault) {
+        // fault_code=0 (cleared) goes through the same island-gap consecutive grouping as non-zero codes
+        parts.push(sql `
   SELECT
     MAX(id) AS id,
     'fault' AS log_type,
@@ -476,7 +404,7 @@ export async function getUnifiedLogsPaginated(
       AND motor_id = ${motorId}
       AND fault_code IS NOT NULL
       AND fault_code >= 0
-      ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+      ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
   ) fault_groups
   GROUP BY
     starter_id,
@@ -488,15 +416,13 @@ export async function getUnifiedLogsPaginated(
     END,
     grp
 `);
-  }
-
-  if (parts.length === 0) return [];
-
-  const unionQuery = parts.length === 1
-    ? parts[0]
-    : parts.reduce((acc, part, i) => i === 0 ? part : sql`${acc} UNION ALL ${part}`);
-
-  const query = sql`
+    }
+    if (parts.length === 0)
+        return [];
+    const unionQuery = parts.length === 1
+        ? parts[0]
+        : parts.reduce((acc, part, i) => i === 0 ? part : sql `${acc} UNION ALL ${part}`);
+    const query = sql `
     SELECT * FROM (
       ${unionQuery}
     ) unified
@@ -505,33 +431,20 @@ export async function getUnifiedLogsPaginated(
     LIMIT ${limit}
     OFFSET ${offset}
   `;
-
-  const results = await db.execute(query);
-  return results.rows ?? results;
+    const results = await db.execute(query);
+    return results.rows ?? results;
 }
-
-
-export async function getUnifiedLogsCount(
-  starterId: number,
-  motorId: number,
-  assignedAt: Date | null = null,
-  logTypes: string[] | null = null
-) {
-  const types = logTypes && logTypes.length > 0 ? logTypes : ["alert", "fault", "activity"];
-
-  const includeAlert = types.includes("alert");
-  const includeFault = types.includes("fault");
-
-  const hasActivityType = types.includes("activity") || types.includes("on") || types.includes("off") || types.includes("mode");
-  const activityActionFilter = hasActivityType ? buildActivityActionFilter(types) : null;
-  const includeActivity = activityActionFilter !== null;
-
-  const assignedAtFilter = assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``;
-
-  const parts: ReturnType<typeof sql>[] = [];
-
-  if (includeActivity) {
-    parts.push(sql`
+export async function getUnifiedLogsCount(starterId, motorId, assignedAt = null, logTypes = null) {
+    const types = logTypes && logTypes.length > 0 ? logTypes : ["alert", "fault", "activity"];
+    const includeAlert = types.includes("alert");
+    const includeFault = types.includes("fault");
+    const hasActivityType = types.includes("activity") || types.includes("on") || types.includes("off") || types.includes("mode");
+    const activityActionFilter = hasActivityType ? buildActivityActionFilter(types) : null;
+    const includeActivity = activityActionFilter !== null;
+    const assignedAtFilter = assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``;
+    const parts = [];
+    if (includeActivity) {
+        parts.push(sql `
       SELECT id, message
       FROM user_activity_logs
       WHERE device_id = ${starterId}
@@ -541,9 +454,8 @@ export async function getUnifiedLogsCount(
         ${assignedAtFilter}
         ${activityActionFilter}
     `);
-
-    if (types.includes("activity")) {
-      parts.push(sql`
+        if (types.includes("activity")) {
+            parts.push(sql `
         SELECT MAX(id) AS id, message
         FROM (
           SELECT *,
@@ -566,11 +478,10 @@ export async function getUnifiedLogsCount(
         ) fc
         GROUP BY action, entity_type, message, grp
       `);
+        }
     }
-  }
-
-  if (includeAlert) {
-    parts.push(sql`
+    if (includeAlert) {
+        parts.push(sql `
       SELECT
         MAX(id) AS id,
         CASE WHEN alert_code = 0 THEN 'Alert cleared - No more alerts' ELSE COALESCE(alert_description, '') END AS message
@@ -591,17 +502,16 @@ export async function getUnifiedLogsCount(
           AND motor_id = ${motorId}
           AND alert_code IS NOT NULL
           AND alert_code >= 0
-          ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+          ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) alert_groups
       GROUP BY
         starter_id, motor_id, alert_code,
         CASE WHEN alert_code = 0 THEN 'Alert cleared - No more alerts' ELSE COALESCE(alert_description, '') END,
         grp
     `);
-  }
-
-  if (includeFault) {
-    parts.push(sql`
+    }
+    if (includeFault) {
+        parts.push(sql `
       SELECT
         MAX(id) AS id,
         CASE WHEN fault_code = 0 THEN 'Fault cleared - No more faults' ELSE COALESCE(fault_description, '') END AS message
@@ -622,27 +532,24 @@ export async function getUnifiedLogsCount(
           AND motor_id = ${motorId}
           AND fault_code IS NOT NULL
           AND fault_code >= 0
-          ${assignedAt ? sql`AND created_at >= ${assignedAt}` : sql``}
+          ${assignedAt ? sql `AND created_at >= ${assignedAt}` : sql ``}
       ) fault_groups
       GROUP BY
         starter_id, motor_id, fault_code,
         CASE WHEN fault_code = 0 THEN 'Fault cleared - No more faults' ELSE COALESCE(fault_description, '') END,
         grp
     `);
-  }
-
-  if (parts.length === 0) return 0;
-
-  const unionQuery = parts.length === 1
-    ? parts[0]
-    : parts.reduce((acc, part, i) => i === 0 ? part : sql`${acc} UNION ALL ${part}`);
-
-  const countQuery = sql`
+    }
+    if (parts.length === 0)
+        return 0;
+    const unionQuery = parts.length === 1
+        ? parts[0]
+        : parts.reduce((acc, part, i) => i === 0 ? part : sql `${acc} UNION ALL ${part}`);
+    const countQuery = sql `
     SELECT COUNT(*) AS total FROM (
       ${unionQuery}
     ) unified
   `;
-
-  const countRes = await db.execute(countQuery);
-  return Number((countRes.rows?.[0] as any)?.total ?? 0);
+    const countRes = await db.execute(countQuery);
+    return Number(countRes.rows?.[0]?.total ?? 0);
 }
