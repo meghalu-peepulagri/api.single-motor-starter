@@ -232,6 +232,8 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
       device_allocation: true,
       sim_recharge_expires_at: true,
       device_mobile_number: true,
+      device_installed_location: true,
+      installation_photo_key: true,
     },
     with: {
       motors: {
@@ -244,6 +246,7 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
           mode: true,
           alias_name: true,
           test_run_status: true,
+          test_run_completed_at: true,
         },
         with: {
           location: {
@@ -463,6 +466,7 @@ export async function starterConnectedMotors(starterId: number) {
           state: true,
           mode: true,
           alias_name: true,
+          test_run_completed_at: true,
         },
       },
       location: {
