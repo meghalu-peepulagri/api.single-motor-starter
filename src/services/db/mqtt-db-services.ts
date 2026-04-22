@@ -113,6 +113,8 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
 
       if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {
         starterBoxUpdates.power = power_present;
+        if (power_present === 1) starterBoxUpdates.last_power_on_at = new Date(time_stamp);
+        else if (power_present === 0) starterBoxUpdates.last_power_off_at = new Date(time_stamp);
         trackPowerChange = true;
       }
 
@@ -137,11 +139,14 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
 
         if (typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1)) {
           updateData.state = motor_state;
+          if (motor_state === 1) updateData.motor_last_on_at = new Date(time_stamp);
+          else if (motor_state === 0) updateData.motor_last_off_at = new Date(time_stamp);
           shouldUpdateMotor = true;
         }
 
         if (VALID_MODES.includes(mode_description as ValidMode) && mode_description !== prevMode) {
           updateData.mode = mode_description;
+          updateData.last_mode_change_at = new Date(time_stamp);
           shouldUpdateMotor = true;
         }
 
@@ -295,6 +300,8 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
 
     if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {
       starterBoxUpdates.power = power_present;
+      if (power_present === 1) starterBoxUpdates.last_power_on_at = new Date(time_stamp);
+      else if (power_present === 0) starterBoxUpdates.last_power_off_at = new Date(time_stamp);
       trackPowerChange = true;
     }
 
@@ -319,11 +326,14 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
 
       if (typeof motor_state === "number" && motor_state !== prevState && (motor_state === 0 || motor_state === 1)) {
         updateData.state = motor_state;
+        if (motor_state === 1) updateData.motor_last_on_at = new Date(time_stamp);
+        else if (motor_state === 0) updateData.motor_last_off_at = new Date(time_stamp);
         shouldUpdateMotor = true;
       }
 
       if (VALID_MODES.includes(mode_description as ValidMode) && mode_description !== prevMode) {
         updateData.mode = mode_description;
+        updateData.last_mode_change_at = new Date(time_stamp);
         shouldUpdateMotor = true;
       }
 
@@ -409,6 +419,8 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
 
     if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {
       starterBoxUpdates.power = power_present;
+      if (power_present === 1) starterBoxUpdates.last_power_on_at = new Date(time_stamp);
+      else if (power_present === 0) starterBoxUpdates.last_power_off_at = new Date(time_stamp);
       trackPowerChange = true;
     }
 
@@ -429,7 +441,10 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
 
     if (motor_state !== prevState) {
       if (motor_state === 0 || motor_state === 1) {
-        await updateRecordByIdWithTrx(motors, motor_id, { state: motor_state }, trx);
+        const updateData: any = { state: motor_state };
+        if (motor_state === 1) updateData.motor_last_on_at = new Date(time_stamp);
+        else if (motor_state === 0) updateData.motor_last_off_at = new Date(time_stamp);
+        await updateRecordByIdWithTrx(motors, motor_id, updateData, trx);
       }
       await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { state: prevState, mode: prevMode }, { state: motor_state, mode: prevMode }, trx, starter_id);
     }
@@ -480,6 +495,8 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 
     if (power_present !== power && power_present !== null && (power_present === 1 || power_present === 0)) {
       starterBoxUpdates.power = power_present;
+      if (power_present === 1) starterBoxUpdates.last_power_on_at = new Date(time_stamp);
+      else if (power_present === 0) starterBoxUpdates.last_power_off_at = new Date(time_stamp);
       trackPowerChange = true;
     }
 
@@ -498,7 +515,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
     }
 
     if (VALID_MODES.includes(mode_description as ValidMode) && mode_description !== prevMode && motor_id) {
-      await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description as ValidMode }, trx);
+      await updateRecordByIdWithTrx(motors, motor_id, { mode: mode_description as ValidMode, last_mode_change_at: new Date(time_stamp) }, trx);
       await ActivityService.writeMotorSyncLogs(created_by || device_created_by, motor_id, { mode: prevMode }, { mode: mode_description }, trx, starter_id);
     }
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
@@ -564,7 +581,10 @@ export async function motorControlAckHandler(message: any, topic: string) {
     const notificationData = await db.transaction(async (trx) => {
       // Update motor state ONLY if changed
       if (stateChanged && (newState === 0 || newState === 1)) {
-        await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor.id));
+        const updateData: any = { state: newState, updated_at: new Date() };
+        if (newState === 1) updateData.motor_last_on_at = new Date();
+        else if (newState === 0) updateData.motor_last_off_at = new Date();
+        await trx.update(motors).set(updateData).where(eq(motors.id, motor.id));
 
         await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
       } else {
@@ -608,7 +628,7 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
     await db.transaction(async (trx) => {
       if (mode !== motor.mode) {
         if (mode == "MANUAL" || mode == "AUTO") {
-          await trx.update(motors).set({ mode: mode as any, updated_at: new Date() }).where(eq(motors.id, motor.id));
+          await trx.update(motors).set({ mode: mode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
         }
       }
 
@@ -642,7 +662,13 @@ export async function heartbeatHandler(message: any, topic: string) {
     const { strength, status } = getValidStrength(message.D.s_q);
     const validNetwork = getValidNetwork(message.D.nwt);
 
-    if (validMac.signal_quality !== strength || validMac.network_type !== message.D.nwt) await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { signal_quality: strength, network_type: validNetwork, status: status });
+    const starterBoxUpdates: any = { last_signal_received_at: new Date() };
+    if (validMac.signal_quality !== strength || validMac.network_type !== message.D.nwt) {
+      starterBoxUpdates.signal_quality = strength;
+      starterBoxUpdates.network_type = validNetwork;
+      starterBoxUpdates.status = status;
+    }
+    await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, starterBoxUpdates);
 
     if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
 
