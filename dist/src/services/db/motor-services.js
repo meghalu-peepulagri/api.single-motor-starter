@@ -131,6 +131,7 @@ export async function getMotorsLatestRuntime(motorIds) {
         motor_state: motorsRunTime.motor_state,
         start_time: motorsRunTime.start_time,
         end_time: motorsRunTime.end_time,
+        offline_at: motorsRunTime.offline_at,
     })
         .from(motorsRunTime)
         .where(inArray(motorsRunTime.motor_id, motorIds))
@@ -145,24 +146,29 @@ export async function getMotorsLatestRuntime(motorIds) {
         if (!row.motor_id || !row.start_time)
             continue;
         const start = new Date(row.start_time);
+        const effectiveEnd = row.end_time
+            ? new Date(row.end_time)
+            : row.offline_at
+                ? new Date(row.offline_at)
+                : null;
         let durationMs = 0;
         let state = row.motor_state === 1 ? "ON" : "OFF";
         // 🔹 CASE 1: ON + no end_time → currently running
-        if (row.motor_state === 1 && !row.end_time) {
+        if (row.motor_state === 1 && !effectiveEnd) {
             durationMs = now.getTime() - start.getTime();
         }
-        // 🔹 CASE 2: ON + end_time → completed run
-        else if (row.motor_state === 1 && row.end_time) {
+        // 🔹 CASE 2: ON + end_time/offline_at → completed run
+        else if (row.motor_state === 1 && effectiveEnd) {
             durationMs =
-                new Date(row.end_time).getTime() - start.getTime();
+                effectiveEnd.getTime() - start.getTime();
         }
-        // 🔹 CASE 3: OFF + end_time → stopped
-        else if (row.motor_state === 0 && row.end_time) {
+        // 🔹 CASE 3: OFF + end_time/offline_at → stopped
+        else if (row.motor_state === 0 && effectiveEnd) {
             durationMs =
-                now.getTime() - new Date(row.end_time).getTime();
+                now.getTime() - effectiveEnd.getTime();
         }
         // 🔥 CASE 4: OFF + no end_time → IMPORTANT FIX (your case)
-        else if (row.motor_state === 0 && !row.end_time) {
+        else if (row.motor_state === 0 && !effectiveEnd) {
             durationMs = now.getTime() - start.getTime();
         }
         // ✅ Safety check
@@ -428,6 +434,7 @@ export async function getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId
             power_end: true,
             power_duration: true,
             power_state: true,
+            offline_at: true,
         }
     });
     // Enrich open records with live values (response only, not saved to DB)
@@ -435,13 +442,14 @@ export async function getMotorRunTime(starterId, fromDateUTC, toDateUTC, motorId
     const enrichedRecords = records.map(record => {
         if (record.end_time !== null)
             return record;
-        const liveDurationMs = now.getTime() - new Date(record.start_time).getTime();
-        const livePowerDurationMs = record.power_start ? now.getTime() - new Date(record.power_start).getTime() : null;
+        const effectiveEnd = record.offline_at ? new Date(record.offline_at) : now;
+        const liveDurationMs = effectiveEnd.getTime() - new Date(record.start_time).getTime();
+        const livePowerDurationMs = record.power_start ? effectiveEnd.getTime() - new Date(record.power_start).getTime() : null;
         return {
             ...record,
-            end_time: now,
+            end_time: effectiveEnd,
             duration: formatDuration(liveDurationMs),
-            power_end: record.power_end ?? (record.power_start ? now.toISOString() : null),
+            power_end: record.power_end ?? (record.power_start ? effectiveEnd.toISOString() : null),
             power_duration: record.power_duration ?? (livePowerDurationMs !== null ? formatDuration(livePowerDurationMs) : null),
         };
     });
@@ -477,7 +485,7 @@ export async function getMotorsTotalRunOnTime(motorIds) {
     // Fetch open/ongoing records (no end_time) where motor is ON and started before today ends
     const openRecords = await db.query.motorsRunTime.findMany({
         where: and(inArray(motorsRunTime.motor_id, motorIds), isNull(motorsRunTime.end_time), eq(motorsRunTime.motor_state, 1), lte(motorsRunTime.start_time, toDateObj)),
-        columns: { motor_id: true, start_time: true, end_time: true, motor_state: true },
+        columns: { motor_id: true, start_time: true, end_time: true, motor_state: true, offline_at: true },
     });
     const allRecords = [...completedRecords, ...openRecords];
     // Group by motor_id
@@ -496,8 +504,12 @@ export async function getMotorsTotalRunOnTime(motorIds) {
             if (record.motor_state !== 1)
                 continue;
             const start = new Date(record.start_time);
-            // For open records: use now as end; for completed: use actual end_time
-            const end = record.end_time ? new Date(record.end_time) : now;
+            // For open records: stop at offline_at when present; otherwise use now.
+            const end = record.end_time
+                ? new Date(record.end_time)
+                : record.offline_at
+                    ? new Date(record.offline_at)
+                    : now;
             // Clamp to today's range
             const segmentStart = start > fromDateObj ? start : fromDateObj;
             const segmentEnd = end < toDateObj ? end : toDateObj;
@@ -527,10 +539,57 @@ export async function updateStarterStatusWithTransaction(starterIds) {
         const activeIds = activeStarterIds.map((row) => row.id);
         // Update motors to INACTIVE
         if (inactiveIds.length > 0) {
+            console.log("inactiveIds", inactiveIds);
+            const offlineAt = new Date();
+            const offlineAtIso = offlineAt.toISOString();
             await trx
                 .update(motors)
                 .set({ status: "INACTIVE" })
                 .where(and(inArray(motors.starter_id, inactiveIds), ne(motors.status, "ARCHIVED")));
+            const openMotorRuntimeRows = await trx
+                .select({
+                id: motorsRunTime.id,
+                start_time: motorsRunTime.start_time,
+                power_start: motorsRunTime.power_start,
+            })
+                .from(motorsRunTime)
+                .where(and(inArray(motorsRunTime.starter_box_id, inactiveIds), isNull(motorsRunTime.end_time)));
+            for (const row of openMotorRuntimeRows) {
+                const durationMs = offlineAt.getTime() - new Date(row.start_time).getTime();
+                const powerDurationMs = row.power_start
+                    ? offlineAt.getTime() - new Date(row.power_start).getTime()
+                    : null;
+                await trx
+                    .update(motorsRunTime)
+                    .set({
+                    end_time: offlineAt,
+                    duration: formatDuration(durationMs),
+                    power_end: row.power_start ? offlineAtIso : null,
+                    power_duration: powerDurationMs !== null ? formatDuration(powerDurationMs) : null,
+                    offline_at: offlineAt,
+                    updated_at: offlineAt,
+                })
+                    .where(eq(motorsRunTime.id, row.id));
+            }
+            const openDeviceRuntimeRows = await trx
+                .select({
+                id: deviceRunTime.id,
+                start_time: deviceRunTime.start_time,
+            })
+                .from(deviceRunTime)
+                .where(and(inArray(deviceRunTime.starter_box_id, inactiveIds), isNull(deviceRunTime.end_time)));
+            for (const row of openDeviceRuntimeRows) {
+                const durationMs = offlineAt.getTime() - new Date(row.start_time).getTime();
+                await trx
+                    .update(deviceRunTime)
+                    .set({
+                    end_time: offlineAt,
+                    duration: formatDuration(durationMs),
+                    updated_at: offlineAt,
+                    time_stamp: offlineAtIso,
+                })
+                    .where(eq(deviceRunTime.id, row.id));
+            }
         }
         // Update motors to ACTIVE
         if (activeIds.length > 0) {

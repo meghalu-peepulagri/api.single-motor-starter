@@ -23,6 +23,7 @@ export function splitRuntimeRecordsByDate(records, fromDate, toDate) {
                 start_time: clampedStart,
                 end_time: null,
                 duration: null,
+                offline_at: record.offline_at ? new Date(record.offline_at) : null,
             });
             continue;
         }
@@ -38,6 +39,7 @@ export function splitRuntimeRecordsByDate(records, fromDate, toDate) {
             start_time: clampedStart,
             end_time: clampedEnd,
             duration: formatDuration(durationMs),
+            offline_at: record.offline_at ? new Date(record.offline_at) : null,
         });
     }
     return result;
