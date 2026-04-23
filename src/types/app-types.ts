@@ -354,8 +354,8 @@ export interface SplitRuntimeRecord {
 }
 
 export type MotorStateData = {
-  state?: number;
-  mode?: string;
+  state?: number | null;
+  mode?: string | null;
   last_on_description?: string;
   last_off_description?: string;
 };
