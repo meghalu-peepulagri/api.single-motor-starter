@@ -6,28 +6,24 @@ import type { WhereQueryData } from "../types/db-types.js";
 
 function meaningfulLastOffOnStateMessage(
   state: number,
-  mode?: string,
+  mode?: string | null,
   lastOnDesc?: string,
   lastOffDesc?: string
 ): string {
-  const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode}` : "";
+  const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode} mode` : "";
 
   if (state === 1) {
-    const desc = lastOnDesc?.trim();
-    if (!desc || desc === "None") return `Pump turned ON${modeLabel}`;
-    return `Pump turned ON${modeLabel} via ${desc}`;
+    return `Pump turned ON${modeLabel}`;
   }
 
   if (state === 0) {
-    const desc = lastOffDesc?.trim();
-    if (!desc || desc === "None") return `Pump turned OFF${modeLabel}`;
-    return `Pump turned OFF${modeLabel} due to ${desc}`;
+    return `Pump turned OFF${modeLabel}`;
   }
 
   return "Pump control failed. Try again.";
 }
 
-export function meaningfulModeMessage(oldMode: string | undefined | null, newMode: string): string {
+export function meaningfulModeMessage(oldMode: string | undefined | null, newMode: string | null): string {
   if (newMode === "MANUAL" || newMode === "AUTO") {
     return `Pump switched from ${oldMode} to ${newMode} mode.`;
   }

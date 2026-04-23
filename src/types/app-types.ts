@@ -336,6 +336,7 @@ export interface RuntimeRecord {
   power_end: string | null;
   power_duration: string | null;
   power_state: number | null;
+  offline_at?: Date | string | null;
 }
 
 export interface SplitRuntimeRecord {
@@ -349,11 +350,12 @@ export interface SplitRuntimeRecord {
   power_end: string | null;
   power_duration: string | null;
   power_state: number | null;
+  offline_at?: Date | null;
 }
 
 export type MotorStateData = {
-  state?: number;
-  mode?: string;
+  state?: number | null;
+  mode?: string | null;
   last_on_description?: string;
   last_off_description?: string;
 };
