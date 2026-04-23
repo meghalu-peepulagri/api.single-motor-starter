@@ -708,7 +708,6 @@ export async function updateStarterStatusWithTransaction(starterIds: number[]) {
 
     // Update motors to INACTIVE
     if (inactiveIds.length > 0) {
-      console.log("inactiveIds", inactiveIds);
       const offlineAt = new Date();
       const offlineAtIso = offlineAt.toISOString();
 

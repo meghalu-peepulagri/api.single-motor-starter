@@ -539,7 +539,6 @@ export async function updateStarterStatusWithTransaction(starterIds) {
         const activeIds = activeStarterIds.map((row) => row.id);
         // Update motors to INACTIVE
         if (inactiveIds.length > 0) {
-            console.log("inactiveIds", inactiveIds);
             const offlineAt = new Date();
             const offlineAtIso = offlineAt.toISOString();
             await trx
