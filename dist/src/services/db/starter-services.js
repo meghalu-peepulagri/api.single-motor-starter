@@ -75,6 +75,7 @@ export async function getStarterByMacWithMotor(mac) {
         where: and(or(eq(starterBoxes.mac_address, upperMac), eq(starterBoxes.pcb_number, upperMac)), ne(starterBoxes.status, 'ARCHIVED')),
         columns: {
             id: true,
+            status: true,
             user_id: true,
             created_by: true,
             gateway_id: true,

@@ -20,7 +20,7 @@ import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { updateActualScheduleFields } from "./motor-schedules-services.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
-import { writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
+import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
 // Live data
@@ -986,16 +986,32 @@ export async function heartbeatHandler(message: any, topic: string) {
       console.error(`Any starter found with given MAC [${topic}]`)
       return null;
     };
+    const heartbeatAt = new Date();
     const { strength, status } = getValidStrength(message.D.s_q);
     const validNetwork = getValidNetwork(message.D.nwt);
+    const statusChanged = validMac.status !== status;
+    const signalChanged = validMac.signal_quality !== strength;
+    const networkChanged = validMac.network_type !== validNetwork;
 
-    const starterBoxUpdates: any = { last_signal_received_at: new Date() };
-    if (validMac.signal_quality !== strength || validMac.network_type !== message.D.nwt) {
+    const starterBoxUpdates: any = { last_signal_received_at: heartbeatAt };
+    if (signalChanged || networkChanged || statusChanged) {
       starterBoxUpdates.signal_quality = strength;
       starterBoxUpdates.network_type = validNetwork;
       starterBoxUpdates.status = status;
     }
-    await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, starterBoxUpdates);
+
+    await db.transaction(async (trx) => {
+      await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, validMac.id, starterBoxUpdates, trx);
+
+      if (statusChanged) {
+        await writeDeviceStatusHistoryIfChanged({
+          starter_id: validMac.id,
+          status,
+          time_stamp: heartbeatAt,
+          trx,
+        });
+      }
+    });
 
     if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
 
