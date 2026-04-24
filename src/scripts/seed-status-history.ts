@@ -93,6 +93,7 @@ function generateMotorHistory(
 
 function generatePowerHistory(
   starterId: number,
+  motorId: number | null,
   start: Date,
   end: Date,
 ): NewPowerStatusHistory[] {
@@ -101,7 +102,7 @@ function generatePowerHistory(
   let status: "ON" | "OFF" = "ON"; // power starts ON
 
   while (current <= end) {
-    records.push({ starter_id: starterId, motor_id: null, status, time_stamp: new Date(current) });
+    records.push({ starter_id: starterId, motor_id: motorId, status, time_stamp: new Date(current) });
     // ON for 8–20 h, OFF for 1–4 h
     const hours = status === "ON" ? rand(8, 20) : rand(1, 4);
     current = addHours(current, hours);
@@ -176,9 +177,13 @@ async function main() {
 
     for (const motor of starterMotors) {
       motorRecords.push(...generateMotorHistory(starter.id, motor.id, start, end));
+      // Mirror live MQTT writes, which persist power history against the motor when available.
+      powerRecords.push(...generatePowerHistory(starter.id, motor.id, start, end));
     }
 
-    powerRecords.push(...generatePowerHistory(starter.id, start, end));
+    if (starterMotors.length === 0) {
+      powerRecords.push(...generatePowerHistory(starter.id, null, start, end));
+    }
     deviceRecords.push(...generateDeviceHistory(starter.id, start, end));
   }
 
