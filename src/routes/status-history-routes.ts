@@ -5,6 +5,7 @@ import { isAuthorized } from "../middlewares/isAuthorized.js";
 const handlers = new StatusHistoryHandlers();
 const statusHistoryRoutes = factory.createApp();
 
+statusHistoryRoutes.get("/motor/runtime", isAuthorized, handlers.getMotorRuntimeHandler);
 statusHistoryRoutes.get("/motor", isAuthorized, handlers.getMotorStatusHistoryHandler);
 statusHistoryRoutes.get("/power", isAuthorized, handlers.getPowerStatusHistoryHandler);
 statusHistoryRoutes.get("/device", isAuthorized, handlers.getDeviceStatusHistoryHandler);
