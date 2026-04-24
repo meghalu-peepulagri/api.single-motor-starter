@@ -156,23 +156,21 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
         starterBoxUpdates.temperature = temp;
       }
 
+      await writePowerStatusHistoryIfChanged({
+        starter_id,
+        motor_id: motor_id ?? null,
+        status: power_present === 1 ? "ON" : "OFF",
+        time_stamp: new Date(time_stamp),
+        trx,
+      });
+
       if (Object.keys(starterBoxUpdates).length > 0) {
         await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter_id, starterBoxUpdates, trx);
+        await trackDeviceRunTime({
+          starter_id, motor_id, location_id: locationId, previous_power_state: power,
+          new_power_state: power_present, motor_state, mode_description, time_stamp
+        }, trx);
 
-        if (trackPowerChange) {
-          await writePowerStatusHistoryIfChanged({
-            starter_id,
-            motor_id: motor_id ?? null,
-            status: power_present === 1 ? "ON" : "OFF",
-            time_stamp: new Date(time_stamp),
-            trx,
-          });
-
-          await trackDeviceRunTime({
-            starter_id, motor_id, location_id: locationId, previous_power_state: power,
-            new_power_state: power_present, motor_state, mode_description, time_stamp
-          }, trx);
-        }
       }
 
       let effectivePrevState = prevState;
@@ -202,24 +200,27 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
           incomingMode: mode_description,
           timeStamp: time_stamp,
         });
+        const shouldWriteMotorHistory = motorSyncChange.nextState === 0 || motorSyncChange.nextState === 1;
+
+        if (shouldWriteMotorHistory) {
+          await writeMotorStatusHistoryIfChanged({
+            starter_id,
+            motor_id,
+            status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
+            time_stamp: new Date(time_stamp),
+            trx,
+          });
+        }
 
         if (motorSyncChange.shouldUpdateMotor) {
           await updateRecordByIdWithTrx(motors, motor_id, motorSyncChange.updateData, trx);
-          if (motorSyncChange.hasStateChanged) {
-            await writeMotorStatusHistoryIfChanged({
-              starter_id,
-              motor_id,
-              status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
-              time_stamp: new Date(time_stamp),
-              trx,
-            });
-          }
           await ActivityService.writeMotorSyncLogs(effectiveCreatedBy, motor_id,
             { state: effectivePrevState, mode: effectivePrevMode }, {
             state: motorSyncChange.nextState,
             mode: motorSyncChange.nextMode
           }, trx, starter_id);
         }
+
 
         const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
         const hasMotorStateChanged = motorSyncChange.hasStateChanged;
@@ -522,18 +523,18 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
       starterBoxUpdates.temperature = temp;
     }
 
+    await writePowerStatusHistoryIfChanged({
+      starter_id,
+      motor_id,
+      status: power_present === 1 ? "ON" : "OFF",
+      time_stamp: new Date(time_stamp),
+      trx,
+    });
+
     if (Object.keys(starterBoxUpdates).length > 0) {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter_id, starterBoxUpdates, trx);
 
       if (trackPowerChange) {
-        await writePowerStatusHistoryIfChanged({
-          starter_id,
-          motor_id,
-          status: power_present === 1 ? "ON" : "OFF",
-          time_stamp: new Date(time_stamp),
-          trx,
-        });
-
         await trackDeviceRunTime({
           starter_id, motor_id, location_id: locationId, previous_power_state: power,
           new_power_state: power_present, motor_state, mode_description, time_stamp
@@ -568,18 +569,10 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
         incomingMode: mode_description,
         timeStamp: time_stamp,
       });
+      const shouldWriteMotorHistory = motorSyncChange.nextState === 0 || motorSyncChange.nextState === 1;
 
       if (motorSyncChange.shouldUpdateMotor) {
         await updateRecordByIdWithTrx(motors, motor_id, motorSyncChange.updateData, trx);
-        if (motorSyncChange.hasStateChanged) {
-          await writeMotorStatusHistoryIfChanged({
-            starter_id,
-            motor_id,
-            status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
-            time_stamp: new Date(time_stamp),
-            trx,
-          });
-        }
         await ActivityService.writeMotorSyncLogs(effectiveCreatedBy, motor_id,
           { state: effectivePrevState, mode: effectivePrevMode },
           { state: motorSyncChange.nextState, mode: motorSyncChange.nextMode },
@@ -587,6 +580,14 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
           starter_id
         );
       }
+
+      await writeMotorStatusHistoryIfChanged({
+        starter_id,
+        motor_id,
+        status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
+        time_stamp: new Date(time_stamp),
+        trx,
+      });
     }
 
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
@@ -676,18 +677,18 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
       starterBoxUpdates.temperature = temp;
     }
 
+    await writePowerStatusHistoryIfChanged({
+      starter_id,
+      motor_id,
+      status: power_present === 1 ? "ON" : "OFF",
+      time_stamp: new Date(time_stamp),
+      trx,
+    });
+
     if (Object.keys(starterBoxUpdates).length > 0) {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter_id, starterBoxUpdates, trx);
 
       if (trackPowerChange) {
-        await writePowerStatusHistoryIfChanged({
-          starter_id,
-          motor_id,
-          status: power_present === 1 ? "ON" : "OFF",
-          time_stamp: new Date(time_stamp),
-          trx,
-        });
-
         await trackDeviceRunTime({
           starter_id, motor_id, location_id: locationId, previous_power_state: power,
           new_power_state: power_present, motor_state, mode_description, time_stamp
@@ -714,18 +715,19 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
       incomingMode: mode_description,
       timeStamp: time_stamp,
     });
+    const shouldWriteMotorHistory = motorSyncChange.nextState === 0 || motorSyncChange.nextState === 1;
 
     if (motorSyncChange.hasStateChanged) {
       await updateRecordByIdWithTrx(motors, motor_id, motorSyncChange.updateData, trx);
-      await writeMotorStatusHistoryIfChanged({
-        starter_id,
-        motor_id,
-        status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
-        time_stamp: new Date(time_stamp),
-        trx,
-      });
       await ActivityService.writeMotorSyncLogs(effectiveCreatedBy, motor_id, { state: effectivePrevState, mode: effectivePrevMode }, { state: motorSyncChange.nextState, mode: effectivePrevMode }, trx, starter_id);
     }
+    await writeMotorStatusHistoryIfChanged({
+      starter_id,
+      motor_id,
+      status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
+      time_stamp: new Date(time_stamp),
+      trx,
+    });
     const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
     const hasMotorStateChanged = motorSyncChange.hasStateChanged;
     const hasStateChanged = motorSyncChange.hasStateChanged;
@@ -789,17 +791,17 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
       starterBoxUpdates.temperature = temp;
     }
 
+    await writePowerStatusHistoryIfChanged({
+      starter_id,
+      motor_id,
+      status: power_present === 1 ? "ON" : "OFF",
+      time_stamp: new Date(time_stamp),
+      trx,
+    });
+
     if (Object.keys(starterBoxUpdates).length > 0) {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, starter_id, starterBoxUpdates, trx);
       if (trackPowerChange) {
-        await writePowerStatusHistoryIfChanged({
-          starter_id,
-          motor_id,
-          status: power_present === 1 ? "ON" : "OFF",
-          time_stamp: new Date(time_stamp),
-          trx,
-        });
-
         await trackDeviceRunTime({
           starter_id, motor_id, location_id: locationId, previous_power_state: power,
           new_power_state: power_present, motor_state, mode_description, time_stamp
@@ -825,6 +827,14 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
       incomingState: motor_state,
       incomingMode: mode_description,
       timeStamp: time_stamp,
+    });
+
+    await writeMotorStatusHistoryIfChanged({
+      starter_id,
+      motor_id,
+      status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
+      time_stamp: new Date(time_stamp),
+      trx,
     });
 
     if (motorSyncChange.hasModeChanged) {
@@ -897,28 +907,32 @@ export async function motorControlAckHandler(message: any, topic: string) {
     const newState = message.D;
 
     const stateChanged = newState !== prevState;
+    const shouldWriteMotorHistory = newState === 0 || newState === 1;
 
-      const notificationData = await db.transaction(async (trx) => {
-        // Update motor state ONLY if changed
-        if (stateChanged && (newState === 0 || newState === 1)) {
-          const updateData: any = { state: newState, updated_at: new Date() };
-          if (newState === 1) updateData.motor_last_on_at = new Date();
-          else if (newState === 0) updateData.motor_last_off_at = new Date();
-          await trx.update(motors).set(updateData).where(eq(motors.id, motor.id));
-          await writeMotorStatusHistoryIfChanged({
-            starter_id,
-            motor_id,
-            status: newState === 1 ? "ON" : "OFF",
-            time_stamp: new Date(),
-            trx,
-          });
+    const notificationData = await db.transaction(async (trx) => {
+      // Update motor state ONLY if changed
+      if (stateChanged && (newState === 0 || newState === 1)) {
+        const updateData: any = { state: newState, updated_at: new Date() };
+        if (newState === 1) updateData.motor_last_on_at = new Date();
+        else if (newState === 0) updateData.motor_last_off_at = new Date();
+        await trx.update(motors).set(updateData).where(eq(motors.id, motor.id));
 
-          await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
-        } else {
+        await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+      } else {
         const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
         if (isFirstRecord) {
           await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
         }
+      }
+
+      if (shouldWriteMotorHistory) {
+        await writeMotorStatusHistoryIfChanged({
+          starter_id,
+          motor_id,
+          status: newState === 1 ? "ON" : "OFF",
+          time_stamp: new Date(),
+          trx,
+        });
       }
 
       // Always log ACK (changed or not)
@@ -1000,21 +1014,19 @@ export async function heartbeatHandler(message: any, topic: string) {
       starterBoxUpdates.status = status;
     }
 
+    if (statusChanged) {
+      await writeDeviceStatusHistoryIfChanged({
+        starter_id: validMac.id,
+        status,
+        time_stamp: heartbeatAt,
+      });
+    }
+
     await db.transaction(async (trx) => {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, validMac.id, starterBoxUpdates, trx);
 
-      if (statusChanged) {
-        await writeDeviceStatusHistoryIfChanged({
-          starter_id: validMac.id,
-          status,
-          time_stamp: heartbeatAt,
-          trx,
-        });
-      }
+      if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
     });
-
-    if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
-
   } catch (error: any) {
     console.error("Error at heartbeat topic handler:", error);
     throw error;
