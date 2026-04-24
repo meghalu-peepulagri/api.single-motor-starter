@@ -10,6 +10,9 @@ import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAs
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { ValidatedAddStarterDispatch } from "../validations/schema/starter-dispatch-validations.js";
 import type { ValidatedAddGateway, ValidatedAssignGatewayToUser, ValidatedRenameGateway, ValidatedUpdateGatewayLabel, ValidatedUpdateGatewayNumber } from "../validations/schema/gateway-validations.js";
+import type { MotorStatusHistoryTable } from "../database/schemas/motor-status-history.js";
+import type { PowerStatusHistoryTable } from "../database/schemas/power-status-history.js";
+import type { DeviceStatusHistoryTable } from "../database/schemas/device-status-history.js";
 
 export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
   | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber;
@@ -359,3 +362,17 @@ export type MotorStateData = {
   last_on_description?: string;
   last_off_description?: string;
 };
+
+// =================== STATUS HISTORY TYPES ===================
+export type HistoryTable =
+  | MotorStatusHistoryTable
+  | PowerStatusHistoryTable
+  | DeviceStatusHistoryTable;
+
+export interface StatusHistoryFilters {
+  starter_id?: number;
+  motor_id?: number;
+  from_date?: string;
+  to_date?: string;
+  status?: string;
+}

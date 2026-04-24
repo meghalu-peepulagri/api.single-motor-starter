@@ -19,6 +19,7 @@ import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { updateActualScheduleFields } from "./motor-schedules-services.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
+import { writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
 // Live data
@@ -135,6 +136,13 @@ export async function updateStates(insertedData, previousData) {
             if (Object.keys(starterBoxUpdates).length > 0) {
                 await updateRecordByIdWithTrx(starterBoxes, starter_id, starterBoxUpdates, trx);
                 if (trackPowerChange) {
+                    await writePowerStatusHistoryIfChanged({
+                        starter_id,
+                        motor_id: motor_id ?? null,
+                        status: power_present === 1 ? "ON" : "OFF",
+                        time_stamp: new Date(time_stamp),
+                        trx,
+                    });
                     await trackDeviceRunTime({
                         starter_id, motor_id, location_id: locationId, previous_power_state: power,
                         new_power_state: power_present, motor_state, mode_description, time_stamp
@@ -168,6 +176,15 @@ export async function updateStates(insertedData, previousData) {
                 });
                 if (motorSyncChange.shouldUpdateMotor) {
                     await updateRecordByIdWithTrx(motors, motor_id, motorSyncChange.updateData, trx);
+                    if (motorSyncChange.hasStateChanged) {
+                        await writeMotorStatusHistoryIfChanged({
+                            starter_id,
+                            motor_id,
+                            status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
+                            time_stamp: new Date(time_stamp),
+                            trx,
+                        });
+                    }
                     await ActivityService.writeMotorSyncLogs(effectiveCreatedBy, motor_id, { state: effectivePrevState, mode: effectivePrevMode }, {
                         state: motorSyncChange.nextState,
                         mode: motorSyncChange.nextMode
@@ -383,6 +400,13 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         if (Object.keys(starterBoxUpdates).length > 0) {
             await updateRecordByIdWithTrx(starterBoxes, starter_id, starterBoxUpdates, trx);
             if (trackPowerChange) {
+                await writePowerStatusHistoryIfChanged({
+                    starter_id,
+                    motor_id,
+                    status: power_present === 1 ? "ON" : "OFF",
+                    time_stamp: new Date(time_stamp),
+                    trx,
+                });
                 await trackDeviceRunTime({
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
@@ -416,6 +440,15 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
             });
             if (motorSyncChange.shouldUpdateMotor) {
                 await updateRecordByIdWithTrx(motors, motor_id, motorSyncChange.updateData, trx);
+                if (motorSyncChange.hasStateChanged) {
+                    await writeMotorStatusHistoryIfChanged({
+                        starter_id,
+                        motor_id,
+                        status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
+                        time_stamp: new Date(time_stamp),
+                        trx,
+                    });
+                }
                 await ActivityService.writeMotorSyncLogs(effectiveCreatedBy, motor_id, { state: effectivePrevState, mode: effectivePrevMode }, { state: motorSyncChange.nextState, mode: motorSyncChange.nextMode }, trx, starter_id);
             }
         }
@@ -497,6 +530,13 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
         if (Object.keys(starterBoxUpdates).length > 0) {
             await updateRecordByIdWithTrx(starterBoxes, starter_id, starterBoxUpdates, trx);
             if (trackPowerChange) {
+                await writePowerStatusHistoryIfChanged({
+                    starter_id,
+                    motor_id,
+                    status: power_present === 1 ? "ON" : "OFF",
+                    time_stamp: new Date(time_stamp),
+                    trx,
+                });
                 await trackDeviceRunTime({
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
@@ -524,6 +564,13 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
         });
         if (motorSyncChange.hasStateChanged) {
             await updateRecordByIdWithTrx(motors, motor_id, motorSyncChange.updateData, trx);
+            await writeMotorStatusHistoryIfChanged({
+                starter_id,
+                motor_id,
+                status: motorSyncChange.nextState === 1 ? "ON" : "OFF",
+                time_stamp: new Date(time_stamp),
+                trx,
+            });
             await ActivityService.writeMotorSyncLogs(effectiveCreatedBy, motor_id, { state: effectivePrevState, mode: effectivePrevMode }, { state: motorSyncChange.nextState, mode: effectivePrevMode }, trx, starter_id);
         }
         const hasPowerChanged = power_present !== power && power_present !== null && (power_present === 1 || power_present === 0);
@@ -584,6 +631,13 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         if (Object.keys(starterBoxUpdates).length > 0) {
             await updateRecordByIdWithTrx(starterBoxes, starter_id, starterBoxUpdates, trx);
             if (trackPowerChange) {
+                await writePowerStatusHistoryIfChanged({
+                    starter_id,
+                    motor_id,
+                    status: power_present === 1 ? "ON" : "OFF",
+                    time_stamp: new Date(time_stamp),
+                    trx,
+                });
                 await trackDeviceRunTime({
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
@@ -678,6 +732,13 @@ export async function motorControlAckHandler(message, topic) {
                 else if (newState === 0)
                     updateData.motor_last_off_at = new Date();
                 await trx.update(motors).set(updateData).where(eq(motors.id, motor.id));
+                await writeMotorStatusHistoryIfChanged({
+                    starter_id,
+                    motor_id,
+                    status: newState === 1 ? "ON" : "OFF",
+                    time_stamp: new Date(),
+                    trx,
+                });
                 await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
             }
             else {

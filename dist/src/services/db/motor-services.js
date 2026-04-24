@@ -12,6 +12,7 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
+import { writeDeviceStatusHistoryIfChanged } from "./status-history-services.js";
 export async function bulkMotorsUpdate(motorsToUpdate, trx) {
     if (!motorsToUpdate || motorsToUpdate.length === 0)
         return;
@@ -541,6 +542,14 @@ export async function updateStarterStatusWithTransaction(starterIds) {
         if (inactiveIds.length > 0) {
             const offlineAt = new Date();
             const offlineAtIso = offlineAt.toISOString();
+            for (const starterId of inactiveIds) {
+                await writeDeviceStatusHistoryIfChanged({
+                    starter_id: starterId,
+                    status: "INACTIVE",
+                    time_stamp: offlineAt,
+                    trx,
+                });
+            }
             await trx
                 .update(motors)
                 .set({ status: "INACTIVE" })
@@ -592,6 +601,15 @@ export async function updateStarterStatusWithTransaction(starterIds) {
         }
         // Update motors to ACTIVE
         if (activeIds.length > 0) {
+            const activeAt = new Date();
+            for (const starterId of activeIds) {
+                await writeDeviceStatusHistoryIfChanged({
+                    starter_id: starterId,
+                    status: "ACTIVE",
+                    time_stamp: activeAt,
+                    trx,
+                });
+            }
             await trx
                 .update(motors)
                 .set({ status: "ACTIVE" })

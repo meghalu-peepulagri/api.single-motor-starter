@@ -13,6 +13,7 @@ import analyticsRoutes from "./analytics-routes.js";
 import starterDispatchRoutes from "./starter-dispatch-routes.js";
 import syncDataRoutes from "./sync-routes.js";
 import gatewayRoutes from "./gateway-routes.js";
+import statusHistoryRoutes from "./status-history-routes.js";
 
 const indexRoute = new Hono();
 
@@ -30,5 +31,6 @@ indexRoute.route("/sync-data", syncDataRoutes);
 indexRoute.route("/bridge", bridgeRoutes);
 indexRoute.route("/starter-dispatch", starterDispatchRoutes);
 indexRoute.route("/gateways", gatewayRoutes);
+indexRoute.route("/status-history", statusHistoryRoutes);
 
 export default indexRoute;
