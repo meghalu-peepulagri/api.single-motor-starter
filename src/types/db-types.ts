@@ -1,14 +1,17 @@
 import type { PgInsertValue } from "drizzle-orm/pg-core";
 import type { AlertsFaults, AlertsFaultsTable } from "../database/schemas/alerts-faults.js";
 import type { DeviceRunTime, DeviceRunTimeTable } from "../database/schemas/device-runtime.js";
+import type { DeviceStatusHistory, DeviceStatusHistoryTable } from "../database/schemas/device-status-history.js";
 import type { DeviceToken, DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import type { Field, FieldsTable } from "../database/schemas/fields.js";
 import type { Gateway, GatewayTable } from "../database/schemas/gateways.js";
 import type { Location, LocationsTable } from "../database/schemas/locations.js";
 import type { MotorRunTime, MotorRunTimeTable } from "../database/schemas/motor-runtime.js";
+import type { MotorStatusHistory, MotorStatusHistoryTable } from "../database/schemas/motor-status-history.js";
 import type { MotorSchedule, MotorScheduleTable } from "../database/schemas/motor-schedules.js";
 import type { Motor, MotorsTable } from "../database/schemas/motors.js";
 import type { Otp, OtpTable } from "../database/schemas/otp.js";
+import type { PowerStatusHistory, PowerStatusHistoryTable } from "../database/schemas/power-status-history.js";
 import type { StarterBox, StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import type { StarterDefaultSettings, StarterDefaultSettingsTable } from "../database/schemas/starter-default-settings.js";
 import type { StarterDefaultSettingsLimits, StarterDefaultSettingsLimitsTable } from "../database/schemas/starter-default-settings-limits.js";
@@ -22,7 +25,7 @@ import type { StarterDispatch, StarterDispatchTable } from "../database/schemas/
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
   MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable | StarterDefaultSettingsLimitsTable
-  | StarterBoxParametersTable | DeviceTemperatureTable | StarterDispatchTable;
+  | StarterBoxParametersTable | DeviceTemperatureTable | StarterDispatchTable | MotorStatusHistoryTable | PowerStatusHistoryTable | DeviceStatusHistoryTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User :
@@ -38,12 +41,15 @@ export type DBRecord<T extends DBTable> =
   T extends MotorScheduleTable ? MotorSchedule :
   T extends AlertsFaultsTable ? AlertsFaults :
   T extends DeviceRunTimeTable ? DeviceRunTime :
+  T extends DeviceStatusHistoryTable ? DeviceStatusHistory :
   T extends MotorRunTimeTable ? MotorRunTime :
+  T extends MotorStatusHistoryTable ? MotorStatusHistory :
   T extends StarterDefaultSettingsTable ? StarterDefaultSettings :
   T extends StarterSettingsLimitsTable ? StarterSettingsLimits :
   T extends StarterSettingsTable ? StarterSettings :
   T extends StarterDefaultSettingsLimitsTable ? StarterDefaultSettingsLimits :
   T extends DeviceTemperatureTable ? DeviceTemperature :
+  T extends PowerStatusHistoryTable ? PowerStatusHistory :
   T extends StarterDispatchTable ? StarterDispatch :
   never;
 
