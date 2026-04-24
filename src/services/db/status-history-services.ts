@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { toZonedTime } from "date-fns-tz";
 import db from "../../database/configuration.js";
 import { deviceStatusHistory } from "../../database/schemas/device-status-history.js";
 import { motorStatusHistory } from "../../database/schemas/motor-status-history.js";
@@ -8,6 +9,16 @@ import { saveSingleRecord } from "./base-db-services.js";
 type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
 
 type StatusHistoryTable = typeof motorStatusHistory | typeof powerStatusHistory | typeof deviceStatusHistory;
+
+const IST_TIMEZONE = "Asia/Kolkata";
+
+function getIstDayKey(value: Date): string {
+  const istDate = toZonedTime(value, IST_TIMEZONE);
+  const year = istDate.getFullYear();
+  const month = String(istDate.getMonth() + 1).padStart(2, "0");
+  const day = String(istDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 async function writeStatusHistoryIfChanged(params: {
   table: StatusHistoryTable;
@@ -28,13 +39,19 @@ async function writeStatusHistoryIfChanged(params: {
   const [latestRecord] = await queryBuilder
     .select({
       status: table.status,
+      time_stamp: table.time_stamp,
     })
     .from(table)
     .where(and(...scopeConditions))
     .orderBy(desc(table.time_stamp), desc(table.id))
     .limit(1);
 
-  if (latestRecord?.status === status) {
+  const isSameStatus = latestRecord?.status === status;
+  const isSameIstDay = latestRecord?.time_stamp
+    ? getIstDayKey(latestRecord.time_stamp) === getIstDayKey(time_stamp)
+    : false;
+
+  if (isSameStatus && isSameIstDay) {
     return null;
   }
 
