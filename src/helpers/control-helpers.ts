@@ -115,11 +115,11 @@ const alertCodes: Record<string, { short: string; detailed: string }> = {
 
 export function getFaultDescription(faultCode: number) {
   if (faultCode === 0) {
-    return "Alert cleared - No more alerts";
+    return "Fault cleared - No more faults";
   }
 
   if (faultCode == null || faultCode === undefined) {
-    return "Unknown Alert";
+    return "Unknown Fault";
   }
 
   const faults: { short: string; detailed: string }[] = [];

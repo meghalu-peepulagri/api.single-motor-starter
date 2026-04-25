@@ -1,17 +1,22 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import env from "../env.js";
+import fs from "fs";
 import dbConfig from "../config/db-config.js";
 import * as alertsFaultsSchema from "./schemas/alerts-faults.js";
 import * as benchedStarterParametersSchema from "./schemas/benched-starter-parameters.js";
 import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
+import * as deviceStatusHistorySchema from "./schemas/device-status-history.js";
 import * as deviceTokensSchema from "./schemas/device-tokens.js";
 import * as fieldsSchema from "./schemas/fields.js";
 import * as gatewaysSchema from "./schemas/gateways.js";
 import * as locationsSchema from "./schemas/locations.js";
 import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
+import * as motorStatusHistorySchema from "./schemas/motor-status-history.js";
 import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
 import * as motorsSchema from "./schemas/motors.js";
 import * as otpSchema from "./schemas/otp.js";
+import * as powerStatusHistorySchema from "./schemas/power-status-history.js";
 import * as starterBoxSchema from "./schemas/starter-boxes.js";
 import * as DefaultSettingsLimitsSchema from "./schemas/starter-default-settings-limits.js";
 import * as starterDefaultSettingsSchema from "./schemas/starter-default-settings.js";
@@ -47,7 +52,10 @@ const db = drizzle(dbClient, {
         ...starterBoxParameters,
         ...motorSchedulesSchema,
         ...DeviceRunTimeSchema,
+        ...deviceStatusHistorySchema,
         ...MotorRunTimeSchema,
+        ...motorStatusHistorySchema,
+        ...powerStatusHistorySchema,
         ...starterDefaultSettingsSchema,
         ...starterSettingsSchema,
         ...starterSettingsLimitsSchema,

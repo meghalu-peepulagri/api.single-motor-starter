@@ -402,6 +402,7 @@ export function buildScheduleTimeline(record: any): any {
     schedule_start_date: record.schedule_start_date,
     schedule_end_date: record.schedule_end_date,
     repeat: record.repeat,
+    created_at: record.created_at,
     events,
   };
 }

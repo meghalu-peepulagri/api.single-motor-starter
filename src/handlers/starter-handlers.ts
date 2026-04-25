@@ -18,6 +18,7 @@ import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilt
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getRawAlertFaultCounts, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
+import type { validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
@@ -720,7 +721,8 @@ export class StarterHandlers {
       const starterId = +c.req.param("id");
       paramsValidateException.validateId(starterId, "Device id");
 
-      const { device_installed_location } = await c.req.json();
+      const reqData = await c.req.json();
+      const { device_installed_location } = await validatedRequest<validatedUpdateInstalledLocation>("update-installed-location", reqData, STARTER_BOX_VALIDATION_CRITERIA);
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);

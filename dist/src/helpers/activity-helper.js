@@ -1,18 +1,12 @@
 import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { ActivityService } from "../services/db/activity-service.js";
 function meaningfulLastOffOnStateMessage(state, mode, lastOnDesc, lastOffDesc) {
-    const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode}` : "";
+    const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode} mode` : "";
     if (state === 1) {
-        const desc = lastOnDesc?.trim();
-        if (!desc || desc === "None")
-            return `Pump turned ON${modeLabel}`;
-        return `Pump turned ON${modeLabel} via ${desc}`;
+        return `Pump turned ON${modeLabel}`;
     }
     if (state === 0) {
-        const desc = lastOffDesc?.trim();
-        if (!desc || desc === "None")
-            return `Pump turned OFF${modeLabel}`;
-        return `Pump turned OFF${modeLabel} due to ${desc}`;
+        return `Pump turned OFF${modeLabel}`;
     }
     return "Pump control failed. Try again.";
 }

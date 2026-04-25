@@ -6,16 +6,19 @@ import type { validatedAddField } from "../validations/schema/field-validations.
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import type { ValidatedAddRepeatDays, ValidatedMotorSchedule, ValidatedMotorScheduleArray, ValidatedUpdateMotorSchedule } from "../validations/schema/motor-schedule-validators.js";
 import type { validatedAddMotor, validatedUpdateMotor, validatedUpdateMotorTestRunStatus } from "../validations/schema/motor-validations.js";
-import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
+import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus, validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { ValidatedAddStarterDispatch } from "../validations/schema/starter-dispatch-validations.js";
 import type { ValidatedAddGateway, ValidatedAssignGatewayToUser, ValidatedRenameGateway, ValidatedUpdateGatewayLabel, ValidatedUpdateGatewayNumber } from "../validations/schema/gateway-validations.js";
+import type { MotorStatusHistoryTable } from "../database/schemas/motor-status-history.js";
+import type { PowerStatusHistoryTable } from "../database/schemas/power-status-history.js";
+import type { DeviceStatusHistoryTable } from "../database/schemas/device-status-history.js";
 
 export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
-  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber;
+  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber | validatedUpdateInstalledLocation;
 
 export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
-  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number";
+  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-installed-location";
 
 export interface IResp {
   status: ContentfulStatusCode;
@@ -336,6 +339,7 @@ export interface RuntimeRecord {
   power_end: string | null;
   power_duration: string | null;
   power_state: number | null;
+  offline_at?: Date | string | null;
 }
 
 export interface SplitRuntimeRecord {
@@ -349,11 +353,26 @@ export interface SplitRuntimeRecord {
   power_end: string | null;
   power_duration: string | null;
   power_state: number | null;
+  offline_at?: Date | null;
 }
 
 export type MotorStateData = {
-  state?: number;
-  mode?: string;
+  state?: number | null;
+  mode?: string | null;
   last_on_description?: string;
   last_off_description?: string;
 };
+
+// =================== STATUS HISTORY TYPES ===================
+export type HistoryTable =
+  | MotorStatusHistoryTable
+  | PowerStatusHistoryTable
+  | DeviceStatusHistoryTable;
+
+export interface StatusHistoryFilters {
+  starter_id?: number;
+  motor_id?: number;
+  from_date?: string;
+  to_date?: string;
+  status?: string;
+}

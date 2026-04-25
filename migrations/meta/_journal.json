@@ -330,6 +330,20 @@
       "when": 1776839458712,
       "tag": "0046_classy_zaran",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1776853412306,
+      "tag": "0047_rapid_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1777006054847,
+      "tag": "0048_broken_grandmaster",
+      "breakpoints": true
     }
   ]
 }

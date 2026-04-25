@@ -138,6 +138,33 @@ export function extractPreviousData(previousData, motorId) {
     const device_created_by = previousData?.created_by;
     return { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number: previousData?.starter_number };
 }
+export function prepareMotorSyncChangeData(params) {
+    const { currentState, currentMode, incomingState, incomingMode, timeStamp } = params;
+    const normalizedState = incomingState === 0 || incomingState === 1 ? incomingState : null;
+    const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" ? incomingMode : null;
+    const hasStateChanged = normalizedState !== null && normalizedState !== currentState;
+    const hasModeChanged = normalizedMode !== null && normalizedMode !== currentMode;
+    const updateData = {};
+    if (hasStateChanged) {
+        updateData.state = normalizedState;
+        if (normalizedState === 1)
+            updateData.motor_last_on_at = new Date(timeStamp);
+        else
+            updateData.motor_last_off_at = new Date(timeStamp);
+    }
+    if (hasModeChanged) {
+        updateData.mode = normalizedMode;
+        updateData.last_mode_change_at = new Date(timeStamp);
+    }
+    return {
+        hasStateChanged,
+        hasModeChanged,
+        shouldUpdateMotor: hasStateChanged || hasModeChanged,
+        updateData,
+        nextState: normalizedState ?? currentState ?? null,
+        nextMode: normalizedMode ?? currentMode ?? null,
+    };
+}
 // =================== SCHEDULE TIME UTILITIES ===================
 /** Convert "HH:mm" to total minutes from midnight */
 /** Convert 4-digit HHMM string to total minutes. e.g., "0600" → 360, "1430" → 870 */

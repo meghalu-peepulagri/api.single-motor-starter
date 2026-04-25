@@ -32,13 +32,6 @@ import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
 
-// =================== AUTO-INCREMENT SCHEDULE ID PER MOTOR ===================
-
-/**
- * Get the next schedule_id for a given motor.
- * First tries to reuse the lowest schedule_id from ARCHIVED/DELETED schedules.
- * If no reusable ID found, returns max(schedule_id) + 1, or 1 if no schedules exist.
- */
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
   // Find the lowest schedule_id from deleted/archived rows
   // that is NOT used by any active row for the same motor
@@ -72,13 +65,6 @@ export async function getNextScheduleIdForMotor(motorId: number): Promise<number
   return (result[0]?.maxId ?? 0) + 1;
 }
 
-// =================== CONFLICT DETECTION QUERIES ===================
-
-/**
- * Find active schedules for a motor that could conflict.
- * Filters by date range overlap and/or overlapping days_of_week.
- * Optionally excludes a specific schedule ID (for updates).
- */
 export async function findConflictingSchedules(
   motorId: number,
   scheduleStartDate?: number | null,
@@ -650,8 +636,8 @@ export async function findScheduleHistoryByMotorAndStarter(
   const conditions = and(
     eq(motorSchedules.motor_id, filters.motor_id),
     eq(motorSchedules.starter_id, filters.starter_id),
-    filters.from_date ? gte(motorSchedules.created_at, filters.from_date) : undefined,
-    filters.to_date ? lte(motorSchedules.created_at, filters.to_date) : undefined,
+    filters.from_date ? gte(motorSchedules.created_at, new Date(filters.from_date)) : undefined,
+    filters.to_date ? lte(motorSchedules.created_at, new Date(filters.to_date)) : undefined,
   );
 
   const [records, countResult] = await Promise.all([
