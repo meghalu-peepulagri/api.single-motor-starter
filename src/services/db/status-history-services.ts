@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { toZonedTime } from "date-fns-tz";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import db from "../../database/configuration.js";
 import { deviceStatusHistory } from "../../database/schemas/device-status-history.js";
 import { motorStatusHistory } from "../../database/schemas/motor-status-history.js";
@@ -18,6 +18,31 @@ function getIstDayKey(value: Date): string {
   const month = String(istDate.getMonth() + 1).padStart(2, "0");
   const day = String(istDate.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getIstDayBoundariesUtc(dayKey: string): { start: Date; end: Date } {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  const start = fromZonedTime(new Date(y, m - 1, d, 0, 0, 0, 0), IST_TIMEZONE);
+  const end = fromZonedTime(new Date(y, m - 1, d, 23, 59, 59, 999), IST_TIMEZONE);
+  return { start, end };
+}
+
+function getMissingIstDayKeys(from: Date, to: Date): string[] {
+  const fromKey = getIstDayKey(from);
+  const toKey = getIstDayKey(to);
+  if (fromKey >= toKey) return [];
+
+  const missing: string[] = [];
+  // Start cursor at the IST midnight of the day after `from`
+  const [fy, fm, fd] = fromKey.split("-").map(Number);
+  const cursor = fromZonedTime(new Date(fy, fm - 1, fd, 0, 0, 0, 0), IST_TIMEZONE);
+  cursor.setDate(cursor.getDate() + 1);
+
+  while (getIstDayKey(cursor) < toKey) {
+    missing.push(getIstDayKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return missing;
 }
 
 async function writeStatusHistoryIfChanged(params: {
@@ -50,6 +75,15 @@ async function writeStatusHistoryIfChanged(params: {
   const isSameIstDay = latestRecord?.time_stamp
     ? getIstDayKey(latestRecord.time_stamp) === getIstDayKey(time_stamp)
     : false;
+
+  if (latestRecord && !isSameIstDay) {
+    const missingDays = getMissingIstDayKeys(latestRecord.time_stamp, time_stamp);
+    for (const dayKey of missingDays) {
+      const { start, end } = getIstDayBoundariesUtc(dayKey);
+      await saveSingleRecord(table, { starter_id, motor_id, status: latestRecord.status, time_stamp: start }, trx);
+      await saveSingleRecord(table, { starter_id, motor_id, status: latestRecord.status, time_stamp: end }, trx);
+    }
+  }
 
   if (isSameStatus && isSameIstDay) {
     return null;
