@@ -12,11 +12,11 @@ function buildWhere(table, filters) {
         conditions.push(eq(table.motor_id, filters.motor_id));
     }
     if (filters.from_date) {
-        conditions.push(gte(table.time_stamp, new Date(filters.from_date)));
+        const start = new Date(`${filters.from_date.split('T')[0]}T00:00:00+05:30`);
+        conditions.push(gte(table.time_stamp, start));
     }
     if (filters.to_date) {
-        const end = new Date(filters.to_date);
-        end.setHours(23, 59, 59, 999);
+        const end = new Date(`${filters.to_date.split('T')[0]}T23:59:59.999+05:30`);
         conditions.push(lte(table.time_stamp, end));
     }
     if (filters.status) {
@@ -104,10 +104,9 @@ function sumOverlapMs(primaryRanges, blockedRanges) {
     return overlapMs;
 }
 export async function getMotorOnRuntime(filters) {
-    const rangeStart = new Date(filters.from_date);
-    rangeStart.setHours(0, 0, 0, 0);
-    const rangeEnd = new Date(filters.to_date);
-    rangeEnd.setHours(23, 59, 59, 999);
+    // Always use IST (+05:30) to compute daily boundaries regardless of server timezone
+    const rangeStart = new Date(`${filters.from_date.split('T')[0]}T00:00:00+05:30`);
+    const rangeEnd = new Date(`${filters.to_date.split('T')[0]}T23:59:59.999+05:30`);
     const motorScope = and(eq(motorStatusHistory.starter_id, filters.starter_id), eq(motorStatusHistory.motor_id, filters.motor_id));
     const deviceScope = and(eq(deviceStatusHistory.starter_id, filters.starter_id), isNull(deviceStatusHistory.motor_id));
     const [preMotorRecord] = await db
