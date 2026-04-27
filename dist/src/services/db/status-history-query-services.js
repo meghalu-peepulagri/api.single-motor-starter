@@ -131,22 +131,40 @@ export async function getMotorOnRuntime(filters) {
         .from(deviceStatusHistory)
         .where(and(deviceScope, gte(deviceStatusHistory.time_stamp, rangeStart), lte(deviceStatusHistory.time_stamp, rangeEnd)))
         .orderBy(asc(deviceStatusHistory.time_stamp));
+    // Only count motor ON time from events that actually happened within the
+    // queried date range. We do NOT carry over a pre-range "ON" status — if the
+    // motor was already ON from the previous night, that time belongs to that
+    // previous day, not this one.
     const motorOnRanges = buildStatusRanges({
-        previousStatus: preMotorRecord?.status,
+        previousStatus: null,
         events: motorEventsInRange,
         activeStatus: "ON",
         rangeStart,
         rangeEnd,
     });
+    // If the device was INACTIVE before the range but motor events exist within
+    // the range, those motor events PROVE the device came back online — we just
+    // don't have an explicit ACTIVE event logged for that comeback. Carrying the
+    // stale INACTIVE forward would zero out all motor runtime for the day, so we
+    // reset it to null (treat device as ACTIVE at rangeStart) in that case.
+    const effectivePreDeviceStatus = preDeviceRecord?.status === "INACTIVE" && motorEventsInRange.length > 0
+        ? null // device clearly came back online; ignore stale INACTIVE carry-over
+        : preDeviceRecord?.status ?? null;
     const deviceInactiveRanges = buildStatusRanges({
-        previousStatus: preDeviceRecord?.status,
+        previousStatus: effectivePreDeviceStatus,
         events: deviceEventsInRange,
         activeStatus: "INACTIVE",
         rangeStart,
         rangeEnd,
     });
     const totalMotorOnMs = sumRangeMs(motorOnRanges);
-    const inactiveOverlapMs = sumOverlapMs(motorOnRanges, deviceInactiveRanges);
+    // A motor event (ON or OFF) is proof the device was communicating at that
+    // exact timestamp. If a motor event falls inside a device INACTIVE window,
+    // that window is unreliable — exclude it from the inactive overlap so we
+    // don't cancel out motor runtime that genuinely happened.
+    const motorEventTimes = motorEventsInRange.map(e => e.time_stamp.getTime());
+    const reliableInactiveRanges = deviceInactiveRanges.filter(range => !motorEventTimes.some(t => t >= range.start.getTime() && t <= range.end.getTime()));
+    const inactiveOverlapMs = sumOverlapMs(motorOnRanges, reliableInactiveRanges);
     const totalMs = Math.max(0, totalMotorOnMs - inactiveOverlapMs);
     return {
         total_on_duration_formatted: formatDuration(totalMs),
