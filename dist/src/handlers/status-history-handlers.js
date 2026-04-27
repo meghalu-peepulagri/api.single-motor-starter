@@ -2,21 +2,13 @@ import { getDeviceStatusHistory, getMotorOnRuntime, getMotorStatusHistory, getPo
 import { logger } from "../utils/logger.js";
 import { sendResponse } from "../utils/send-response.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
-function parseFilters(c) {
-    const q = c.req.query();
-    return {
-        starter_id: q.starter_id ? +q.starter_id : undefined,
-        motor_id: q.motor_id ? +q.motor_id : undefined,
-        from_date: q.from_date || undefined,
-        to_date: q.to_date || undefined,
-        status: q.status || undefined,
-    };
-}
+import { DEVICE_STATUS_HISTORY_FETCHED, MOTOR_STATUS_HISTORY_FETCHED, POWER_STATUS_HISTORY_FETCHED, STARTER_RUNTIME_FETCHED, } from "../constants/app-constants.js";
+import { parseStatusHistoryFilters } from "../helpers/status-history-helpers.js";
 export class StatusHistoryHandlers {
     async getMotorStatusHistoryHandler(c) {
         try {
-            const result = await getMotorStatusHistory(parseFilters(c));
-            return sendResponse(c, 200, "Motor status history fetched successfully", result);
+            const result = await getMotorStatusHistory(parseStatusHistoryFilters(c));
+            return sendResponse(c, 200, MOTOR_STATUS_HISTORY_FETCHED, result);
         }
         catch (error) {
             logger.error("Error in getMotorStatusHistoryHandler:", error);
@@ -25,8 +17,8 @@ export class StatusHistoryHandlers {
     }
     async getPowerStatusHistoryHandler(c) {
         try {
-            const result = await getPowerStatusHistory(parseFilters(c));
-            return sendResponse(c, 200, "Power status history fetched successfully", result);
+            const result = await getPowerStatusHistory(parseStatusHistoryFilters(c));
+            return sendResponse(c, 200, POWER_STATUS_HISTORY_FETCHED, result);
         }
         catch (error) {
             logger.error("Error in getPowerStatusHistoryHandler:", error);
@@ -35,8 +27,8 @@ export class StatusHistoryHandlers {
     }
     async getDeviceStatusHistoryHandler(c) {
         try {
-            const result = await getDeviceStatusHistory(parseFilters(c));
-            return sendResponse(c, 200, "Device status history fetched successfully", result);
+            const result = await getDeviceStatusHistory(parseStatusHistoryFilters(c));
+            return sendResponse(c, 200, DEVICE_STATUS_HISTORY_FETCHED, result);
         }
         catch (error) {
             logger.error("Error in getDeviceStatusHistoryHandler:", error);
@@ -55,7 +47,7 @@ export class StatusHistoryHandlers {
                 from_date: q.from_date,
                 to_date: q.to_date,
             });
-            return sendResponse(c, 200, "Motor runtime fetched successfully", result);
+            return sendResponse(c, 200, STARTER_RUNTIME_FETCHED, result);
         }
         catch (error) {
             logger.error("Error in getMotorRuntimeHandler:", error);
