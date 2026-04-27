@@ -83,6 +83,14 @@ async function writeStatusHistoryIfChanged(params: {
       await saveSingleRecord(table, { starter_id, motor_id, status: latestRecord.status, time_stamp: start }, trx);
       await saveSingleRecord(table, { starter_id, motor_id, status: latestRecord.status, time_stamp: end }, trx);
     }
+
+    // Always write a baseline record at the start of the current IST day
+    // so that every day with telemetry data has a history entry at day-start.
+    // Use the previous status since at IST midnight the device was still in
+    // whatever state it had at the end of the previous day.
+    const currentDayKey = getIstDayKey(time_stamp);
+    const { start: currentDayStart } = getIstDayBoundariesUtc(currentDayKey);
+    await saveSingleRecord(table, { starter_id, motor_id, status: latestRecord.status, time_stamp: currentDayStart }, trx);
   }
 
   if (isSameStatus && isSameIstDay) {
