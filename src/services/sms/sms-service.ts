@@ -38,7 +38,6 @@ export class SmsService {
       };
 
       const response = await axios.request(options);
-
       // TODO: handle error response from API properly
       if (response.data.type !== "success") {
         const errorMessage = response.data?.message || "SMS sending failed";
