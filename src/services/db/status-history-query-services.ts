@@ -90,15 +90,31 @@ function buildStatusRanges(params: {
 
   for (const event of events) {
     if (openStart !== null && event.time_stamp.getTime() > openStart.getTime()) {
-      ranges.push({ start: openStart, end: event.time_stamp });
+      // Clamp the end time to rangeEnd if the event happens after
+      const clampedEnd = event.time_stamp > rangeEnd ? rangeEnd : event.time_stamp;
+      if (clampedEnd.getTime() > openStart.getTime()) {
+        ranges.push({ start: openStart, end: clampedEnd });
+      }
     }
 
     currentStatus = event.status;
-    openStart = currentStatus === activeStatus ? event.time_stamp : null;
+    
+    // If turning active, start the range. If the event is before rangeStart, clamp to rangeStart
+    if (currentStatus === activeStatus) {
+        openStart = event.time_stamp < rangeStart ? rangeStart : event.time_stamp;
+    } else {
+        openStart = null;
+    }
   }
 
-  if (openStart !== null && rangeEnd.getTime() > openStart.getTime()) {
-    ranges.push({ start: openStart, end: rangeEnd });
+  if (openStart !== null) {
+    const now = new Date();
+    // Cap the end time so we don't calculate into the future
+    const maxEnd = rangeEnd > now ? now : rangeEnd;
+    
+    if (maxEnd.getTime() > openStart.getTime()) {
+      ranges.push({ start: openStart, end: maxEnd });
+    }
   }
 
   return ranges;
