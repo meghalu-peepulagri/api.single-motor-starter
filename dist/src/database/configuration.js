@@ -27,16 +27,16 @@ import * as starterSettingsSchema from "./schemas/starter-settings.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
 const dbClient = new Pool({
-    // host: env.DB_HOST,
-    // port: Number(env.DB_PORT),
-    // user: env.DB_USER,
-    // password: env.DB_PASSWORD,
-    // database: env.DB_NAME,
-    // ssl: {
-    //   rejectUnauthorized: true,
-    //   ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
-    // },
-    connectionString: dbConfig.connectionString,
+    host: env.DB_HOST,
+    port: Number(env.DB_PORT),
+    user: env.DB_USER,
+    password: env.DB_PASSWORD,
+    database: env.DB_NAME,
+    ssl: {
+        rejectUnauthorized: true,
+        ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
+    },
+    //connectionString: dbConfig.connectionString,
 });
 const db = drizzle(dbClient, {
     schema: {
