@@ -98,12 +98,12 @@ function buildStatusRanges(params: {
     }
 
     currentStatus = event.status;
-    
+
     // If turning active, start the range. If the event is before rangeStart, clamp to rangeStart
     if (currentStatus === activeStatus) {
-        openStart = event.time_stamp < rangeStart ? rangeStart : event.time_stamp;
+      openStart = event.time_stamp < rangeStart ? rangeStart : event.time_stamp;
     } else {
-        openStart = null;
+      openStart = null;
     }
   }
 
@@ -111,7 +111,7 @@ function buildStatusRanges(params: {
     const now = new Date();
     // Cap the end time so we don't calculate into the future
     const maxEnd = rangeEnd > now ? now : rangeEnd;
-    
+
     if (maxEnd.getTime() > openStart.getTime()) {
       ranges.push({ start: openStart, end: maxEnd });
     }
@@ -150,7 +150,6 @@ function sumOverlapMs(primaryRanges: TimeRange[], blockedRanges: TimeRange[]): n
 }
 
 export async function getMotorOnRuntime(filters: MotorRuntimeFilters) {
-  // Always use IST (+05:30) to compute daily boundaries regardless of server timezone
   const rangeStart = new Date(`${filters.from_date.split('T')[0]}T00:00:00+05:30`);
   const rangeEnd = new Date(`${filters.to_date.split('T')[0]}T23:59:59.999+05:30`);
 
@@ -189,47 +188,60 @@ export async function getMotorOnRuntime(filters: MotorRuntimeFilters) {
     .where(and(deviceScope, gte(deviceStatusHistory.time_stamp, rangeStart), lte(deviceStatusHistory.time_stamp, rangeEnd)))
     .orderBy(asc(deviceStatusHistory.time_stamp));
 
-  // Only count motor ON time from events that actually happened within the
-  // queried date range. We do NOT carry over a pre-range "ON" status — if the
-  // motor was already ON from the previous night, that time belongs to that
-  // previous day, not this one.
+  // ── FIX 1: Remove consecutive same-status duplicates ──────────
+  // ON, ON sequences are boundary markers not real activity
+  function deduplicateEvents<T extends { status: string }>(events: T[]): T[] {
+    return events.filter((event, index) => {
+      if (index === 0) return true;
+      return event.status !== events[index - 1].status;
+    });
+  }
+
+  const dedupedMotorEvents = deduplicateEvents(motorEventsInRange);
+
+  // ── FIX 2: Smart carry-over ───────────────────────────────────
+  const firstEventIsOff = dedupedMotorEvents[0]?.status === "OFF";
+  const motorCarryOver = preMotorRecord?.status === "ON" && firstEventIsOff;
+
   const motorOnRanges = buildStatusRanges({
-    previousStatus: null,
-    events: motorEventsInRange,
+    previousStatus: motorCarryOver ? "ON" : null,
+    events: dedupedMotorEvents,
     activeStatus: "ON",
     rangeStart,
     rangeEnd,
   });
 
-  // If the device was INACTIVE before the range but motor events exist within
-  // the range, those motor events PROVE the device came back online — we just
-  // don't have an explicit ACTIVE event logged for that comeback. Carrying the
-  // stale INACTIVE forward would zero out all motor runtime for the day, so we
-  // reset it to null (treat device as ACTIVE at rangeStart) in that case.
-  const effectivePreDeviceStatus =
-    preDeviceRecord?.status === "INACTIVE" && motorEventsInRange.length > 0
-      ? null   // device clearly came back online; ignore stale INACTIVE carry-over
-      : preDeviceRecord?.status ?? null;
+  // ── FIX 3: Only reset stale INACTIVE if real motor activity ───
+  const hasRealMotorActivity = dedupedMotorEvents.some((e, i) =>
+    e.status === "ON" && dedupedMotorEvents[i + 1]?.status === "OFF"
+  ) || motorCarryOver;
+
+  const deviceStaleInactive =
+    preDeviceRecord?.status === "INACTIVE" && hasRealMotorActivity;
+
+  const effectivePreDeviceStatus = deviceStaleInactive
+    ? null
+    : preDeviceRecord?.status ?? null;
 
   const deviceInactiveRanges = buildStatusRanges({
     previousStatus: effectivePreDeviceStatus,
-    events: deviceEventsInRange,
+    events: deduplicateEvents(deviceEventsInRange),
     activeStatus: "INACTIVE",
     rangeStart,
     rangeEnd,
   });
 
-  const totalMotorOnMs = sumRangeMs(motorOnRanges);
-
-  // A motor event (ON or OFF) is proof the device was communicating at that
-  // exact timestamp. If a motor event falls inside a device INACTIVE window,
-  // that window is unreliable — exclude it from the inactive overlap so we
-  // don't cancel out motor runtime that genuinely happened.
-  const motorEventTimes = motorEventsInRange.map(e => e.time_stamp.getTime());
+  // ── FIX 4: Strict boundary check for unreliable windows ───────
+  // Use strict > < instead of >= <= so boundary timestamps
+  // don't accidentally filter out entire INACTIVE windows
+  const motorEventTimes = dedupedMotorEvents.map(e => e.time_stamp.getTime());
   const reliableInactiveRanges = deviceInactiveRanges.filter(range =>
-    !motorEventTimes.some(t => t >= range.start.getTime() && t <= range.end.getTime())
+    !motorEventTimes.some(
+      t => t > range.start.getTime() && t < range.end.getTime()
+    )
   );
 
+  const totalMotorOnMs = sumRangeMs(motorOnRanges);
   const inactiveOverlapMs = sumOverlapMs(motorOnRanges, reliableInactiveRanges);
   const totalMs = Math.max(0, totalMotorOnMs - inactiveOverlapMs);
 
