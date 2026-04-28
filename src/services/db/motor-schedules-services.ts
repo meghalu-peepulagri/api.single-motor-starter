@@ -614,11 +614,11 @@ export async function bulkCreateMotorSchedules(
   }
 
   // 5. Finalize data and perform Bulk Database Insertion
-  const startingScheduleId = await getNextScheduleIdForMotor(motorId);
+  // const startingScheduleId = await getNextScheduleIdForMotor(motorId);
 
   const finalPayload = preparedList.map((item, index) => ({
     ...buildScheduleData(item, item.schedule_start_date!),
-    schedule_id: startingScheduleId + index,
+    schedule_id: item.schedule_id,
     created_by: userId,
     enabled: item.enabled ?? true,
     schedule_status: item.schedule_status ?? "PENDING",
