@@ -10,6 +10,7 @@ import { controlMode } from "../../helpers/control-helpers.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
+import { prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
@@ -125,21 +126,17 @@ async function getLatestAlertsFaultsSnapshot(trx: any, starterId: number, motorI
 
 export async function updateStates(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
-    alert_description, fault, fault_description, time_stamp, temp, avg_current,
-    active_schedule_id, active_schedule_type, active_schedule_start_time,
-    active_schedule_runtime_minutes, active_schedule_end_time,
-    active_schedule_missed_minutes, active_schedule_failure_at,
-    active_schedule_failure_reason } = insertedData;
-
+    alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id) return null;
 
   const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
   if (isInTestRun && isInTestRun.test_run_status === "PROCESSING") await updateLatestStarterSettingsFlc(starter_id, avg_current)
 
+  const record = prepareStarterParametersRecord(insertedData);
   try {
     const notificationData = await db.transaction(async (trx) => {
-      await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+      await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, record, trx);
       await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
 
       const starterBoxUpdates: Record<string, any> = {};
@@ -394,15 +391,15 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       }
 
       // Update actual schedule fields with device-reported values
-      if (active_schedule_id && motor_id && starter_id) {
-        await updateActualScheduleFields(motor_id, starter_id, active_schedule_id, {
-          actual_start_time: active_schedule_start_time,
-          actual_end_time: active_schedule_end_time,
-          actual_run_time: active_schedule_runtime_minutes,
-          actual_type: active_schedule_type,
-          missed_minutes: active_schedule_missed_minutes,
-          failure_at: active_schedule_failure_at,
-          failure_reason: active_schedule_failure_reason,
+      if (insertedData.active_schedule_id && motor_id && starter_id) {
+        await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
+          actual_start_time: insertedData.active_schedule_start_time,
+          actual_end_time: insertedData.active_schedule_end_time,
+          actual_run_time: insertedData.active_schedule_runtime_minutes,
+          actual_type: insertedData.active_schedule_type,
+          missed_minutes: insertedData.active_schedule_missed_minutes,
+          failure_at: insertedData.active_schedule_failure_at,
+          failure_reason: insertedData.active_schedule_failure_reason,
         }, trx);
       }
 
@@ -495,18 +492,16 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
 
 export async function updateDevicePowerAndMotorStateToON(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
-    alert_description, fault, fault_description, time_stamp, temp, avg_current,
-    active_schedule_id, active_schedule_start_time, active_schedule_end_time,
-    active_schedule_runtime_minutes, active_schedule_type,
-    active_schedule_missed_minutes, active_schedule_failure_at, active_schedule_failure_reason } = insertedData;
+    alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
   const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
   if (isInTestRun && isInTestRun.test_run_status === "PROCESSING") await updateLatestStarterSettingsFlc(starter_id, avg_current);
 
+  const record = prepareStarterParametersRecord(insertedData);
   const notificationData = await db.transaction(async (trx) => {
-    await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+    await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, record, trx);
     await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
 
     const starterBoxUpdates: Record<string, any> = {};
@@ -622,15 +617,15 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
     }
 
     // Update actual schedule fields with device-reported values
-    if (active_schedule_id && motor_id && starter_id) {
-      await updateActualScheduleFields(motor_id, starter_id, active_schedule_id, {
-        actual_start_time: active_schedule_start_time,
-        actual_end_time: active_schedule_end_time,
-        actual_run_time: active_schedule_runtime_minutes,
-        actual_type: active_schedule_type,
-        missed_minutes: active_schedule_missed_minutes,
-        failure_at: active_schedule_failure_at,
-        failure_reason: active_schedule_failure_reason,
+    if (insertedData.active_schedule_id && motor_id && starter_id) {
+      await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
+        actual_start_time: insertedData.active_schedule_start_time,
+        actual_end_time: insertedData.active_schedule_end_time,
+        actual_run_time: insertedData.active_schedule_runtime_minutes,
+        actual_type: insertedData.active_schedule_type,
+        missed_minutes: insertedData.active_schedule_missed_minutes,
+        failure_at: insertedData.active_schedule_failure_at,
+        failure_reason: insertedData.active_schedule_failure_reason,
       }, trx);
     }
 
@@ -659,8 +654,9 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
+  const record = prepareStarterParametersRecord(insertedData);
   const notificationData = await db.transaction(async (trx) => {
-    await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+    await saveSingleRecord(starterBoxParameters, record, trx);
     await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
 
     const starterBoxUpdates: Record<string, any> = {};
@@ -758,6 +754,20 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
     }
 
     const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(notificationMotor, motor_state, mode_description, starter_id, starter_number) : null;
+
+    // Update actual schedule fields with device-reported values
+    if (insertedData.active_schedule_id && motor_id && starter_id) {
+      await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
+        actual_start_time: insertedData.active_schedule_start_time,
+        actual_end_time: insertedData.active_schedule_end_time,
+        actual_run_time: insertedData.active_schedule_runtime_minutes,
+        actual_type: insertedData.active_schedule_type,
+        missed_minutes: insertedData.active_schedule_missed_minutes,
+        failure_at: insertedData.active_schedule_failure_at,
+        failure_reason: insertedData.active_schedule_failure_reason,
+      }, trx);
+    }
+
     return { notificationDataState };
   });
 
@@ -775,7 +785,9 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
   if (!starter_id || !motor_id) return null;
 
+  const record = prepareStarterParametersRecord(insertedData);
   const notificationData = await db.transaction(async (trx) => {
+    await saveSingleRecord(starterBoxParameters, record, trx);
     await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
     const starterBoxUpdates: Record<string, any> = {};
     let trackPowerChange = false;
@@ -871,6 +883,20 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 
     const hasModeChanged = motorSyncChange.hasModeChanged;
     const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(notificationMotor, mode_description, starter_id, starter_number) : null;
+
+    // Update actual schedule fields with device-reported values
+    if (insertedData.active_schedule_id && motor_id && starter_id) {
+      await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
+        actual_start_time: insertedData.active_schedule_start_time,
+        actual_end_time: insertedData.active_schedule_end_time,
+        actual_run_time: insertedData.active_schedule_runtime_minutes,
+        actual_type: insertedData.active_schedule_type,
+        missed_minutes: insertedData.active_schedule_missed_minutes,
+        failure_at: insertedData.active_schedule_failure_at,
+        failure_reason: insertedData.active_schedule_failure_reason,
+      }, trx);
+    }
+
     return { notificationDataMode };
   });
 

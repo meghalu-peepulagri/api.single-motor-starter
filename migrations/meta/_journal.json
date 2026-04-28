@@ -344,6 +344,20 @@
       "when": 1777006054847,
       "tag": "0048_broken_grandmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1777379703245,
+      "tag": "0049_goofy_slyde",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1777380653428,
+      "tag": "0050_mushy_valeria_richards",
+      "breakpoints": true
     }
   ]
 }

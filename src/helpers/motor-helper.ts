@@ -81,11 +81,24 @@ export function buildAnalyticsFilter(parameter: string) {
     time_stamp: benchedStarterParameters.time_stamp,
   };
 
+  const scheduleFieldsMain = {
+    ...(starterBoxParameters.schedule_id != null && { schedule_id: starterBoxParameters.schedule_id }),
+    ...(starterBoxParameters.schedule_start_time != null && { schedule_start_time: starterBoxParameters.schedule_start_time }),
+    ...(starterBoxParameters.schedule_end_time != null && { schedule_end_time: starterBoxParameters.schedule_end_time }),
+  };
+
+  const scheduleFieldsBench = {
+    ...(benchedStarterParameters.schedule_id != null && { schedule_id: benchedStarterParameters.schedule_id }),
+    ...(benchedStarterParameters.schedule_start_time != null && { schedule_start_time: benchedStarterParameters.schedule_start_time }),
+    ...(benchedStarterParameters.schedule_end_time != null && { schedule_end_time: benchedStarterParameters.schedule_end_time }),
+  };
+
   const voltageFieldsMain = {
     line_voltage_r: starterBoxParameters.line_voltage_r,
     line_voltage_y: starterBoxParameters.line_voltage_y,
     line_voltage_b: starterBoxParameters.line_voltage_b,
     avg_voltage: starterBoxParameters.avg_voltage,
+    ...scheduleFieldsMain,
   };
 
   const voltageFieldsBench = {
@@ -93,6 +106,7 @@ export function buildAnalyticsFilter(parameter: string) {
     line_voltage_y: benchedStarterParameters.line_voltage_y,
     line_voltage_b: benchedStarterParameters.line_voltage_b,
     avg_voltage: benchedStarterParameters.avg_voltage,
+    ...scheduleFieldsBench,
   };
 
   const currentFieldsMain = {
@@ -100,6 +114,7 @@ export function buildAnalyticsFilter(parameter: string) {
     current_y: starterBoxParameters.current_y,
     current_b: starterBoxParameters.current_b,
     avg_current: starterBoxParameters.avg_current,
+    ...scheduleFieldsMain,
   };
 
   const currentFieldsBench = {
@@ -107,6 +122,7 @@ export function buildAnalyticsFilter(parameter: string) {
     current_y: benchedStarterParameters.current_y,
     current_b: benchedStarterParameters.current_b,
     avg_current: benchedStarterParameters.avg_current,
+    ...scheduleFieldsBench,
   };
 
   if (parameter === "voltage") {
@@ -127,38 +143,49 @@ export function buildAnalyticsFilter(parameter: string) {
 }
 
 export function formatAnalyticsData(data: any[], parameter: string) {
-  return data.map(record => ({
-    id: record.id,
-    time_stamp: record.time_stamp,
-    ...(parameter === "voltage"
-      ? {
-        line_voltage_r: Number.parseFloat((record.line_voltage_r || 0).toFixed(2)),
-        line_voltage_y: Number.parseFloat((record.line_voltage_y || 0).toFixed(2)),
-        line_voltage_b: Number.parseFloat((record.line_voltage_b || 0).toFixed(2)),
-        avg_voltage: Number.parseFloat((record.avg_voltage || 0).toFixed(2)),
-      }
-      : {}),
-    ...(parameter === "current"
-      ? {
-        current_r: Number.parseFloat((record.current_r || 0).toFixed(2)),
-        current_y: Number.parseFloat((record.current_y || 0).toFixed(2)),
-        current_b: Number.parseFloat((record.current_b || 0).toFixed(2)),
-        avg_current: Number.parseFloat((record.avg_current || 0).toFixed(2)),
-      }
-      : {}),
-    ...(!parameter
-      ? {
-        line_voltage_r: Number.parseFloat((record.line_voltage_r || 0).toFixed(2)),
-        line_voltage_y: Number.parseFloat((record.line_voltage_y || 0).toFixed(2)),
-        line_voltage_b: Number.parseFloat((record.line_voltage_b || 0).toFixed(2)),
-        avg_voltage: Number.parseFloat((record.avg_voltage || 0).toFixed(2)),
-        current_r: Number.parseFloat((record.current_r || 0).toFixed(2)),
-        current_y: Number.parseFloat((record.current_y || 0).toFixed(2)),
-        current_b: Number.parseFloat((record.current_b || 0).toFixed(2)),
-        avg_current: Number.parseFloat((record.avg_current || 0).toFixed(2)),
-      }
-      : {}),
-  }));
+  return data.map(record => {
+    const scheduleFields = {
+      ...(record.schedule_id != null && { schedule_id: record.schedule_id }),
+      ...(record.schedule_start_time != null && { schedule_start_time: record.schedule_start_time }),
+      ...(record.schedule_end_time != null && { schedule_end_time: record.schedule_end_time }),
+    };
+
+    return {
+      id: record.id,
+      time_stamp: record.time_stamp,
+      ...(parameter === "voltage"
+        ? {
+          line_voltage_r: Number.parseFloat((record.line_voltage_r || 0).toFixed(2)),
+          line_voltage_y: Number.parseFloat((record.line_voltage_y || 0).toFixed(2)),
+          line_voltage_b: Number.parseFloat((record.line_voltage_b || 0).toFixed(2)),
+          avg_voltage: Number.parseFloat((record.avg_voltage || 0).toFixed(2)),
+          ...scheduleFields,
+        }
+        : {}),
+      ...(parameter === "current"
+        ? {
+          current_r: Number.parseFloat((record.current_r || 0).toFixed(2)),
+          current_y: Number.parseFloat((record.current_y || 0).toFixed(2)),
+          current_b: Number.parseFloat((record.current_b || 0).toFixed(2)),
+          avg_current: Number.parseFloat((record.avg_current || 0).toFixed(2)),
+          ...scheduleFields,
+        }
+        : {}),
+      ...(!parameter
+        ? {
+          line_voltage_r: Number.parseFloat((record.line_voltage_r || 0).toFixed(2)),
+          line_voltage_y: Number.parseFloat((record.line_voltage_y || 0).toFixed(2)),
+          line_voltage_b: Number.parseFloat((record.line_voltage_b || 0).toFixed(2)),
+          avg_voltage: Number.parseFloat((record.avg_voltage || 0).toFixed(2)),
+          current_r: Number.parseFloat((record.current_r || 0).toFixed(2)),
+          current_y: Number.parseFloat((record.current_y || 0).toFixed(2)),
+          current_b: Number.parseFloat((record.current_b || 0).toFixed(2)),
+          avg_current: Number.parseFloat((record.avg_current || 0).toFixed(2)),
+          ...scheduleFields,
+        }
+        : {}),
+    };
+  });
 }
 
 

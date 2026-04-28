@@ -56,6 +56,17 @@ export const starterBoxParameters = pgTable("starter_parameters", {
   payload_errors: jsonb('payload_errors').notNull().default(sql`'[]'::jsonb`),
   group_id: varchar("group_id"),
   temperature: real("temperature").default(0),
+
+  // Schedule runtime fields (NEW)
+  schedule_id: integer("schedule_id"),
+  schedule_start_time: varchar("schedule_start_time"), // st
+  schedule_end_time: varchar("schedule_end_time"),     // et
+  schedule_runtime_minutes: integer("schedule_runtime_minutes"), // rt
+  schedule_type: varchar("schedule_type"), // optional (if cy or normal)
+  schedule_missed_minutes: integer("schedule_missed_minutes"), // mm
+  schedule_failure_at: timestamp("schedule_failure_at"), // fe
+  schedule_failure_reason: varchar("schedule_failure_reason"), // fr
+  
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
