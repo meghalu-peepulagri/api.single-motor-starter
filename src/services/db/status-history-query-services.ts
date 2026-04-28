@@ -17,11 +17,11 @@ function buildWhere(table: HistoryTable, filters: StatusHistoryFilters) {
     conditions.push(eq(table.motor_id as any, filters.motor_id));
   }
   if (filters.from_date) {
-    conditions.push(gte(table.time_stamp, new Date(filters.from_date)) as any);
+    const start = new Date(`${filters.from_date.split('T')[0]}T00:00:00+05:30`);
+    conditions.push(gte(table.time_stamp, start) as any);
   }
   if (filters.to_date) {
-    const end = new Date(filters.to_date);
-    end.setHours(23, 59, 59, 999);
+    const end = new Date(`${filters.to_date.split('T')[0]}T23:59:59.999+05:30`);
     conditions.push(lte(table.time_stamp, end) as any);
   }
   if (filters.status) {
@@ -90,15 +90,31 @@ function buildStatusRanges(params: {
 
   for (const event of events) {
     if (openStart !== null && event.time_stamp.getTime() > openStart.getTime()) {
-      ranges.push({ start: openStart, end: event.time_stamp });
+      // Clamp the end time to rangeEnd if the event happens after
+      const clampedEnd = event.time_stamp > rangeEnd ? rangeEnd : event.time_stamp;
+      if (clampedEnd.getTime() > openStart.getTime()) {
+        ranges.push({ start: openStart, end: clampedEnd });
+      }
     }
 
     currentStatus = event.status;
-    openStart = currentStatus === activeStatus ? event.time_stamp : null;
+    
+    // If turning active, start the range. If the event is before rangeStart, clamp to rangeStart
+    if (currentStatus === activeStatus) {
+        openStart = event.time_stamp < rangeStart ? rangeStart : event.time_stamp;
+    } else {
+        openStart = null;
+    }
   }
 
-  if (openStart !== null && rangeEnd.getTime() > openStart.getTime()) {
-    ranges.push({ start: openStart, end: rangeEnd });
+  if (openStart !== null) {
+    const now = new Date();
+    // Cap the end time so we don't calculate into the future
+    const maxEnd = rangeEnd > now ? now : rangeEnd;
+    
+    if (maxEnd.getTime() > openStart.getTime()) {
+      ranges.push({ start: openStart, end: maxEnd });
+    }
   }
 
   return ranges;
@@ -134,11 +150,8 @@ function sumOverlapMs(primaryRanges: TimeRange[], blockedRanges: TimeRange[]): n
 }
 
 export async function getMotorOnRuntime(filters: MotorRuntimeFilters) {
-  const rangeStart = new Date(filters.from_date);
-  rangeStart.setHours(0, 0, 0, 0);
-
-  const rangeEnd = new Date(filters.to_date);
-  rangeEnd.setHours(23, 59, 59, 999);
+  const rangeStart = new Date(`${filters.from_date.split('T')[0]}T00:00:00+05:30`);
+  const rangeEnd = new Date(`${filters.to_date.split('T')[0]}T23:59:59.999+05:30`);
 
   const motorScope = and(
     eq(motorStatusHistory.starter_id, filters.starter_id),
@@ -175,24 +188,61 @@ export async function getMotorOnRuntime(filters: MotorRuntimeFilters) {
     .where(and(deviceScope, gte(deviceStatusHistory.time_stamp, rangeStart), lte(deviceStatusHistory.time_stamp, rangeEnd)))
     .orderBy(asc(deviceStatusHistory.time_stamp));
 
+  // ── FIX 1: Remove consecutive same-status duplicates ──────────
+  // ON, ON sequences are boundary markers not real activity
+  function deduplicateEvents<T extends { status: string }>(events: T[]): T[] {
+    return events.filter((event, index) => {
+      if (index === 0) return true;
+      return event.status !== events[index - 1].status;
+    });
+  }
+
+  const dedupedMotorEvents = deduplicateEvents(motorEventsInRange);
+
+  // ── FIX 2: Smart carry-over ───────────────────────────────────
+  const firstEventIsOff = dedupedMotorEvents[0]?.status === "OFF";
+  const motorCarryOver = preMotorRecord?.status === "ON" && firstEventIsOff;
+
   const motorOnRanges = buildStatusRanges({
-    previousStatus: preMotorRecord?.status,
-    events: motorEventsInRange,
+    previousStatus: motorCarryOver ? "ON" : null,
+    events: dedupedMotorEvents,
     activeStatus: "ON",
     rangeStart,
     rangeEnd,
   });
 
+  // ── FIX 3: Only reset stale INACTIVE if real motor activity ───
+  const hasRealMotorActivity = dedupedMotorEvents.some((e, i) =>
+    e.status === "ON" && dedupedMotorEvents[i + 1]?.status === "OFF"
+  ) || motorCarryOver;
+
+  const deviceStaleInactive =
+    preDeviceRecord?.status === "INACTIVE" && hasRealMotorActivity;
+
+  const effectivePreDeviceStatus = deviceStaleInactive
+    ? null
+    : preDeviceRecord?.status ?? null;
+
   const deviceInactiveRanges = buildStatusRanges({
-    previousStatus: preDeviceRecord?.status,
-    events: deviceEventsInRange,
+    previousStatus: effectivePreDeviceStatus,
+    events: deduplicateEvents(deviceEventsInRange),
     activeStatus: "INACTIVE",
     rangeStart,
     rangeEnd,
   });
 
+  // ── FIX 4: Strict boundary check for unreliable windows ───────
+  // Use strict > < instead of >= <= so boundary timestamps
+  // don't accidentally filter out entire INACTIVE windows
+  const motorEventTimes = dedupedMotorEvents.map(e => e.time_stamp.getTime());
+  const reliableInactiveRanges = deviceInactiveRanges.filter(range =>
+    !motorEventTimes.some(
+      t => t > range.start.getTime() && t < range.end.getTime()
+    )
+  );
+
   const totalMotorOnMs = sumRangeMs(motorOnRanges);
-  const inactiveOverlapMs = sumOverlapMs(motorOnRanges, deviceInactiveRanges);
+  const inactiveOverlapMs = sumOverlapMs(motorOnRanges, reliableInactiveRanges);
   const totalMs = Math.max(0, totalMotorOnMs - inactiveOverlapMs);
 
   return {
