@@ -187,7 +187,6 @@ export async function cancelSchedulesByIds(scheduleIds: number[]) {
       manually_stopped: true,
       paused_at: now,
       enabled: false,
-      last_stopped_at: now,
       updated_at: now,
     })
     .where(inArray(motorSchedules.id, scheduleIds))

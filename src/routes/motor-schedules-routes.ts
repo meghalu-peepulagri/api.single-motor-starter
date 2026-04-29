@@ -36,7 +36,7 @@ motorScheduleRoute.post("/", isAuthorized, motorScheduleHandler.createMotorSched
 
 
 // Bulk stop schedules by ids
-motorScheduleRoute.post("/bulk/stop", isAuthorized, motorScheduleHandler.bulkStopSchedulesHandler);
+motorScheduleRoute.post("/bulk/stop", isAuthorized, motorScheduleHandler. bulkStopSchedulesHandler);
 
 // Bulk restart schedules by ids
 motorScheduleRoute.post("/bulk/restart", isAuthorized, motorScheduleHandler.bulkRestartSchedulesHandler);
