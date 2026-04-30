@@ -19,7 +19,7 @@ import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsec
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -752,6 +752,19 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at get device details handler:", error);
+            throw error;
+        }
+    };
+    getBasicDetailsHandler = async (c) => {
+        try {
+            const query = c.req.query();
+            const paginationParams = getPaginationOffParams(query);
+            const search = query.search_string ?? query.search ?? "";
+            const basicDetails = await getBasicStarterDetails(paginationParams, search);
+            return sendResponse(c, 200, "Basic device details fetched successfully", basicDetails);
+        }
+        catch (error) {
+            console.error("Error at get basic device details handler:", error);
             throw error;
         }
     };

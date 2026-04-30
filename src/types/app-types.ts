@@ -235,6 +235,9 @@ export interface ScheduleForEvaluation {
   runtime_minutes: number | null;
   last_started_at: Date | null;
   enabled: boolean;
+  actual_start_time?: string | null;
+  actual_end_time?: string | null;
+  actual_run_time?: number | null;
 }
 
 export interface ScheduleStatusUpdate {

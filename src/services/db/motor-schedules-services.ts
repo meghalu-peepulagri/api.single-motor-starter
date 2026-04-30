@@ -471,12 +471,22 @@ export async function batchUpdateScheduleStatuses(
       updated_at: Date;
       last_started_at?: Date;
       last_stopped_at?: Date;
+      actual_start_time?: string | null;
+      actual_end_time?: string | null;
+      actual_run_time?: number | null;
     } = {
       schedule_status: group.status,
       updated_at: new Date(),
     };
     if (group.last_started_at) setData.last_started_at = group.last_started_at;
     if (group.last_stopped_at) setData.last_stopped_at = group.last_stopped_at;
+
+    // Reset actual fields for the next run cycle
+    if (group.status === "WAITING_NEXT_CYCLE" || group.status === "COMPLETED") {
+      setData.actual_start_time = null;
+      setData.actual_end_time = null;
+      setData.actual_run_time = null;
+    }
 
     const result = await db
       .update(motorSchedules)
@@ -515,6 +525,9 @@ export async function findEvaluatableSchedules() {
       runtime_minutes: true,
       last_started_at: true,
       enabled: true,
+      actual_start_time: true,
+      actual_end_time: true,
+      actual_run_time: true,
     },
   });
 }

@@ -673,3 +673,58 @@ export async function getDeviceWithDispatchDetails(search: string) {
     },
   } as any);
 }
+
+export async function getBasicStarterDetails(
+  pageParams: { page: number; pageSize: number; offset: number },
+  search?: string,
+) {
+  const trimmedSearch = search?.trim();
+  const whereCondition = and(
+    ne(starterBoxes.status, "ARCHIVED"),
+    ...(trimmedSearch ? [or(
+      ilike(starterBoxes.starter_number, `%${trimmedSearch}%`),
+      ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`),
+      ilike(starterBoxes.mac_address, `%${trimmedSearch}%`),
+    )] : []),
+  );
+
+  const records = await db.query.starterBoxes.findMany({
+    where: whereCondition,
+    columns: {
+      id: true,
+      starter_number: true,
+      pcb_number: true,
+      mac_address: true,
+      device_allocation: true,
+    },
+    with: {
+      motors: {
+        where: ne(motors.status, "ARCHIVED"),
+        columns: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [desc(starterBoxes.created_at)],
+    limit: pageParams.pageSize,
+    offset: pageParams.offset,
+  });
+
+  const totalFilters = [ne(starterBoxes.status, "ARCHIVED")];
+  if (trimmedSearch) {
+    totalFilters.push(or(
+      ilike(starterBoxes.starter_number, `%${trimmedSearch}%`),
+      ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`),
+      ilike(starterBoxes.mac_address, `%${trimmedSearch}%`),
+    ) as any);
+  }
+
+  const totalRecords = await getRecordsCount(starterBoxes, totalFilters);
+  const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
+
+  return {
+    pagination_info: pagination,
+    records,
+  };
+}

@@ -22,7 +22,7 @@ import type { validatedUpdateInstalledLocation } from "../validations/schema/sta
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
@@ -851,6 +851,19 @@ export class StarterHandlers {
       return sendResponse(c, 200, "Device details fetched successfully", deviceDetails);
     } catch (error: any) {
       console.error("Error at get device details handler:", error);
+      throw error;
+    }
+  };
+
+  getBasicDetailsHandler = async (c: Context) => {
+    try {
+      const query = c.req.query();
+      const paginationParams = getPaginationOffParams(query);
+      const search = query.search_string ?? query.search ?? "";
+      const basicDetails = await getBasicStarterDetails(paginationParams, search);
+      return sendResponse(c, 200, "Basic device details fetched successfully", basicDetails);
+    } catch (error: any) {
+      console.error("Error at get basic device details handler:", error);
       throw error;
     }
   };

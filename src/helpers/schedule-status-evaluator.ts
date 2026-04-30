@@ -64,8 +64,12 @@ export function evaluateScheduleStatus(
   const currentDateNum = ist.dateNum;
   const currentDayOfWeek = ist.dayOfWeek;
 
-  const startMinutes = timeToMinutes(schedule.start_time);
-  const endMinutes = timeToMinutes(schedule.end_time);
+  const effectiveStartTime = schedule.actual_start_time || schedule.start_time;
+  const effectiveEndTime = schedule.actual_end_time || schedule.end_time;
+  const effectiveRuntime = schedule.actual_run_time || schedule.runtime_minutes;
+
+  const startMinutes = timeToMinutes(effectiveStartTime);
+  const endMinutes = timeToMinutes(effectiveEndTime);
   const isTodayValid = isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek);
 
   // ── SCHEDULED → RUNNING / WAITING_NEXT_CYCLE / COMPLETED (missed window) ──
@@ -97,10 +101,10 @@ export function evaluateScheduleStatus(
       shouldComplete = true;
     }
 
-    if (!shouldComplete && schedule.runtime_minutes && schedule.last_started_at) {
+    if (!shouldComplete && effectiveRuntime && schedule.last_started_at) {
       const elapsedMs = now.getTime() - new Date(schedule.last_started_at).getTime();
       const elapsedMinutes = elapsedMs / 60000;
-      if (elapsedMinutes >= schedule.runtime_minutes) {
+      if (elapsedMinutes >= effectiveRuntime) {
         shouldComplete = true;
       }
     }
