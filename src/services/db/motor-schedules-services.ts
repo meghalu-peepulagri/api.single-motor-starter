@@ -457,6 +457,7 @@ export async function batchUpdateScheduleStatuses(
     ids: number[];
     last_started_at?: Date;
     last_stopped_at?: Date;
+    completed_at?: Date;
   }[],
 ) {
   const results = [];
@@ -468,6 +469,7 @@ export async function batchUpdateScheduleStatuses(
       updated_at: Date;
       last_started_at?: Date;
       last_stopped_at?: Date;
+      completed_at?: Date;
       actual_start_time?: string | null;
       actual_end_time?: string | null;
       actual_run_time?: number | null;
@@ -477,6 +479,7 @@ export async function batchUpdateScheduleStatuses(
     };
     if (group.last_started_at) setData.last_started_at = group.last_started_at;
     if (group.last_stopped_at) setData.last_stopped_at = group.last_stopped_at;
+    if (group.completed_at) setData.completed_at = group.completed_at;
 
     // Reset actual fields for the next run cycle
     if (group.status === "WAITING_NEXT_CYCLE" || group.status === "COMPLETED") {
@@ -525,6 +528,7 @@ export async function findEvaluatableSchedules() {
       actual_start_time: true,
       actual_end_time: true,
       actual_run_time: true,
+      completed_at: true,
     },
   });
 }
@@ -675,6 +679,7 @@ export async function findScheduleHistoryByMotorAndStarter(
       deleted_at: motorSchedules.deleted_at,
       updated_at: motorSchedules.updated_at,
       edited_at: motorSchedules.edited_at,
+      completed_at: motorSchedules.completed_at,
     })
       .from(motorSchedules)
       .where(conditions)

@@ -388,6 +388,7 @@ export function buildScheduleTimeline(record: any): any {
   if (record.failure_at) events.push({ event: "FAILED", timestamp: new Date(record.failure_at).toISOString() });
   if (record.deleted_at) events.push({ event: "DELETED", timestamp: new Date(record.deleted_at).toISOString() });
   if (record.edited_at) events.push({ event: "EDITED", timestamp: new Date(record.edited_at).toISOString() });
+  if (record.completed_at) events.push({ event: "COMPLETED", timestamp: new Date(record.completed_at).toISOString() });
 
   events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 

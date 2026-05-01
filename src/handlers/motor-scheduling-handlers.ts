@@ -372,7 +372,7 @@ export class MotorScheduleHandler {
 
       await batchUpdateScheduleStatuses([
         { status: "RUNNING", ids: groups.RUNNING, last_started_at: now },
-        { status: "COMPLETED", ids: groups.COMPLETED, last_stopped_at: now },
+        { status: "COMPLETED", ids: groups.COMPLETED, completed_at: now },
         { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
       ]);
 
