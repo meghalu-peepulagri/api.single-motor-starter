@@ -77,6 +77,7 @@ export const motorSchedules = pgTable("motor_schedules", {
   last_stopped_at: timestamp("last_stopped_at"),
   paused_at: timestamp("paused_at"),
   restarted_at: timestamp("restarted_at"),
+  edited_at: timestamp("edited_at"),
 
   created_by: integer("created_by").references(() => users.id), // user_id of the creator
   deleted_by: integer("deleted_by").references(() => users.id), // user_id of who deleted (if applicable)
