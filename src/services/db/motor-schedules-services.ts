@@ -301,17 +301,14 @@ export async function findSchedulesByFilters(
       )
     );
   }
-  if (filters.schedule_start_date) {
-    conditions.push(
-      lte(motorSchedules.schedule_start_date, filters.schedule_start_date)
-    );
-    conditions.push(
-      gte(motorSchedules.schedule_end_date, filters.schedule_start_date)
-    );
+  if (filters.schedule_start_date && filters.schedule_end_date) {
+    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_end_date));
+    conditions.push(gte(motorSchedules.schedule_end_date, filters.schedule_start_date));
+  } else if (filters.schedule_start_date) {
+    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_start_date));
+    conditions.push(gte(motorSchedules.schedule_end_date, filters.schedule_start_date));
   } else if (filters.schedule_end_date) {
-    conditions.push(
-      lte(motorSchedules.schedule_start_date, filters.schedule_end_date)
-    );
+    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_end_date));
   }
   if (filters.repeat !== undefined) {
     conditions.push(eq(motorSchedules.repeat, filters.repeat));
