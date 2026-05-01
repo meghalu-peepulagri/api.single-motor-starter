@@ -155,7 +155,7 @@ export class MotorScheduleHandler {
       );
       checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate, schedule_end_date: data.schedule_end_date || scheduleStartDate }, existingSchedules);
 
-      await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, buildScheduleData(data, scheduleStartDate));
+      await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { ...buildScheduleData(data, scheduleStartDate), edited_at: new Date() });
       return sendResponse(c, 200, SCHEDULE_UPDATED);
     } catch (error: any) {
       handleAppError(error, "edit motor Schedule");
@@ -184,7 +184,7 @@ export class MotorScheduleHandler {
   };
 
   // =================== UPDATE SCHEDULE STATUS ===================
-    updateScheduleStatusHandler = async (c: Context) => {
+  updateScheduleStatusHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
@@ -348,7 +348,7 @@ export class MotorScheduleHandler {
 
       return sendResponse(c, 200, BULK_SCHEDULES_DELETED, { deleted_count: ids.length });
     } catch (error: any) {
-      handleAppError(error, "bulk delete schedules"); 
+      handleAppError(error, "bulk delete schedules");
       throw error;
     }
   };

@@ -331,7 +331,6 @@ export function buildScheduleData(data: {
     power_loss_recovery: scheduleType === "CYCLIC" ? false : (data.power_loss_recovery === true),
     repeat: data.repeat ?? 0,
     power_loss_recovery_time: data.power_loss_recovery_time ?? 30,
-    edited_at: new Date(),
   };
 }
 
