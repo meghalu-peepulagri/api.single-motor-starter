@@ -677,6 +677,7 @@ export async function findScheduleHistoryByMotorAndStarter(
       failure_reason: motorSchedules.failure_reason,
       deleted_at: motorSchedules.deleted_at,
       updated_at: motorSchedules.updated_at,
+      edited_at: motorSchedules.edited_at,
     })
       .from(motorSchedules)
       .where(conditions)
