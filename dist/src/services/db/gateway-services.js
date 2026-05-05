@@ -141,18 +141,25 @@ export async function gatewayConflicts(gatewayId) {
     }
     return existingGateway;
 }
-export async function assertGatewayIdentifiersUnique(data, trx) {
+export async function assertGatewayIdentifiersUnique(data, trx, excludeId) {
     const queryBuilder = trx || db;
-    const orConditions = [
-        sql `lower(${gateways.mac_address}) = ${data.macLower}`,
-        sql `lower(${gateways.pcb_number}) = ${data.pcbLower}`,
-    ];
-    if (data.nameLower) {
+    const orConditions = [];
+    if (data.macLower)
+        orConditions.push(sql `lower(${gateways.mac_address}) = ${data.macLower}`);
+    if (data.pcbLower)
+        orConditions.push(sql `lower(${gateways.pcb_number}) = ${data.pcbLower}`);
+    if (data.nameLower)
         orConditions.push(sql `lower(${gateways.name}) = ${data.nameLower}`);
-    }
-    if (data.gatewayNumberLower) {
+    if (data.gatewayNumberLower)
         orConditions.push(sql `lower(${gateways.gateway_number}) = ${data.gatewayNumberLower}`);
-    }
+    if (orConditions.length === 0)
+        return;
+    const whereConditions = [
+        ne(gateways.status, "ARCHIVED"),
+        sql `(${sql.join(orConditions, sql ` OR `)})`,
+    ];
+    if (excludeId)
+        whereConditions.push(ne(gateways.id, excludeId));
     const matched = await queryBuilder
         .select({
         name: gateways.name,
@@ -161,7 +168,7 @@ export async function assertGatewayIdentifiersUnique(data, trx) {
         gateway_number: gateways.gateway_number,
     })
         .from(gateways)
-        .where(and(ne(gateways.status, "ARCHIVED"), sql `(${sql.join(orConditions, sql ` OR `)})`))
+        .where(and(...whereConditions))
         .limit(1);
     if (!Array.isArray(matched) || matched.length === 0) {
         return;

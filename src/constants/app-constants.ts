@@ -327,6 +327,7 @@ export const GATEWAY_NUMBER_MIN_LEN = "Gateway number should be min 3 characters
 export const GATEWAY_IDENTIFIER_REQUIRED = "Mac address / PCB number / Gateway number / Gateway name is required";
 export const GATEWAY_ASSIGNED_SUCCESSFULLY = "Gateway assigned successfully";
 export const GATEWAY_ALREADY_ASSIGNED = "Gateway already assigned";
+export const GATEWAY_UPDATED = "Gateway updated successfully";
 
 
 // Motor schedule 

@@ -7,6 +7,36 @@ export function getGatewayIdentifierLowers(data) {
     const gatewayNumberLower = data.gateway_number?.trim().toLowerCase() ?? null;
     return { nameLower, macLower, pcbLower, gatewayNumberLower };
 }
+export function buildGatewayUpdatePayload(validReq, current) {
+    const nameLower = validReq.name && validReq.name !== current.name
+        ? validReq.name.toLowerCase() : null;
+    const gatewayNumberLower = validReq.gateway_number && validReq.gateway_number !== current.gateway_number
+        ? validReq.gateway_number.toLowerCase() : null;
+    const macLower = validReq.mac_address && validReq.mac_address !== current.mac_address
+        ? validReq.mac_address.toLowerCase() : null;
+    const pcbLower = validReq.pcb_number && validReq.pcb_number !== current.pcb_number
+        ? validReq.pcb_number.toLowerCase() : null;
+    const updateData = {};
+    if (validReq.name !== undefined)
+        updateData.name = validReq.name;
+    if (validReq.gateway_number !== undefined)
+        updateData.gateway_number = validReq.gateway_number;
+    if (validReq.label !== undefined)
+        updateData.label = validReq.label;
+    if (validReq.mac_address !== undefined)
+        updateData.mac_address = validReq.mac_address;
+    if (validReq.pcb_number !== undefined)
+        updateData.pcb_number = validReq.pcb_number;
+    const oldData = {};
+    for (const key of Object.keys(updateData)) {
+        oldData[key] = current[key] ?? null;
+    }
+    return {
+        updateData,
+        oldData,
+        changedIdentifiers: { nameLower, gatewayNumberLower, macLower, pcbLower },
+    };
+}
 export function gatewayFilters(query, userId) {
     const filters = [];
     filters.push(ne(gateways.status, "ARCHIVED"));

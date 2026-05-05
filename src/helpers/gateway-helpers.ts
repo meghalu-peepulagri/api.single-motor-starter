@@ -15,6 +15,50 @@ export function getGatewayIdentifierLowers(data: {
   return { nameLower, macLower, pcbLower, gatewayNumberLower };
 }
 
+export function buildGatewayUpdatePayload(
+  validReq: {
+    name?: string | null | undefined;
+    gateway_number?: string | null | undefined;
+    label?: string | null | undefined;
+    mac_address?: string | null | undefined;
+    pcb_number?: string | null | undefined;
+  },
+  current: {
+    name?: string | null;
+    gateway_number?: string | null;
+    label?: string | null;
+    mac_address?: string | null;
+    pcb_number?: string | null;
+  }
+) {
+  const nameLower = validReq.name && validReq.name !== current.name
+    ? validReq.name.toLowerCase() : null;
+  const gatewayNumberLower = validReq.gateway_number && validReq.gateway_number !== current.gateway_number
+    ? validReq.gateway_number.toLowerCase() : null;
+  const macLower = validReq.mac_address && validReq.mac_address !== current.mac_address
+    ? validReq.mac_address.toLowerCase() : null;
+  const pcbLower = validReq.pcb_number && validReq.pcb_number !== current.pcb_number
+    ? validReq.pcb_number.toLowerCase() : null;
+
+  const updateData: Record<string, any> = {};
+  if (validReq.name !== undefined) updateData.name = validReq.name;
+  if (validReq.gateway_number !== undefined) updateData.gateway_number = validReq.gateway_number;
+  if (validReq.label !== undefined) updateData.label = validReq.label;
+  if (validReq.mac_address !== undefined) updateData.mac_address = validReq.mac_address;
+  if (validReq.pcb_number !== undefined) updateData.pcb_number = validReq.pcb_number;
+
+  const oldData: Record<string, any> = {};
+  for (const key of Object.keys(updateData)) {
+    oldData[key] = (current as any)[key] ?? null;
+  }
+
+  return {
+    updateData,
+    oldData,
+    changedIdentifiers: { nameLower, gatewayNumberLower, macLower, pcbLower },
+  };
+}
+
 export function gatewayFilters(query: any, userId?: number) {
   const filters: any[] = [];
   filters.push(ne(gateways.status, "ARCHIVED"));

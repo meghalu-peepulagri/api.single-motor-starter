@@ -126,3 +126,22 @@ export function prepareGatewayNumberUpdatedLog(data: {
     message: `Gateway '${data.gatewayName}' number updated to '${data.newGatewayNumber}'.`,
   });
 }
+
+export function prepareGatewayDetailsUpdatedLog(data: {
+  performedBy: number;
+  userId: number;
+  gatewayId: number;
+  oldData: Record<string, any>;
+  newData: Record<string, any>;
+}): NewUserActivityLog {
+  return ActivityService.prepareActivityLog({
+    userId: data.userId,
+    performedBy: data.performedBy,
+    action: "GATEWAY_DETAILS_UPDATED",
+    entityType: "GATEWAY",
+    entityId: data.gatewayId,
+    oldData: data.oldData,
+    newData: data.newData,
+    message: `Gateway details updated.`,
+  });
+}

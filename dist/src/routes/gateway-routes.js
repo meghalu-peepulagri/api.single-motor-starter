@@ -11,5 +11,6 @@ gatewayRoutes.patch("/assign", isAuthorized, gatewayHandlers.assignGatewayToUser
 gatewayRoutes.post("/:id/label", isAuthorized, gatewayHandlers.updateGatewayLabelHandler);
 gatewayRoutes.post("/:id/rename", isAuthorized, gatewayHandlers.renameGatewayHandler);
 gatewayRoutes.post("/:id/number", isAuthorized, gatewayHandlers.updateGatewayNumberHandler);
-gatewayRoutes.patch("/:id", isAuthorized, gatewayHandlers.deleteGatewayHandler);
+gatewayRoutes.patch("/:id", isAuthorized, gatewayHandlers.updateGatewayDetailsHandler);
+gatewayRoutes.delete("/:id", isAuthorized, gatewayHandlers.deleteGatewayHandler);
 export default gatewayRoutes;

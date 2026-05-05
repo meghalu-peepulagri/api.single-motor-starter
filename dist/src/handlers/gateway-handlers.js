@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
-import { GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED } from "../constants/app-constants.js";
+import { GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_UPDATED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways } from "../database/schemas/gateways.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDeletedLog, prepareGatewayLabelUpdatedLog, prepareGatewayNumberUpdatedLog, prepareGatewayRenamedLog } from "../helpers/gateway-activity-helper.js";
-import { gatewayDropdownFilters, gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
+import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDeletedLog, prepareGatewayDetailsUpdatedLog, prepareGatewayLabelUpdatedLog, prepareGatewayNumberUpdatedLog, prepareGatewayRenamedLog } from "../helpers/gateway-activity-helper.js";
+import { buildGatewayUpdatePayload, gatewayDropdownFilters, gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { assertGatewayIdentifiersUnique, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysDropdownList, getGatewaysList } from "../services/db/gateway-services.js";
@@ -257,6 +257,50 @@ export class GatewayHandlers {
         }
         catch (error) {
             console.error("Error at update gateway number :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            throw error;
+        }
+    };
+    updateGatewayDetailsHandler = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const gatewayId = +c.req.param("id");
+            paramsValidateException.validateId(gatewayId, "gateway id");
+            const reqBody = await c.req.json();
+            paramsValidateException.emptyBodyValidation(reqBody);
+            const validReq = await validatedRequest("update-gateway-details", reqBody, GATEWAY_VALIDATION_CRITERIA);
+            const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, [
+                "id", "name", "gateway_number", "label", "mac_address", "pcb_number", "user_id",
+            ]);
+            if (!gateway)
+                throw new NotFoundException(GATEWAY_NOT_FOUND);
+            const { updateData, oldData, changedIdentifiers } = buildGatewayUpdatePayload(validReq, gateway);
+            const { nameLower, gatewayNumberLower, macLower, pcbLower } = changedIdentifiers;
+            if (nameLower || gatewayNumberLower || macLower || pcbLower) {
+                await assertGatewayIdentifiersUnique({
+                    nameLower,
+                    macLower: macLower ?? gateway.mac_address?.toLowerCase() ?? "",
+                    pcbLower: pcbLower ?? gateway.pcb_number?.toLowerCase() ?? "",
+                    gatewayNumberLower,
+                }, undefined, gatewayId);
+            }
+            await db.transaction(async (tx) => {
+                await updateRecordById(gateways, gatewayId, updateData, tx);
+                const log = prepareGatewayDetailsUpdatedLog({
+                    performedBy: userPayload.id,
+                    userId: gateway.user_id ?? userPayload.id,
+                    gatewayId,
+                    oldData,
+                    newData: updateData,
+                });
+                await ActivityService.saveActivityLogs([log], tx);
+            });
+            return sendResponse(c, 200, GATEWAY_UPDATED);
+        }
+        catch (error) {
+            console.error("Error at update gateway details :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);

@@ -72,3 +72,19 @@ export const vUpdateGatewayNumber = v.object({
 });
 
 export type ValidatedUpdateGatewayNumber = v.InferOutput<typeof vUpdateGatewayNumber>;
+
+export const vUpdateGatewayDetails = v.pipe(
+  v.object({
+    name: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, GATEWAY_NAME_MIN_LEN)))),
+    gateway_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, GATEWAY_NUMBER_MIN_LEN)))),
+    label: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, GATEWAY_LABEL_MIN_LEN)))),
+    mac_address: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, MAC_MIN_LEN)))),
+    pcb_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, PCB_MIN_LEN)))),
+  }),
+  v.check(
+    data => Object.values(data).some(v => v !== null && v !== undefined),
+    "At least one field must be provided to update"
+  ),
+);
+
+export type ValidatedUpdateGatewayDetails = v.InferOutput<typeof vUpdateGatewayDetails>;
