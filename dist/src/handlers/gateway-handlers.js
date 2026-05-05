@@ -24,14 +24,12 @@ export class GatewayHandlers {
             const gatewayPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(gatewayPayload);
             const validGatewayReq = await validatedRequest("add-gateway", gatewayPayload, GATEWAY_VALIDATION_CRITERIA);
-            const gatewayName = validGatewayReq.name?.trim()
-                ? validGatewayReq.name.trim()
-                : validGatewayReq.gateway_number.trim();
+            const gatewayName = validGatewayReq.name?.trim() || null;
             const identifiers = getGatewayIdentifierLowers({ ...validGatewayReq, name: gatewayName });
             await assertGatewayIdentifiersUnique(identifiers);
             const newGateway = {
                 ...validGatewayReq,
-                name: gatewayName,
+                name: gatewayName ?? validGatewayReq.gateway_number.trim(),
                 user_id: null,
                 created_by: userPayload.id,
             };
@@ -65,10 +63,7 @@ export class GatewayHandlers {
                 throw new ForbiddenException();
             const result = await db.transaction(async (tx) => {
                 const assignment = await assignGatewayToUser({
-                    mac_address: validReq.mac_address ?? undefined,
-                    pcb_number: validReq.pcb_number ?? undefined,
-                    gateway_number: validReq.gateway_number ?? undefined,
-                    name: validReq.name ?? undefined,
+                    gateway_id: validReq.gateway_id,
                     targetUserId,
                     performedByUserId: userPayload.id,
                 }, tx);

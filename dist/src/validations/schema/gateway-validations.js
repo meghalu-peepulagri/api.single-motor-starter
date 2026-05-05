@@ -14,19 +14,10 @@ export const vUpdateGatewayLabel = v.object({
 export const vRenameGateway = v.object({
     name: v.pipe(v.string(GATEWAY_NAME_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(GATEWAY_NAME_REQUIRED), v.minLength(3, GATEWAY_NAME_MIN_LEN)),
 });
-export const vAssignGatewayToUser = v.pipe(v.object({
-    mac_address: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, MAC_MIN_LEN)))),
-    pcb_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, PCB_MIN_LEN)))),
-    gateway_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, GATEWAY_NUMBER_MIN_LEN)))),
-    name: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, GATEWAY_NAME_MIN_LEN)))),
+export const vAssignGatewayToUser = v.object({
+    gateway_id: v.number(),
     user_id: v.nullish(v.optional(v.number(INVALID_USER_ID))),
-}), v.check((data) => {
-    const mac = data.mac_address?.trim();
-    const pcb = data.pcb_number?.trim();
-    const gno = data.gateway_number?.trim();
-    const name = data.name?.trim();
-    return Boolean(mac || pcb || gno || name);
-}, GATEWAY_IDENTIFIER_REQUIRED));
+});
 export const vUpdateGatewayNumber = v.object({
     gateway_number: v.pipe(v.string(GATEWAY_NUMBER_REQUIRED), v.transform(value => value.trim()), v.nonEmpty(GATEWAY_NUMBER_REQUIRED), v.minLength(3, GATEWAY_NUMBER_MIN_LEN)),
 });

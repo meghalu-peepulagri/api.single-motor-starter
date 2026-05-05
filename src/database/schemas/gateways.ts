@@ -8,7 +8,7 @@ import { statusEnum } from "../../constants/enum-types.js";
 
 export const gateways = pgTable("gateways", {
   id: serial("id").primaryKey(),
-  name: varchar("name").notNull(),
+  name: varchar("name"),
   gateway_number: varchar("gateway_number"),
   label: varchar("label"),
   mac_address: varchar("mac_address"),

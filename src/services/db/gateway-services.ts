@@ -152,34 +152,18 @@ export async function getGatewayForOwnerAction<C extends keyof Gateway>(
 }
 
 export async function assignGatewayToUser(data: {
-  mac_address?: string;
-  pcb_number?: string;
-  gateway_number?: string;
-  name?: string;
+  gateway_id: number;
   targetUserId: number;
   performedByUserId: number;
 }, trx?: any): Promise<{ gateway_id: number; name: string; old_user_id: number | null } | null> {
   const queryBuilder = trx || db;
 
-  const conditions: any[] = [ne(gateways.status, "ARCHIVED")];
-  if (data.mac_address) conditions.push(eq(gateways.mac_address, data.mac_address));
-  if (data.pcb_number) conditions.push(eq(gateways.pcb_number, data.pcb_number));
-  if (data.gateway_number) conditions.push(sql`lower(${gateways.gateway_number}) = ${data.gateway_number.toLowerCase()}`);
-  if (data.name) conditions.push(sql`lower(${gateways.name}) = ${data.name.toLowerCase()}`);
-
   const matched = await queryBuilder
-    .select({
-      id: gateways.id,
-      name: gateways.name,
-      user_id: gateways.user_id,
-    })
+    .select({ id: gateways.id, name: gateways.name, user_id: gateways.user_id })
     .from(gateways)
-    .where(and(...conditions));
+    .where(and(eq(gateways.id, data.gateway_id), ne(gateways.status, "ARCHIVED")));
 
   if (matched.length === 0) return null;
-  if (matched.length > 1) {
-    throw new BadRequestException("Multiple gateways found with given identifiers");
-  }
 
   const gateway = matched[0];
   if (gateway.user_id && gateway.user_id !== data.targetUserId) {
@@ -211,18 +195,20 @@ export async function gatewayConflicts(gatewayId?: number): Promise<Gateway | nu
 }
 
 export async function assertGatewayIdentifiersUnique(data: {
-  nameLower: string;
+  nameLower: string | null;
   macLower: string;
   pcbLower: string;
   gatewayNumberLower: string | null;
 }, trx?: any) {
   const queryBuilder = trx || db;
 
-  const orConditions = [
-    sql`lower(${gateways.name}) = ${data.nameLower}`,
+  const orConditions: any[] = [
     sql`lower(${gateways.mac_address}) = ${data.macLower}`,
     sql`lower(${gateways.pcb_number}) = ${data.pcbLower}`,
   ];
+  if (data.nameLower) {
+    orConditions.push(sql`lower(${gateways.name}) = ${data.nameLower}`);
+  }
   if (data.gatewayNumberLower) {
     orConditions.push(sql`lower(${gateways.gateway_number}) = ${data.gatewayNumberLower}`);
   }
@@ -251,7 +237,7 @@ export async function assertGatewayIdentifiersUnique(data: {
   const existingPcbLower = duplicate.pcb_number?.trim().toLowerCase() ?? null;
   const existingGatewayNumberLower = duplicate.gateway_number?.trim().toLowerCase() ?? null;
 
-  if (existingNameLower === data.nameLower) {
+  if (data.nameLower && existingNameLower === data.nameLower) {
     throw new ConflictException(UNIQUE_INDEX_MESSAGES["validate_gateway_name"]);
   }
   if (data.gatewayNumberLower && existingGatewayNumberLower === data.gatewayNumberLower) {
