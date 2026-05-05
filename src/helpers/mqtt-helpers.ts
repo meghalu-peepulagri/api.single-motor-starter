@@ -11,49 +11,42 @@ import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 export async function liveDataHandler(parsedMessage: any, topic: string) {
   try {
     if (!parsedMessage) return;
-    const { gatewayId: gatewayMac, deviceId: deviceMac } = getIdentifiersFromTopic(topic);
-    const mac = deviceMac || gatewayMac;
-    if (!mac) {
-      logger.error("Invalid MQTT topic or missing MAC", undefined, { mac, topic });
+    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId) {
+      logger.error("Invalid MQTT topic or missing device MAC", undefined, { gatewayId, deviceId, topic });
       return null;
     }
 
-    // Validate MAC in DB
-    const validMac = await getStarterByMacWithMotor(mac!);
-    if (!validMac) {
-      logger.error("Starter not found for MAC", undefined, { mac, topic });
+    // Always validate device MAC in DB
+    const device = await getStarterByMacWithMotor(deviceId);
+    if (!device) {
+      logger.error("Starter not found for MAC", undefined, { deviceId, topic });
       return null;
     }
 
-    // Handle Dual-Segment Format (STRICT VALIDATION)
-    if (gatewayMac && deviceMac) {
-      const gateway = await getGatewayByIdentifier(gatewayMac!);
+    // For 4-segment topics (peepul/{gateway}/{device}/status): also validate gateway
+    if (gatewayId) {
+      const gateway = await getGatewayByIdentifier(gatewayId);
       if (!gateway) {
-        console.error(`Gateway not found for identifier [${gatewayMac}]`);
+        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
         return null;
       }
-
-      // We already have validMac (the device) fetched via 'mac'
-      if (validMac.gateway_id !== gateway.id) {
-        console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+      if (device.gateway_id !== gateway.id) {
+        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
         return null;
       }
     }
 
-    // Format raw payload 
     const formatted = validateLiveDataFormat(parsedMessage, topic);
     if (!formatted) return null;
 
-    // Validate live data content 
     const validated = validateLiveDataContent(formatted);
     if (!validated) return null;
 
-    //  Prepare payload for DB 
-    const prepared = prepareLiveDataPayload(validated, validMac);
+    const prepared = prepareLiveDataPayload(validated, device);
     if (!prepared) return null;
 
-    // Save final payload
-    await saveLiveDataTopic(prepared, prepared.group_id, validMac);
+    await saveLiveDataTopic(prepared, prepared.group_id, device);
   }
   catch (err: any) {
     logger.error("Error at live data topic handler", err);
@@ -68,7 +61,7 @@ export function getIdentifiersFromTopic(topic: string) {
     return { gatewayId: segments[1], deviceId: segments[2] };
   } else if (segments.length === 3) {
     // peepul/{device}/status
-    return { gatewayId: segments[1], deviceId: null };
+    return { gatewayId: null, deviceId: segments[1] };
   }
   return { gatewayId: null, deviceId: null };
 }

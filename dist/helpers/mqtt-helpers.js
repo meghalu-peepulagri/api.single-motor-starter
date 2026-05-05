@@ -1,5 +1,4 @@
 import { DEVICE_SCHEMA } from "../constants/app-constants.js";
-import { getGatewayByIdentifier } from "../services/db/gateway-services.js";
 import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { logger } from "../utils/logger.js";
@@ -9,56 +8,36 @@ export async function liveDataHandler(parsedMessage, topic) {
     try {
         if (!parsedMessage)
             return;
-        const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
-        if (!deviceId) {
-            logger.error("Invalid MQTT topic or missing device MAC", undefined, { gatewayId, deviceId, topic });
+        const mac = typeof topic === "string" && topic.includes("/") ? topic.split("/")[1] : null;
+        if (!mac) {
+            logger.error("Invalid MQTT topic or missing MAC", undefined, { mac, topic });
             return null;
         }
-        // Always validate device MAC in DB
-        const device = await getStarterByMacWithMotor(deviceId);
-        if (!device) {
-            logger.error("Starter not found for MAC", undefined, { deviceId, topic });
+        // Validate MAC in DB
+        const validMac = await getStarterByMacWithMotor(mac);
+        if (!validMac) {
+            logger.error("Starter not found for MAC", undefined, { mac, topic });
             return null;
         }
-        // For 4-segment topics (peepul/{gateway}/{device}/status): also validate gateway
-        if (gatewayId) {
-            const gateway = await getGatewayByIdentifier(gatewayId);
-            if (!gateway) {
-                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
-                return null;
-            }
-            if (device.gateway_id !== gateway.id) {
-                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
-                return null;
-            }
-        }
+        // Format raw payload 
         const formatted = validateLiveDataFormat(parsedMessage, topic);
         if (!formatted)
             return null;
+        // Validate live data content 
         const validated = validateLiveDataContent(formatted);
         if (!validated)
             return null;
-        const prepared = prepareLiveDataPayload(validated, device);
+        //  Prepare payload for DB 
+        const prepared = prepareLiveDataPayload(validated, validMac);
         if (!prepared)
             return null;
-        await saveLiveDataTopic(prepared, prepared.group_id, device);
+        // Save final payload
+        await saveLiveDataTopic(prepared, prepared.group_id, validMac);
     }
     catch (err) {
         logger.error("Error at live data topic handler", err);
         return null;
     }
-}
-export function getIdentifiersFromTopic(topic) {
-    const segments = topic.split("/");
-    if (segments.length === 4) {
-        // peepul/{gateway}/{device}/status
-        return { gatewayId: segments[1], deviceId: segments[2] };
-    }
-    else if (segments.length === 3) {
-        // peepul/{device}/status
-        return { gatewayId: null, deviceId: segments[1] };
-    }
-    return { gatewayId: null, deviceId: null };
 }
 export function randomSequenceNumber() {
     let lastNumber = null;

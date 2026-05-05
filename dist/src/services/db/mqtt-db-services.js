@@ -428,30 +428,29 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
 // Motor control ack
 export async function motorControlAckHandler(message, topic) {
     try {
-        const { gatewayId: gatewayMac, deviceId: deviceMac } = getIdentifiersFromTopic(topic);
-        const macAddress = deviceMac || gatewayMac;
-        if (!macAddress) {
-            console.error("Invalid topic format: Identifier not found");
+        const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+        if (!deviceId) {
+            logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
             return;
         }
-        const validMac = await getStarterByMacWithMotor(macAddress);
-        if (!validMac?.id || !validMac.motors || validMac.motors.length === 0) {
-            console.error(`Device not found for identifier [${macAddress}]`);
+        const device = await getStarterByMacWithMotor(deviceId);
+        if (!device?.id || !device.motors || device.motors.length === 0) {
+            logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
             return;
         }
-        if (gatewayMac && deviceMac) {
-            const gateway = await getGatewayByIdentifier(gatewayMac);
+        if (gatewayId) {
+            const gateway = await getGatewayByIdentifier(gatewayId);
             if (!gateway) {
-                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
                 return;
             }
-            if (validMac.gateway_id !== gateway.id) {
-                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+            if (device.gateway_id !== gateway.id) {
+                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
                 return;
             }
         }
-        const motor = validMac.motors[0];
-        const starter_id = validMac.id;
+        const motor = device.motors[0];
+        const starter_id = device.id;
         const motor_id = motor.id;
         const location_id = motor.location_id;
         const mode_description = motor.mode;
@@ -471,8 +470,8 @@ export async function motorControlAckHandler(message, topic) {
                 }
             }
             // Always log ACK (changed or not)
-            await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
-            return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, validMac.starter_number) : null;
+            await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+            return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, device.starter_number) : null;
         });
         // Send notification after transaction completes (debounced)
         if (notificationData) {
@@ -483,44 +482,45 @@ export async function motorControlAckHandler(message, topic) {
     }
     catch (error) {
         logger.error("Error at motor control ack handler", error);
-        console.error("Error at motor control ack handler", error);
         throw error;
     }
 }
 // Motor mode ack
 export async function motorModeChangeAckHandler(message, topic) {
     try {
-        const { gatewayId: gatewayMac, deviceId: deviceMac } = getIdentifiersFromTopic(topic);
-        const identifier = deviceMac || gatewayMac;
-        const validMac = await getStarterByMacWithMotor(identifier);
-        if (!validMac?.id || !validMac.motors.length) {
-            console.error(`Device not found for identifier [${identifier}]`);
+        const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+        if (!deviceId) {
+            logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
             return null;
         }
-        ;
-        if (gatewayMac && deviceMac) {
-            const gateway = await getGatewayByIdentifier(gatewayMac);
+        const device = await getStarterByMacWithMotor(deviceId);
+        if (!device?.id || !device.motors.length) {
+            logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
+            return null;
+        }
+        if (gatewayId) {
+            const gateway = await getGatewayByIdentifier(gatewayId);
             if (!gateway) {
-                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
                 return null;
             }
-            if (validMac.gateway_id !== gateway.id) {
-                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+            if (device.gateway_id !== gateway.id) {
+                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
                 return null;
             }
         }
         const mode = controlMode(message.D);
-        const motor = validMac.motors[0];
+        const motor = device.motors[0];
         await db.transaction(async (trx) => {
             if (mode !== motor.mode) {
                 if (mode == "MANUAL" || mode == "AUTO") {
                     await trx.update(motors).set({ mode: mode, updated_at: new Date() }).where(eq(motors.id, motor.id));
                 }
             }
-            await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, validMac.id);
+            await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, device.id);
         });
         const modeChanged = mode !== motor.mode;
-        const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, validMac.id, validMac.starter_number) : null;
+        const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, device.id, device.starter_number) : null;
         if (notificationData) {
             if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
                 await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
@@ -529,50 +529,50 @@ export async function motorModeChangeAckHandler(message, topic) {
     }
     catch (error) {
         logger.error("Error at motor mode change ack handler", error);
-        console.error("Error at motor mode change ack handler", error);
         throw error;
     }
 }
 export async function heartbeatHandler(message, topic) {
     try {
-        const { gatewayId: gatewayMac, deviceId: deviceMac } = getIdentifiersFromTopic(topic);
-        const identifier = deviceMac || gatewayMac;
-        const validMac = await getStarterByMacWithMotor(identifier);
-        if (!validMac?.id) {
-            console.error(`Device not found for identifier [${identifier}]`);
+        const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+        if (!deviceId) {
+            logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
             return null;
         }
-        ;
-        if (gatewayMac && deviceMac) {
-            const gateway = await getGatewayByIdentifier(gatewayMac);
+        const device = await getStarterByMacWithMotor(deviceId);
+        if (!device?.id) {
+            logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
+            return null;
+        }
+        if (gatewayId) {
+            const gateway = await getGatewayByIdentifier(gatewayId);
             if (!gateway) {
-                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
                 return null;
             }
-            if (validMac.gateway_id !== gateway.id) {
-                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+            if (device.gateway_id !== gateway.id) {
+                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
                 return null;
             }
         }
         const { strength, status } = getValidStrength(message.D.s_q);
         const validNetwork = getValidNetwork(message.D.nwt);
-        if (validMac.signal_quality !== strength || validMac.network_type !== message.D.nwt)
-            await updateRecordById(starterBoxes, validMac.id, { signal_quality: strength, network_type: validNetwork, status: status });
-        if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false")
-            await publishDeviceSettings(validMac);
+        if (device.signal_quality !== strength || device.network_type !== message.D.nwt)
+            await updateRecordById(starterBoxes, device.id, { signal_quality: strength, network_type: validNetwork, status: status });
+        if (message.D.s_q >= 2 && message.D.s_q <= 30 && device.synced_settings_status === "false")
+            await publishDeviceSettings(device);
     }
     catch (error) {
-        console.error("Error at heartbeat topic handler:", error);
+        logger.error("Error at heartbeat topic handler", error);
         throw error;
     }
 }
 export async function deviceSerialNumberAllocationAckHandler(message, topic) {
     try {
-        const { deviceId: deviceMac, gatewayId: gatewayMac } = getIdentifiersFromTopic(topic);
-        const identifier = deviceMac || gatewayMac;
-        const upperId = identifier?.trim().toUpperCase();
-        if (!upperId)
+        const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+        if (!deviceId)
             return null;
+        const upperId = deviceId.trim().toUpperCase();
         const byMac = await db.query.starterBoxes.findFirst({
             where: and(eq(starterBoxes.mac_address, upperId), ne(starterBoxes.status, "ARCHIVED")),
             columns: { id: true, user_id: true, created_by: true, device_allocation: true, gateway_id: true },
@@ -583,17 +583,17 @@ export async function deviceSerialNumberAllocationAckHandler(message, topic) {
             columns: { id: true, user_id: true, created_by: true, device_allocation: true, gateway_id: true },
         });
         if (!starter?.id) {
-            console.error(`Device not found for identifier [${upperId}]`);
+            logger.error(`Device not found for identifier [${upperId}]`, undefined, { deviceId, topic });
             return null;
         }
-        if (gatewayMac && deviceMac) {
-            const gateway = await getGatewayByIdentifier(gatewayMac);
+        if (gatewayId) {
+            const gateway = await getGatewayByIdentifier(gatewayId);
             if (!gateway) {
-                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
                 return null;
             }
             if (starter.gateway_id !== gateway.id) {
-                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
                 return null;
             }
         }
@@ -610,7 +610,7 @@ export async function deviceSerialNumberAllocationAckHandler(message, topic) {
         await applyDeviceAllocation(starter.id, newAllocation, userId);
     }
     catch (error) {
-        console.error("Error at device serial number allocation ack handler:", error);
+        logger.error("Error at device serial number allocation ack handler", error);
         throw error;
     }
 }
@@ -624,244 +624,229 @@ export function publishData(preparedData, starterData) {
     mqttServiceInstance.publish(topic, payload);
 }
 export async function deviceSyncUpdate(message, topic) {
-    const { deviceId: deviceMac, gatewayId: gatewayMac } = getIdentifiersFromTopic(topic);
-    const macFromTopic = deviceMac || gatewayMac;
+    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
     try {
-        if (!macFromTopic) {
-            console.error("Invalid topic format: MAC/PCB not found");
+        if (!deviceId) {
+            logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
             return null;
         }
-        const validMac = await getStarterByMacWithMotor(macFromTopic);
-        if (!validMac?.id) {
-            console.error(`Device not found for identifier [${macFromTopic}]`);
+        const device = await getStarterByMacWithMotor(deviceId);
+        if (!device?.id) {
+            logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
             return null;
         }
-        if (gatewayMac && deviceMac) {
-            const gateway = await getGatewayByIdentifier(gatewayMac);
+        if (gatewayId) {
+            const gateway = await getGatewayByIdentifier(gatewayId);
             if (!gateway) {
-                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
                 return null;
             }
-            if (validMac.gateway_id !== gateway.id) {
-                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+            if (device.gateway_id !== gateway.id) {
+                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
                 return null;
             }
         }
         if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
-            console.error(`Invalid message data in calibration ack [${message.D}]`);
+            logger.error(`Invalid message data in calibration ack [${message.D}]`, undefined, { deviceId });
             return null;
         }
-        // Match PCB/MAC and sequence number from pendingAckMap
-        const pendingAck = pendingAckMap.get(macFromTopic);
+        const pendingAck = pendingAckMap.get(deviceId);
         if (!pendingAck) {
-            logger.warn(`No pending ACK found for ${macFromTopic}`);
+            logger.warn(`No pending ACK found for ${deviceId}`);
             return null;
         }
-        // Validate sequence number matches
         if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
-            logger.warn(`Schedule ACK sequence mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+            logger.warn(`Schedule ACK sequence mismatch for ${deviceId}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
             return null;
         }
         if (message.D === 1) {
-            // ACK success — resolve true so caller proceeds with DB update
             pendingAck.resolve(true);
-            pendingAckMap.delete(macFromTopic);
-            logger.info(`Calibration ACK success for ${macFromTopic}`);
-            // Update DB: mark settings as acknowledged
-            const validMac = await getStarterByMacWithMotor(macFromTopic);
-            if (validMac?.id) {
-                await updateLatestStarterSettings(validMac.id, message.D);
-                if (validMac.synced_settings_status === "false") {
-                    await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
+            pendingAckMap.delete(deviceId);
+            logger.info(`Calibration ACK success for ${deviceId}`);
+            const updatedDevice = await getStarterByMacWithMotor(deviceId);
+            if (updatedDevice?.id) {
+                await updateLatestStarterSettings(updatedDevice.id, message.D);
+                if (updatedDevice.synced_settings_status === "false") {
+                    await updateRecordById(starterBoxes, updatedDevice.id, { synced_settings_status: "true" });
                 }
             }
         }
         else {
-            // ACK failed (D === 0) — resolve false, do NOT update DB
             pendingAck.resolve(false);
-            pendingAckMap.delete(macFromTopic);
-            logger.warn(`Calibration ACK failed (D=0) for ${macFromTopic}, skipping DB update`);
+            pendingAckMap.delete(deviceId);
+            logger.warn(`Calibration ACK failed (D=0) for ${deviceId}, skipping DB update`);
         }
     }
     catch (error) {
-        // On error, reject the pending ACK so caller doesn't hang
-        const pendingAck = pendingAckMap.get(macFromTopic);
+        const pendingAck = deviceId ? pendingAckMap.get(deviceId) : undefined;
         if (pendingAck) {
             pendingAck.resolve(false);
-            pendingAckMap.delete(macFromTopic);
+            pendingAckMap.delete(deviceId);
         }
-        console.error("Error at device sync update (calibration ack):", error);
+        logger.error("Error at device sync update (calibration ack)", error);
         throw error;
     }
 }
 export async function adminConfigDataRequestAckHandler(message, topic) {
     try {
-        const { deviceId: deviceMac, gatewayId: gatewayMac } = getIdentifiersFromTopic(topic);
-        const macFromTopic = deviceMac || gatewayMac;
-        const validMac = await getStarterByMacWithMotor(macFromTopic);
-        if (!validMac?.id) {
-            console.error(`Device not found for identifier [${macFromTopic}]`);
+        const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+        if (!deviceId)
+            return null;
+        const device = await getStarterByMacWithMotor(deviceId);
+        if (!device?.id) {
+            logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
             return null;
         }
-        if (gatewayMac && deviceMac) {
-            const gateway = await getGatewayByIdentifier(gatewayMac);
+        if (gatewayId) {
+            const gateway = await getGatewayByIdentifier(gatewayId);
             if (!gateway) {
-                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
                 return null;
             }
-            if (validMac.gateway_id !== gateway.id) {
-                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+            if (device.gateway_id !== gateway.id) {
+                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
                 return null;
             }
         }
-        if (message.D === undefined ||
-            message.D === null ||
-            (message.D !== 0 && message.D !== 1)) {
-            console.error(`Invalid message data in admin config ack [${message.D}]`);
+        if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
+            logger.error(`Invalid message data in admin config ack [${message.D}]`, undefined, { deviceId });
             return null;
         }
-        //  Resolve ACK to stop retries
-        const pendingAck = pendingAckMap.get(macFromTopic);
+        const pendingAck = pendingAckMap.get(deviceId);
         if (pendingAck) {
             pendingAck.resolve(true);
-            pendingAckMap.delete(macFromTopic);
+            pendingAckMap.delete(deviceId);
         }
-        // Update DB
-        await updateLatestStarterSettings(validMac.id, message.D);
-        if (validMac &&
-            validMac.synced_settings_status === "false") {
-            await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
+        await updateLatestStarterSettings(device.id, message.D);
+        if (device.synced_settings_status === "false") {
+            await updateRecordById(starterBoxes, device.id, { synced_settings_status: "true" });
         }
     }
     catch (error) {
-        console.error("Error at admin config ack handler:", error);
+        logger.error("Error at admin config ack handler", error);
         throw error;
     }
 }
 export async function deviceResetAckHandler(message, topic) {
     try {
-        const { deviceId: deviceMac, gatewayId: gatewayMac } = getIdentifiersFromTopic(topic);
-        const macFromTopic = deviceMac || gatewayMac;
-        const validMac = await getStarterByMacWithMotor(macFromTopic);
-        if (!validMac?.id) {
-            console.error(`Device not found for identifier [${macFromTopic}]`);
+        const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+        if (!deviceId)
+            return null;
+        const device = await getStarterByMacWithMotor(deviceId);
+        if (!device?.id) {
+            logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
             return null;
         }
-        if (gatewayMac && deviceMac) {
-            const gateway = await getGatewayByIdentifier(gatewayMac);
+        if (gatewayId) {
+            const gateway = await getGatewayByIdentifier(gatewayId);
             if (!gateway) {
-                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
                 return null;
             }
-            if (validMac.gateway_id !== gateway.id) {
-                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+            if (device.gateway_id !== gateway.id) {
+                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
                 return null;
             }
         }
         if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
-            console.error(`Invalid message data in admin config ack [${message.D}]`);
+            logger.error(`Invalid message data in device reset ack [${message.D}]`, undefined, { deviceId });
             return null;
         }
         const updatedFields = { device_reset_status: message.D === 1 ? "true" : "false" };
-        const changedStatus = validMac.device_reset_status !== updatedFields.device_reset_status;
+        const changedStatus = device.device_reset_status !== updatedFields.device_reset_status;
         if (changedStatus)
-            await updateRecordById(starterBoxes, validMac.id, updatedFields);
+            await updateRecordById(starterBoxes, device.id, updatedFields);
     }
     catch (error) {
-        console.error("Error at device reset ack topic:", error);
+        logger.error("Error at device reset ack handler", error);
         throw error;
     }
 }
 export async function deviceInfoAckHandler(message, topic) {
-    const { deviceId: deviceMac, gatewayId: gatewayMac } = getIdentifiersFromTopic(topic);
-    const macFromTopic = deviceMac || gatewayMac;
+    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId)
+        return null;
     const updatedFields = {};
     try {
-        // Resolve pending ACK to stop retry publishing
-        const pendingAck = pendingAckMap.get(macFromTopic);
+        const pendingAck = pendingAckMap.get(deviceId);
         if (pendingAck) {
             pendingAck.resolve(true);
-            pendingAckMap.delete(macFromTopic);
+            pendingAckMap.delete(deviceId);
         }
-        const validMac = await getStarterByMacWithMotor(macFromTopic);
-        if (!validMac?.id) {
-            console.error(`Device not found for identifier [${macFromTopic}]`);
+        const device = await getStarterByMacWithMotor(deviceId);
+        if (!device?.id) {
+            logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
             return null;
         }
-        if (gatewayMac && deviceMac) {
-            const gateway = await getGatewayByIdentifier(gatewayMac);
+        if (gatewayId) {
+            const gateway = await getGatewayByIdentifier(gatewayId);
             if (!gateway) {
-                console.error(`Gateway not found for identifier [${gatewayMac}]`);
+                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
                 return null;
             }
-            if (validMac.gateway_id !== gateway.id) {
-                console.error(`Gateway and device mapping mismatch for topic [${topic}]`);
+            if (device.gateway_id !== gateway.id) {
+                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
                 return null;
             }
         }
         if (!message.D) {
-            console.error(`Invalid message data in device info ack`);
+            logger.error("Invalid message data in device info ack", undefined, { deviceId });
             return null;
         }
-        if (message.D.version && message.D.version !== validMac.hardware_version) {
+        if (message.D.version && message.D.version !== device.hardware_version) {
             updatedFields.hardware_version = message.D.version;
         }
         const hasValue = (value) => value !== undefined && value !== null &&
             typeof value === "string" && value.trim() !== "";
-        // SIM recharge expiration date (validated)
-        if (hasValue(message.D.val) && message.D.val !== validMac.sim_recharge_expires_at) {
+        if (hasValue(message.D.val) && message.D.val !== device.sim_recharge_expires_at) {
             updatedFields.sim_recharge_expires_at = message.D.val;
         }
-        // SIM number (validated) — strip country code, take up to 40 digits
         if (hasValue(message.D.sim_num)) {
-            const rawSim = String(message.D.sim_num).replace(/^\+91/, ''); // remove +91 country code
-            const simNumber = rawSim.slice(0, 40); // take up to 40 digits
-            if (simNumber.length >= 1 && simNumber.length <= 40 && simNumber !== validMac.device_mobile_number) {
+            const rawSim = String(message.D.sim_num).replace(/^\+91/, '');
+            const simNumber = rawSim.slice(0, 40);
+            if (simNumber.length >= 1 && simNumber.length <= 40 && simNumber !== device.device_mobile_number) {
                 updatedFields.device_mobile_number = simNumber;
             }
         }
         if (Object.keys(updatedFields).length > 0) {
-            await updateRecordById(starterBoxes, validMac.id, updatedFields);
+            await updateRecordById(starterBoxes, device.id, updatedFields);
         }
     }
     catch (error) {
-        // On error, resolve pending ACK as false so caller doesn't hang
-        const pendingAck = pendingAckMap.get(macFromTopic);
+        const pendingAck = pendingAckMap.get(deviceId);
         if (pendingAck) {
             pendingAck.resolve(false);
-            pendingAckMap.delete(macFromTopic);
+            pendingAckMap.delete(deviceId);
         }
         if (error?.code === "23505" || error?.cause?.code === "23505") {
             const duplicateMobile = updatedFields.device_mobile_number;
-            logger.info(`Device Info ACK failed for ${macFromTopic} - Duplicate mobile number: ${duplicateMobile}`);
-            logger.mqtt(`Duplicate SIM number detected during device info ACK | MAC: ${macFromTopic} | Mobile: ${duplicateMobile}`);
+            logger.info(`Device Info ACK failed for ${deviceId} - Duplicate mobile number: ${duplicateMobile}`);
+            logger.mqtt(`Duplicate SIM number detected during device info ACK | MAC: ${deviceId} | Mobile: ${duplicateMobile}`);
             return;
         }
-        logger.error(`Device Info ACK error for ${macFromTopic}: ${error.message}`);
-        logger.mqtt(`MQTT Device Info ACK error | MAC: ${macFromTopic} | Error: ${error.message}`);
-        console.error("Error at device info ack handler:", error);
+        logger.error(`Device Info ACK error for ${deviceId}: ${error.message}`);
+        logger.mqtt(`MQTT Device Info ACK error | MAC: ${deviceId} | Error: ${error.message}`);
     }
 }
 function scheduleCreationAckResolver(message, topic) {
-    const { deviceId: deviceMac, gatewayId: gatewayMac } = getIdentifiersFromTopic(topic);
-    const macFromTopic = deviceMac || gatewayMac;
-    if (!macFromTopic)
+    const { deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId)
         return;
-    const pendingAck = pendingAckMap.get(macFromTopic);
+    const pendingAck = pendingAckMap.get(deviceId);
     if (!pendingAck) {
-        logger.warn(`No pending schedule ACK found for ${macFromTopic}`);
+        logger.warn(`No pending schedule ACK found for ${deviceId}`);
         return;
     }
     if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
-        logger.warn(`Schedule ACK sequence mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+        logger.warn(`Schedule ACK sequence mismatch for ${deviceId}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
         return;
     }
     const dValue = typeof message.D === "number" ? message.D : -1;
     // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
     const ackSuccess = dValue === 1 || dValue === 4;
     pendingAck.resolve(ackSuccess);
-    pendingAckMap.delete(macFromTopic);
-    logger.info(`Schedule creation ACK resolved for ${macFromTopic}, D=${dValue}, success=${ackSuccess}`);
+    pendingAckMap.delete(deviceId);
+    logger.info(`Schedule creation ACK resolved for ${deviceId}, D=${dValue}, success=${ackSuccess}`);
 }
 export const waitForAck = (identifiers, timeoutMs, validator) => {
     return new Promise((resolve) => {
