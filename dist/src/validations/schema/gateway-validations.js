@@ -28,3 +28,7 @@ export const vUpdateGatewayDetails = v.pipe(v.object({
     mac_address: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, MAC_MIN_LEN)))),
     pcb_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, PCB_MIN_LEN)))),
 }), v.check(data => Object.values(data).some(v => v !== null && v !== undefined), "At least one field must be provided to update"));
+export const vRemoveGatewayUser = v.object({
+    gateway_id: v.number(),
+    user_id: v.number(INVALID_USER_ID),
+});

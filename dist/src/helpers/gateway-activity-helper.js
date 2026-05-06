@@ -84,6 +84,18 @@ export function prepareGatewayNumberUpdatedLog(data) {
         message: `Gateway '${data.gatewayName}' number updated to '${data.newGatewayNumber}'.`,
     });
 }
+export function prepareGatewayUserRemovedLog(data) {
+    return ActivityService.prepareActivityLog({
+        userId: data.userId,
+        performedBy: data.performedBy,
+        action: "GATEWAY_USER_REMOVED",
+        entityType: "GATEWAY",
+        entityId: data.gatewayId,
+        oldData: { user_id: data.oldUserId },
+        newData: { user_id: null },
+        message: `User removed from gateway '${data.gatewayName}'.`,
+    });
+}
 export function prepareGatewayDetailsUpdatedLog(data) {
     return ActivityService.prepareActivityLog({
         userId: data.userId,

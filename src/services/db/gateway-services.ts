@@ -175,6 +175,10 @@ export async function assignGatewayToUser(data: {
   return { gateway_id: gateway.id, name: gateway.name, old_user_id: gateway.user_id };
 }
 
+export async function removeUserFromGateway(gatewayId: number, trx?: any): Promise<void> {
+  await updateRecordById<GatewayTable>(gateways, gatewayId, { user_id: null }, trx);
+}
+
 export async function gatewayConflicts(gatewayId?: number): Promise<Gateway | null> {
   if (gatewayId == null) {
     return null;

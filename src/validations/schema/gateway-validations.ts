@@ -88,3 +88,10 @@ export const vUpdateGatewayDetails = v.pipe(
 );
 
 export type ValidatedUpdateGatewayDetails = v.InferOutput<typeof vUpdateGatewayDetails>;
+
+export const vRemoveGatewayUser = v.object({
+  gateway_id: v.number(),
+  user_id: v.number(INVALID_USER_ID),
+});
+
+export type ValidatedRemoveGatewayUser = v.InferOutput<typeof vRemoveGatewayUser>;

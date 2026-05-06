@@ -10,7 +10,7 @@ import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-v
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
 import { vAddStarterDispatch } from "./schema/starter-dispatch-validations.js";
-import { vAddGateway, vAssignGatewayToUser, vRenameGateway, vUpdateGatewayDetails, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
+import { vAddGateway, vAssignGatewayToUser, vRemoveGatewayUser, vRenameGateway, vUpdateGatewayDetails, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 const schemaMap = {
     "signup": vSignUp,
@@ -41,6 +41,7 @@ const schemaMap = {
     "assign-gateway": vAssignGatewayToUser,
     "update-gateway-number": vUpdateGatewayNumber,
     "update-gateway-details": vUpdateGatewayDetails,
+    "remove-gateway-user": vRemoveGatewayUser,
 };
 export async function validatedRequest(actionType, reqData, errorMessage) {
     const schema = schemaMap[actionType];

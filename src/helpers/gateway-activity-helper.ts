@@ -127,6 +127,25 @@ export function prepareGatewayNumberUpdatedLog(data: {
   });
 }
 
+export function prepareGatewayUserRemovedLog(data: {
+  performedBy: number;
+  userId: number;
+  gatewayId: number;
+  gatewayName: string;
+  oldUserId: number | null;
+}): NewUserActivityLog {
+  return ActivityService.prepareActivityLog({
+    userId: data.userId,
+    performedBy: data.performedBy,
+    action: "GATEWAY_USER_REMOVED",
+    entityType: "GATEWAY",
+    entityId: data.gatewayId,
+    oldData: { user_id: data.oldUserId },
+    newData: { user_id: null },
+    message: `User removed from gateway '${data.gatewayName}'.`,
+  });
+}
+
 export function prepareGatewayDetailsUpdatedLog(data: {
   performedBy: number;
   userId: number;

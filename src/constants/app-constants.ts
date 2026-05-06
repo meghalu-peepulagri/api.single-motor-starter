@@ -328,6 +328,7 @@ export const GATEWAY_IDENTIFIER_REQUIRED = "Mac address / PCB number / Gateway n
 export const GATEWAY_ASSIGNED_SUCCESSFULLY = "Gateway assigned successfully";
 export const GATEWAY_ALREADY_ASSIGNED = "Gateway already assigned";
 export const GATEWAY_UPDATED = "Gateway updated successfully";
+export const GATEWAY_USER_REMOVED = "Gateway user removed successfully";
 
 
 // Motor schedule 

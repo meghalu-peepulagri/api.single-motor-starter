@@ -131,6 +131,9 @@ export async function assignGatewayToUser(data, trx) {
     await updateRecordById(gateways, gateway.id, { user_id: data.targetUserId }, trx);
     return { gateway_id: gateway.id, name: gateway.name, old_user_id: gateway.user_id };
 }
+export async function removeUserFromGateway(gatewayId, trx) {
+    await updateRecordById(gateways, gatewayId, { user_id: null }, trx);
+}
 export async function gatewayConflicts(gatewayId) {
     if (gatewayId == null) {
         return null;

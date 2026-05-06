@@ -1,15 +1,15 @@
 import { eq } from "drizzle-orm";
-import { GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_UPDATED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED } from "../constants/app-constants.js";
+import { GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_UPDATED, GATEWAY_USER_REMOVED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways } from "../database/schemas/gateways.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDeletedLog, prepareGatewayDetailsUpdatedLog, prepareGatewayLabelUpdatedLog, prepareGatewayNumberUpdatedLog, prepareGatewayRenamedLog } from "../helpers/gateway-activity-helper.js";
+import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDeletedLog, prepareGatewayDetailsUpdatedLog, prepareGatewayLabelUpdatedLog, prepareGatewayNumberUpdatedLog, prepareGatewayRenamedLog, prepareGatewayUserRemovedLog } from "../helpers/gateway-activity-helper.js";
 import { buildGatewayUpdatePayload, gatewayDropdownFilters, gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { assertGatewayIdentifiersUnique, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysDropdownList, getGatewaysList } from "../services/db/gateway-services.js";
+import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
+import { assertGatewayIdentifiersUnique, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysDropdownList, getGatewaysList, removeUserFromGateway } from "../services/db/gateway-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -301,6 +301,36 @@ export class GatewayHandlers {
         }
         catch (error) {
             console.error("Error at update gateway details :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            throw error;
+        }
+    };
+    removeGatewayUserHandler = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const reqBody = await c.req.json();
+            paramsValidateException.emptyBodyValidation(reqBody);
+            const validReq = await validatedRequest("remove-gateway-user", reqBody, GATEWAY_VALIDATION_CRITERIA);
+            const gateway = await getSingleRecordByMultipleColumnValues(gateways, ["id", "status"], ["=", "!="], [validReq.gateway_id, "ARCHIVED"], ["id", "name", "user_id"]);
+            if (!gateway)
+                throw new NotFoundException(GATEWAY_NOT_FOUND);
+            await db.transaction(async (tx) => {
+                await removeUserFromGateway(gateway.id, tx);
+                const log = prepareGatewayUserRemovedLog({
+                    performedBy: userPayload.id,
+                    userId: validReq.user_id,
+                    gatewayId: gateway.id,
+                    gatewayName: gateway.name,
+                    oldUserId: gateway.user_id,
+                });
+                await ActivityService.saveActivityLogs([log], tx);
+            });
+            return sendResponse(c, 200, GATEWAY_USER_REMOVED);
+        }
+        catch (error) {
+            console.error("Error at remove gateway user :", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
