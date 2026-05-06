@@ -58,6 +58,8 @@ export function starterFilters(query, user) {
     }
     if (query.device_status)
         filters.push(eq(starterBoxes.device_status, query.device_status));
+    if (query.starter_type)
+        filters.push(eq(starterBoxes.starter_type, query.starter_type));
     if (query.user_id)
         filters.push(eq(starterBoxes.user_id, query.user_id));
     if (user.user_type !== "ADMIN" && user.user_type !== "SUPER_ADMIN")
@@ -90,6 +92,8 @@ export function starterCountFilters(query) {
         if (powerValue !== undefined)
             filters.push(eq(starterBoxes.power, powerValue));
     }
+    if (query.starter_type)
+        filters.push(eq(starterBoxes.starter_type, query.starter_type));
     return filters;
 }
 export function parseSimExpiryDate(dateStr) {
