@@ -111,6 +111,7 @@ export async function getStarterByMacWithMotor(mac: string) {
       hardware_version: true,
       sim_recharge_expires_at: true,
       device_mobile_number: true,
+      starter_type: true,
     },
     with: {
       motors: {
@@ -124,6 +125,7 @@ export async function getStarterByMacWithMotor(mac: string) {
           location_id: true,
           created_by: true,
           alias_name: true,
+          motor_reference: true,
         },
       },
     },

@@ -4,9 +4,11 @@ import { logger } from "../utils/logger.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
 import { addMinutesToTime, normalizeTime } from "./motor-schedule-payload-helper.js";
 
-export function prepareLiveDataPayload(validatedData: any, starterData: any) {
+export function prepareLiveDataPayload(validatedData: any, starterData: any, motor?: any) {
+  // motor can be explicitly provided (multi-motor path) or derived from motors[0] (single-motor path)
+  const resolvedMotor = motor ?? starterData?.motors?.[0];
 
-  if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
+  if (!validatedData || !starterData || !resolvedMotor) {
     logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
     console.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
     return null;
@@ -71,7 +73,8 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
     starter_id: starterData.id || null,
     gateway_id: starterData.gateway_id || null,
     user_id: starterData.created_by || null,
-    motor_id: starterData.motors[0].id || null,
+    motor_id: resolvedMotor.id || null,
+    motor_reference: resolvedMotor.motor_reference ?? null,
 
     // Schedule
     active_schedule_id: sch?.id ?? null,

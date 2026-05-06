@@ -449,34 +449,75 @@ export async function motorControlAckHandler(message, topic) {
                 return;
             }
         }
-        const motor = device.motors[0];
         const starter_id = device.id;
-        const motor_id = motor.id;
-        const location_id = motor.location_id;
-        const mode_description = motor.mode;
-        const prevState = motor.state;
-        const newState = message.D;
-        const stateChanged = newState !== prevState;
-        const notificationData = await db.transaction(async (trx) => {
-            // Update motor state ONLY if changed
-            if (stateChanged && (newState === 0 || newState === 1)) {
-                await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor.id));
-                await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+        if (device.starter_type === "MULTI_STARTER") {
+            // message.D = { m1: { m_s: 1 }, m2: { m_s: 0 } }
+            const motorRefs = Object.keys(message.D ?? {});
+            const notifications = [];
+            for (const ref of motorRefs) {
+                const motor = device.motors.find((m) => m.motor_reference === ref);
+                if (!motor) {
+                    logger.warn(`[MULTI_STARTER] MOTOR_CONTROL_ACK: no DB motor with motor_reference="${ref}" — skipping`);
+                    continue;
+                }
+                const newState = message.D[ref]?.m_s;
+                if (newState === undefined || newState === null)
+                    continue;
+                const prevState = motor.state;
+                const mode_description = motor.mode;
+                const motor_id = motor.id;
+                const location_id = motor.location_id;
+                const stateChanged = newState !== prevState;
+                const notificationData = await db.transaction(async (trx) => {
+                    if (stateChanged && (newState === 0 || newState === 1)) {
+                        await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor_id));
+                        await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+                    }
+                    else {
+                        const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+                        if (isFirstRecord) {
+                            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+                        }
+                    }
+                    await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor_id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+                    return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, device.starter_number) : null;
+                });
+                if (notificationData)
+                    notifications.push({ data: notificationData, newState });
             }
-            else {
-                const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
-                if (isFirstRecord) {
-                    await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+            for (const { data, newState } of notifications) {
+                if (shouldSendNotification(data.motorId, "state", newState)) {
+                    await sendUserNotification(data.userId, data.title, data.message, data.motorId, starter_id);
                 }
             }
-            // Always log ACK (changed or not)
-            await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
-            return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, device.starter_number) : null;
-        });
-        // Send notification after transaction completes (debounced)
-        if (notificationData) {
-            if (shouldSendNotification(notificationData.motorId, "state", newState)) {
-                await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, starter_id);
+        }
+        else {
+            // SINGLE_STARTER — existing path unchanged
+            const motor = device.motors[0];
+            const motor_id = motor.id;
+            const location_id = motor.location_id;
+            const mode_description = motor.mode;
+            const prevState = motor.state;
+            const newState = message.D;
+            const stateChanged = newState !== prevState;
+            const notificationData = await db.transaction(async (trx) => {
+                if (stateChanged && (newState === 0 || newState === 1)) {
+                    await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor.id));
+                    await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+                }
+                else {
+                    const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+                    if (isFirstRecord) {
+                        await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+                    }
+                }
+                await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+                return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, device.starter_number) : null;
+            });
+            if (notificationData) {
+                if (shouldSendNotification(notificationData.motorId, "state", newState)) {
+                    await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, starter_id);
+                }
             }
         }
     }
@@ -509,21 +550,55 @@ export async function motorModeChangeAckHandler(message, topic) {
                 return null;
             }
         }
-        const mode = controlMode(message.D);
-        const motor = device.motors[0];
-        await db.transaction(async (trx) => {
-            if (mode !== motor.mode) {
-                if (mode == "MANUAL" || mode == "AUTO") {
-                    await trx.update(motors).set({ mode: mode, updated_at: new Date() }).where(eq(motors.id, motor.id));
+        if (device.starter_type === "MULTI_STARTER") {
+            // message.D = { m1: { mode: 1 }, m2: { mode: 0 } }
+            const motorRefs = Object.keys(message.D ?? {});
+            const notifications = [];
+            for (const ref of motorRefs) {
+                const motor = device.motors.find((m) => m.motor_reference === ref);
+                if (!motor) {
+                    logger.warn(`[MULTI_STARTER] MODE_CHANGE_ACK: no DB motor with motor_reference="${ref}" — skipping`);
+                    continue;
+                }
+                const rawMode = message.D[ref]?.mode;
+                if (rawMode === undefined || rawMode === null)
+                    continue;
+                const mode = controlMode(rawMode);
+                const modeChanged = mode !== motor.mode;
+                await db.transaction(async (trx) => {
+                    if (modeChanged && (mode === "MANUAL" || mode === "AUTO")) {
+                        await trx.update(motors).set({ mode: mode, updated_at: new Date() }).where(eq(motors.id, motor.id));
+                    }
+                    await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { mode: motor.mode }, { mode }, "MOTOR_MODE_ACK", trx, device.id);
+                });
+                if (modeChanged) {
+                    notifications.push({ data: prepareMotorModeControlNotificationData(motor, mode, device.id, device.starter_number), mode });
                 }
             }
-            await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, device.id);
-        });
-        const modeChanged = mode !== motor.mode;
-        const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, device.id, device.starter_number) : null;
-        if (notificationData) {
-            if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
-                await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
+            for (const { data, mode } of notifications) {
+                if (shouldSendNotification(data.motorId, "mode", mode)) {
+                    await sendUserNotification(data.userId, data.title, data.message, data.motorId, data.starterId);
+                }
+            }
+        }
+        else {
+            // SINGLE_STARTER — existing path unchanged
+            const mode = controlMode(message.D);
+            const motor = device.motors[0];
+            await db.transaction(async (trx) => {
+                if (mode !== motor.mode) {
+                    if (mode == "MANUAL" || mode == "AUTO") {
+                        await trx.update(motors).set({ mode: mode, updated_at: new Date() }).where(eq(motors.id, motor.id));
+                    }
+                }
+                await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { mode: motor.mode }, { mode }, "MOTOR_MODE_ACK", trx, device.id);
+            });
+            const modeChanged = mode !== motor.mode;
+            const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, device.id, device.starter_number) : null;
+            if (notificationData) {
+                if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
+                    await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
+                }
             }
         }
     }

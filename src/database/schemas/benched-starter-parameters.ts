@@ -31,6 +31,7 @@ export const benchedStarterParameters = pgTable("benched_starter_parameters", {
   mode_description: varchar("mode_description").notNull(),
   motor_state: integer("motor_state").notNull(),
   motor_description: varchar("motor_description").notNull(),
+  motor_reference: varchar("motor_reference"),
 
   // Faults & alerts 
   alert_code: integer("alert").notNull(),

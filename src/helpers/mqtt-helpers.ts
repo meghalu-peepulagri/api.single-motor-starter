@@ -5,6 +5,7 @@ import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import type { RetryOptions } from "../types/app-types.js";
 import { logger } from "../utils/logger.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
+import { extractMultiMotorBlocks, isMultiMotorPayload, resolveMotorsFromPayload } from "./multi-motor-live-data-helper.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 
 
@@ -40,17 +41,73 @@ export async function liveDataHandler(parsedMessage: any, topic: string) {
     const formatted = validateLiveDataFormat(parsedMessage, topic);
     if (!formatted) return null;
 
-    const validated = validateLiveDataContent(formatted);
-    if (!validated) return null;
-
-    const prepared = prepareLiveDataPayload(validated, device);
-    if (!prepared) return null;
-
-    await saveLiveDataTopic(prepared, prepared.group_id, device);
+    if (device.starter_type === "MULTI_STARTER") {
+      await handleMultiStarterLiveData(parsedMessage, formatted, device);
+    } else {
+      // SINGLE_STARTER — existing path, unchanged
+      const validated = validateLiveDataContent(formatted);
+      if (!validated) return null;
+      const prepared = prepareLiveDataPayload(validated, device);
+      if (!prepared) return null;
+      await saveLiveDataTopic(prepared, prepared.group_id, device);
+    }
   }
   catch (err: any) {
     logger.error("Error at live data topic handler", err);
     return null;
+  }
+}
+
+async function handleMultiStarterLiveData(parsedMessage: any, formatted: any, device: any) {
+  // Identify which group is present (G01 / G02 / G03 / G04)
+  const groupKey = Object.keys(formatted.groups)[0] as string;
+  const rawGroupData = parsedMessage?.D?.[groupKey];
+
+  // If the device is MULTI_STARTER but the payload has no m1/m2 keys (e.g. legacy firmware),
+  // fall back to the single-motor path to stay backward-compatible.
+  if (!isMultiMotorPayload(rawGroupData)) {
+    const validated = validateLiveDataContent(formatted);
+    if (!validated) return;
+    const prepared = prepareLiveDataPayload(validated, device);
+    if (!prepared) return;
+    await saveLiveDataTopic(prepared, prepared.group_id, device);
+    return;
+  }
+
+  // Extract per-motor blocks, merging shared group fields (p_v, pwr, llv) into each block
+  const blocks = extractMultiMotorBlocks(rawGroupData);
+
+  // Match each block to a DB motor via motor_reference
+  const resolved = resolveMotorsFromPayload(blocks, device.motors);
+
+  // Case 4: none of the motor refs matched any DB motor
+  if (resolved.length === 0) {
+    logger.error("[MULTI_STARTER] No payload motor blocks matched any DB motor — dropping message", undefined, { mac: device.mac_address });
+    return;
+  }
+
+  // Process each matched motor independently through the existing pipeline
+  for (const { motorRef, motor, mergedData } of resolved) {
+    // Build a synthetic single-motor payload so the existing validator works unchanged
+    const syntheticPayload = {
+      T: parsedMessage.T,
+      S: parsedMessage.S,
+      D: {
+        [groupKey]: mergedData,
+        ct: parsedMessage.D?.ct ?? null,
+      },
+    };
+
+    const validated = validateLiveDataContent({ original: syntheticPayload, groups: { [groupKey]: mergedData } });
+    if (!validated) {
+      logger.warn(`[MULTI_STARTER] Validation failed for motor_reference="${motorRef}" — skipping`, { mac: device.mac_address });
+      continue;
+    }
+
+    const prepared = prepareLiveDataPayload(validated, device, motor);
+    if (!prepared) continue;
+
+    await saveLiveDataTopic(prepared, prepared.group_id, device);
   }
 }
 

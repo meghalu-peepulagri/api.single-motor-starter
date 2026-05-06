@@ -275,6 +275,7 @@ export type preparedLiveData = {
   gateway_id: number;
   user_id: number;
   motor_id: number,
+  motor_reference: string | null,
 
   // Schedule fields from device payload
   active_schedule_id: number | null;
@@ -300,6 +301,7 @@ export type previousPreparedLiveData = {
     location_id: number | null;
     hp: string;
     state: number;
+    motor_reference: string | null;
   }[];
 }
 
