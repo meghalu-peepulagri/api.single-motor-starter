@@ -379,6 +379,13 @@
       "when": 1778044265111,
       "tag": "0053_brainy_flatman",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1778060081295,
+      "tag": "0054_thick_namora",
+      "breakpoints": true
     }
   ]
 }

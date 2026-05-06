@@ -31,6 +31,7 @@ export const starterBoxParameters = pgTable("starter_parameters", {
   mode_description: varchar("mode_description").notNull(),
   motor_state: integer("motor_state").notNull(),
   motor_description: varchar("motor_description").notNull(),
+  motor_reference: varchar("motor_reference"),
 
   // Faults & alerts 
   alert_code: integer("alert").notNull(),
@@ -66,7 +67,7 @@ export const starterBoxParameters = pgTable("starter_parameters", {
   schedule_missed_minutes: integer("schedule_missed_minutes"), // mm
   schedule_failure_at: timestamp("schedule_failure_at"), // fe
   schedule_failure_reason: varchar("schedule_failure_reason"), // fr
-  
+
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [
