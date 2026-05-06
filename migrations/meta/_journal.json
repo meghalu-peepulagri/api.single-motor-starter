@@ -386,6 +386,13 @@
       "when": 1778060081295,
       "tag": "0054_thick_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1778060222390,
+      "tag": "0055_lucky_infant_terrible",
+      "breakpoints": true
     }
   ]
 }
