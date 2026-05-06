@@ -285,7 +285,10 @@ export const STARTER_NOT_DEPLOYED = "Device not deployed yet";
 export const DEVICE_NOT_ALLOCATED = "Device not allocated";
 export const STARTER_LIST_FETCHED = "Device fetches successfully";
 export const STARTER_REPLACED_SUCCESSFULLY = "Device location updated successfully";
-export const STARTER_RUNTIME_FETCHED = "Run time fetches successfully";
+export const STARTER_RUNTIME_FETCHED = "Motor runtime fetched successfully";
+export const MOTOR_STATUS_HISTORY_FETCHED = "Motor status history fetched successfully";
+export const POWER_STATUS_HISTORY_FETCHED = "Power status history fetched successfully";
+export const DEVICE_STATUS_HISTORY_FETCHED = "Device status history fetched successfully";
 export const DEVICE_ANALYTICS_FETCHED = "Device analytics fetches successfully"
 export const DEPLOYED_STATUS = ["READY", "DEPLOYED", "TEST", "ASSIGNED"] as const;
 export const DEPLOYED_STATUS_UPDATED = "Deployed status updated successfully";
@@ -348,11 +351,14 @@ export const SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"] as const;
 export const SCHEDULE_TYPE_CODES = [1, 2] as const; // 1 = TIME_BASED, 2 = CYCLIC
 export const DAYS_OF_WEEK_ENUM = [0, 1, 2, 3, 4, 5, 6] as const; // 0=Sunday ... 6=Saturday
 export const SCHEDULED_CREATED = "Motor schedule created successfully";
+export const MULTIPLE_SCHEDULES_CREATED = "Multiple schedules created successfully";
 export const ALREADY_SCHEDULED_EXISTS = "Schedule already exists with same time";
 export const SCHEDULE_TYPE_IS_REQUIRED = "Schedule type is required";
 export const INVALID_SCHEDULED_TYPE = "Invalid schedule type";
 export const SCHEDULE_DATE_REQUIRED = "Schedule date is required";
 export const SCHEDULE_DATE_FORMAT = "Schedule date must be in YYYY-MM-DD format";
+export const SCHEDULE_START_DATE_REQUIRED = "Schedule start date is required";
+export const SCHEDULE_END_DATE_REQUIRED = "Schedule end date is required";
 export const SCHEDULE_START_DATE_FORMAT = "Schedule start date must be in YYYY-MM-DD format";
 export const SCHEDULE_END_DATE_FORMAT = "Schedule end date must be in YYYY-MM-DD format";
 export const SCHEDULE_END_DATE_PAST = "Schedule end date cannot be in the past";
@@ -404,6 +410,11 @@ export const SCHEDULE_RESTARTED = "Motor schedule restarted successfully";
 export const ALL_SCHEDULES_STOPPED = "All active schedules stopped for this motor";
 export const NO_ACTIVE_SCHEDULE = "No active schedule found to stop";
 export const INVALID_SCHEDULE_CMD = "Invalid cmd. Use 1 for stop, 2 for restart";
+export const BULK_SCHEDULES_STOPPED = "Bulk schedules stopped successfully";
+export const BULK_SCHEDULES_RESTARTED = "Bulk schedules restarted successfully";
+export const BULK_SCHEDULES_DELETED = "Bulk schedules deleted successfully";
+export const BULK_SCHEDULE_IDS_REQUIRED = "Array of schedule ids required";
+export const SCHEDULE_HISTORY_FETCHED = "Schedule history fetched successfully";
 export const SCHEDULE_CMD_REQUIRED = "cmd is required";
 
 // Schedule date validation

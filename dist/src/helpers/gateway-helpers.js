@@ -42,10 +42,7 @@ export function gatewayFilters(query, userId) {
     filters.push(ne(gateways.status, "ARCHIVED"));
     if (query.search_string?.trim()) {
         const s = `%${query.search_string.trim()}%`;
-        filters.push(ilike(gateways.name, s));
-        filters.push(ilike(gateways.pcb_number, s));
-        filters.push(ilike(gateways.mac_address, s));
-        filters.push(ilike(gateways.gateway_number, s));
+        filters.push(or(ilike(gateways.name, s), ilike(gateways.pcb_number, s), ilike(gateways.mac_address, s), ilike(gateways.gateway_number, s)));
     }
     if (query.status) {
         filters.push(eq(gateways.status, query.status));

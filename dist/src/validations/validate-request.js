@@ -3,9 +3,9 @@ import { safeParseAsync } from "valibot";
 import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
-import { vAddMotorSchedule, vAddRepeatDays, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
+import { vAddMotorSchedule, vAddRepeatDays, vArrayOfMotorScheduleValidators, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
 import { vAddMotor, vAssignMotorToDevice, vReplaceMotorDevice, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
-import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus } from "./schema/starter-validations.js";
+import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
@@ -24,6 +24,7 @@ const schemaMap = {
     "update-motor-test-run-status": vUpdateMotorTestRunStatus,
     "add-starter": vAddStarter,
     "create-motor-schedule": vAddMotorSchedule,
+    "create-bulk-motor-schedule": vArrayOfMotorScheduleValidators,
     "update-motor-schedule": vUpdateMotorSchedule,
     "add-repeat-days": vAddRepeatDays,
     "assign-starter": vAssignStarter,
@@ -44,6 +45,7 @@ const schemaMap = {
     "remove-gateway-user": vRemoveGatewayUser,
     "assign-motor-to-device": vAssignMotorToDevice,
     "replace-motor-device": vReplaceMotorDevice,
+    "update-installed-location": vUpdateInstalledLocation,
 };
 export async function validatedRequest(actionType, reqData, errorMessage) {
     const schema = schemaMap[actionType];

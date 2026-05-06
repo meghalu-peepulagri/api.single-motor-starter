@@ -104,16 +104,8 @@ export async function getGatewayDetails(gatewayId) {
         },
     });
 }
-export async function getGatewayForOwnerAction(gatewayId, userId, columnsToSelect) {
-    const gateway = await getSingleRecordConditionallyWithOr(gateways, {
-        columns: ["id", "status"],
-        relations: ["=", "!="],
-        values: [gatewayId, "ARCHIVED"],
-        or: [
-            { columns: ["user_id"], relations: ["="], values: [userId] },
-            { columns: ["created_by"], relations: ["="], values: [userId] },
-        ],
-    }, columnsToSelect);
+export async function getGatewayForOwnerAction(gatewayId, columnsToSelect) {
+    const gateway = await getSingleRecordByMultipleColumnValues(gateways, ["id", "status"], ["=", "!="], [gatewayId, "ARCHIVED"], columnsToSelect);
     return gateway;
 }
 export async function assignGatewayToUser(data, trx) {

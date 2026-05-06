@@ -1,0 +1,1 @@
+ALTER TABLE "motors_run_time" ADD COLUMN "offline_at" timestamp;

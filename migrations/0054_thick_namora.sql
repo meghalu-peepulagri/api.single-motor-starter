@@ -1,0 +1,1 @@
+ALTER TABLE "starter_parameters" ADD COLUMN "motor_reference" varchar;

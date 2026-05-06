@@ -129,22 +129,17 @@ export async function getGatewayDetails(gatewayId: number) {
   });
 }
 
+
+
 export async function getGatewayForOwnerAction<C extends keyof Gateway>(
   gatewayId: number,
-  userId: number,
   columnsToSelect: C[],
 ): Promise<Pick<Gateway, C> | null> {
-  const gateway = await getSingleRecordConditionallyWithOr(
+  const gateway = await getSingleRecordByMultipleColumnValues<typeof gateways>(
     gateways,
-    {
-      columns: ["id", "status"],
-      relations: ["=", "!="],
-      values: [gatewayId, "ARCHIVED"],
-      or: [
-        { columns: ["user_id"], relations: ["="], values: [userId] },
-        { columns: ["created_by"], relations: ["="], values: [userId] },
-      ],
-    },
+    ["id", "status"],
+    ["=", "!="],
+    [gatewayId, "ARCHIVED"],
     columnsToSelect,
   );
 

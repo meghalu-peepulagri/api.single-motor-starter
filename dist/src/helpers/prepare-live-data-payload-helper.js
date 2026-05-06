@@ -1,8 +1,8 @@
-import { controlMode, getAlertDescription, getFaultDescription, lastOff, lastOn, motorState } from "./control-helpers.js";
-import { parseTimestamp } from "./dns-helpers.js";
 import { logger } from "../utils/logger.js";
+import { controlMode, getAlertDescription, getFailureReason, getFaultDescription, lastOff, lastOn, motorState } from "./control-helpers.js";
+import { parseTimestamp } from "./dns-helpers.js";
+import { normalizeTime } from "./motor-schedule-payload-helper.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
-import { addMinutesToTime, normalizeTime } from "./motor-schedule-payload-helper.js";
 export function prepareLiveDataPayload(validatedData, starterData, motor) {
     // motor can be explicitly provided (multi-motor path) or derived from motors[0] (single-motor path)
     const resolvedMotor = motor ?? starterData?.motors?.[0];
@@ -21,7 +21,6 @@ export function prepareLiveDataPayload(validatedData, starterData, motor) {
     const llv = cleanThreeNumberArray(llvSource);
     const amp = cleanThreeNumberArray(data.amp || []);
     const motorStateValue = cleanScalar(data.m_s ?? data.mtr_sts) || 0;
-    const activeScheduleType = sch ? (sch.cy === 1 ? "CYCLIC" : "TIME_BASED") : null;
     return {
         payload_version: cleanScalar(data.p_v) || 0,
         packet_number: validatedData.T,
@@ -63,9 +62,56 @@ export function prepareLiveDataPayload(validatedData, starterData, motor) {
         motor_reference: resolvedMotor.motor_reference ?? null,
         // Schedule
         active_schedule_id: sch?.id ?? null,
-        active_schedule_type: activeScheduleType,
+        active_schedule_type: null,
         active_schedule_start_time: schStartTime,
         active_schedule_runtime_minutes: schRuntime,
         active_schedule_end_time: schEndTime,
+        active_schedule_missed_minutes: sch?.mm ?? 0,
+        active_schedule_failure_at: sch?.fe ? new Date(String(sch.fe).length === 13 ? Number(sch.fe) : Number(sch.fe) * 1000) : null,
+        active_schedule_failure_reason: getFailureReason(cleanScalar(sch?.fr)),
+    };
+}
+export function prepareStarterParametersRecord(insertedData) {
+    return {
+        payload_version: String(insertedData.payload_version),
+        packet_number: insertedData.packet_number,
+        line_voltage_r: insertedData.line_voltage_r,
+        line_voltage_y: insertedData.line_voltage_y,
+        line_voltage_b: insertedData.line_voltage_b,
+        avg_voltage: insertedData.avg_voltage,
+        current_r: insertedData.current_r,
+        current_y: insertedData.current_y,
+        current_b: insertedData.current_b,
+        avg_current: insertedData.avg_current,
+        power_present: insertedData.power_present,
+        motor_mode: insertedData.motor_mode,
+        mode_description: insertedData.mode_description,
+        motor_state: insertedData.motor_state,
+        motor_description: insertedData.motor_description,
+        alert_code: insertedData.alert_code,
+        alert_description: insertedData.alert_description,
+        fault: insertedData.fault,
+        fault_description: insertedData.fault_description,
+        last_on_code: insertedData.last_on_code,
+        last_on_description: insertedData.last_on_description,
+        last_off_code: insertedData.last_off_code,
+        last_off_description: insertedData.last_off_description,
+        time_stamp: insertedData.time_stamp,
+        starter_id: insertedData.starter_id,
+        motor_id: insertedData.motor_id,
+        gateway_id: insertedData.gateway_id,
+        user_id: insertedData.user_id,
+        payload_valid: insertedData.payload_valid,
+        payload_errors: insertedData.payload_errors,
+        group_id: String(insertedData.group_id),
+        temperature: insertedData.temp,
+        schedule_id: insertedData.active_schedule_id,
+        schedule_start_time: insertedData.active_schedule_start_time,
+        schedule_end_time: insertedData.active_schedule_end_time,
+        schedule_runtime_minutes: insertedData.active_schedule_runtime_minutes,
+        schedule_type: insertedData.active_schedule_type,
+        schedule_missed_minutes: insertedData.active_schedule_missed_minutes,
+        schedule_failure_at: insertedData.active_schedule_failure_at,
+        schedule_failure_reason: insertedData.active_schedule_failure_reason,
     };
 }

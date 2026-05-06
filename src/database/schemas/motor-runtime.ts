@@ -23,6 +23,7 @@ export const motorsRunTime = pgTable("motors_run_time", {
   power_end: varchar("power_end"),
   power_state: integer("power_state"),
   power_duration: varchar("power_duration"),
+  offline_at: timestamp("offline_at"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 

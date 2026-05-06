@@ -281,6 +281,118 @@
       "when": 1776170792579,
       "tag": "0039_calm_talkback",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1776328522436,
+      "tag": "0040_pale_cyclops",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1776329725969,
+      "tag": "0041_busy_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1776408960379,
+      "tag": "0042_messy_shiver_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1776409157314,
+      "tag": "0043_curvy_doctor_doom",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1776778443678,
+      "tag": "0044_illegal_leader",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1776837246461,
+      "tag": "0045_keen_zeigeist",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1776839458712,
+      "tag": "0046_classy_zaran",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1776853412306,
+      "tag": "0047_rapid_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1777006054847,
+      "tag": "0048_broken_grandmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1777379703245,
+      "tag": "0049_goofy_slyde",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1777380653428,
+      "tag": "0050_mushy_valeria_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1777630017911,
+      "tag": "0051_abandoned_thing",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1777635807780,
+      "tag": "0052_noisy_purple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1778044265111,
+      "tag": "0053_brainy_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1778060081295,
+      "tag": "0054_thick_namora",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1778060222390,
+      "tag": "0055_lucky_infant_terrible",
+      "breakpoints": true
     }
   ]
 }

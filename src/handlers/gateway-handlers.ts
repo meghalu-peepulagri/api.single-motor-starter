@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+﻿import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_UPDATED, GATEWAY_USER_REMOVED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
@@ -167,7 +167,7 @@ export class GatewayHandlers {
       const gatewayId = +c.req.param("id");
       paramsValidateException.validateId(gatewayId, "gateway id");
 
-      const foundGateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "name", "label", "status", "user_id"]);
+      const foundGateway = await getGatewayForOwnerAction(gatewayId, ["id", "name", "label", "status", "user_id"]);
       if (!foundGateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
 
       await db.transaction(async (tx) => {
@@ -204,7 +204,7 @@ export class GatewayHandlers {
         "Gateway label details provided do not meet the required validation criteria",
       );
 
-      const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "label", "user_id"]);
+      const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "label", "user_id"]);
 
       if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
 
@@ -243,7 +243,7 @@ export class GatewayHandlers {
         "Gateway rename details provided do not meet the required validation criteria",
       );
 
-      const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "name", "user_id"]);
+      const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "name", "user_id"]);
 
       if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
 
@@ -282,7 +282,7 @@ export class GatewayHandlers {
         "Gateway number details provided do not meet the required validation criteria",
       );
 
-      const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "gateway_number", "user_id", "name"]);
+      const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "gateway_number", "user_id", "name"]);
       if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
 
       await db.transaction(async (tx) => {
@@ -322,7 +322,7 @@ export class GatewayHandlers {
         GATEWAY_VALIDATION_CRITERIA,
       );
 
-      const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, [
+      const gateway = await getGatewayForOwnerAction(gatewayId, [
         "id", "name", "gateway_number", "label", "mac_address", "pcb_number", "user_id",
       ]);
       if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);

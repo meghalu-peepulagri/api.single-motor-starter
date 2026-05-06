@@ -144,7 +144,7 @@ export class GatewayHandlers {
             const userPayload = c.get("user_payload");
             const gatewayId = +c.req.param("id");
             paramsValidateException.validateId(gatewayId, "gateway id");
-            const foundGateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "name", "label", "status", "user_id"]);
+            const foundGateway = await getGatewayForOwnerAction(gatewayId, ["id", "name", "label", "status", "user_id"]);
             if (!foundGateway)
                 throw new NotFoundException(GATEWAY_NOT_FOUND);
             await db.transaction(async (tx) => {
@@ -174,7 +174,7 @@ export class GatewayHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validReq = await validatedRequest("update-gateway-label", reqBody, "Gateway label details provided do not meet the required validation criteria");
-            const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "label", "user_id"]);
+            const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "label", "user_id"]);
             if (!gateway)
                 throw new NotFoundException(GATEWAY_NOT_FOUND);
             await db.transaction(async (tx) => {
@@ -206,7 +206,7 @@ export class GatewayHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validReq = await validatedRequest("rename-gateway", reqBody, "Gateway rename details provided do not meet the required validation criteria");
-            const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "name", "user_id"]);
+            const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "name", "user_id"]);
             if (!gateway)
                 throw new NotFoundException(GATEWAY_NOT_FOUND);
             await db.transaction(async (tx) => {
@@ -238,7 +238,7 @@ export class GatewayHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validReq = await validatedRequest("update-gateway-number", reqBody, "Gateway number details provided do not meet the required validation criteria");
-            const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "gateway_number", "user_id", "name"]);
+            const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "gateway_number", "user_id", "name"]);
             if (!gateway)
                 throw new NotFoundException(GATEWAY_NOT_FOUND);
             await db.transaction(async (tx) => {
@@ -271,7 +271,7 @@ export class GatewayHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validReq = await validatedRequest("update-gateway-details", reqBody, GATEWAY_VALIDATION_CRITERIA);
-            const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, [
+            const gateway = await getGatewayForOwnerAction(gatewayId, [
                 "id", "name", "gateway_number", "label", "mac_address", "pcb_number", "user_id",
             ]);
             if (!gateway)

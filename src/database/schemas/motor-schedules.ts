@@ -69,8 +69,16 @@ export const motorSchedules = pgTable("motor_schedules", {
   actual_run_time: integer("actual_run_time"),          // minutes — actual runtime device is executing
   actual_type: scheduleTypeEnum("actual_type"),         // actual schedule type device executed
 
+  missed_minutes: integer("missed_minutes").default(0), // Accumulated missed minutes or power loss time
+  failure_at: timestamp("failure_at"),                  // Timestamp of the last failure
+  failure_reason: varchar("failure_reason").default(sql`null`),
+
   last_started_at: timestamp("last_started_at"),
   last_stopped_at: timestamp("last_stopped_at"),
+  paused_at: timestamp("paused_at"),
+  restarted_at: timestamp("restarted_at"),
+  edited_at: timestamp("edited_at"),
+  completed_at: timestamp("completed_at"),
 
   created_by: integer("created_by").references(() => users.id), // user_id of the creator
   deleted_by: integer("deleted_by").references(() => users.id), // user_id of who deleted (if applicable)

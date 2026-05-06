@@ -60,6 +60,25 @@ export function motorState(code) {
         default: return "Unknown state";
     }
 }
+export function getFailureReason(code) {
+    switch (code) {
+        case 0:
+            return "No Failure";
+        case 1:
+            return "Power Loss";
+        case 2:
+            return "Fault";
+        case 3:
+            return "Mode Change";
+        case 4:
+            return "Overlap";
+        case 5:
+            return "Invalid timings";
+        default:
+            return "Invalid failure reason";
+    }
+}
+;
 const faultCodes = {
     "0x01": { short: "Dry Run", detailed: "Dry Run Protection Detected - No water flow detected." },
     "0x02": { short: "Overload", detailed: "Overload Threshold Detected - Check pump load." },
@@ -90,8 +109,12 @@ const alertCodes = {
     "0x1000": { short: "Output Phase", detailed: "Output Phase Alert - Check output connections." },
 };
 export function getFaultDescription(faultCode) {
-    if (!faultCode || faultCode === 0)
-        return "No Fault";
+    if (faultCode === 0) {
+        return "Fault cleared - No more faults";
+    }
+    if (faultCode == null || faultCode === undefined) {
+        return "Unknown Fault";
+    }
     const faults = [];
     for (const [hexCode, description] of Object.entries(faultCodes)) {
         const bit = Number.parseInt(hexCode, 16);
@@ -122,8 +145,12 @@ export function getFaultNotificationMessage(faultCode) {
     return `${faults.map(f => f.short).join(", ")} Faults Detected`;
 }
 export function getAlertDescription(alertCode) {
-    if (!alertCode || alertCode === 0)
-        return "No Alert";
+    if (alertCode === 0) {
+        return "Alert cleared - No more alerts";
+    }
+    if (alertCode == null || alertCode === undefined) {
+        return "Unknown Alert";
+    }
     const alerts = [];
     for (const [hexCode, description] of Object.entries(alertCodes)) {
         const bit = Number.parseInt(hexCode, 16);

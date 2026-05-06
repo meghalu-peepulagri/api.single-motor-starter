@@ -1,0 +1,1 @@
+ALTER TABLE "benched_starter_parameters" ADD COLUMN "motor_reference" varchar;

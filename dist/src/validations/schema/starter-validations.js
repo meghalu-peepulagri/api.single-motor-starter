@@ -36,3 +36,6 @@ export const vAssignLocationToStarter = v.object({
     location_id: requiredNumber(LOCATION_REQUIRED),
     starter_id: requiredNumber(DEVICE_ID_REQUIRED),
 });
+export const vUpdateInstalledLocation = v.object({
+    device_installed_location: v.pipe(v.string("Device installed location is required"), v.trim(), v.nonEmpty("Installed location is required"), v.minLength(3, "Installed location has min 3 characters")),
+});
