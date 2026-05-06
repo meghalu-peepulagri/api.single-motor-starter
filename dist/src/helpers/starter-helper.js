@@ -7,10 +7,10 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import { getStartersWithSimRechargeExpiry } from "../services/db/starter-services.js";
 export function prepareStarterData(starterBoxPayload, userPayload, dispatchDetails, gatewayId) {
-    const motorDetails = {
-        name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
-        hp: 2,
-    };
+    let motorDetails;
+    if (starterBoxPayload.starter_type !== "MULTI_STARTER") {
+        motorDetails = { name: `Pump 1 - ${starterBoxPayload.pcb_number}`, hp: 2 };
+    }
     return {
         ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails,
         sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,

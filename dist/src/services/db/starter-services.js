@@ -32,7 +32,8 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload, 
     const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
     return await db.transaction(async (trx) => {
         const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
-        await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+        if (preparedStarerData.motorDetails)
+            await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
         await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
         await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
         await saveSingleRecord(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
@@ -129,6 +130,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             signal_quality: true,
             network_type: true,
             device_mobile_number: true,
+            starter_type: true,
         },
         with: {
             gateway: {
@@ -149,6 +151,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     mode: true,
                     alias_name: true,
                     test_run_status: true,
+                    motor_reference: true,
                 },
                 with: {
                     location: {

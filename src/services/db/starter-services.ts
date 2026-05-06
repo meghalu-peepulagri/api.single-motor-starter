@@ -37,7 +37,7 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
 
   return await db.transaction(async (trx: any) => {
     const starter = await saveSingleRecord<StarterBoxTable>(starterBoxes, preparedStarerData, trx);
-    await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+    if (preparedStarerData.motorDetails) await saveSingleRecord<MotorsTable>(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
 
     await saveSingleRecord<StarterSettingsTable>(starterSettings,
       { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" },
@@ -154,6 +154,7 @@ export async function paginatedStarterList(
       signal_quality: true,
       network_type: true,
       device_mobile_number: true,
+      starter_type: true,
     },
     with: {
       gateway: {
@@ -174,6 +175,7 @@ export async function paginatedStarterList(
           mode: true,
           alias_name: true,
           test_run_status: true,
+          motor_reference: true,
         },
         with: {
           location: {

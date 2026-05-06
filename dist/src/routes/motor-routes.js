@@ -9,4 +9,7 @@ motorRoutes.get("/:id", isAuthorized, motorHandlers.getSingleMotorHandler);
 motorRoutes.patch("/:id", isAuthorized, motorHandlers.updateMotorHandler);
 motorRoutes.delete("/:id", isAuthorized, motorHandlers.deleteMotorHandler);
 motorRoutes.patch("/:id/test-run-status", isAuthorized, motorHandlers.updateMotorTestRunStatusHandler);
+motorRoutes.patch("/:id/assign-device", isAuthorized, motorHandlers.assignMotorToDeviceHandler);
+motorRoutes.patch("/:id/detach-device", isAuthorized, motorHandlers.detachMotorFromDeviceHandler);
+motorRoutes.patch("/:id/replace-device", isAuthorized, motorHandlers.replaceMotorDeviceHandler);
 export default motorRoutes;
