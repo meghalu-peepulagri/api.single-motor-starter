@@ -372,6 +372,13 @@
       "when": 1777635807780,
       "tag": "0052_noisy_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1778044265111,
+      "tag": "0053_brainy_flatman",
+      "breakpoints": true
     }
   ]
 }

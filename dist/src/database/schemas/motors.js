@@ -19,6 +19,7 @@ export const motors = pgTable("motors", {
     created_by: integer("created_by").references(() => users.id),
     starter_id: integer("starter_id").references(() => starterBoxes.id),
     motor_index: integer("motor_index").default(1),
+    motor_reference: varchar("motor_reference"),
     status: statusEnum().default("ACTIVE"),
     test_run_status: testRunStatusEnum().default("IN_TEST"),
     test_run_completed_at: timestamp("test_run_completed_at"),
