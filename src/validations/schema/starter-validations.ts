@@ -13,7 +13,7 @@ export const vAddStarter = v.object({
   gateway_id: v.optional(v.union([v.number(), v.null()])),
   hardware_version: hardwareVersion,
   device_mobile_number: v.nullish(v.optional(simNumberValidator)),
-  starter_type : v.nullish(v.optional(v.picklist(["SINGLE_STARTER", "MULTI_STARTER"], "Invalid starter type"))),
+  starter_type : v.optional(v.picklist(["SINGLE_STARTER", "MULTI_STARTER"], "Invalid starter type")),
 });
 
 export const vAssignStarter = v.object({

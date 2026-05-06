@@ -18,10 +18,14 @@ export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, use
     hp: 2,
   };
 
+
   return {
     ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails
     , sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,
-    device_mobile_number: dispatchDetails?.sim_no, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
+    device_mobile_number: dispatchDetails?.sim_no, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId,
+    ...(starterBoxPayload.starter_type === "MULTI_STARTER" && {
+      motor_support_type: "MULTIPLE_MOTORS"
+    })
   }
 };
 

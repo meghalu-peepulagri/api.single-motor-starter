@@ -55,6 +55,7 @@ export interface starterBoxPayloadType {
   starter_number: string;
   mac_address?: string | null | undefined;
   gateway_id?: number | null | undefined;
+  starter_type?: "SINGLE_STARTER" | "MULTI_STARTER";
 }
 
 export interface ValidationOutput {
