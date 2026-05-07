@@ -315,8 +315,11 @@ export const GATEWAY_NUMBER_MIN_LEN = "Gateway number should be min 3 characters
 export const GATEWAY_IDENTIFIER_REQUIRED = "Mac address / PCB number / Gateway number / Gateway name is required";
 export const GATEWAY_ASSIGNED_SUCCESSFULLY = "Gateway assigned successfully";
 export const GATEWAY_ALREADY_ASSIGNED = "Gateway already assigned";
+export const DEVICE_ALREADY_CONNECTED_TO_GATEWAY = "Device is already connected to a gateway";
 export const GATEWAY_UPDATED = "Gateway updated successfully";
 export const GATEWAY_USER_REMOVED = "Gateway user removed successfully";
+export const GATEWAY_DEVICES_FETCHED = "Gateway devices fetched successfully";
+export const GATEWAY_ASSIGNED_TO_DEVICE = "Gateway assigned to device successfully";
 // Motor schedule 
 export const SCHEDULE_TYPES = ["TIME_BASED", "CYCLIC"];
 export const SCHEDULE_TYPE_CODES = [1, 2]; // 1 = TIME_BASED, 2 = CYCLIC

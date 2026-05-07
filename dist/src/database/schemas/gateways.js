@@ -4,6 +4,7 @@ import { sql, relations } from "drizzle-orm";
 import { users } from "./users.js";
 import { uniqueIndex } from "drizzle-orm/gel-core";
 import { statusEnum } from "../../constants/enum-types.js";
+import { starterBoxes } from "./starter-boxes.js";
 export const gateways = pgTable("gateways", {
     id: serial("id").primaryKey(),
     name: varchar("name"),
@@ -26,7 +27,7 @@ export const gateways = pgTable("gateways", {
     uniqueIndex("validate_gateway_mac_address").on(sql `lower(${table.mac_address})`).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("validate_gateway_pcb_number").on(sql `lower(${table.pcb_number})`).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
-export const gatewaysRelations = relations(gateways, ({ one }) => ({
+export const gatewaysRelations = relations(gateways, ({ one, many }) => ({
     location: one(locations, {
         fields: [gateways.location_id],
         references: [locations.id],
@@ -35,4 +36,5 @@ export const gatewaysRelations = relations(gateways, ({ one }) => ({
         fields: [gateways.user_id],
         references: [users.id],
     }),
+    starterBoxes: many(starterBoxes),
 }));

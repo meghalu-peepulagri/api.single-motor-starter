@@ -2,6 +2,7 @@ import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import type { Gateway } from "../../database/schemas/gateways.js";
 import { gateways, type GatewayTable } from "../../database/schemas/gateways.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 import { GATEWAY_ALREADY_ASSIGNED, GATEWAY_NOT_FOUND, UNIQUE_INDEX_MESSAGES } from "../../constants/app-constants.js";
 import ConflictException from "../../exceptions/conflict-exception.js";
@@ -250,6 +251,51 @@ export async function assertGatewayIdentifiersUnique(data: {
   }
 
   throw new ConflictException();
+}
+
+export async function getGatewayWithDevices(gatewayId: number) {
+  const gateway = await db.query.gateways.findFirst({
+    where: and(eq(gateways.id, gatewayId), ne(gateways.status, "ARCHIVED")),
+    columns: {
+      id: true,
+      name: true,
+      gateway_number: true,
+      label: true,
+      mac_address: true,
+      pcb_number: true,
+      status: true,
+    },
+    with: {
+      starterBoxes: {
+        where: ne(starterBoxes.status, "ARCHIVED"),
+        orderBy: [desc(starterBoxes.created_at)],
+        columns: {
+          id: true,
+          name: true,
+          starter_number: true,
+          mac_address: true,
+          pcb_number: true,
+          device_status: true,
+          power: true,
+          starter_type: true,
+        },
+      },
+    },
+  } as any);
+
+  return gateway ?? null;
+}
+
+export async function assignGatewayToDevice(
+  gatewayId: number,
+  starterId: number,
+  trx?: any,
+): Promise<void> {
+  const qb = trx || db;
+  await qb
+    .update(starterBoxes)
+    .set({ gateway_id: gatewayId, updated_at: new Date() })
+    .where(eq(starterBoxes.id, starterId));
 }
 
 export async function getGatewayByIdentifier(identifier: string) {

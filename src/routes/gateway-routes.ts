@@ -15,6 +15,8 @@ gatewayRoutes.patch("/remove-user", isAuthorized, gatewayHandlers.removeGatewayU
 gatewayRoutes.post("/:id/label", isAuthorized, gatewayHandlers.updateGatewayLabelHandler);
 gatewayRoutes.post("/:id/rename", isAuthorized, gatewayHandlers.renameGatewayHandler);
 gatewayRoutes.post("/:id/number", isAuthorized, gatewayHandlers.updateGatewayNumberHandler);
+gatewayRoutes.get("/:id/devices", isAuthorized, gatewayHandlers.getGatewayDevicesHandler);
+gatewayRoutes.patch("/:id/assign-device", isAuthorized, gatewayHandlers.assignGatewayToDeviceHandler);
 gatewayRoutes.patch("/:id", isAuthorized, gatewayHandlers.updateGatewayDetailsHandler);
 gatewayRoutes.delete("/:id", isAuthorized, gatewayHandlers.deleteGatewayHandler);
 

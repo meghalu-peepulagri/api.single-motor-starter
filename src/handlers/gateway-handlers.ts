@@ -1,6 +1,6 @@
 ﻿import { eq } from "drizzle-orm";
 import type { Context } from "hono";
-import { GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_UPDATED, GATEWAY_USER_REMOVED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED } from "../constants/app-constants.js";
+import { DEVICE_ALREADY_CONNECTED_TO_GATEWAY, GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_ASSIGNED_TO_DEVICE, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_DEVICES_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_UPDATED, GATEWAY_USER_REMOVED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED, STARTER_BOX_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
@@ -10,13 +10,16 @@ import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDelete
 import { buildGatewayUpdatePayload, gatewayDropdownFilters, gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { assertGatewayIdentifiersUnique, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysDropdownList, getGatewaysList, removeUserFromGateway } from "../services/db/gateway-services.js";
+import { assertGatewayIdentifiersUnique, assignGatewayToDevice, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysDropdownList, getGatewaysList, getGatewayWithDevices, removeUserFromGateway } from "../services/db/gateway-services.js";
+import { getSingleRecordByMultipleColumnValues as getStarter } from "../services/db/base-db-services.js";
+import type { StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedAddGateway, ValidatedAssignGatewayToUser, ValidatedRemoveGatewayUser, ValidatedRenameGateway, ValidatedUpdateGatewayDetails, ValidatedUpdateGatewayLabel, ValidatedUpdateGatewayNumber } from "../validations/schema/gateway-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ForbiddenException from "../exceptions/forbidden-exception.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 
 const paramsValidateException = new ParamsValidateException();
@@ -357,6 +360,50 @@ export class GatewayHandlers {
       handleJsonParseError(error);
       parseDatabaseError(error);
       handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
+  getGatewayDevicesHandler = async (c: Context) => {
+    try {
+      const gatewayId = +c.req.param("id");
+      paramsValidateException.validateId(gatewayId, "Gateway id");
+
+      const result = await getGatewayWithDevices(gatewayId);
+      if (!result) throw new NotFoundException(GATEWAY_NOT_FOUND);
+
+      return sendResponse(c, 200, GATEWAY_DEVICES_FETCHED, result);
+    } catch (error: any) {
+      console.error("Error at get gateway devices :", error);
+      throw error;
+    }
+  }
+
+  assignGatewayToDeviceHandler = async (c: Context) => {
+    try {
+      const gatewayId = +c.req.param("id");
+      paramsValidateException.validateId(gatewayId, "Gateway id");
+
+      const reqBody = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqBody);
+
+      const starterId = +reqBody.starter_id;
+      paramsValidateException.validateId(starterId, "Starter id");
+
+      const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "status"]);
+      if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
+
+      const starter = await getStarter<StarterBoxTable>(starterBoxes, ["id", "status", "gateway_id"], ["=", "!="], [starterId, "ARCHIVED"],);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+      if ((starter as any).gateway_id) throw new ConflictException(DEVICE_ALREADY_CONNECTED_TO_GATEWAY);
+
+      await assignGatewayToDevice(gatewayId, starterId);
+
+      return sendResponse(c, 200, GATEWAY_ASSIGNED_TO_DEVICE);
+    } catch (error: any) {
+      console.error("Error at assign gateway to device :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
       throw error;
     }
   }
