@@ -247,7 +247,7 @@ export async function replaceStarterWithTransaction(motor, starter, locationId) 
     };
     return await db.transaction(action);
 }
-export async function getStarterAnalytics(starterId, fromDate, toDate, parameter, motorId) {
+export async function getStarterAnalytics(starterId, fromDate, toDate, parameter, motorId, motorReference) {
     const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
     const { selectedFieldsMain, selectedFieldsBench } = buildAnalyticsFilter(parameter);
     const startOfDayDate = new Date(startOfDayUTC);
@@ -267,6 +267,10 @@ export async function getStarterAnalytics(starterId, fromDate, toDate, parameter
     if (motorId) {
         filtersMain.push(eq(starterBoxParameters.motor_id, +motorId));
         filtersBench.push(eq(benchedStarterParameters.motor_id, +motorId));
+    }
+    else if (motorReference) {
+        filtersMain.push(eq(starterBoxParameters.motor_reference, motorReference));
+        filtersBench.push(eq(benchedStarterParameters.motor_reference, motorReference));
     }
     const data = await db
         .select(selectedFieldsMain)

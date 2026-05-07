@@ -280,7 +280,7 @@ export type preparedLiveData = {
   starter_id: number;
   gateway_id: number;
   user_id: number;
-  motor_id: number,
+  motor_id: number | null,
   motor_reference: string | null,
 
   // Schedule fields from device payload

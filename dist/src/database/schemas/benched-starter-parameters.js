@@ -40,7 +40,7 @@ export const benchedStarterParameters = pgTable("benched_starter_parameters", {
     time_stamp: varchar("time_stamp").notNull(),
     // References
     starter_id: integer("starter_id").notNull(),
-    motor_id: integer("motor_id").notNull(),
+    motor_id: integer("motor_id"),
     gateway_id: integer("gateway_id"),
     user_id: integer("user_id").notNull(),
     payload_valid: boolean("payload_valid").notNull().default(false),

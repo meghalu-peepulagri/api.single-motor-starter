@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-Content \"D:\\\\orotron\\\\Single-motor-Starter\\\\peepulagri-api.single-motor-starter\\\\src\\\\services\\\\db\\\\mqtt-db-services.ts\")",
+      "Bash(Measure-Object -Line)",
+      "Bash(Select-Object -ExpandProperty Lines)"
+    ]
+  }
+}

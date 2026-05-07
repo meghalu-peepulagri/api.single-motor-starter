@@ -189,7 +189,7 @@ export function formatAnalyticsData(data: any[], parameter: string) {
 }
 
 
-export function extractPreviousData(previousData: any, motorId: number) {
+export function extractPreviousData(previousData: any, motorId: number | null) {
   const power = previousData?.power ?? null;
 
   const motor = previousData?.motors?.find((m: any) => m.id === motorId) || {};

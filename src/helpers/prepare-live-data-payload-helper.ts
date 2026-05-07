@@ -106,6 +106,7 @@ export function prepareStarterParametersRecord(insertedData: preparedLiveData): 
     mode_description: insertedData.mode_description,
     motor_state: insertedData.motor_state,
     motor_description: insertedData.motor_description,
+    motor_reference: insertedData.motor_reference,
     alert_code: insertedData.alert_code,
     alert_description: insertedData.alert_description,
     fault: insertedData.fault,

@@ -40,24 +40,23 @@ export function extractMultiMotorBlocks(groupData) {
 /**
  * Matches extracted payload blocks to DB motors using motor_reference.
  *
- * Case 1 — Block key (m1/m2) has no matching DB motor with that motor_reference:
- *   → Log warning and skip.
- *
- * Case 2 — No blocks could be matched at all:
- *   Returns an empty array. Caller is responsible for logging and early return.
+ * matched  — blocks with a live DB motor (full pipeline: insert + motor state/mode updates).
+ * unmatched — blocks with no currently-assigned motor (parameters-only insert, no motor updates).
  */
 export function resolveMotorsFromPayload(blocks, dbMotors) {
     const motorByRef = new Map(dbMotors
         .filter(m => m.motor_reference !== null)
         .map(m => [m.motor_reference, m]));
-    const resolved = [];
+    const matched = [];
+    const unmatched = [];
     for (const { motorRef, mergedData } of blocks) {
         const motor = motorByRef.get(motorRef);
         if (!motor) {
-            logger.warn(`[MULTI_STARTER] No DB motor with motor_reference="${motorRef}" — skipping block`);
+            logger.warn(`[MULTI_STARTER] No DB motor with motor_reference="${motorRef}" — will attempt parameters-only insert`);
+            unmatched.push({ motorRef, mergedData });
             continue;
         }
-        resolved.push({ motorRef, motor, mergedData });
+        matched.push({ motorRef, motor, mergedData });
     }
-    return resolved;
+    return { matched, unmatched };
 }

@@ -10,7 +10,7 @@ import { controlMode, getFaultNotificationMessage } from "../../helpers/control-
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
 import { getIdentifiersFromTopic, liveDataHandler } from "../../helpers/mqtt-helpers.js";
-import { prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
+import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
@@ -139,7 +139,7 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
   try {
     const notificationData = await db.transaction(async (trx) => {
       await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, record, trx);
-      await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
+      if (motor_id) await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
 
       const starterBoxUpdates: Record<string, any> = {};
       let trackPowerChange = false;
@@ -1550,3 +1550,61 @@ export const waitForAck = (
     mqttClient.on("message", onMessage);
   });
 };
+
+/**
+ * Inserts a starter_parameters record for an unmatched motor_reference block
+ * (motor was unassigned from the device but the hardware keeps sending data).
+ *
+ * Resolves motor_id via two fallbacks (history lookup → motor_index lookup).
+ * If no motor_id can be resolved, inserts with motor_id = null (column is now nullable).
+ * Does NOT update motor state, mode, or any related tables.
+ */
+export async function insertParametersForUnmatchedMotor(
+  device: any,
+  motorRef: string,
+  validated: any,
+) {
+  const starterId: number = device.id;
+
+  // 1st: look for the last motor_id recorded for this starter + motor_reference
+  const lastRecord = await db
+    .select({ motor_id: starterBoxParameters.motor_id })
+    .from(starterBoxParameters)
+    .where(and(
+      eq(starterBoxParameters.starter_id, starterId),
+      eq(starterBoxParameters.motor_reference, motorRef),
+    ))
+    .orderBy(desc(starterBoxParameters.time_stamp))
+    .limit(1);
+
+  let motorId: number | null = lastRecord[0]?.motor_id ?? null;
+
+  // 2nd fallback: motor is still assigned but has no motor_reference set —
+  // match by motor_index (m1 → index 1, m2 → index 2)
+  if (!motorId) {
+    const motorIndex = motorRef === "m1" ? 1 : 2;
+    const motorRecord = await db
+      .select({ id: motors.id })
+      .from(motors)
+      .where(and(
+        eq(motors.starter_id, starterId),
+        eq(motors.motor_index, motorIndex),
+        ne(motors.status, "ARCHIVED"),
+      ))
+      .limit(1);
+    motorId = motorRecord[0]?.id ?? null;
+  }
+
+  // motor_id is now nullable — proceed with null when no motor exists at all
+  const stubMotor = { id: motorId, motor_reference: motorRef, state: 0, mode: "AUTO" };
+  const prepared = prepareLiveDataPayload(validated, device, stubMotor);
+  if (!prepared) return;
+
+  const record = prepareStarterParametersRecord(prepared);
+  try {
+    await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, record);
+    logger.info(`[MULTI_STARTER] Parameters-only insert: starter_id=${starterId} motor_reference="${motorRef}" motor_id=${motorId}`);
+  } catch (err: any) {
+    logger.error(`[MULTI_STARTER] Parameters-only insert failed for motor_reference="${motorRef}"`, err);
+  }
+}

@@ -287,7 +287,8 @@ export async function getStarterAnalytics(
   fromDate: string,
   toDate: string,
   parameter: string,
-  motorId?: number | undefined
+  motorId?: number | undefined,
+  motorReference?: string | undefined
 ) {
   const { startOfDayUTC, endOfDayUTC } = getUTCFromDateAndToDate(fromDate, toDate);
   const { selectedFieldsMain, selectedFieldsBench } = buildAnalyticsFilter(parameter);
@@ -312,6 +313,9 @@ export async function getStarterAnalytics(
   if (motorId) {
     filtersMain.push(eq(starterBoxParameters.motor_id, +motorId));
     filtersBench.push(eq(benchedStarterParameters.motor_id, +motorId));
+  } else if (motorReference) {
+    filtersMain.push(eq(starterBoxParameters.motor_reference, motorReference));
+    filtersBench.push(eq(benchedStarterParameters.motor_reference, motorReference));
   }
 
   const data = await db

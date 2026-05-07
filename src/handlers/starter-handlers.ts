@@ -298,22 +298,32 @@ export class StarterHandlers {
     try {
       const query = c.req.query();
       const starterId = +c.req.param("id");
-      const motorId = +query.motor_id
       paramsValidateException.validateId(starterId, "Device id");
-      if (motorId) paramsValidateException.validateId(motorId, "Motor id");
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
-      if (motorId) {
-        const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
-        if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
+      const motorParam = query.motor_id;
+      let motorId: number | undefined;
+      let motorReference: string | undefined;
+
+      if (motorParam) {
+        const numericId = Number(motorParam);
+        if (Number.isInteger(numericId) && numericId > 0) {
+          motorId = numericId;
+          paramsValidateException.validateId(motorId, "Motor id");
+          const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+          if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
+        } else {
+          // motor_reference string like "m1" or "m2" — motor may no longer be assigned
+          motorReference = motorParam;
+        }
       }
 
       const parameter = query.parameter;
       const { fromDateUTC, toDateUTC } = parseQueryDates(query);
 
-      const starterList = await getStarterAnalytics(starterId, fromDateUTC, toDateUTC, parameter, motorId);
+      const starterList = await getStarterAnalytics(starterId, fromDateUTC, toDateUTC, parameter, motorId, motorReference);
       return sendResponse(c, 200, DEVICE_ANALYTICS_FETCHED, starterList);
     } catch (error: any) {
       console.error("Error at starter analytics :", error);

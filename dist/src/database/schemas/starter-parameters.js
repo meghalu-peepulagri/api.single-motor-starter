@@ -40,7 +40,7 @@ export const starterBoxParameters = pgTable("starter_parameters", {
     time_stamp: varchar("time_stamp").notNull(),
     // References
     starter_id: integer("starter_id").notNull().references(() => starterBoxes.id),
-    motor_id: integer("motor_id").notNull().references(() => motors.id),
+    motor_id: integer("motor_id").references(() => motors.id),
     gateway_id: integer("gateway_id").references(() => gateways.id),
     user_id: integer("user_id").notNull().references(() => users.id),
     payload_valid: boolean("payload_valid").notNull().default(false),

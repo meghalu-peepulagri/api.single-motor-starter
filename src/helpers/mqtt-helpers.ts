@@ -1,6 +1,6 @@
 import { DEVICE_SCHEMA } from "../constants/app-constants.js";
 import { getGatewayByIdentifier } from "../services/db/gateway-services.js";
-import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
+import { insertParametersForUnmatchedMotor, saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import type { RetryOptions } from "../types/app-types.js";
 import { logger } from "../utils/logger.js";
@@ -78,36 +78,38 @@ async function handleMultiStarterLiveData(parsedMessage: any, formatted: any, de
   const blocks = extractMultiMotorBlocks(rawGroupData);
 
   // Match each block to a DB motor via motor_reference
-  const resolved = resolveMotorsFromPayload(blocks, device.motors);
+  const { matched, unmatched } = resolveMotorsFromPayload(blocks, device.motors);
 
-  // Case 4: none of the motor refs matched any DB motor
-  if (resolved.length === 0) {
-    logger.error("[MULTI_STARTER] No payload motor blocks matched any DB motor — dropping message", undefined, { mac: device.mac_address });
-    return;
-  }
-
-  // Process each matched motor independently through the existing pipeline
-  for (const { motorRef, motor, mergedData } of resolved) {
-    // Build a synthetic single-motor payload so the existing validator works unchanged
+  // Process each matched motor through the full pipeline (insert + motor state/mode updates)
+  for (const { motorRef, motor, mergedData } of matched) {
     const syntheticPayload = {
       T: parsedMessage.T,
       S: parsedMessage.S,
-      D: {
-        [groupKey]: mergedData,
-        ct: parsedMessage.D?.ct ?? null,
-      },
+      D: { [groupKey]: mergedData, ct: parsedMessage.D?.ct ?? null },
     };
-
     const validated = validateLiveDataContent({ original: syntheticPayload, groups: { [groupKey]: mergedData } });
     if (!validated) {
       logger.warn(`[MULTI_STARTER] Validation failed for motor_reference="${motorRef}" — skipping`, { mac: device.mac_address });
       continue;
     }
-
     const prepared = prepareLiveDataPayload(validated, device, motor);
     if (!prepared) continue;
-
     await saveLiveDataTopic(prepared, prepared.group_id, device);
+  }
+
+  // Process unmatched blocks — motor no longer assigned, insert parameters only (no motor/mode updates)
+  for (const { motorRef, mergedData } of unmatched) {
+    const syntheticPayload = {
+      T: parsedMessage.T,
+      S: parsedMessage.S,
+      D: { [groupKey]: mergedData, ct: parsedMessage.D?.ct ?? null },
+    };
+    const validated = validateLiveDataContent({ original: syntheticPayload, groups: { [groupKey]: mergedData } });
+    if (!validated) {
+      logger.warn(`[MULTI_STARTER] Validation failed for unmatched motor_reference="${motorRef}" — skipping`, { mac: device.mac_address });
+      continue;
+    }
+    await insertParametersForUnmatchedMotor(device, motorRef, validated);
   }
 }
 
