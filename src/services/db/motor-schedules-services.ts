@@ -29,6 +29,8 @@ import {
 import { motors } from "../../database/schemas/motors.js";
 import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../../validations/schema/motor-schedule-validators.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { evaluateScheduleStatus } from "../../helpers/schedule-status-evaluator.js";
+import type { ScheduleForEvaluation } from "../../types/app-types.js";
 
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
 
@@ -696,4 +698,32 @@ export async function findScheduleHistoryByMotorAndStarter(
   const pagination = getPaginationData(pageParams.page, pageParams.pageSize, total);
 
   return { records, pagination };
+}
+
+// =================== ON-READ STATUS EVALUATION ===================
+
+const EVALUATABLE_STATUSES_ON_READ = ["PENDING", "SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE"];
+
+export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<void> {
+  const now = new Date();
+  const toEvaluate = records.filter(r => EVALUATABLE_STATUSES_ON_READ.includes(r.schedule_status));
+  if (toEvaluate.length === 0) return;
+
+  const groups = { RUNNING: [] as number[], COMPLETED: [] as number[], WAITING_NEXT_CYCLE: [] as number[] };
+
+  for (const s of toEvaluate) {
+    const res = evaluateScheduleStatus(s as ScheduleForEvaluation, now);
+    if (!res) continue;
+    const key = res.newStatus as keyof typeof groups;
+    if (groups[key]) groups[key].push(res.id);
+    s.schedule_status = res.newStatus;
+  }
+
+  if (!Object.values(groups).some(ids => ids.length > 0)) return;
+
+  await batchUpdateScheduleStatuses([
+    { status: "RUNNING",            ids: groups.RUNNING,            last_started_at: now },
+    { status: "COMPLETED",          ids: groups.COMPLETED,          last_stopped_at: now, completed_at: now },
+    { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
+  ]);
 }

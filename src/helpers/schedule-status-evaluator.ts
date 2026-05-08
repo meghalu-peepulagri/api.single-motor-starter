@@ -64,13 +64,31 @@ export function evaluateScheduleStatus(
   const currentDateNum = ist.dateNum;
   const currentDayOfWeek = ist.dayOfWeek;
 
-  const effectiveStartTime = schedule.actual_start_time || schedule.start_time;
-  const effectiveEndTime = schedule.actual_end_time || schedule.end_time;
+  const startMinutes = timeToMinutes(schedule.start_time);
+  const endMinutes = timeToMinutes(schedule.end_time);
   const effectiveRuntime = schedule.actual_run_time || schedule.runtime_minutes;
-
-  const startMinutes = timeToMinutes(effectiveStartTime);
-  const endMinutes = timeToMinutes(effectiveEndTime);
   const isTodayValid = isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek);
+
+  // ── PENDING → RUNNING / COMPLETED (if window passed without device ack) ──
+  if (schedule.schedule_status === "PENDING") {
+    if (!isTodayValid) return null;
+
+    if (isWithinTimeWindow(currentMinutes, startMinutes, endMinutes)) {
+      return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
+    }
+
+    if (hasPassedEndTime(currentMinutes, startMinutes, endMinutes)) {
+      if (schedule.repeat === 1) {
+        if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
+          return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+        }
+        return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
+      }
+      return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+    }
+
+    return null;
+  }
 
   // ── SCHEDULED → RUNNING / WAITING_NEXT_CYCLE / COMPLETED (missed window) ──
   if (schedule.schedule_status === "SCHEDULED") {

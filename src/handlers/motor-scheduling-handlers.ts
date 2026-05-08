@@ -59,6 +59,7 @@ import {
 } from "../services/db/base-db-services.js";
 import {
   batchUpdateScheduleStatuses,
+  evaluateAndUpdateSchedulesOnRead,
   bulkCreateMotorSchedules,
   cancelSchedulesByIds,
   findActiveScheduleById,
@@ -82,6 +83,7 @@ import type {
 import { validatedRequest } from "../validations/validate-request.js";
 
 const paramsValidateException = new ParamsValidateException();
+
 
 export class MotorScheduleHandler {
 
@@ -110,6 +112,8 @@ export class MotorScheduleHandler {
       const filters = buildMotorScheduleFilters(query);
       const result = await findSchedulesByFilters(filters, page, limit);
 
+      await evaluateAndUpdateSchedulesOnRead(result.records);
+
       return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result, filters.schedule_start_date));
     } catch (error: any) {
       handleAppError(error, "motor Schedule List");
@@ -124,6 +128,8 @@ export class MotorScheduleHandler {
 
       const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId);
       if (!schedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      await evaluateAndUpdateSchedulesOnRead([schedule]);
 
       return sendResponse(c, 200, SCHEDULE_DETAILS_FETCHED, formatMotorScheduleResponse(schedule));
     } catch (error: any) {
