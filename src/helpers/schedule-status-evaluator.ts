@@ -53,6 +53,34 @@ function isWithinTimeWindow(
   return currentMinutes >= startMinutes || currentMinutes < endMinutes;
 }
 
+// =================== TERMINAL STATUS RESOLVER ===================
+
+function resolveTerminalStatus(
+  schedule: ScheduleForEvaluation,
+  startMinutes: number,
+  endMinutes: number,
+  now: Date,
+): ScheduleStatusUpdate {
+  const plannedMinutes = endMinutes > startMinutes
+    ? endMinutes - startMinutes
+    : (1440 - startMinutes) + endMinutes;
+
+  const hasActualStart = !!schedule.actual_start_time;
+  const actualRunTime = schedule.actual_run_time ?? null;
+
+  let newStatus: "COMPLETED" | "PARTIAL" | "MISSED";
+
+  if (!hasActualStart) {
+    newStatus = "MISSED";
+  } else if (actualRunTime !== null && actualRunTime >= plannedMinutes - 1) {
+    newStatus = "COMPLETED";
+  } else {
+    newStatus = "PARTIAL";
+  }
+
+  return { id: schedule.id, newStatus, last_stopped_at: now };
+}
+
 // =================== MAIN EVALUATOR ===================
 
 export function evaluateScheduleStatus(
@@ -64,13 +92,31 @@ export function evaluateScheduleStatus(
   const currentDateNum = ist.dateNum;
   const currentDayOfWeek = ist.dayOfWeek;
 
-  const effectiveStartTime = schedule.actual_start_time || schedule.start_time;
-  const effectiveEndTime = schedule.actual_end_time || schedule.end_time;
+  const startMinutes = timeToMinutes(schedule.start_time);
+  const endMinutes = timeToMinutes(schedule.end_time);
   const effectiveRuntime = schedule.actual_run_time || schedule.runtime_minutes;
-
-  const startMinutes = timeToMinutes(effectiveStartTime);
-  const endMinutes = timeToMinutes(effectiveEndTime);
   const isTodayValid = isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek);
+
+  // ── PENDING → RUNNING / COMPLETED / WAITING_NEXT_CYCLE ──
+  if (schedule.schedule_status === "PENDING") {
+    if (!isTodayValid) return null;
+
+    if (isWithinTimeWindow(currentMinutes, startMinutes, endMinutes)) {
+      return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
+    }
+
+    if (hasPassedEndTime(currentMinutes, startMinutes, endMinutes)) {
+      if (schedule.repeat === 1) {
+        if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
+          return { id: schedule.id, newStatus: "MISSED", last_stopped_at: now };
+        }
+        return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
+      }
+      return { id: schedule.id, newStatus: "MISSED", last_stopped_at: now };
+    }
+
+    return null;
+  }
 
   // ── SCHEDULED → RUNNING / WAITING_NEXT_CYCLE / COMPLETED (missed window) ──
   if (schedule.schedule_status === "SCHEDULED") {
@@ -83,17 +129,17 @@ export function evaluateScheduleStatus(
     if (hasPassedEndTime(currentMinutes, startMinutes, endMinutes)) {
       if (schedule.repeat === 1) {
         if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-          return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+          return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
         }
         return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
       }
-      return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+      return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
     }
 
     return null;
   }
 
-  // ── RUNNING → COMPLETED / WAITING_NEXT_CYCLE ──
+  // ── RUNNING → COMPLETED / PARTIAL / MISSED / WAITING_NEXT_CYCLE ──
   if (schedule.schedule_status === "RUNNING") {
     let shouldComplete = false;
 
@@ -112,19 +158,19 @@ export function evaluateScheduleStatus(
     if (shouldComplete) {
       if (schedule.repeat === 1) {
         if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-          return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+          return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
         }
         return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
       }
-      return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+      return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
     }
     return null;
   }
 
-  // ── WAITING_NEXT_CYCLE → RUNNING / COMPLETED ──
+  // ── WAITING_NEXT_CYCLE → RUNNING / COMPLETED / PARTIAL / MISSED ──
   if (schedule.schedule_status === "WAITING_NEXT_CYCLE") {
     if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-      return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+      return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
     }
 
     if (!isTodayValid) return null;
