@@ -212,7 +212,7 @@ export function prepareMotorSyncChangeData(params: {
   const { currentState, currentMode, incomingState, incomingMode, timeStamp } = params;
 
   const normalizedState = incomingState === 0 || incomingState === 1 ? incomingState : null;
-  const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" ? incomingMode : null;
+  const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" || incomingMode === "SCHEDULE" ? incomingMode : null;
 
   const hasStateChanged = normalizedState !== null && normalizedState !== currentState;
   const hasModeChanged = normalizedMode !== null && normalizedMode !== currentMode;
@@ -539,7 +539,7 @@ export function prepareMotorStateControlNotificationData(motor: Motor, newState:
 
 export function prepareMotorModeControlNotificationData(motor: any, mode_description: string, starter_id: number, starter_number: string): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string } | null {
   const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
-  const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO";
+  const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO" || mode_description === "SCHEDULE";
 
   const title = isValidMode
     ? `Pump ${pumpName} mode changed to ${mode_description}`

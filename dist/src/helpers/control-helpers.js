@@ -42,6 +42,8 @@ export function controlMode(code) {
             return "INVALID REQUEST";
         case 5:
             return "FEATURE NOT ENABLED";
+        case 6:
+            return "SCHEDULE";
         default:
             return "Unknown mode";
     }

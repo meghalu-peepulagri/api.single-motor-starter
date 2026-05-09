@@ -304,7 +304,7 @@ export type previousPreparedLiveData = {
     created_by: number | null;
     id: number;
     name: string;
-    mode: "AUTO" | "MANUAL"
+    mode: "AUTO" | "MANUAL" | "SCHEDULE"
     location_id: number | null;
     hp: string;
     state: number;

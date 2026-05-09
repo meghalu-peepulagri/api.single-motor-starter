@@ -89,7 +89,7 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
 }
 
 
-const VALID_MODES = ["AUTO", "MANUAL"] as const;
+const VALID_MODES = ["AUTO", "MANUAL", "SCHEDULE"] as const;
 type ValidMode = typeof VALID_MODES[number];
 
 async function getLockedMotorSnapshot(trx: any, motorId: number) {

@@ -10,7 +10,7 @@ function meaningfulLastOffOnStateMessage(
   lastOnDesc?: string,
   lastOffDesc?: string
 ): string {
-  const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode} mode` : "";
+  const modeLabel = (mode === "AUTO" || mode === "MANUAL" || mode === "SCHEDULE") ? ` in ${mode} mode` : "";
 
   if (state === 1) {
     return `Pump turned ON${modeLabel}`;
@@ -24,7 +24,7 @@ function meaningfulLastOffOnStateMessage(
 }
 
 export function meaningfulModeMessage(oldMode: string | undefined | null, newMode: string | null): string {
-  if (newMode === "MANUAL" || newMode === "AUTO") {
+  if (newMode === "MANUAL" || newMode === "AUTO" || newMode === "SCHEDULE") {
     return `Pump switched from ${oldMode} to ${newMode} mode.`;
   }
   return `Mode not updated due to '${newMode}'`;

@@ -165,7 +165,7 @@ export function extractPreviousData(previousData, motorId) {
 export function prepareMotorSyncChangeData(params) {
     const { currentState, currentMode, incomingState, incomingMode, timeStamp } = params;
     const normalizedState = incomingState === 0 || incomingState === 1 ? incomingState : null;
-    const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" ? incomingMode : null;
+    const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" || incomingMode === "SCHEDULE" ? incomingMode : null;
     const hasStateChanged = normalizedState !== null && normalizedState !== currentState;
     const hasModeChanged = normalizedMode !== null && normalizedMode !== currentMode;
     const updateData = {};
@@ -400,7 +400,7 @@ export function prepareMotorStateControlNotificationData(motor, newState, mode_d
 }
 export function prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) {
     const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
-    const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO";
+    const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO" || mode_description === "SCHEDULE";
     const title = isValidMode
         ? `Pump ${pumpName} mode changed to ${mode_description}`
         : `Pump ${pumpName} mode not updated`;
