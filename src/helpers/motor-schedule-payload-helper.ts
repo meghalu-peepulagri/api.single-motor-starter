@@ -2,7 +2,6 @@ import { getFailureReason } from "./control-helpers.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 
 type ScheduleType = "TIME_BASED" | "CYCLIC";
-
 const VALID_SCHEDULE_TYPES: ScheduleType[] = ["TIME_BASED", "CYCLIC"];
 
 function isObject(value: unknown): value is Record<string, any> {
