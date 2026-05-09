@@ -94,7 +94,6 @@ export function evaluateScheduleStatus(
 
   const startMinutes = timeToMinutes(schedule.start_time);
   const endMinutes = timeToMinutes(schedule.end_time);
-  const effectiveRuntime = schedule.actual_run_time || schedule.runtime_minutes;
   const isTodayValid = isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek);
 
   // ── PENDING → RUNNING / COMPLETED / WAITING_NEXT_CYCLE ──
@@ -142,30 +141,20 @@ export function evaluateScheduleStatus(
 
   // ── RUNNING → COMPLETED / PARTIAL / MISSED / WAITING_NEXT_CYCLE ──
   if (schedule.schedule_status === "RUNNING") {
-    let shouldComplete = false;
+    // No actual data from device yet — stay RUNNING, do not touch DB
+    if (!schedule.actual_start_time) return null;
 
-    if (hasPassedEndTime(currentMinutes, startMinutes, endMinutes)) {
-      shouldComplete = true;
-    }
+    // Device has not reported completion yet — wait
+    const hasActualCompletion = schedule.actual_run_time != null || schedule.actual_end_time != null;
+    if (!hasActualCompletion) return null;
 
-    if (!shouldComplete && effectiveRuntime && schedule.last_started_at) {
-      const elapsedMs = now.getTime() - new Date(schedule.last_started_at).getTime();
-      const elapsedMinutes = elapsedMs / 60000;
-      if (elapsedMinutes >= effectiveRuntime) {
-        shouldComplete = true;
+    if (schedule.repeat === 1) {
+      if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
+        return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
       }
+      return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
     }
-
-    if (shouldComplete) {
-      if (schedule.repeat === 1) {
-        if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-          return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
-        }
-        return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
-      }
-      return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
-    }
-    return null;
+    return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
   }
 
   // ── WAITING_NEXT_CYCLE → RUNNING / COMPLETED / PARTIAL / MISSED ──
