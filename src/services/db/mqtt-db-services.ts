@@ -994,7 +994,7 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
 
     await db.transaction(async (trx) => {
       if (mode !== motor.mode) {
-        if (mode == "MANUAL" || mode == "AUTO") {
+        if (mode == "MANUAL" || mode == "AUTO" || mode == "SCHEDULE") {
           await trx.update(motors).set({ mode: mode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
         }
       }
