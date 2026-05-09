@@ -384,7 +384,10 @@ export function buildScheduleTimeline(record: any): any {
   if (record.last_started_at) events.push({ event: "RUNNING", timestamp: new Date(record.last_started_at).toISOString() });
   if (record.paused_at) events.push({ event: "PAUSED", timestamp: new Date(record.paused_at).toISOString() });
   if (record.restarted_at) events.push({ event: "RESTARTED", timestamp: new Date(record.restarted_at).toISOString() });
-  if (record.last_stopped_at) events.push({ event: record.schedule_status === "MISSED" ? "MISSED" : "STOPPED", timestamp: new Date(record.last_stopped_at).toISOString() });
+  if (record.last_stopped_at) {
+    const terminalEventMap: Record<string, string> = { MISSED: "MISSED", PARTIAL: "PARTIAL" };
+    events.push({ event: terminalEventMap[record.schedule_status] ?? "STOPPED", timestamp: new Date(record.last_stopped_at).toISOString() });
+  }
   if (record.failure_at) events.push({ event: "FAILED", timestamp: new Date(record.failure_at).toISOString() });
   if (record.deleted_at) events.push({ event: "DELETED", timestamp: new Date(record.deleted_at).toISOString() });
   if (record.edited_at) events.push({ event: "EDITED", timestamp: new Date(record.edited_at).toISOString() });
@@ -403,6 +406,13 @@ export function buildScheduleTimeline(record: any): any {
     end_time: record.end_time,
     schedule_start_date: record.schedule_start_date,
     schedule_end_date: record.schedule_end_date,
+    actual_start_time: record.actual_start_time,
+    actual_end_time: record.actual_end_time,
+    runtime_minutes: record.runtime_minutes,
+    actual_run_time: record.actual_run_time,
+    failure_reason: record.failure_reason,
+    missed_minutes: record.missed_minutes,
+    failure_at: record.failure_at,
     repeat: record.repeat,
     created_at: record.created_at,
     events,
