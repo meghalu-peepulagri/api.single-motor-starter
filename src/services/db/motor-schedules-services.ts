@@ -455,7 +455,7 @@ export async function findPendingSchedulesForSync() {
  */
 export async function batchUpdateScheduleStatuses(
   groups: {
-    status: "RUNNING" | "COMPLETED" | "WAITING_NEXT_CYCLE";
+    status: "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "WAITING_NEXT_CYCLE";
     ids: number[];
     last_started_at?: Date;
     last_stopped_at?: Date;
@@ -484,7 +484,7 @@ export async function batchUpdateScheduleStatuses(
     if (group.completed_at) setData.completed_at = group.completed_at;
 
     // Reset actual fields for the next run cycle
-    if (group.status === "WAITING_NEXT_CYCLE" || group.status === "COMPLETED") {
+    if (["COMPLETED", "PARTIAL", "MISSED", "WAITING_NEXT_CYCLE"].includes(group.status)) {
       setData.actual_start_time = null;
       setData.actual_end_time = null;
       setData.actual_run_time = null;
@@ -666,6 +666,10 @@ export async function findScheduleHistoryByMotorAndStarter(
       schedule_status: motorSchedules.schedule_status,
       start_time: motorSchedules.start_time,
       end_time: motorSchedules.end_time,
+        actual_start_time: motorSchedules.actual_start_time,
+      actual_end_time: motorSchedules.actual_end_time,
+      actual_run_time: motorSchedules.actual_run_time,
+      missed_minutes: motorSchedules.missed_minutes,
       schedule_start_date: motorSchedules.schedule_start_date,
       schedule_end_date: motorSchedules.schedule_end_date,
       repeat: motorSchedules.repeat,
@@ -709,7 +713,13 @@ export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<
   const toEvaluate = records.filter(r => EVALUATABLE_STATUSES_ON_READ.includes(r.schedule_status));
   if (toEvaluate.length === 0) return;
 
-  const groups = { RUNNING: [] as number[], COMPLETED: [] as number[], WAITING_NEXT_CYCLE: [] as number[] };
+  const groups = {
+    RUNNING: [] as number[],
+    COMPLETED: [] as number[],
+    PARTIAL: [] as number[],
+    MISSED: [] as number[],
+    WAITING_NEXT_CYCLE: [] as number[],
+  };
 
   for (const s of toEvaluate) {
     const res = evaluateScheduleStatus(s as ScheduleForEvaluation, now);
@@ -724,6 +734,8 @@ export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<
   await batchUpdateScheduleStatuses([
     { status: "RUNNING",            ids: groups.RUNNING,            last_started_at: now },
     { status: "COMPLETED",          ids: groups.COMPLETED,          last_stopped_at: now, completed_at: now },
+    { status: "PARTIAL",            ids: groups.PARTIAL,            last_stopped_at: now },
+    { status: "MISSED",             ids: groups.MISSED,             last_stopped_at: now },
     { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
   ]);
 }

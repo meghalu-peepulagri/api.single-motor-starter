@@ -242,7 +242,7 @@ export interface ScheduleForEvaluation {
 
 export interface ScheduleStatusUpdate {
   id: number;
-  newStatus: "RUNNING" | "COMPLETED" | "WAITING_NEXT_CYCLE";
+  newStatus: "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "WAITING_NEXT_CYCLE";
   last_started_at?: Date;
   last_stopped_at?: Date;
 }
@@ -304,7 +304,7 @@ export type previousPreparedLiveData = {
     created_by: number | null;
     id: number;
     name: string;
-    mode: "AUTO" | "MANUAL"
+    mode: "AUTO" | "MANUAL" | "SCHEDULE"
     location_id: number | null;
     hp: string;
     state: number;

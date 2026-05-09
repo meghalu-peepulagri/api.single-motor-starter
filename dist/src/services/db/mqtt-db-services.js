@@ -83,7 +83,7 @@ export async function selectTopicAck(topicType, payload, topic) {
             return null;
     }
 }
-const VALID_MODES = ["AUTO", "MANUAL"];
+const VALID_MODES = ["AUTO", "MANUAL", "SCHEDULE"];
 async function getLockedMotorSnapshot(trx, motorId) {
     const [motorRecord] = await trx
         .select({

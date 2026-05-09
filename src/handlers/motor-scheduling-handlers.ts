@@ -367,18 +367,27 @@ export class MotorScheduleHandler {
       if (!schedules || schedules.length === 0) return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, { evaluated: 0, updated: 0, transitions: [] });
 
       const transitions: any[] = [];
-      const groups = { RUNNING: [] as number[], COMPLETED: [] as number[], WAITING_NEXT_CYCLE: [] as number[] };
+      const groups = {
+        RUNNING: [] as number[],
+        COMPLETED: [] as number[],
+        PARTIAL: [] as number[],
+        MISSED: [] as number[],
+        WAITING_NEXT_CYCLE: [] as number[],
+      };
 
       for (const s of schedules) {
         const res = evaluateScheduleStatus(s as ScheduleForEvaluation, now);
         if (!res) continue;
-        groups[res.newStatus as keyof typeof groups].push(res.id);
+        const key = res.newStatus as keyof typeof groups;
+        if (groups[key]) groups[key].push(res.id);
         transitions.push({ schedule_id: res.id, from: s.schedule_status, to: res.newStatus });
       }
 
       await batchUpdateScheduleStatuses([
-        { status: "RUNNING", ids: groups.RUNNING, last_started_at: now },
-        { status: "COMPLETED", ids: groups.COMPLETED, completed_at: now },
+        { status: "RUNNING",            ids: groups.RUNNING,            last_started_at: now },
+        { status: "COMPLETED",          ids: groups.COMPLETED,          last_stopped_at: now, completed_at: now },
+        { status: "PARTIAL",            ids: groups.PARTIAL,            last_stopped_at: now },
+        { status: "MISSED",             ids: groups.MISSED,             last_stopped_at: now },
         { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
       ]);
 
