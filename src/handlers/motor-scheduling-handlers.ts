@@ -279,6 +279,7 @@ export class MotorScheduleHandler {
     try {
       const data = await c.req.json();
       const scheduleIds: number[] = data.schedule_ids;
+      const slotUpdates: { id: number; schedule_id: number }[] | undefined = data.slot_updates;
 
       if (!scheduleIds || !Array.isArray(scheduleIds) || scheduleIds.length === 0) {
         throw new BadRequestException("Array of schedule ids required");
@@ -287,6 +288,17 @@ export class MotorScheduleHandler {
       await db.update(motorSchedules)
         .set({ acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" })
         .where(inArray(motorSchedules.id, scheduleIds));
+
+      // Fix 3: update schedule_id (device slot) per record if device confirmed a different slot
+      if (slotUpdates && Array.isArray(slotUpdates) && slotUpdates.length > 0) {
+        await Promise.all(
+          slotUpdates.map(({ id, schedule_id }) =>
+            db.update(motorSchedules)
+              .set({ schedule_id })
+              .where(inArray(motorSchedules.id, [id]))
+          )
+        );
+      }
 
       return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
     } catch (error: any) {
