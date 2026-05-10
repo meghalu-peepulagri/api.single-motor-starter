@@ -407,6 +407,13 @@
       "when": 1778307856354,
       "tag": "0057_redundant_sheva_callister",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1778401946883,
+      "tag": "0058_green_luckman",
+      "breakpoints": true
     }
   ]
 }

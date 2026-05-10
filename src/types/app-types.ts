@@ -235,6 +235,7 @@ export interface ScheduleForEvaluation {
   runtime_minutes: number | null;
   last_started_at: Date | null;
   enabled: boolean;
+  acknowledgement?: number | null;     // 0 = not acknowledged by device, 1 = acknowledged
   actual_start_time?: string | null;
   actual_end_time?: string | null;
   actual_run_time?: number | null;
@@ -242,7 +243,7 @@ export interface ScheduleForEvaluation {
 
 export interface ScheduleStatusUpdate {
   id: number;
-  newStatus: "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "WAITING_NEXT_CYCLE";
+  newStatus: "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
   last_started_at?: Date;
   last_stopped_at?: Date;
 }

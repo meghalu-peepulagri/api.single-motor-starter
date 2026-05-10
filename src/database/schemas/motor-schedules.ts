@@ -12,7 +12,8 @@ export const scheduleStatusEnum = pgEnum("schedule_status", [
   "STOPPED",             // Stopped manually (cmd=1)
   "COMPLETED",           // Ran full planned duration
   "PARTIAL",             // Started but stopped before planned duration
-  "MISSED",              // Time window passed, motor never started
+  "MISSED",              // Device received schedule but motor never started within the window
+  "UNDELIVERED",         // Device never acknowledged the schedule and the time window has closed
   "FAILED",              // Device execution failed
   "CANCELLED",           // Cancelled by user/system
   "DELETED",             // Deleted (cmd=3)

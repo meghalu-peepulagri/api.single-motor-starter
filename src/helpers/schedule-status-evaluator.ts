@@ -53,7 +53,7 @@ function resolveTerminalStatus(
 
   let newStatus: "COMPLETED" | "PARTIAL" | "MISSED";
 
-  if (!hasActualStart) {
+  if (!hasActualStart || actualRunTime === 0) {
     newStatus = "MISSED";
   } else if (actualRunTime !== null && actualRunTime >= plannedMinutes - 1) {
     newStatus = "COMPLETED";
@@ -78,58 +78,81 @@ export function evaluateScheduleStatus(
   const startMinutes = timeToMinutes(schedule.start_time);
   const endMinutes = timeToMinutes(schedule.end_time);
   const windowPassed = hasPassedEndTime(currentMinutes, startMinutes, endMinutes);
-  const hasActualCompletion = schedule.actual_run_time != null || schedule.actual_end_time != null;
+  // actual_end_time is the true completion signal — actual_run_time is a live counter, not a stop signal
+  const deviceReportedEnd = schedule.actual_end_time != null;
 
   // ── PENDING / SCHEDULED ──
   if (schedule.schedule_status === "PENDING" || schedule.schedule_status === "SCHEDULED") {
-    // Device reported actual start → use actual times
     if (schedule.actual_start_time) {
-      if (!hasActualCompletion) return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
-
-      if (schedule.repeat === 1) {
-        if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-          return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+      if (deviceReportedEnd) {
+        // Device sent actual_end_time → motor has stopped, resolve terminal
+        if (schedule.repeat === 1) {
+          if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
+            return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+          }
+          return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
         }
-        return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
+        return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
       }
-      return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+
+      // No actual_end_time → motor is still running or connection dropped
+      if (!windowPassed) return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
+
+      // Window closed, no end time from device
+      const hasRunData = schedule.actual_run_time != null && schedule.actual_run_time > 0;
+      if (hasRunData) return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
+      return { id: schedule.id, newStatus: "FAILED", last_stopped_at: now };
     }
 
-    // No actual start — use scheduled window only to detect MISSED
+    // No actual start
     if (!isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek)) return null;
 
     if (windowPassed) {
+      // No ACK → device never received the schedule, window gone → FAILED
+      if (schedule.acknowledgement === 0) return { id: schedule.id, newStatus: "FAILED", last_stopped_at: now };
+
       if (schedule.repeat === 1) {
         if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
           return resolveTerminalStatus(schedule, startMinutes, endMinutes, now); // → MISSED
         }
         return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
       }
-      return resolveTerminalStatus(schedule, startMinutes, endMinutes, now); // → MISSED (actual_start_time null)
+      return resolveTerminalStatus(schedule, startMinutes, endMinutes, now); // → MISSED
     }
 
-    return null; // window not yet passed, wait
+    return null;
   }
 
   // ── RUNNING ──
   if (schedule.schedule_status === "RUNNING") {
-    // Device reported actual start and completion → resolve
-    if (schedule.actual_start_time && hasActualCompletion) {
-      if (schedule.repeat === 1) {
-        if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-          return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+    if (schedule.actual_start_time) {
+      if (deviceReportedEnd) {
+        // Device sent actual_end_time → motor has stopped, resolve terminal
+        if (schedule.repeat === 1) {
+          if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
+            return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+          }
+          return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
         }
-        return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
+        return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
       }
+
+      // No actual_end_time but window closed → resolve based on run data
+      if (windowPassed) {
+        const hasRunData = schedule.actual_run_time != null && schedule.actual_run_time > 0;
+        if (hasRunData) return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
+        return { id: schedule.id, newStatus: "FAILED", last_stopped_at: now };
+      }
+
+      return null; // window open, still running
+    }
+
+    // No actual start but window passed → MISSED
+    if (windowPassed) {
       return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
     }
 
-    // No actual data but window has passed → force MISSED
-    if (!schedule.actual_start_time && windowPassed) {
-      return resolveTerminalStatus(schedule, startMinutes, endMinutes, now); // → MISSED
-    }
-
-    return null; // still running or waiting for device report
+    return null;
   }
 
   // ── WAITING_NEXT_CYCLE ──
@@ -139,11 +162,11 @@ export function evaluateScheduleStatus(
     }
 
     if (schedule.actual_start_time) {
-      if (!hasActualCompletion) return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
+      if (!deviceReportedEnd) return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
       return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
     }
 
-    return null; // wait for device to report
+    return null;
   }
 
   return null;

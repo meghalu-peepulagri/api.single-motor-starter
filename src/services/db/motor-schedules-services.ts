@@ -455,7 +455,7 @@ export async function findPendingSchedulesForSync() {
  */
 export async function batchUpdateScheduleStatuses(
   groups: {
-    status: "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "WAITING_NEXT_CYCLE";
+    status: "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
     ids: number[];
     last_started_at?: Date;
     last_stopped_at?: Date;
@@ -483,12 +483,6 @@ export async function batchUpdateScheduleStatuses(
     if (group.last_stopped_at) setData.last_stopped_at = group.last_stopped_at;
     if (group.completed_at) setData.completed_at = group.completed_at;
 
-    // Reset actual fields for the next run cycle
-    if (["COMPLETED", "PARTIAL", "MISSED", "WAITING_NEXT_CYCLE"].includes(group.status)) {
-      setData.actual_start_time = null;
-      setData.actual_end_time = null;
-      setData.actual_run_time = null;
-    }
 
     const result = await db
       .update(motorSchedules)
@@ -718,6 +712,7 @@ export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<
     COMPLETED: [] as number[],
     PARTIAL: [] as number[],
     MISSED: [] as number[],
+    FAILED: [] as number[],
     WAITING_NEXT_CYCLE: [] as number[],
   };
 
@@ -736,6 +731,7 @@ export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<
     { status: "COMPLETED",          ids: groups.COMPLETED,          last_stopped_at: now, completed_at: now },
     { status: "PARTIAL",            ids: groups.PARTIAL,            last_stopped_at: now },
     { status: "MISSED",             ids: groups.MISSED,             last_stopped_at: now },
+    { status: "FAILED",             ids: groups.FAILED,             last_stopped_at: now },
     { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
   ]);
 }
