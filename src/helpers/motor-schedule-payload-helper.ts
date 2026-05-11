@@ -353,9 +353,9 @@ export function formatMotorScheduleResponse(record: any, queryDate?: number): an
     schedule_type: scheduleType,
     schedule_status: displayStatus,
     days_of_week: Array.isArray(rest.days_of_week) ? rest.days_of_week : [],
-    start_time: rest.actual_start_time ?? rest.start_time,
-    end_time: rest.actual_end_time ?? rest.end_time,
-    runtime_minutes: rest.actual_run_time ?? rest.runtime_minutes,
+    start_time: rest.start_time,
+    end_time: rest.end_time,
+    runtime_minutes: rest.runtime_minutes,
     failure_reason_description: getFailureReason(rest.failure_reason),
     failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
   };
