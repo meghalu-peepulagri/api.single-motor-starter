@@ -731,7 +731,7 @@ export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<
     { status: "COMPLETED",          ids: groups.COMPLETED,          last_stopped_at: now, completed_at: now },
     { status: "PARTIAL",            ids: groups.PARTIAL,            last_stopped_at: now },
     { status: "MISSED",             ids: groups.MISSED,             last_stopped_at: now },
-    { status: "FAILED",             ids: groups.FAILED,             last_stopped_at: now },
+    { status: "FAILED",             ids: groups.FAILED },
     { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
   ]);
 }

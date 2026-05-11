@@ -101,7 +101,7 @@ export function evaluateScheduleStatus(
       // Window closed, no end time from device
       const hasRunData = schedule.actual_run_time != null && schedule.actual_run_time > 0;
       if (hasRunData) return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
-      return { id: schedule.id, newStatus: "FAILED", last_stopped_at: now };
+      return { id: schedule.id, newStatus: "FAILED" };
     }
 
     // No actual start
@@ -109,7 +109,7 @@ export function evaluateScheduleStatus(
 
     if (windowPassed) {
       // No ACK → device never received the schedule, window gone → FAILED
-      if (schedule.acknowledgement === 0) return { id: schedule.id, newStatus: "FAILED", last_stopped_at: now };
+      if (schedule.acknowledgement === 0) return { id: schedule.id, newStatus: "FAILED" };
 
       if (schedule.repeat === 1) {
         if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
@@ -141,7 +141,7 @@ export function evaluateScheduleStatus(
       if (windowPassed) {
         const hasRunData = schedule.actual_run_time != null && schedule.actual_run_time > 0;
         if (hasRunData) return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
-        return { id: schedule.id, newStatus: "FAILED", last_stopped_at: now };
+        return { id: schedule.id, newStatus: "FAILED" };
       }
 
       return null; // window open, still running
