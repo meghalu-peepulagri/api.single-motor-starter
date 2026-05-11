@@ -49,13 +49,14 @@ function resolveTerminalStatus(
     : (1440 - startMinutes) + endMinutes;
 
   const hasActualStart = !!schedule.actual_start_time;
+  const hasActualEnd = !!schedule.actual_end_time;
   const actualRunTime = schedule.actual_run_time ?? null;
 
   let newStatus: "COMPLETED" | "PARTIAL" | "MISSED";
 
-  if (!hasActualStart || actualRunTime === 0) {
+  if (!hasActualStart) {
     newStatus = "MISSED";
-  } else if (actualRunTime !== null && actualRunTime >= plannedMinutes - 1) {
+  } else if (hasActualEnd && actualRunTime !== null && actualRunTime >= plannedMinutes - 1) {
     newStatus = "COMPLETED";
   } else {
     newStatus = "PARTIAL";
@@ -98,10 +99,8 @@ export function evaluateScheduleStatus(
       // No actual_end_time → motor is still running or connection dropped
       if (!windowPassed) return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
 
-      // Window closed, no end time from device
-      const hasRunData = schedule.actual_run_time != null && schedule.actual_run_time > 0;
-      if (hasRunData) return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
-      return { id: schedule.id, newStatus: "FAILED" };
+      // Window closed, no actual_end_time — started but device never reported end → PARTIAL
+      return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
     }
 
     // No actual start
@@ -137,11 +136,9 @@ export function evaluateScheduleStatus(
         return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
       }
 
-      // No actual_end_time but window closed → resolve based on run data
+      // No actual_end_time but window closed — started but device never reported end → PARTIAL
       if (windowPassed) {
-        const hasRunData = schedule.actual_run_time != null && schedule.actual_run_time > 0;
-        if (hasRunData) return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
-        return { id: schedule.id, newStatus: "FAILED" };
+        return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
       }
 
       return null; // window open, still running
