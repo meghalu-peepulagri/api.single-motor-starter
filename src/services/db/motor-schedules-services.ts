@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, SQL, sql, getTableColumns, desc } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, notInArray, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
@@ -32,7 +32,7 @@ import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { evaluateScheduleStatus } from "../../helpers/schedule-status-evaluator.js";
 import type { ScheduleForEvaluation } from "../../types/app-types.js";
 
-const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
+const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE", "STOPPED", "RESTARTED"] as const;
 
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
   // Find the lowest schedule_id from deleted/archived rows
@@ -72,16 +72,18 @@ export async function findConflictingSchedules(
   scheduleStartDate?: number | null,
   scheduleEndDate?: number | null,
   daysOfWeek: number[] = [],
-  excludeScheduleId?: number,
+  excludeScheduleIds?: number | number[],
 ) {
+  const excludeIds = excludeScheduleIds === undefined ? [] : Array.isArray(excludeScheduleIds) ? excludeScheduleIds : [excludeScheduleIds];
+
   const conditions: SQL[] = [
     eq(motorSchedules.motor_id, motorId),
     ne(motorSchedules.status, "ARCHIVED"),
     inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]),
   ];
 
-  if (excludeScheduleId) {
-    conditions.push(ne(motorSchedules.id, excludeScheduleId));
+  if (excludeIds.length > 0) {
+    conditions.push(notInArray(motorSchedules.id, excludeIds));
   }
 
   // Build date/day filter: match by date range overlap OR overlapping days

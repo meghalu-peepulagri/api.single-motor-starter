@@ -199,7 +199,7 @@ export class MotorScheduleHandler {
       if (cmd === undefined || cmd === null) throw new BadRequestException(SCHEDULE_CMD_REQUIRED);
       if (cmd !== 1 && cmd !== 2) throw new BadRequestException(INVALID_SCHEDULE_CMD);
 
-      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "schedule_status"]);
+      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "motor_id", "schedule_status", "start_time", "end_time", "schedule_start_date", "schedule_end_date", "repeat", "days_of_week"]);
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       if (cmd === 1) {
@@ -208,6 +208,9 @@ export class MotorScheduleHandler {
         await stopScheduleById(scheduleId);
         return sendResponse(c, 200, SCHEDULE_STOPPED);
       }
+
+      const conflicts = await findConflictingSchedules(existed.motor_id, existed.schedule_start_date, existed.schedule_end_date, existed.days_of_week ?? [], scheduleId);
+      checkMotorScheduleConflict(existed, conflicts);
 
       await restartScheduleById(scheduleId);
       return sendResponse(c, 200, SCHEDULE_RESTARTED);
@@ -344,6 +347,16 @@ export class MotorScheduleHandler {
     try {
       const { ids }: { ids: number[] } = await c.req.json();
       if (!ids || !Array.isArray(ids) || ids.length === 0) throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
+
+      const schedules = await db.query.motorSchedules.findMany({
+        where: inArray(motorSchedules.id, ids),
+        columns: { id: true, motor_id: true, start_time: true, end_time: true, schedule_start_date: true, schedule_end_date: true, repeat: true, days_of_week: true },
+      });
+
+      for (const schedule of schedules) {
+        const conflicts = await findConflictingSchedules(schedule.motor_id, schedule.schedule_start_date, schedule.schedule_end_date, schedule.days_of_week ?? [], ids);
+        checkMotorScheduleConflict(schedule, conflicts);
+      }
 
       await restartSchedulesByIds(ids);
       return sendResponse(c, 200, BULK_SCHEDULES_RESTARTED, { restarted_count: ids.length });
