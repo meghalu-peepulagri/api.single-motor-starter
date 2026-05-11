@@ -152,6 +152,19 @@ export function evaluateScheduleStatus(
     return null;
   }
 
+  // ── PARTIAL ──
+  if (schedule.schedule_status === "PARTIAL") {
+    if (deviceReportedEnd && schedule.actual_run_time != null) {
+      const plannedMinutes = endMinutes > startMinutes
+        ? endMinutes - startMinutes
+        : (1440 - startMinutes) + endMinutes;
+      if (schedule.actual_run_time >= plannedMinutes - 1) {
+        return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+      }
+    }
+    return null;
+  }
+
   // ── WAITING_NEXT_CYCLE ──
   if (schedule.schedule_status === "WAITING_NEXT_CYCLE") {
     if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {

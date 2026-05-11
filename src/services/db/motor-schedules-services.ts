@@ -508,7 +508,7 @@ export async function findEvaluatableSchedules() {
     where: and(
       eq(motorSchedules.enabled, true),
       ne(motorSchedules.status, "ARCHIVED"),
-      inArray(motorSchedules.schedule_status, ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE"]),
+      inArray(motorSchedules.schedule_status, ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"]),
     ),
     columns: {
       id: true,
@@ -548,6 +548,8 @@ export async function updateActualScheduleFields(
   },
   trx: DbTransaction
 ) {
+  const now = new Date();
+
   await trx
     .update(motorSchedules)
     .set({
@@ -558,7 +560,7 @@ export async function updateActualScheduleFields(
       missed_minutes: actualData.missed_minutes ?? 0,
       failure_at: actualData.failure_at ?? null,
       failure_reason: actualData.failure_reason ?? null,
-      updated_at: new Date(),
+      updated_at: now,
     })
     .where(
       and(
@@ -569,6 +571,24 @@ export async function updateActualScheduleFields(
         sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`,
       )
     );
+
+  // If device reported actual_end_time and run_time matches planned → upgrade to COMPLETED
+  if (actualData.actual_end_time && actualData.actual_run_time !== null) {
+    await trx
+      .update(motorSchedules)
+      .set({ schedule_status: "COMPLETED", completed_at: now, last_stopped_at: now, updated_at: now })
+      .where(
+        and(
+          eq(motorSchedules.motor_id, motorId),
+          eq(motorSchedules.starter_id, starterId),
+          eq(motorSchedules.schedule_id, scheduleId),
+          sql`${motorSchedules.status} != 'ARCHIVED'`,
+          sql`${motorSchedules.runtime_minutes} IS NOT NULL`,
+          sql`${motorSchedules.actual_run_time} >= ${motorSchedules.runtime_minutes} - 1`,
+          inArray(motorSchedules.schedule_status, ["PARTIAL", "RUNNING", "SCHEDULED", "PENDING"]),
+        )
+      );
+  }
 }
 
 export async function bulkCreateMotorSchedules(
@@ -702,7 +722,7 @@ export async function findScheduleHistoryByMotorAndStarter(
 
 // =================== ON-READ STATUS EVALUATION ===================
 
-const EVALUATABLE_STATUSES_ON_READ = ["PENDING", "SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE"];
+const EVALUATABLE_STATUSES_ON_READ = ["PENDING", "SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"];
 
 export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<void> {
   const now = new Date();
