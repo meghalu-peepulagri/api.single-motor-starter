@@ -606,6 +606,7 @@ export async function getMotorsTotalRunOnTime(motorIds: number[]) {
   // Default to today's date range in IST
   const IST = "Asia/Kolkata";
   const { toZonedTime, fromZonedTime } = await import("date-fns-tz");
+  // @ts-ignore — date-fns v4 missing index.d.ts for NodeNext ESM resolution
   const { startOfDay, endOfDay } = await import("date-fns");
   const nowIST = toZonedTime(new Date(), IST);
   const fromDateObj = fromZonedTime(startOfDay(nowIST), IST);
