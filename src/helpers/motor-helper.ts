@@ -388,6 +388,7 @@ export function checkMotorScheduleConflict(
   },
   existingSchedules: Array<{
     id: number;
+    schedule_id?: number;
     start_time: string;
     end_time: string;
     schedule_start_date?: number | null;
@@ -403,6 +404,7 @@ export function checkMotorScheduleConflict(
 
     const conflictInfo = {
       conflicting_schedule_id: existing.id,
+      conflicting_schedule_slot: existing.schedule_id,
       existing_start_time: existing.start_time,
       existing_end_time: existing.end_time,
       existing_date: existing.schedule_start_date || null,

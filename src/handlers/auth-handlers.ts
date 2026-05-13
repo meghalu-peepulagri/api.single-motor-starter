@@ -1,5 +1,6 @@
 import argon2 from "argon2";
 import type { Context } from "hono";
+// @ts-ignore — date-fns v4 missing index.d.ts for NodeNext ESM resolution
 import { isBefore } from "date-fns";
 import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, MOBILE_NUMBER_ALREADY_EXIST, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";

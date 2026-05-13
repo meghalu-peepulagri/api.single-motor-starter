@@ -119,6 +119,7 @@ export async function findConflictingSchedules(
     where: and(...conditions),
     columns: {
       id: true,
+      schedule_id: true,
       start_time: true,
       end_time: true,
       schedule_start_date: true,
