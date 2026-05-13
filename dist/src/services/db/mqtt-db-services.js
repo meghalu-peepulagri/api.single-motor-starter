@@ -23,22 +23,67 @@ import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./
 import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
+// Postgres deadlock code. Concurrent MQTT messages for the same device can
+// race on (starter_boxes, motors) row locks; the loser is killed with 40P01.
+// The transaction was never committed, so a simple retry is safe.
+const PG_DEADLOCK_CODE = "40P01";
+const PG_SERIALIZATION_CODE = "40001";
+async function withDeadlockRetry(label, fn, maxAttempts = 5) {
+    let attempt = 0;
+    while (true) {
+        try {
+            return await fn();
+        }
+        catch (err) {
+            const code = err?.cause?.code ?? err?.code;
+            const isRetryable = code === PG_DEADLOCK_CODE || code === PG_SERIALIZATION_CODE;
+            attempt++;
+            if (!isRetryable || attempt >= maxAttempts)
+                throw err;
+            // Exponential backoff with jitter: 50ms → 100ms → 200ms → 400ms, +0-100ms jitter.
+            const backoffMs = 50 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100);
+            logger?.warn?.(`[${label}] ${code} on attempt ${attempt} — retrying in ${backoffMs}ms`);
+            await new Promise(r => setTimeout(r, backoffMs));
+        }
+    }
+}
+// Per-device serialization. Concurrent MQTT messages for the SAME starter_id
+// would otherwise race on the same (starter_boxes, motors) rows and deadlock
+// repeatedly even with retries. By chaining work per key, only one tx for a
+// given device runs at a time. Different devices remain fully parallel.
+const deviceLocks = new Map();
+function runSerializedPerDevice(starterId, fn) {
+    // Without a starter_id we can't shard; fall through unserialised.
+    if (!starterId)
+        return fn();
+    const prev = deviceLocks.get(starterId) ?? Promise.resolve();
+    const next = prev.catch(() => undefined).then(fn);
+    deviceLocks.set(starterId, next);
+    // Clean up the map entry once this tail is the current one and it's done,
+    // so the Map doesn't grow forever for short-lived devices.
+    next.finally(() => {
+        if (deviceLocks.get(starterId) === next)
+            deviceLocks.delete(starterId);
+    });
+    return next;
+}
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {
+    const starterId = insertedData?.starter_id;
     switch (groupId) {
         case "G01": //  Live data topic
-            await updateStates(insertedData, previousData);
+            await runSerializedPerDevice(starterId, () => withDeadlockRetry("updateStates", () => updateStates(insertedData, previousData)));
             break;
         case "G02":
             // Update Device power & motor state to ON
-            await updateDevicePowerAndMotorStateToON(insertedData, previousData);
+            await runSerializedPerDevice(starterId, () => withDeadlockRetry("updateDevicePowerAndMotorStateToON", () => updateDevicePowerAndMotorStateToON(insertedData, previousData)));
             break;
         case "G03":
             // Update Device power On & motor state to Off
-            await updateDevicePowerONAndMotorStateOFF(insertedData, previousData);
+            await runSerializedPerDevice(starterId, () => withDeadlockRetry("updateDevicePowerONAndMotorStateOFF", () => updateDevicePowerONAndMotorStateOFF(insertedData, previousData)));
             break;
         case "G04":
-            await updateDevicePowerAndMotorStateOFF(insertedData, previousData);
+            await runSerializedPerDevice(starterId, () => withDeadlockRetry("updateDevicePowerAndMotorStateOFF", () => updateDevicePowerAndMotorStateOFF(insertedData, previousData)));
             break;
         default:
             return null;

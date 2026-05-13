@@ -594,7 +594,9 @@ export async function updateActualScheduleFields(
         eq(motorSchedules.schedule_id, scheduleId),
         eq(motorSchedules.schedule_start_date, today),
         sql`${motorSchedules.status} != 'ARCHIVED'`,
-        sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED', 'ARCHIVED', 'COMPLETED', 'MISSED', 'FAILED')`,
+        // 'ARCHIVED' is intentionally NOT listed here — it belongs to the separate
+        // motorSchedules.status column (already filtered above), not schedule_status.
+        sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED', 'COMPLETED', 'MISSED', 'FAILED')`,
       )
     );
 
