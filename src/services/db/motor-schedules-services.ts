@@ -563,6 +563,10 @@ export async function updateActualScheduleFields(
   trx: DbTransaction
 ) {
   const now = new Date();
+  // schedule_id is a device slot (1–32) reused across many records — one row per
+  // day for repeating schedules. Without a date filter the update would clobber
+  // every row sharing this slot. Today's row is the one the device is reporting on.
+  const today = todayAsYYMMDD();
 
   // Recompute actual_run_time from wall-clock window (seconds-inclusive end minute)
   // so device-reported integer-floor doesn't make a fully-run schedule look short.
@@ -588,8 +592,9 @@ export async function updateActualScheduleFields(
         eq(motorSchedules.motor_id, motorId),
         eq(motorSchedules.starter_id, starterId),
         eq(motorSchedules.schedule_id, scheduleId),
+        eq(motorSchedules.schedule_start_date, today),
         sql`${motorSchedules.status} != 'ARCHIVED'`,
-        sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`,
+        sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED', 'ARCHIVED', 'COMPLETED', 'MISSED', 'FAILED')`,
       )
     );
 
@@ -603,6 +608,7 @@ export async function updateActualScheduleFields(
           eq(motorSchedules.motor_id, motorId),
           eq(motorSchedules.starter_id, starterId),
           eq(motorSchedules.schedule_id, scheduleId),
+          eq(motorSchedules.schedule_start_date, today),
           sql`${motorSchedules.status} != 'ARCHIVED'`,
           sql`${motorSchedules.runtime_minutes} IS NOT NULL`,
           sql`${motorSchedules.actual_run_time} >= ${motorSchedules.runtime_minutes}`,
