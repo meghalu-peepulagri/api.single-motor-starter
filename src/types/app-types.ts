@@ -231,6 +231,7 @@ export interface ScheduleForEvaluation {
   schedule_start_date: number | null;  // Numeric YYMMDD (e.g., 260415)
   schedule_end_date: number | null;    // Numeric YYMMDD (e.g., 260416)
   days_of_week: number[];
+  bit_wise_days?: number | null;  // active-day bitmask; cleared bit = stopped day
   repeat: number;
   runtime_minutes: number | null;
   last_started_at: Date | null;

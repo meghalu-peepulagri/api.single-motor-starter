@@ -249,6 +249,14 @@ export function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
+// Wall-clock minutes between two HHMM timestamps. Handles midnight crossover.
+// "1015" → "1020" returns 5.
+export function wallClockMinutes(startHHMM: string, endHHMM: string): number {
+  const s = timeToMinutes(startHHMM);
+  const e = timeToMinutes(endHHMM);
+  return e >= s ? e - s : (1440 - s) + e;
+}
+
 /**
  * Check if two time ranges overlap, accounting for midnight crossing.
  * Each range is [start, end) in 4-digit HHMM string format (e.g., "0600", "1430").

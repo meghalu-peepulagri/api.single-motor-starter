@@ -53,6 +53,9 @@ motorScheduleRoute.patch("/bulk/ack", isAuthorized, motorScheduleHandler.bulkUpd
 // Add repeat days to an existing schedule
 motorScheduleRoute.patch("/repeat-days/:id", isAuthorized, motorScheduleHandler.addRepeatDaysHandler);
 
+// Per-day stop / restart / delete  { action: "stop"|"restart"|"delete", day: 0-6 }
+motorScheduleRoute.patch("/:id/days", isAuthorized, motorScheduleHandler.updateDayBitmaskHandler);
+
 // Ack schedule (mark as acknowledged)
 motorScheduleRoute.patch("/:id/ack", isAuthorized, motorScheduleHandler.updateAcknowledgementHandler);
 

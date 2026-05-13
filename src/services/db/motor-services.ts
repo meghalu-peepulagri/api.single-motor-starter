@@ -17,7 +17,6 @@ import { writeDeviceStatusHistoryIfChanged } from "./status-history-services.js"
 
 // Extract transaction type from Drizzle's db.transaction callback
 type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
-
 export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?: string | null; hp?: number | null }>, trx?: DbTransaction): Promise<void> {
   if (!motorsToUpdate || motorsToUpdate.length === 0) return;
 

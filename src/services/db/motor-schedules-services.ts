@@ -9,13 +9,15 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import {
   buildScheduleData,
   dateToYYMMDD,
+  expandDateRangeByDays,
   normalizeMotorSchedulePayload,
   todayAsYYMMDD
 } from "../../helpers/motor-schedule-payload-helper.js";
 import {
   checkIntraArrayConflicts,
   checkMotorScheduleConflict,
-  validateScheduleTypeRules
+  validateScheduleTypeRules,
+  wallClockMinutes
 } from "../../helpers/motor-helper.js";
 import { validatedRequest } from "../../validations/validate-request.js";
 import {
@@ -35,8 +37,6 @@ import type { ScheduleForEvaluation } from "../../types/app-types.js";
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE", "STOPPED", "RESTARTED"] as const;
 
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
-  // Find the lowest schedule_id from deleted/archived rows
-  // that is NOT used by any active row for the same motor
   const reusable = await db
     .select({ scheduleId: motorSchedules.schedule_id })
     .from(motorSchedules)
@@ -149,8 +149,7 @@ export async function findScheduleByScheduleId(scheduleId: number) {
   });
 }
 
-// =================== SCHEDULE LOOKUP QUERIES ===================
-
+// =================== SCHEDULE LOOKUP QUERIES ==================
 /**
  * Find an active schedule by its ID (for stop operation).
  */
@@ -164,8 +163,7 @@ export async function findActiveScheduleById(scheduleId: number) {
 }
 
 /**
- * Find all active/pending schedules for a motor (for stop-all operation).
- */
+ * Find all active/pending schedules for a motor (for stop-all operation). */
 export async function findAllActiveSchedulesForMotor(motorId: number) {
   return await db.query.motorSchedules.findMany({
     where: and(
@@ -311,6 +309,20 @@ export async function findSchedulesByFilters(
   } else if (filters.schedule_start_date) {
     conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_start_date));
     conditions.push(gte(motorSchedules.schedule_end_date, filters.schedule_start_date));
+    // For repeat schedules: only return records whose days_of_week includes the queried day
+    const queriedDate = String(filters.schedule_start_date).padStart(6, "0");
+    const yyyy = 2000 + parseInt(queriedDate.slice(0, 2), 10);
+    const mm   = parseInt(queriedDate.slice(2, 4), 10) - 1;
+    const dd   = parseInt(queriedDate.slice(4, 6), 10);
+    const dow  = new Date(Date.UTC(yyyy, mm, dd)).getUTCDay(); // 0=Sun..6=Sat
+    conditions.push(
+      sql`(
+        ${motorSchedules.repeat} = 0
+        OR array_length(${motorSchedules.days_of_week}, 1) IS NULL
+        OR array_length(${motorSchedules.days_of_week}, 1) = 0
+        OR ${motorSchedules.days_of_week} @> ARRAY[${dow}]::int[]
+      )`
+    );
   } else if (filters.schedule_end_date) {
     conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_end_date));
   }
@@ -519,6 +531,7 @@ export async function findEvaluatableSchedules() {
       schedule_start_date: true,
       schedule_end_date: true,
       days_of_week: true,
+      bit_wise_days: true,
       repeat: true,
       runtime_minutes: true,
       last_started_at: true,
@@ -550,14 +563,21 @@ export async function updateActualScheduleFields(
 ) {
   const now = new Date();
 
+  // Recompute actual_run_time from wall-clock window (seconds-inclusive end minute)
+  // so device-reported integer-floor doesn't make a fully-run schedule look short.
+  let computedRunTime = actualData.actual_run_time;
+  if (actualData.actual_start_time && actualData.actual_end_time) {
+    computedRunTime = wallClockMinutes(actualData.actual_start_time, actualData.actual_end_time);
+  }
+
   await trx
     .update(motorSchedules)
     .set({
       actual_start_time: actualData.actual_start_time,
       actual_end_time: actualData.actual_end_time,
-      actual_run_time: actualData.actual_run_time,
+      actual_run_time: computedRunTime,
       actual_type: actualData.actual_type,
-      missed_minutes: actualData.missed_minutes ?? 0,
+      missed_minutes: sql`GREATEST(COALESCE(${motorSchedules.runtime_minutes}, 0) - COALESCE(${computedRunTime}, 0), 0)`,
       failure_at: actualData.failure_at ?? null,
       failure_reason: actualData.failure_reason ?? null,
       updated_at: now,
@@ -572,8 +592,8 @@ export async function updateActualScheduleFields(
       )
     );
 
-  // If device reported actual_end_time and run_time matches planned → upgrade to COMPLETED
-  if (actualData.actual_end_time && actualData.actual_run_time !== null) {
+  // If device reported actual_end_time and run_time meets planned → upgrade to COMPLETED
+  if (actualData.actual_end_time && computedRunTime !== null) {
     await trx
       .update(motorSchedules)
       .set({ schedule_status: "COMPLETED", completed_at: now, last_stopped_at: now, updated_at: now })
@@ -584,7 +604,7 @@ export async function updateActualScheduleFields(
           eq(motorSchedules.schedule_id, scheduleId),
           sql`${motorSchedules.status} != 'ARCHIVED'`,
           sql`${motorSchedules.runtime_minutes} IS NOT NULL`,
-          sql`${motorSchedules.actual_run_time} >= ${motorSchedules.runtime_minutes} - 1`,
+          sql`${motorSchedules.actual_run_time} >= ${motorSchedules.runtime_minutes}`,
           inArray(motorSchedules.schedule_status, ["PARTIAL", "RUNNING", "SCHEDULED", "PENDING"]),
         )
       );
@@ -625,14 +645,35 @@ export async function bulkCreateMotorSchedules(
     return { ...data, schedule_start_date: scheduleStartDate, schedule_end_date: scheduleEndDate };
   });
 
+  // 3b. Expand schedules that have a date range + specific days_of_week into
+  //     individual per-day records. This ensures the device (which only receives
+  //     sd/ed without days_of_week) runs only on the selected days.
+  const expandedList: typeof preparedList = [];
+  for (const item of preparedList) {
+    const hasDays = Array.isArray(item.days_of_week) && item.days_of_week.length > 0;
+    const hasRange = item.schedule_start_date < item.schedule_end_date!;
+
+    if (hasDays && hasRange) {
+      const dates = expandDateRangeByDays(item.schedule_start_date, item.schedule_end_date!, item.days_of_week!);
+      if (dates.length === 0) {
+        throw new BadRequestException("No matching dates found for the selected days within the given date range");
+      }
+      for (const date of dates) {
+        expandedList.push({ ...item, schedule_start_date: date, schedule_end_date: date, repeat: 0, days_of_week: [], bit_wise_days: 0 });
+      }
+    } else {
+      expandedList.push(item);
+    }
+  }
+
   // 4. Multi-layer Conflict Detection
   // Layer A: Check for overlaps within the requested batch itself
-  checkIntraArrayConflicts(preparedList);
+  checkIntraArrayConflicts(expandedList);
 
   // Layer B: Check against existing schedules in the database
-  const startDates = preparedList.map((s) => s.schedule_start_date!);
-  const endDates = preparedList.map((s) => s.schedule_end_date!);
-  const allDays = Array.from(new Set(preparedList.flatMap((s) => s.days_of_week || [])));
+  const startDates = expandedList.map((s) => s.schedule_start_date!);
+  const endDates = expandedList.map((s) => s.schedule_end_date!);
+  const allDays = Array.from(new Set(expandedList.flatMap((s) => s.days_of_week || [])));
 
   const existingInDb = await findConflictingSchedules(
     motorId,
@@ -641,14 +682,14 @@ export async function bulkCreateMotorSchedules(
     allDays,
   );
 
-  for (const schedule of preparedList) {
+  for (const schedule of expandedList) {
     checkMotorScheduleConflict(schedule, existingInDb);
   }
 
   // 5. Finalize data and perform Bulk Database Insertion
   // const startingScheduleId = await getNextScheduleIdForMotor(motorId);
 
-  const finalPayload = preparedList.map((item, index) => ({
+  const finalPayload = expandedList.map((item) => ({
     ...buildScheduleData(item, item.schedule_start_date!),
     schedule_id: item.schedule_id,
     created_by: userId,
@@ -657,6 +698,56 @@ export async function bulkCreateMotorSchedules(
   }));
 
   return await saveRecords(motorSchedules, finalPayload as any);
+}
+
+// =================== PER-DAY BITMASK UPDATE ===================
+
+/**
+ * Stop a specific day: clear its bit in bit_wise_days only.
+ * days_of_week is NOT touched — the day is still "known" so it can be restarted.
+ */
+export async function stopDayInSchedule(scheduleId: number, day: number) {
+  return await db
+    .update(motorSchedules)
+    .set({
+      bit_wise_days: sql`${motorSchedules.bit_wise_days} & ~(1 << ${day})`,
+      updated_at: new Date(),
+    })
+    .where(eq(motorSchedules.id, scheduleId))
+    .returning({ id: motorSchedules.id, bit_wise_days: motorSchedules.bit_wise_days, days_of_week: motorSchedules.days_of_week });
+}
+
+/**
+ * Restart a specific day: set its bit back in bit_wise_days.
+ * Only valid if the day is still in days_of_week.
+ */
+export async function restartDayInSchedule(scheduleId: number, day: number) {
+  return await db
+    .update(motorSchedules)
+    .set({
+      bit_wise_days: sql`${motorSchedules.bit_wise_days} | (1 << ${day})`,
+      updated_at: new Date(),
+    })
+    .where(and(
+      eq(motorSchedules.id, scheduleId),
+      sql`${motorSchedules.days_of_week} @> ARRAY[${day}]::int[]`,
+    ))
+    .returning({ id: motorSchedules.id, bit_wise_days: motorSchedules.bit_wise_days, days_of_week: motorSchedules.days_of_week });
+}
+
+/**
+ * Delete a specific day permanently: remove from days_of_week + recalculate bit_wise_days.
+ */
+export async function deleteDayFromSchedule(scheduleId: number, day: number) {
+  return await db
+    .update(motorSchedules)
+    .set({
+      days_of_week: sql`array_remove(${motorSchedules.days_of_week}, ${day})`,
+      bit_wise_days: sql`${motorSchedules.bit_wise_days} & ~(1 << ${day})`,
+      updated_at: new Date(),
+    })
+    .where(eq(motorSchedules.id, scheduleId))
+    .returning({ id: motorSchedules.id, bit_wise_days: motorSchedules.bit_wise_days, days_of_week: motorSchedules.days_of_week });
 }
 
 // =================== SCHEDULE HISTORY ===================

@@ -26,7 +26,16 @@ function isTodayValidForSchedule(
 ): boolean {
   if (schedule.repeat === 1) {
     if (schedule.days_of_week.length === 0) return true;
-    return schedule.days_of_week.map(Number).includes(currentDayOfWeek);
+
+    // Is today an intended day?
+    if (!schedule.days_of_week.map(Number).includes(currentDayOfWeek)) return false;
+
+    // Is today's day currently active (not stopped via bit_wise_days)?
+    if (schedule.bit_wise_days != null) {
+      return !!((schedule.bit_wise_days >> currentDayOfWeek) & 1);
+    }
+
+    return true;
   }
   return schedule.schedule_start_date === currentDateNum;
 }
@@ -56,7 +65,7 @@ function resolveTerminalStatus(
 
   if (!hasActualStart) {
     newStatus = "MISSED";
-  } else if (hasActualEnd && actualRunTime !== null && actualRunTime >= plannedMinutes - 1) {
+  } else if (hasActualEnd && actualRunTime !== null && actualRunTime >= plannedMinutes) {
     newStatus = "COMPLETED";
   } else {
     newStatus = "PARTIAL";
@@ -158,7 +167,7 @@ export function evaluateScheduleStatus(
       const plannedMinutes = endMinutes > startMinutes
         ? endMinutes - startMinutes
         : (1440 - startMinutes) + endMinutes;
-      if (schedule.actual_run_time >= plannedMinutes - 1) {
+      if (schedule.actual_run_time >= plannedMinutes) {
         return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
       }
     }

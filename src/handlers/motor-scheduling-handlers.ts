@@ -62,6 +62,7 @@ import {
   evaluateAndUpdateSchedulesOnRead,
   bulkCreateMotorSchedules,
   cancelSchedulesByIds,
+  deleteDayFromSchedule,
   findActiveScheduleById,
   findAllActiveSchedulesForMotor,
   findConflictingSchedules,
@@ -69,8 +70,10 @@ import {
   findPendingSchedulesForSync,
   findScheduleHistoryByMotorAndStarter,
   findSchedulesByFilters,
+  restartDayInSchedule,
   restartScheduleById,
   restartSchedulesByIds,
+  stopDayInSchedule,
   stopScheduleById
 } from "../services/db/motor-schedules-services.js";
 import type { ScheduleForEvaluation } from "../types/app-types.js";
@@ -419,6 +422,54 @@ export class MotorScheduleHandler {
       return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, { evaluated: schedules.length, updated: transitions.length, transitions });
     } catch (error: any) {
       handleAppError(error, "sync schedule statuses");
+    }
+  };
+
+  // =================== PER-DAY BITMASK UPDATE ===================
+  // PATCH /motor-schedules/:id/days
+  // Body: { action: "stop" | "restart" | "delete", day: 0-6 }
+  updateDayBitmaskHandler = async (c: Context) => {
+    try {
+      const scheduleId = +c.req.param("id");
+      paramsValidateException.validateId(scheduleId, "schedule id");
+
+      const { action, day } = await c.req.json();
+
+      if (!["stop", "restart", "delete"].includes(action))
+        throw new BadRequestException("action must be stop | restart | delete");
+      if (!Number.isInteger(day) || day < 0 || day > 6)
+        throw new BadRequestException("day must be an integer 0–6 (0=Sun … 6=Sat)");
+
+      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "days_of_week", "bit_wise_days", "schedule_status"]) as any;
+      if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      if (action === "stop") {
+        await stopDayInSchedule(scheduleId, day);
+        return sendResponse(c, 200, "Day stopped");
+      }
+
+      if (action === "restart") {
+        if (!existed.days_of_week?.includes(day))
+          throw new BadRequestException("Cannot restart a day that was permanently deleted");
+        await restartDayInSchedule(scheduleId, day);
+        return sendResponse(c, 200, "Day restarted");
+      }
+
+      // action === "delete"
+      const remainingDays = (existed.days_of_week ?? []).filter((d: number) => d !== day);
+      await deleteDayFromSchedule(scheduleId, day);
+
+      // If no days remain, delete the whole record
+      if (remainingDays.length === 0) {
+        await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, {
+          schedule_status: "DELETED", enabled: false,
+        });
+        return sendResponse(c, 200, "Day deleted — schedule removed (no days remaining)");
+      }
+
+      return sendResponse(c, 200, "Day deleted");
+    } catch (error: any) {
+      handleAppError(error, "update day bitmask");
     }
   };
 

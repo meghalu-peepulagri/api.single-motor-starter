@@ -189,6 +189,33 @@ export function dateToYYMMDD(date: Date): number {
   return yy * 10000 + mm * 100 + dd;
 }
 
+/** Convert a YYMMDD number to a UTC midnight Date object */
+function yymmddToDate(yymmdd: number): Date {
+  const yy = Math.floor(yymmdd / 10000);
+  const mm = Math.floor((yymmdd % 10000) / 100);
+  const dd = yymmdd % 100;
+  return new Date(Date.UTC(2000 + yy, mm - 1, dd));
+}
+
+/**
+ * Expand a YYMMDD date range into individual dates matching the given days of week.
+ * Returns YYMMDD numbers only for dates whose day-of-week is in daysOfWeek.
+ * Days: 0=Sunday, 1=Monday, ..., 6=Saturday.
+ */
+export function expandDateRangeByDays(startDate: number, endDate: number, daysOfWeek: number[]): number[] {
+  if (daysOfWeek.length === 0) return [];
+  const result: number[] = [];
+  const current = yymmddToDate(startDate);
+  const end = yymmddToDate(endDate);
+  while (current <= end) {
+    if (daysOfWeek.includes(current.getUTCDay())) {
+      result.push(dateToYYMMDD(current));
+    }
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return result;
+}
+
 function inferScheduleType(payload: Record<string, any>): ScheduleType {
   // Accept cy: 1 = CYCLIC, cy: 0 or absent = TIME_BASED
   if (payload.cy === 1) return "CYCLIC";
@@ -245,6 +272,14 @@ function normalizeSingleSchedulePayload(payload: Record<string, any>): Record<st
   const finalStartTime = startTime ?? payload.start_time;
   const finalEndTime = hasEndInput ? (explicitEnd ?? rawEndInput) : (endTime ?? payload.end_time);
 
+  // Derive bit_wise_days from days_of_week if not supplied
+  const rawBitWiseDays = payload.bit_wise_days !== undefined ? payload.bit_wise_days : undefined;
+  const derivedBitWiseDays = rawBitWiseDays !== undefined
+    ? rawBitWiseDays
+    : daysOfWeek.length > 0
+      ? daysOfWeek.reduce((m: number, d: number) => m | (1 << d), 0)
+      : 0;
+
   const normalized: Record<string, any> = {
     ...payload,
     schedule_type: scheduleType,
@@ -256,6 +291,7 @@ function normalizeSingleSchedulePayload(payload: Record<string, any>): Record<st
     cycle_on_minutes: cycleOnMinutes ?? payload.cycle_on_minutes,
     cycle_off_minutes: cycleOffMinutes ?? payload.cycle_off_minutes,
     days_of_week: daysOfWeek,
+    bit_wise_days: derivedBitWiseDays,
   };
 
   // power_loss_recovery: keep explicit input for validation; default CYCLIC to false only if not provided
@@ -440,6 +476,14 @@ function toCompactSchedule(record: any): Record<string, any> | null {
     en: record.enabled ? 1 : 0,
     pwr_rec: record.power_loss_recovery ? 1 : 0,
   };
+
+  // Send active-day bitmask to firmware when repeat schedule has specific days
+  if (record.repeat === 1 && record.bit_wise_days != null && record.bit_wise_days > 0) {
+    item.dow = record.bit_wise_days;
+  } else if (record.repeat === 1 && Array.isArray(record.days_of_week) && record.days_of_week.length > 0) {
+    // Derive from days_of_week if bit_wise_days missing
+    item.dow = record.days_of_week.reduce((m: number, d: number) => m | (1 << d), 0);
+  }
 
   // CYCLIC format adds: {cy, on, off}
   if (isCyclic) {
