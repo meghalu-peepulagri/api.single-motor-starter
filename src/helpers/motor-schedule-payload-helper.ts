@@ -459,20 +459,47 @@ export function buildScheduleTimeline(record: any): any {
 const MAX_SCHEDULES_PER_DEVICE = 12;
 const MAX_ITEMS_PER_CHUNK = 8;
 
+/**
+ * Combine a YYMMDD date and HHMM time (both in IST) into a UTC epoch second.
+ * Device needs absolute timestamps (st_ep / ed_ep) so it can act independently
+ * of its own clock-format assumptions.
+ */
+function yymmddHhmmToEpochSeconds(yymmdd: number, hhmm: number | string): number {
+  const dateStr = String(yymmdd).padStart(6, "0");
+  const yy = parseInt(dateStr.slice(0, 2), 10);
+  const mo = parseInt(dateStr.slice(2, 4), 10) - 1;
+  const dd = parseInt(dateStr.slice(4, 6), 10);
+
+  const timeStr = String(hhmm).padStart(4, "0");
+  const hh = parseInt(timeStr.slice(0, 2), 10);
+  const mi = parseInt(timeStr.slice(2, 4), 10);
+
+  // Date.UTC builds the instant as if Y/M/D h:m were UTC. We want IST (UTC+5:30),
+  // so subtract the IST offset to land on the correct UTC instant.
+  const utcMs = Date.UTC(2000 + yy, mo, dd, hh, mi, 0) - IST_OFFSET_MS;
+  return Math.floor(utcMs / 1000);
+}
+
 /** Format a single schedule record into compact m1 item based on schedule type */
 function toCompactSchedule(record: any): Record<string, any> | null {
   // Skip schedules without valid start date
   if (!record.schedule_start_date) return null;
 
   const isCyclic = record.schedule_type === "CYCLIC";
+  const sd = record.schedule_start_date;
+  const ed = record.schedule_end_date ?? record.schedule_start_date;
+  const stRaw = parseInt(record.start_time, 10);
+  const etRaw = parseInt(record.end_time, 10);
 
-  // TIME_BASED format: {id, sd, ed, st, et, en, pwr_rec}
+  // TIME_BASED format: {id, sd, ed, st, et, st_ep, ed_ep, en, pwr_rec}
   const item: Record<string, any> = {
     id: record.schedule_id,
-    sd: record.schedule_start_date,
-    ed: record.schedule_end_date ?? record.schedule_start_date,
-    st: parseInt(record.start_time, 10),
-    et: parseInt(record.end_time, 10),
+    sd,
+    ed,
+    st: stRaw,
+    et: etRaw,
+    st_ep: yymmddHhmmToEpochSeconds(sd, stRaw),
+    ed_ep: yymmddHhmmToEpochSeconds(ed, etRaw),
     en: record.enabled ? 1 : 0,
     pwr_rec: record.power_loss_recovery ? 1 : 0,
   };

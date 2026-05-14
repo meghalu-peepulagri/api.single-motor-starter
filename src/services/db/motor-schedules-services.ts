@@ -462,6 +462,56 @@ export async function findPendingSchedulesForSync() {
   });
 }
 
+/**
+ * Fetch unacknowledged, PENDING schedules for ONE starter (and optionally one motor)
+ * within the today→+2 day window. Used by the heartbeat-driven push path: when a
+ * device pings us we already know its id, so we skip the cross-starter join the
+ * cron version does.
+ */
+export async function findPendingSchedulesForStarter(starterId: number, motorId?: number) {
+  const today = new Date();
+  const twoDaysLater = new Date(today);
+  twoDaysLater.setDate(today.getDate() + 2);
+  const todayNum = dateToYYMMDD(today);
+  const lastDayNum = dateToYYMMDD(twoDaysLater);
+
+  const conditions = [
+    eq(motorSchedules.starter_id, starterId),
+    eq(motorSchedules.acknowledgement, 0),
+    ne(motorSchedules.status, "ARCHIVED"),
+    inArray(motorSchedules.schedule_status, ["PENDING"]),
+    gte(motorSchedules.schedule_start_date, todayNum),
+    lte(motorSchedules.schedule_start_date, lastDayNum),
+  ];
+  if (motorId != null) {
+    conditions.push(eq(motorSchedules.motor_id, motorId));
+  }
+
+  return await db.query.motorSchedules.findMany({
+    where: and(...conditions),
+    columns: {
+      id: true,
+      starter_id: true,
+      schedule_id: true,
+      schedule_type: true,
+      schedule_start_date: true,
+      schedule_end_date: true,
+      start_time: true,
+      end_time: true,
+      runtime_minutes: true,
+      cycle_on_minutes: true,
+      cycle_off_minutes: true,
+      repeat: true,
+      days_of_week: true,
+      bit_wise_days: true,
+      power_loss_recovery: true,
+      power_loss_recovery_time: true,
+      enabled: true,
+    },
+    orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
+  });
+}
+
 // =================== BATCH STATUS UPDATE FOR SYNC ===================
 
 /**

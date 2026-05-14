@@ -24,6 +24,7 @@ import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./
 import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
+import { pushPendingSchedulesForStarter } from "../../helpers/schedule-sync-helper.js";
 // Postgres deadlock code. Concurrent MQTT messages for the same device can
 // race on (starter_boxes, motors) row locks; the loser is killed with 40P01.
 // The transaction was never committed, so a simple retry is safe.
@@ -1106,6 +1107,30 @@ export async function heartbeatHandler(message: any, topic: string) {
 
       if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
     });
+
+    // Heartbeat-driven schedule push: whenever the device is online (signal 1–30),
+    // check for unacknowledged schedules and push them. The push helper early-returns
+    // if there are no pending rows, so calling it on every heartbeat is cheap
+    // (one DB query) — but it means a freshly created schedule reaches the device
+    // on the very next heartbeat, regardless of prior connection state.
+    // Fire-and-forget so the heartbeat handler never blocks on MQTT ACK timeouts.
+    const isNowOnline = strength != null && strength >= 1 && strength <= 30;
+    if (isNowOnline) {
+      const motorList = Array.isArray((validMac as any).motors) ? (validMac as any).motors : [];
+      setImmediate(() => {
+        if (motorList.length === 0) {
+          pushPendingSchedulesForStarter(validMac).catch((err) =>
+            logger.error(`heartbeat schedule push failed for starter ${validMac.id}: ${err?.message}`),
+          );
+          return;
+        }
+        for (const motor of motorList) {
+          pushPendingSchedulesForStarter(validMac, motor.id).catch((err) =>
+            logger.error(`heartbeat schedule push failed for starter ${validMac.id} motor ${motor.id}: ${err?.message}`),
+          );
+        }
+      });
+    }
   } catch (error: any) {
     console.error("Error at heartbeat topic handler:", error);
     throw error;

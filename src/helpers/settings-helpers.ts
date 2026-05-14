@@ -570,9 +570,7 @@ export const publishMultipleTimesInBackground = async (
   const ackWaitTimesInSeconds = [10, 10, 3];
 
   // Use the SAME identifier that publishData uses for publishing
-  const publishedKey = starterDetails.device_allocation === "false"
-    ? starterDetails.mac_address
-    : starterDetails.pcb_number;
+  const publishedKey = starterDetails.device_allocation === "false" ? starterDetails.mac_address : starterDetails.pcb_number;
 
   if (!publishedKey) {
     logger.error(`No valid publish key found for starter ${starterDetails.id}`);
