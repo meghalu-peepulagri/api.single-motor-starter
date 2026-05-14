@@ -483,10 +483,20 @@ export class MotorScheduleHandler {
       const starters = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, grouped.map(g => g.starter_id)));
       const starterMap = new Map(starters.map(s => [s.id, s]));
 
-      let totalDevices = 0, totalChunks = 0;
+      const isOnline = (sq: number | null | undefined) => sq != null && sq >= 1 && sq <= 30;
+
+      let totalDevices = 0, totalChunks = 0, skippedOffline = 0;
       for (const { starter_id, chunks } of grouped) {
         const starter = starterMap.get(starter_id);
         if (!starter) continue;
+
+        // Skip offline devices — signal_quality outside 1–30 means inactive/offline.
+        // Without this, every offline device burns ~23s waiting for ACK that never comes.
+        if (!isOnline(starter.signal_quality)) {
+          skippedOffline++;
+          continue;
+        }
+
         totalDevices++;
         for (const { payload, dbIds } of chunks) {
           totalChunks++;
@@ -495,7 +505,7 @@ export class MotorScheduleHandler {
           }
         }
       }
-      return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: totalDevices, total_chunks: totalChunks });
+      return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: totalDevices, total_chunks: totalChunks, skipped_offline: skippedOffline });
     } catch (error: any) {
       handleAppError(error, "get pending schedules for sync");
     }
