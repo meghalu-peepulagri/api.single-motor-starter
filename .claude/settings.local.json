@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npx drizzle-kit *)",
       "Bash(Get-ChildItem -Path \"D:\\\\orotron\\\\Single-motor-Starter\\\\peepulagri-api.single-motor-starter\\\\src\" -Recurse -Include \"*schedule*\")",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(where pandoc *)",
+      "Bash(pandoc --version)"
     ]
   }
 }

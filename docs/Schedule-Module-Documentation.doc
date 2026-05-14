@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8">
+<title>Motor Schedule Module — Complete Documentation</title>
+<!--[if gte mso 9]>
+<xml>
+  <w:WordDocument>
+    <w:View>Print</w:View>
+    <w:Zoom>100</w:Zoom>
+    <w:DoNotOptimizeForBrowser/>
+  </w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+  @page WordSection1 { size: 8.5in 11.0in; margin: 1.0in 0.9in 1.0in 0.9in; }
+  div.WordSection1 { page: WordSection1; }
+  body { font-family: 'Calibri', 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1a1a1a; line-height: 1.45; }
+  h1 { font-size: 22pt; color: #0b3a82; border-bottom: 3px solid #0b3a82; padding-bottom: 6px; margin-top: 18px; }
+  h2 { font-size: 16pt; color: #0b3a82; border-bottom: 1px solid #aac6f0; padding-bottom: 3px; margin-top: 22px; }
+  h3 { font-size: 13pt; color: #0b5394; margin-top: 18px; }
+  h4 { font-size: 11.5pt; color: #1a4e8a; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px 0; }
+  th, td { border: 1px solid #6f7a8a; padding: 6px 9px; text-align: left; vertical-align: top; font-size: 10.5pt; }
+  th { background: #e7eef9; color: #0b3a82; font-weight: bold; }
+  tr:nth-child(even) td { background: #f5f8fc; }
+  code, pre { font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; }
+  pre { background: #f3f4f6; border: 1px solid #d0d7de; padding: 9px 11px; margin: 6px 0 12px 0; white-space: pre-wrap; }
+  code { background: #f3f4f6; padding: 1px 4px; border-radius: 2px; }
+  .note { background: #fff8d6; border-left: 4px solid #d4a017; padding: 8px 12px; margin: 10px 0; }
+  .warn { background: #fde9e9; border-left: 4px solid #c0392b; padding: 8px 12px; margin: 10px 0; }
+  .ok   { background: #e7f6ec; border-left: 4px solid #1e8449; padding: 8px 12px; margin: 10px 0; }
+  .meta { color: #555; font-size: 9.5pt; }
+  .small { font-size: 9.5pt; color: #555; }
+  ul, ol { margin: 4px 0 10px 22px; }
+  li { margin-bottom: 3px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 9.5pt; color: #fff; }
+  .b-pending { background: #6c757d; }
+  .b-scheduled { background: #2563eb; }
+  .b-running { background: #16a34a; }
+  .b-completed { background: #0e7490; }
+  .b-partial { background: #d97706; }
+  .b-missed { background: #b45309; }
+  .b-failed { background: #b91c1c; }
+  .b-stopped { background: #475569; }
+  .b-cancelled { background: #4b5563; }
+  .b-deleted { background: #1f2937; }
+  .b-waiting { background: #7c3aed; }
+  .b-undelivered { background: #9f1239; }
+  .toc { background: #f5f8fc; border: 1px solid #c5d3e8; padding: 10px 16px; margin: 12px 0 20px 0; }
+  .toc ol { margin-left: 18px; }
+</style>
+</head>
+<body>
+<div class="WordSection1">
+
+<h1>Motor Schedule Module — Complete Documentation</h1>
+<p class="meta">
+  Backend: <code>orotron\Single-motor-Starter\peepulagri-api.single-motor-starter</code><br>
+  Frontend: <code>orotron\idhara\admin-app.singlestarter.com</code><br>
+  Audience: Backend engineers, frontend engineers, QA, support.
+</p>
+
+<div class="toc">
+  <strong>Table of Contents</strong>
+  <ol>
+    <li><a href="#overview">Module Overview</a></li>
+    <li><a href="#data-model">Data Model — motor_schedules</a></li>
+    <li><a href="#statuses">Schedule Statuses</a></li>
+    <li><a href="#creation">Schedule Creation Flow</a></li>
+    <li><a href="#date-ranges">Date Range Cases — Single Day / Two Days / Many Days</a></li>
+    <li><a href="#mqtt">MQTT Publish — Device Sync</a></li>
+    <li><a href="#payload">Device Payload Format (T:3)</a></li>
+    <li><a href="#heartbeat">Heartbeat-Driven Auto Sync</a></li>
+    <li><a href="#status-flow">Status Transitions &amp; Reporting</a></li>
+    <li><a href="#edge-cases">Edge Cases &amp; Error Handling</a></li>
+    <li><a href="#api">REST API Surface</a></li>
+  </ol>
+</div>
+
+<h2 id="overview">1. Module Overview</h2>
+
+<p>
+The Motor Schedule module lets a user schedule when a connected motor should run.
+A schedule is created by the operator through the Admin app, stored in
+<code>motor_schedules</code>, and delivered to the physical starter device over
+MQTT. The device then runs the motor at the configured times.
+</p>
+
+<p>Schedules support two execution modes:</p>
+<ul>
+  <li><strong>TIME_BASED</strong> — motor runs from <code>start_time</code> to <code>end_time</code> (optionally for <code>runtime_minutes</code>).</li>
+  <li><strong>CYCLIC</strong> — motor cycles ON for <code>cycle_on_minutes</code>, OFF for <code>cycle_off_minutes</code>, repeating within the window.</li>
+</ul>
+
+<p>A schedule can be:</p>
+<ul>
+  <li><strong>Single-day</strong> — runs on one specific date.</li>
+  <li><strong>Date range</strong> — runs on every day inside the range.</li>
+  <li><strong>Repeating</strong> — runs on selected <code>days_of_week</code>, either inside a date range or indefinitely.</li>
+</ul>
+
+<h2 id="data-model">2. Data Model — <code>motor_schedules</code></h2>
+
+<p>Source: <code>src/database/schemas/motor-schedules.ts</code>.</p>
+
+<table>
+  <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+  <tr><td><code>id</code></td><td>serial PK</td><td>Internal row id.</td></tr>
+  <tr><td><code>motor_id</code></td><td>int FK</td><td>Owning motor.</td></tr>
+  <tr><td><code>starter_id</code></td><td>int FK</td><td>Physical starter device.</td></tr>
+  <tr><td><code>schedule_id</code></td><td>int</td><td>Per-motor slot (1–32). Device uses this as its slot index. Reused across days of repeating schedules.</td></tr>
+  <tr><td><code>schedule_type</code></td><td>enum</td><td><code>TIME_BASED</code> or <code>CYCLIC</code>.</td></tr>
+  <tr><td><code>schedule_start_date</code> / <code>schedule_end_date</code></td><td>int (YYMMDD)</td><td>e.g., <code>260514</code> = 2026-05-14.</td></tr>
+  <tr><td><code>start_time</code> / <code>end_time</code></td><td>HHMM string</td><td>e.g., <code>"1135"</code>.</td></tr>
+  <tr><td><code>days_of_week</code></td><td>int[]</td><td>0=Sun … 6=Sat. Empty = "not repeating by day".</td></tr>
+  <tr><td><code>bit_wise_days</code></td><td>int</td><td>Bitmask derived from <code>days_of_week</code> (bit0=Sun … bit6=Sat). Sent to firmware.</td></tr>
+  <tr><td><code>runtime_minutes</code></td><td>int</td><td>Planned duration (TIME_BASED).</td></tr>
+  <tr><td><code>cycle_on_minutes</code> / <code>cycle_off_minutes</code></td><td>int</td><td>CYCLIC mode.</td></tr>
+  <tr><td><code>repeat</code></td><td>int</td><td>0 = one-shot, 1 = repeat using <code>days_of_week</code>.</td></tr>
+  <tr><td><code>power_loss_recovery</code> / <code>power_loss_recovery_time</code></td><td>bool / int</td><td>Resume after power outage; max recovery window in minutes.</td></tr>
+  <tr><td><code>schedule_status</code></td><td>enum</td><td>Lifecycle state, see §3.</td></tr>
+  <tr><td><code>acknowledgement</code></td><td>int (0/1)</td><td>0 = device has not confirmed receipt; 1 = device acknowledged.</td></tr>
+  <tr><td><code>actual_start_time</code>, <code>actual_end_time</code>, <code>actual_run_time</code>, <code>actual_type</code></td><td>—</td><td>Device-reported execution values.</td></tr>
+  <tr><td><code>missed_minutes</code>, <code>failure_at</code>, <code>failure_reason</code></td><td>—</td><td>Failure telemetry.</td></tr>
+  <tr><td><code>enabled</code>, <code>manually_stopped</code></td><td>bool</td><td>Soft toggle &amp; manual stop flag.</td></tr>
+  <tr><td><code>created_at</code>, <code>updated_at</code>, <code>acknowledged_at</code>, <code>last_started_at</code>, <code>last_stopped_at</code>, <code>paused_at</code>, <code>restarted_at</code>, <code>edited_at</code>, <code>completed_at</code>, <code>deleted_at</code></td><td>timestamps</td><td>Lifecycle audit trail.</td></tr>
+  <tr><td><code>status</code></td><td>enum</td><td>Row-level <code>ACTIVE</code> / <code>ARCHIVED</code>.</td></tr>
+</table>
+
+<div class="note">
+<strong>Why YYMMDD as int?</strong> The device firmware accepts a compact 6-digit date so MQTT payloads are small. <code>260514</code> = 14 May 2026 (IST).
+</div>
+
+<h2 id="statuses">3. Schedule Statuses</h2>
+
+<p>Source: <code>scheduleStatusEnum</code> in <code>motor-schedules.ts</code>.</p>
+
+<table>
+  <tr><th>Status</th><th>Meaning</th><th>Set When</th></tr>
+  <tr><td><span class="badge b-pending">PENDING</span></td><td>Created but device has not yet acknowledged.</td><td>On insert (default).</td></tr>
+  <tr><td><span class="badge b-scheduled">SCHEDULED</span></td><td>Device ACKed receipt; waiting for start time.</td><td>After successful MQTT publish + ACK.</td></tr>
+  <tr><td><span class="badge b-running">RUNNING</span></td><td>Motor is currently executing the schedule.</td><td>When device reports start (live data).</td></tr>
+  <tr><td><span class="badge b-stopped">STOPPED</span></td><td>Manually stopped by user (cmd=1).</td><td>Stop endpoint.</td></tr>
+  <tr><td><span class="badge b-completed">COMPLETED</span></td><td>Ran the full planned duration.</td><td>Device reports actual run time ≥ planned.</td></tr>
+  <tr><td><span class="badge b-partial">PARTIAL</span></td><td>Started but stopped before planned duration.</td><td>Run time &lt; planned.</td></tr>
+  <tr><td><span class="badge b-missed">MISSED</span></td><td>Device received schedule but motor never started inside the window.</td><td>Window passed, no start reported.</td></tr>
+  <tr><td><span class="badge b-undelivered">UNDELIVERED</span></td><td>Device never ACKed and the window has closed.</td><td>Schedule window passed while <code>acknowledgement = 0</code>.</td></tr>
+  <tr><td><span class="badge b-failed">FAILED</span></td><td>Execution failure reported by device (fault, voltage, etc.).</td><td>Device reports failure code.</td></tr>
+  <tr><td><span class="badge b-cancelled">CANCELLED</span></td><td>Cancelled by user/system.</td><td>Cancel API.</td></tr>
+  <tr><td><span class="badge b-deleted">DELETED</span></td><td>Deleted (cmd=3).</td><td>Delete endpoint.</td></tr>
+  <tr><td><span class="badge b-waiting">WAITING_NEXT_CYCLE</span></td><td>Repeat/Cyclic: this cycle done, awaiting next.</td><td>End of a CYCLIC iteration.</td></tr>
+</table>
+
+<h2 id="creation">4. Schedule Creation Flow</h2>
+
+<p>
+The frontend posts a payload to <code>POST /v1.0/motor-schedules</code>. The handler
+calls <code>bulkCreateMotorSchedules</code> in
+<code>src/services/db/motor-schedules-services.ts</code>.
+</p>
+
+<h3>4.1 Step-by-step pipeline</h3>
+
+<ol>
+  <li><strong>Normalize</strong> the payload (<code>normalizeMotorSchedulePayload</code>):
+    accepts loose input formats (e.g., <code>"YYYY-MM-DD"</code>, <code>"HH:MM"</code>,
+    <code>"600"</code>) and converts everything to canonical types
+    (<code>YYMMDD</code> int and <code>HHMM</code> string).</li>
+  <li><strong>Validate</strong> against schema rules (<code>validatedRequest</code>): required
+    fields, time ranges, enum values, type-specific rules.</li>
+  <li><strong>Verify motor exists</strong> and is not <code>ARCHIVED</code>.</li>
+  <li><strong>Fill defaults</strong>: if <code>schedule_start_date</code> is missing → use today
+    (IST); if <code>schedule_end_date</code> is missing → set to start date.</li>
+  <li><strong>Apply schedule-type rules</strong> (<code>validateScheduleTypeRules</code>):
+    e.g., CYCLIC must have <code>cycle_on_minutes</code> / <code>cycle_off_minutes</code>.</li>
+  <li><strong>Expand date range × days_of_week</strong>, see §5.</li>
+  <li><strong>Conflict detection</strong>:
+    <ul>
+      <li>Intra-batch: do any of the rows you're creating overlap each other?</li>
+      <li>DB: do they overlap with already-existing non-archived schedules for this motor?</li>
+    </ul>
+  </li>
+  <li><strong>Build final rows</strong> with <code>buildScheduleData</code>, set
+    <code>schedule_status = "PENDING"</code> and <code>acknowledgement = 0</code>.</li>
+  <li><strong>Bulk insert</strong> via <code>saveRecords</code>.</li>
+</ol>
+
+<div class="ok">
+<strong>End state after creation:</strong> one or more rows in <code>motor_schedules</code>
+with status <code>PENDING</code> and <code>acknowledgement=0</code>. They will be
+delivered to the device on the next heartbeat (§8) or by the
+<code>/sync/pending</code> cron route.
+</div>
+
+<h2 id="date-ranges">5. Date Range Cases — Single Day / Two Days / Many Days</h2>
+
+<p>
+This is the heart of how schedules get materialized into per-day rows.
+The expansion logic lives in <code>bulkCreateMotorSchedules</code> in
+<code>motor-schedules-services.ts</code> and uses
+<code>expandDateRangeByDays</code> from <code>motor-schedule-payload-helper.ts</code>.
+</p>
+
+<h3>5.1 Case A — Single date selected (1 day)</h3>
+
+<p><strong>Input</strong> (frontend):</p>
+<pre>{
+  "motor_id": 12,
+  "starter_id": 748,
+  "schedule_start_date": 260514,
+  "schedule_end_date": 260514,
+  "start_time": "1135",
+  "end_time": "1150",
+  "runtime_minutes": 15,
+  "repeat": 0,
+  "days_of_week": []
+}</pre>
+
+<p><strong>What happens:</strong></p>
+<ul>
+  <li><code>hasDays</code> = false (empty <code>days_of_week</code>)</li>
+  <li><code>hasRange</code> = false (<code>start == end</code>)</li>
+  <li>No expansion. <strong>1 row inserted</strong>.</li>
+  <li>Status: <code>PENDING</code>. ack=0.</li>
+</ul>
+
+<h3>5.2 Case B — Two-day range selected (start ≠ end), no specific days</h3>
+
+<p><strong>Input:</strong></p>
+<pre>{
+  "schedule_start_date": 260514,
+  "schedule_end_date":   260515,
+  "start_time": "0900",
+  "end_time":   "1000",
+  "runtime_minutes": 60,
+  "repeat": 0,
+  "days_of_week": []
+}</pre>
+
+<p><strong>What happens:</strong></p>
+<ul>
+  <li><code>hasDays</code> = false → no day-of-week filter</li>
+  <li><code>hasRange</code> = true (different start/end)</li>
+  <li>The row is inserted as-is with <code>schedule_start_date=260514</code>,
+    <code>schedule_end_date=260515</code>. <strong>1 row</strong>, representing the range.</li>
+  <li>Daily expansion only happens when <code>days_of_week</code> is non-empty (see §5.3).</li>
+</ul>
+
+<div class="note">
+<strong>Interpretation on device:</strong> when the firmware sees <code>sd ≠ ed</code> and no
+day-of-week bitmask, it runs the schedule every day between <code>sd</code> and <code>ed</code>
+(inclusive).
+</div>
+
+<h3>5.3 Case C — Date range + specific days (the expansion case)</h3>
+
+<p><strong>Input:</strong></p>
+<pre>{
+  "schedule_start_date": 260514,   // Thu
+  "schedule_end_date":   260520,   // next Wed
+  "start_time": "0700",
+  "end_time":   "0730",
+  "runtime_minutes": 30,
+  "repeat": 1,
+  "days_of_week": [1, 3]            // Mon, Wed
+}</pre>
+
+<p><strong>What happens (in <code>bulkCreateMotorSchedules</code>):</strong></p>
+<pre>const hasDays  = days_of_week.length > 0;            // true
+const hasRange = schedule_start_date &lt; schedule_end_date;  // true
+
+if (hasDays && hasRange) {
+  const dates = expandDateRangeByDays(start, end, days_of_week);
+  // → e.g. [260518 (Mon), 260520 (Wed)]
+  for (const date of dates) {
+    insert one row with sd=date, ed=date, repeat=0, days_of_week=[], bit_wise_days=0
+  }
+}</pre>
+
+<p><strong>Result:</strong></p>
+<ul>
+  <li>One row per matched date.</li>
+  <li>Each row has identical times but <code>sd == ed</code>.</li>
+  <li><code>repeat</code> is forced to <code>0</code> on the children (they're now single-day occurrences).</li>
+  <li>If no matched dates → <code>BadRequestException</code> "No matching dates found…".</li>
+</ul>
+
+<h3>5.4 Case D — Repeating by days, no end date</h3>
+
+<p>If <code>repeat = 1</code> and the user selects only <code>days_of_week</code> with
+<code>start = today</code>, end omitted (or equal to start), the row is stored once
+with <code>repeat=1</code> and the day bitmask. The device runs it on those weekdays
+indefinitely until cancelled.</p>
+
+<h3>5.5 Summary table</h3>
+
+<table>
+  <tr><th>start</th><th>end</th><th>days_of_week</th><th>repeat</th><th>Rows created</th><th>Notes</th></tr>
+  <tr><td>260514</td><td>260514</td><td>[]</td><td>0</td><td>1</td><td>Single one-shot day.</td></tr>
+  <tr><td>260514</td><td>260515</td><td>[]</td><td>0</td><td>1 (range row)</td><td>Device runs every day in range.</td></tr>
+  <tr><td>260514</td><td>260520</td><td>[1, 3]</td><td>1</td><td>N matched dates</td><td>One row per matching weekday inside range.</td></tr>
+  <tr><td>260514</td><td>260514</td><td>[1, 3]</td><td>1</td><td>1</td><td>Repeats weekly on Mon &amp; Wed (no range expansion).</td></tr>
+</table>
+
+<h2 id="mqtt">6. MQTT Publish — Device Sync</h2>
+
+<h3>6.1 Two paths to publish</h3>
+
+<table>
+  <tr><th>Path</th><th>Trigger</th><th>Best for</th></tr>
+  <tr><td><strong>Heartbeat-driven</strong></td><td>Device sends MQTT heartbeat (every ~30 s).</td><td>Real-time delivery to online devices.</td></tr>
+  <tr><td><strong><code>/sync/pending</code> route</strong></td><td>Cron or manual HTTP call.</td><td>Reconciliation safety net; pushes anything the heartbeat path missed.</td></tr>
+</table>
+
+<h3>6.2 The pending query — what gets sent</h3>
+
+<p>Source: <code>findPendingSchedulesForStarter</code> /
+<code>findPendingSchedulesForSync</code>.</p>
+
+<p>A row qualifies for sync when ALL of these are true:</p>
+<ul>
+  <li><code>acknowledgement = 0</code></li>
+  <li><code>enabled = true</code></li>
+  <li><code>status != 'ARCHIVED'</code></li>
+  <li><code>schedule_status</code> in <code>('PENDING')</code> for the per-starter version (the broader cron path also allows other active states)</li>
+  <li><code>schedule_start_date</code> between <strong>today</strong> and <strong>today+2 days</strong></li>
+</ul>
+
+<div class="warn">
+<strong>Why "today and next 2 days" (= 3-day window)?</strong> The device firmware
+accepts a small set of slots and we don't want to push schedules months in advance
+— they may be edited or cancelled. The cron pushes everything within the next 3
+days; further-out schedules wait their turn.
+</div>
+
+<h3>6.3 Online vs offline filter</h3>
+
+<p>
+Each starter row has a <code>signal_quality</code> column updated on every
+heartbeat. A device is considered <strong>online</strong> when
+<code>1 ≤ signal_quality ≤ 30</code>.
+</p>
+
+<p>The <code>/sync/pending</code> route now <strong>skips offline starters</strong>:</p>
+<pre>const isOnline = (sq) => sq != null && sq >= 1 && sq <= 30;
+if (!isOnline(starter.signal_quality)) { skippedOffline++; continue; }</pre>
+
+<p>This was added to prevent Cloudflare 524 timeouts: each offline device used to burn
+~23 s waiting for ACK that never arrived; 5 offline starters could take the route
+past Cloudflare's 100-second limit.</p>
+
+<h3>6.4 Chunking</h3>
+
+<p>Schedules are grouped per starter and chunked for MQTT
+(<code>buildDeviceSyncPayloads</code>):</p>
+<ul>
+  <li>Per device cap: <code>MAX_SCHEDULES_PER_DEVICE = 12</code> rows.</li>
+  <li>Per chunk cap: <code>MAX_ITEMS_PER_CHUNK = 8</code> rows.</li>
+  <li>Each chunk gets <code>idx</code> (1-based index), <code>last</code> (1 if final), <code>sch_cnt</code> (total valid schedules being sent), and the schedule array <code>m1</code>.</li>
+</ul>
+
+<h3>6.5 Publish retry / ACK</h3>
+
+<p>Each chunk goes through <code>publishMultipleTimesInBackground</code>:</p>
+<ul>
+  <li>3 publish attempts (10 s, 10 s, 3 s ACK waits).</li>
+  <li>Stops on first matching ACK from the device (same sequence number on the matching key).</li>
+  <li>On success: row's <code>schedule_status</code> set to <code>SCHEDULED</code>, <code>acknowledgement = 1</code>, <code>acknowledged_at = now</code>.</li>
+  <li>On failure (all 3 attempts): row stays <code>PENDING</code>, ack=0 — retried on next heartbeat / cron run.</li>
+</ul>
+
+<h2 id="payload">7. Device Payload Format (T:3)</h2>
+
+<p>
+The device receives one MQTT message per chunk on topic
+<code>peepul/&lt;mac_or_pcb&gt;/cmd</code>. Type code <code>T:3</code> = schedule creation.
+</p>
+
+<h3>7.1 Envelope</h3>
+
+<pre>{
+  "T": 3,
+  "S": 223,            // random sequence number (device echoes in ACK)
+  "D": {
+    "idx": 1,          // 1-based chunk index
+    "last": 1,         // 1 = final chunk for this sync call, 0 = more coming
+    "sch_cnt": 2,      // total valid schedules being delivered across all chunks
+    "plr": 30,         // power-loss-recovery time (minutes)
+    "m1": [ /* schedule items */ ]
+  }
+}</pre>
+
+<h3>7.2 Schedule item (inside <code>m1</code>) — TIME_BASED</h3>
+
+<pre>{
+  "id":     2,            // schedule_id (device slot 1–32)
+  "sd":     260514,       // start date YYMMDD
+  "ed":     260514,       // end date YYMMDD
+  "st":     1135,         // start time HHMM (int)
+  "et":     1150,         // end time HHMM (int)
+  "st_ep":  1778738700,   // start epoch (UTC seconds, derived from sd+st in IST)
+  "ed_ep":  1778739600,   // end epoch (UTC seconds, derived from ed+et in IST)
+  "en":     1,            // enabled (1/0)
+  "pwr_rec": 0,           // power_loss_recovery (1/0)
+  "dow":    10            // bit_wise_days (only present when repeat=1 and days picked)
+                          //   bit0=Sun, bit1=Mon ... bit6=Sat (e.g., 10 = Mon|Wed)
+}</pre>
+
+<h3>7.3 Schedule item — CYCLIC adds:</h3>
+
+<pre>{
+  ...same as above...,
+  "cy":  1,
+  "on":  10,   // cycle_on_minutes
+  "off": 5     // cycle_off_minutes
+}</pre>
+
+<div class="note">
+<strong>Why both <code>st</code>/<code>et</code> AND <code>st_ep</code>/<code>ed_ep</code>?</strong>
+<code>st</code>/<code>et</code> are a compact wall-clock representation (HHMM int).
+<code>st_ep</code>/<code>ed_ep</code> are absolute UTC epoch seconds — the device uses
+the epoch values so its internal clock format doesn't matter. Epoch values are
+derived assuming the original date+time is in IST (UTC+5:30).
+</div>
+
+<h3>7.4 Example — 2 schedules in one chunk</h3>
+
+<pre>{
+  "T": 3, "S": 223,
+  "D": {
+    "idx": 1, "last": 1, "sch_cnt": 2, "plr": 30,
+    "m1": [
+      { "id": 1, "sd": 260514, "ed": 260514, "st": 1040, "et": 1100,
+        "st_ep": 1778735400, "ed_ep": 1778736600, "en": 1, "pwr_rec": 0 },
+      { "id": 2, "sd": 260514, "ed": 260514, "st": 1135, "et": 1150,
+        "st_ep": 1778738700, "ed_ep": 1778739600, "en": 1, "pwr_rec": 0 }
+    ]
+  }
+}</pre>
+
+<h2 id="heartbeat">8. Heartbeat-Driven Auto Sync</h2>
+
+<p>
+Source: <code>heartbeatHandler</code> in
+<code>src/services/db/mqtt-db-services.ts</code> and
+<code>pushPendingSchedulesForStarter</code> in
+<code>src/helpers/schedule-sync-helper.ts</code>.
+</p>
+
+<h3>8.1 Why heartbeat-driven</h3>
+
+<p>
+Previously, schedules only reached the device when an external caller hit
+<code>/sync/pending</code>. If the device was offline, that route wasted ~23 s per
+offline starter and risked Cloudflare 524 timeouts. Heartbeat-driven push solves
+both problems: each device pings us when it's online, and we push at exactly
+that moment.
+</p>
+
+<h3>8.2 Flow on every heartbeat</h3>
+
+<pre>1. Device → MQTT heartbeat on peepul/&lt;mac&gt;/hb
+2. heartbeatHandler reads validMac (starter + motors) from DB
+3. Update starter_boxes (signal_quality, network_type, status)
+4. IF synced_settings_status == "false" AND signal in [2..30]
+     → publishDeviceSettings(validMac)         (T:4 — fire-and-forget setImmediate)
+5. IF signal_quality in [1..30]
+     for each motor on this starter:
+       → setImmediate( pushPendingSchedulesForStarter(starter, motor.id) )</pre>
+
+<h3>8.3 Settings vs schedules — sequencing</h3>
+
+<p>
+The settings publish (<code>T:4</code>) and our schedule publish (<code>T:3</code>) share
+a global per-starter lock (<code>publishingMap</code> in
+<code>ack-tracker-hepler.ts</code>). The settings publish goes first (queued earlier).
+Our helper polls the lock for up to 30 s before publishing T:3:
+</p>
+
+<pre>async function waitForPublishLock(starterId, maxWaitMs = 30000, intervalMs = 500) {
+  const start = Date.now();
+  while (publishingMap.get(starterId)) {
+    if (Date.now() - start > maxWaitMs) return false;
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return true;
+}</pre>
+
+<p>This guarantees both T:4 and T:3 fire on the same heartbeat in the right order.
+If the settings publish never finishes within 30 s, the schedule push gives up
+gracefully (logs a warning) and the next heartbeat retries.</p>
+
+<h3>8.4 Timing summary</h3>
+
+<table>
+  <tr><th>Heartbeat #</th><th>Settings T:4</th><th>Schedule T:3</th><th>Total time</th></tr>
+  <tr><td>1st (settings unsynced, schedules pending)</td><td>Publishes &amp; ACKs</td><td>Waits for lock, then publishes</td><td>~1.5 s</td></tr>
+  <tr><td>1st (settings unsynced, no schedules)</td><td>Publishes</td><td>—</td><td>~1 s</td></tr>
+  <tr><td>2nd+ (settings already synced, schedule pending)</td><td>Skipped</td><td>Publishes immediately</td><td>~0.5 s</td></tr>
+  <tr><td>2nd+ (everything synced)</td><td>Skipped</td><td>Nothing to do</td><td>&lt;1 ms</td></tr>
+  <tr><td>Settings ACK fails (offline mid-publish)</td><td>~23 s timeout, returns false</td><td>Still attempted afterwards</td><td>~23–46 s</td></tr>
+</table>
+
+<h3>8.5 Independence guarantee</h3>
+
+<div class="ok">
+Settings and schedules are <strong>independent</strong>. If settings fails to
+ACK, the schedule publish still runs. The system never permanently blocks one
+on the other — every heartbeat is a fresh attempt.
+</div>
+
+<h2 id="status-flow">9. Status Transitions &amp; Reporting</h2>
+
+<h3>9.1 Happy path</h3>
+
+<pre>CREATED → PENDING (ack=0)
+        ↓ device ACK
+        → SCHEDULED (ack=1, schedule_status="SCHEDULED")
+        ↓ device starts motor at start_time
+        → RUNNING (last_started_at)
+        ↓ motor runs full planned duration
+        → COMPLETED (completed_at, actual_run_time ≥ runtime_minutes)</pre>
+
+<h3>9.2 Partial / missed paths</h3>
+
+<table>
+  <tr><th>Outcome</th><th>Trigger</th></tr>
+  <tr><td><span class="badge b-partial">PARTIAL</span></td><td>Motor started but stopped before <code>runtime_minutes</code> elapsed (manual stop, fault, power loss without recovery).</td></tr>
+  <tr><td><span class="badge b-missed">MISSED</span></td><td>Window closed without motor ever starting (firmware decision; device reports zero start).</td></tr>
+  <tr><td><span class="badge b-undelivered">UNDELIVERED</span></td><td>Window closed while <code>acknowledgement = 0</code> — device never received the schedule (offline the whole time).</td></tr>
+  <tr><td><span class="badge b-failed">FAILED</span></td><td>Device reports a fault during execution (over-voltage, overload, etc.); <code>failure_reason</code> captures the code.</td></tr>
+</table>
+
+<h3>9.3 Manual lifecycle</h3>
+
+<table>
+  <tr><th>Event</th><th>Endpoint / cmd</th><th>Resulting status</th></tr>
+  <tr><td>Manually stop</td><td>Stop API (cmd=1)</td><td>STOPPED (<code>manually_stopped=true</code>, <code>paused_at</code> set)</td></tr>
+  <tr><td>Restart after manual stop</td><td>Restart API (cmd=2)</td><td>SCHEDULED (<code>manually_stopped=false</code>, <code>restarted_at</code>)</td></tr>
+  <tr><td>Cancel (whole schedule)</td><td>Cancel API</td><td>CANCELLED</td></tr>
+  <tr><td>Delete (permanent)</td><td>Delete API (cmd=3)</td><td>DELETED, <code>deleted_at</code> set</td></tr>
+</table>
+
+<h3>9.4 Status evaluation on read</h3>
+
+<p>
+<code>evaluateAndUpdateSchedulesOnRead</code> runs when the list endpoint is hit.
+It re-checks evaluatable statuses (PENDING, SCHEDULED, RUNNING,
+WAITING_NEXT_CYCLE, PARTIAL) against the current time using
+<code>evaluateScheduleStatus</code> and updates DB rows in 3 batched queries.
+This avoids stale "RUNNING" rows when a device went silent.
+</p>
+
+<h3>9.5 actual_* fields (device-reported execution)</h3>
+
+<p>
+<code>updateActualScheduleFields</code> (called from MQTT live-data handlers)
+stores the device's reported execution values. The update is gated to
+non-terminal statuses only:
+</p>
+<pre>WHERE motor_id   = ?
+  AND starter_id = ?
+  AND schedule_id = ?
+  AND schedule_start_date = today
+  AND status != 'ARCHIVED'
+  AND schedule_status NOT IN ('COMPLETED','PARTIAL','FAILED','MISSED')</pre>
+
+<h2 id="edge-cases">10. Edge Cases &amp; Error Handling</h2>
+
+<table>
+  <tr><th>Case</th><th>Behavior</th></tr>
+  <tr><td>Device offline at creation</td><td>Row saved <code>PENDING</code> + ack=0. Pushed on next heartbeat once <code>signal_quality</code> goes 1–30.</td></tr>
+  <tr><td>Device offline through entire window</td><td>Row may transition to UNDELIVERED after window passes (no ACK ever).</td></tr>
+  <tr><td>Schedule edited before delivery</td><td>Row updated in place; <code>edited_at</code> set; <code>acknowledgement</code> reset to 0 so device re-syncs.</td></tr>
+  <tr><td>Schedule edited after device ACK but before start</td><td>Re-publishes with same <code>schedule_id</code> (device slot) so firmware overwrites the slot.</td></tr>
+  <tr><td>Conflict with existing schedule (overlapping time on same motor)</td><td><code>BadRequestException</code> with the conflicting schedule details.</td></tr>
+  <tr><td>Date range × days yields zero matches</td><td><code>BadRequestException("No matching dates found …")</code>.</td></tr>
+  <tr><td>Cyclic with no <code>cycle_on_minutes</code>/<code>cycle_off_minutes</code></td><td>Validation error in <code>validateScheduleTypeRules</code>.</td></tr>
+  <tr><td>Power loss during execution</td><td>If <code>power_loss_recovery=true</code> and outage ≤ <code>power_loss_recovery_time</code>, device resumes and credits run time. Else PARTIAL.</td></tr>
+  <tr><td>MQTT publish fails 3 attempts</td><td>Row stays <code>PENDING</code>, ack=0. Next heartbeat retries automatically.</td></tr>
+  <tr><td>Multiple heartbeats arriving while publish in flight</td><td><code>publishingMap</code> serializes per-starter publishes; subsequent attempts wait or skip.</td></tr>
+  <tr><td>Cloudflare 524 on <code>/sync/pending</code></td><td>Offline filter (signal 1–30) keeps the route under the 100-second limit.</td></tr>
+</table>
+
+<h2 id="api">11. REST API Surface</h2>
+
+<p>Source: <code>src/routes/motor-schedules-routes.ts</code> and <code>src/handlers/motor-scheduling-handlers.ts</code>.</p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Auth</th><th>Purpose</th></tr>
+  <tr><td>POST</td><td><code>/v1.0/motor-schedules</code></td><td>required</td><td>Create one or many schedules (handles range expansion).</td></tr>
+  <tr><td>GET</td><td><code>/v1.0/motor-schedules</code></td><td>required</td><td>List with filters: motor_id, starter_id, status, date, repeat, etc.</td></tr>
+  <tr><td>GET</td><td><code>/v1.0/motor-schedules/:id</code></td><td>required</td><td>Get one schedule by row id.</td></tr>
+  <tr><td>PUT</td><td><code>/v1.0/motor-schedules/:id</code></td><td>required</td><td>Edit a non-RUNNING schedule.</td></tr>
+  <tr><td>POST</td><td><code>/v1.0/motor-schedules/:id/stop</code></td><td>required</td><td>Manual stop.</td></tr>
+  <tr><td>POST</td><td><code>/v1.0/motor-schedules/:id/restart</code></td><td>required</td><td>Restart after manual stop.</td></tr>
+  <tr><td>POST</td><td><code>/v1.0/motor-schedules/stop-all</code></td><td>required</td><td>Stop every active schedule on a motor.</td></tr>
+  <tr><td>DELETE</td><td><code>/v1.0/motor-schedules/:id</code></td><td>required</td><td>Permanent delete (cmd=3, sends delete to device).</td></tr>
+  <tr><td>GET</td><td><code>/v1.0/motor-schedules/history</code></td><td>required</td><td>Schedule execution history.</td></tr>
+  <tr><td>GET</td><td><code>/v1.0/motor-schedules/sync/pending</code></td><td><strong>no auth</strong></td><td>Internal cron — push unacknowledged schedules to devices.</td></tr>
+</table>
+
+<h3>11.1 <code>/sync/pending</code> response shape</h3>
+
+<pre>{
+  "message": "Pending schedules fetched",
+  "data": {
+    "devices":         3,    // online devices we pushed to
+    "total_chunks":    5,    // MQTT chunks attempted
+    "skipped_offline": 2     // devices skipped because signal_quality not in 1–30
+  }
+}</pre>
+
+<hr style="margin-top: 28px;">
+<p class="meta">
+End of document. For questions or to extend this documentation, contact the backend team.
+</p>
+
+</div>
+</body>
+</html>
