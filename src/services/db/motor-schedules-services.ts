@@ -313,9 +313,9 @@ export async function findSchedulesByFilters(
     // For repeat schedules: only return records whose days_of_week includes the queried day
     const queriedDate = String(filters.schedule_start_date).padStart(6, "0");
     const yyyy = 2000 + parseInt(queriedDate.slice(0, 2), 10);
-    const mm   = parseInt(queriedDate.slice(2, 4), 10) - 1;
-    const dd   = parseInt(queriedDate.slice(4, 6), 10);
-    const dow  = new Date(Date.UTC(yyyy, mm, dd)).getUTCDay(); // 0=Sun..6=Sat
+    const mm = parseInt(queriedDate.slice(2, 4), 10) - 1;
+    const dd = parseInt(queriedDate.slice(4, 6), 10);
+    const dow = new Date(Date.UTC(yyyy, mm, dd)).getUTCDay(); // 0=Sun..6=Sat
     conditions.push(
       sql`(
         ${motorSchedules.repeat} = 0
@@ -571,9 +571,9 @@ export async function updateActualScheduleFields(
   // Recompute actual_run_time from wall-clock window (seconds-inclusive end minute)
   // so device-reported integer-floor doesn't make a fully-run schedule look short.
   let computedRunTime = actualData.actual_run_time;
-  if (actualData.actual_start_time && actualData.actual_end_time) {
-    computedRunTime = wallClockMinutes(actualData.actual_start_time, actualData.actual_end_time);
-  }
+  // if (actualData.actual_start_time && actualData.actual_end_time) {
+  //   computedRunTime = wallClockMinutes(actualData.actual_start_time, actualData.actual_end_time);
+  // }
 
   await trx
     .update(motorSchedules)
@@ -582,7 +582,7 @@ export async function updateActualScheduleFields(
       actual_end_time: actualData.actual_end_time,
       actual_run_time: computedRunTime,
       actual_type: actualData.actual_type,
-      missed_minutes: sql`GREATEST(COALESCE(${motorSchedules.runtime_minutes}, 0) - COALESCE(${computedRunTime}, 0), 0)`,
+      missed_minutes: actualData.missed_minutes ?? null,
       failure_at: actualData.failure_at ?? null,
       failure_reason: actualData.failure_reason ?? null,
       updated_at: now,
@@ -594,30 +594,9 @@ export async function updateActualScheduleFields(
         eq(motorSchedules.schedule_id, scheduleId),
         eq(motorSchedules.schedule_start_date, today),
         sql`${motorSchedules.status} != 'ARCHIVED'`,
-        // 'ARCHIVED' is intentionally NOT listed here — it belongs to the separate
-        // motorSchedules.status column (already filtered above), not schedule_status.
-        sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED', 'COMPLETED', 'MISSED', 'FAILED')`,
+        notInArray(motorSchedules.schedule_status, ["COMPLETED", "FAILED", "MISSED"]),
       )
     );
-
-  // If device reported actual_end_time and run_time meets planned → upgrade to COMPLETED
-  if (actualData.actual_end_time && computedRunTime !== null) {
-    await trx
-      .update(motorSchedules)
-      .set({ schedule_status: "COMPLETED", completed_at: now, last_stopped_at: now, updated_at: now })
-      .where(
-        and(
-          eq(motorSchedules.motor_id, motorId),
-          eq(motorSchedules.starter_id, starterId),
-          eq(motorSchedules.schedule_id, scheduleId),
-          eq(motorSchedules.schedule_start_date, today),
-          sql`${motorSchedules.status} != 'ARCHIVED'`,
-          sql`${motorSchedules.runtime_minutes} IS NOT NULL`,
-          sql`${motorSchedules.actual_run_time} >= ${motorSchedules.runtime_minutes}`,
-          inArray(motorSchedules.schedule_status, ["PARTIAL", "RUNNING", "SCHEDULED", "PENDING"]),
-        )
-      );
-  }
 }
 
 export async function bulkCreateMotorSchedules(
@@ -782,7 +761,7 @@ export async function findScheduleHistoryByMotorAndStarter(
       schedule_status: motorSchedules.schedule_status,
       start_time: motorSchedules.start_time,
       end_time: motorSchedules.end_time,
-        actual_start_time: motorSchedules.actual_start_time,
+      actual_start_time: motorSchedules.actual_start_time,
       actual_end_time: motorSchedules.actual_end_time,
       actual_run_time: motorSchedules.actual_run_time,
       missed_minutes: motorSchedules.missed_minutes,
@@ -849,11 +828,11 @@ export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<
   if (!Object.values(groups).some(ids => ids.length > 0)) return;
 
   await batchUpdateScheduleStatuses([
-    { status: "RUNNING",            ids: groups.RUNNING,            last_started_at: now },
-    { status: "COMPLETED",          ids: groups.COMPLETED,          last_stopped_at: now, completed_at: now },
-    { status: "PARTIAL",            ids: groups.PARTIAL,            last_stopped_at: now },
-    { status: "MISSED",             ids: groups.MISSED,             last_stopped_at: now },
-    { status: "FAILED",             ids: groups.FAILED },
+    { status: "RUNNING", ids: groups.RUNNING, last_started_at: now },
+    { status: "COMPLETED", ids: groups.COMPLETED, last_stopped_at: now, completed_at: now },
+    { status: "PARTIAL", ids: groups.PARTIAL, last_stopped_at: now },
+    { status: "MISSED", ids: groups.MISSED, last_stopped_at: now },
+    { status: "FAILED", ids: groups.FAILED },
     { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
   ]);
 }
