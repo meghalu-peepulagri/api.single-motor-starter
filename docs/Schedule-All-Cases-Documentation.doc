@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8">
+<title>Motor Schedule — All Handled Cases</title>
+<!--[if gte mso 9]>
+<xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml>
+<![endif]-->
+<style>
+  @page WordSection1 { size: 8.5in 11.0in; margin: 0.9in 0.8in 0.9in 0.8in; }
+  div.WordSection1 { page: WordSection1; }
+  body { font-family: 'Calibri', 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1a1a1a; line-height: 1.5; }
+  h1 { font-size: 22pt; color: #0b3a82; border-bottom: 3px solid #0b3a82; padding-bottom: 6px; }
+  h2 { font-size: 16pt; color: #0b3a82; border-bottom: 1px solid #aac6f0; padding-bottom: 3px; margin-top: 26px; }
+  h3 { font-size: 13pt; color: #0b5394; margin-top: 18px; }
+  h4 { font-size: 11.5pt; color: #1a4e8a; margin-top: 14px; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 14px 0; }
+  th, td { border: 1px solid #6f7a8a; padding: 5px 8px; text-align: left; vertical-align: top; font-size: 10pt; }
+  th { background: #e7eef9; color: #0b3a82; font-weight: bold; }
+  tr:nth-child(even) td { background: #f5f8fc; }
+  code, pre { font-family: 'Consolas', 'Courier New', monospace; font-size: 9.5pt; }
+  pre { background: #f3f4f6; border: 1px solid #d0d7de; padding: 8px 10px; margin: 4px 0 10px 0; white-space: pre-wrap; }
+  code { background: #f3f4f6; padding: 1px 4px; border-radius: 2px; }
+  .case { background: #f7fafd; border-left: 4px solid #0b5394; padding: 10px 14px; margin: 12px 0 4px 0; }
+  .case h3 { margin-top: 0; }
+  .note { background: #fff8d6; border-left: 4px solid #d4a017; padding: 7px 11px; margin: 8px 0; }
+  .ok   { background: #e7f6ec; border-left: 4px solid #1e8449; padding: 7px 11px; margin: 8px 0; }
+  .warn { background: #fde9e9; border-left: 4px solid #c0392b; padding: 7px 11px; margin: 8px 0; }
+  .small { font-size: 9.5pt; color: #555; }
+  .toc { background: #f5f8fc; border: 1px solid #c5d3e8; padding: 10px 16px; margin: 12px 0 18px 0; }
+  .toc ol { margin-left: 18px; }
+  .meta { color: #555; font-size: 9.5pt; }
+  td.before, td.open, td.passed { font-weight: bold; }
+  td.before { background: #fff3d4; }
+  td.open   { background: #d4f0db; }
+  td.passed { background: #ffd9d9; }
+</style>
+</head>
+<body>
+<div class="WordSection1">
+
+<h1>Motor Schedule — All Handled Cases</h1>
+<p class="meta">Comprehensive case-by-case behavior reference. Each scenario shows: input → window state → evaluator return → final DB state.</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+  <li><a href="#vocab">Vocabulary &amp; Helpers</a></li>
+  <li><a href="#creation">Schedule Creation Cases</a></li>
+  <li><a href="#lifecycle">TIME_BASED Lifecycle Cases</a></li>
+  <li><a href="#cyclic">CYCLIC Lifecycle Cases</a></li>
+  <li><a href="#repeat">Repeating &amp; Date-Range Cases</a></li>
+  <li><a href="#mqtt">MQTT Delivery Cases</a></li>
+  <li><a href="#heartbeat">Heartbeat-Driven Cases</a></li>
+  <li><a href="#manual">Manual Action Cases (Stop / Restart / Delete / Edit)</a></li>
+  <li><a href="#edge">Edge &amp; Error Cases</a></li>
+</ol>
+</div>
+
+<h2 id="vocab">1. Vocabulary &amp; Helpers</h2>
+
+<table>
+  <tr><th>Term</th><th>Meaning</th></tr>
+  <tr><td><code>BEFORE</code></td><td>Current time &lt; <code>start_time</code> — window has not yet opened today.</td></tr>
+  <tr><td><code>OPEN</code></td><td><code>start_time</code> ≤ current time &lt; <code>end_time</code> — window is active.</td></tr>
+  <tr><td><code>PASSED</code></td><td>Current time ≥ <code>end_time</code> — window has closed.</td></tr>
+  <tr><td><code>actual_start_time</code></td><td>Set by device live data. May be pre-filled with the planned time before motor really starts.</td></tr>
+  <tr><td><code>actual_run_time</code></td><td>Minutes the motor was actually ON. Updated by device.</td></tr>
+  <tr><td><code>acknowledgement = 1</code></td><td>Device confirmed it received the schedule.</td></tr>
+  <tr><td><code>runtime_minutes</code></td><td>Planned duration (used to decide COMPLETED vs PARTIAL after the window closes).</td></tr>
+</table>
+
+<div class="note">
+<strong>Rule of thumb the evaluator follows:</strong>
+While <code>BEFORE</code> the window → never RUNNING. While <code>OPEN</code> → RUNNING (if started). While <code>PASSED</code> → terminal.
+</div>
+
+<h2 id="creation">2. Schedule Creation Cases</h2>
+
+<div class="case">
+<h3>Case 2.1 — Single day, no repeat</h3>
+<p><strong>Input:</strong> <code>sd=260514</code>, <code>ed=260514</code>, <code>repeat=0</code>, <code>days_of_week=[]</code></p>
+<table>
+  <tr><th>Step</th><th>What happens</th></tr>
+  <tr><td>Validate</td><td>Times normalized to HHMM, date to YYMMDD.</td></tr>
+  <tr><td>Conflict check</td><td>Compared against existing schedules on same motor.</td></tr>
+  <tr><td>Expansion</td><td>None. <code>hasDays=false</code>, <code>hasRange=false</code>.</td></tr>
+  <tr><td>Rows inserted</td><td><strong>1 row</strong>, <code>schedule_status="PENDING"</code>, <code>acknowledgement=0</code>.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 2.2 — Multi-day range, no specific days</h3>
+<p><strong>Input:</strong> <code>sd=260514</code>, <code>ed=260515</code>, <code>repeat=0</code>, <code>days_of_week=[]</code></p>
+<table>
+  <tr><th>Step</th><th>What happens</th></tr>
+  <tr><td>Expansion</td><td>None. <code>hasDays=false</code>.</td></tr>
+  <tr><td>Rows inserted</td><td><strong>1 row</strong> spanning the range. Device runs every day inside <code>[sd, ed]</code>.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 2.3 — Date range × specific days (expansion)</h3>
+<p><strong>Input:</strong> <code>sd=260514</code>, <code>ed=260520</code>, <code>days_of_week=[1,3]</code> (Mon, Wed), <code>repeat=1</code></p>
+<table>
+  <tr><th>Date</th><th>Weekday</th><th>Match?</th><th>Row inserted?</th></tr>
+  <tr><td>260514 (Thu)</td><td>Thu</td><td>no</td><td>—</td></tr>
+  <tr><td>260518 (Mon)</td><td>Mon</td><td>✅</td><td>1 row, <code>sd=ed=260518</code></td></tr>
+  <tr><td>260519 (Tue)</td><td>Tue</td><td>no</td><td>—</td></tr>
+  <tr><td>260520 (Wed)</td><td>Wed</td><td>✅</td><td>1 row, <code>sd=ed=260520</code></td></tr>
+</table>
+<p><strong>Total:</strong> 2 rows. Each child row has <code>repeat=0</code>, <code>days_of_week=[]</code>, <code>bit_wise_days=0</code>.</p>
+</div>
+
+<div class="case">
+<h3>Case 2.4 — Repeating weekly, no end date</h3>
+<p><strong>Input:</strong> <code>sd=260514</code>, <code>ed=260514</code> (or null), <code>days_of_week=[1,3,5]</code>, <code>repeat=1</code></p>
+<table>
+  <tr><th>Step</th><th>What happens</th></tr>
+  <tr><td>Expansion</td><td>None — <code>sd == ed</code>, no range.</td></tr>
+  <tr><td>Rows inserted</td><td><strong>1 row</strong> with <code>repeat=1</code>, <code>bit_wise_days = 0b0101010 = 42</code>.</td></tr>
+  <tr><td>Device behavior</td><td>Runs at the configured time on Mon/Wed/Fri indefinitely.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 2.5 — CYCLIC schedule</h3>
+<p><strong>Input:</strong> <code>schedule_type="CYCLIC"</code>, <code>start=0900</code>, <code>end=1200</code>, <code>cycle_on=10</code>, <code>cycle_off=20</code></p>
+<table>
+  <tr><th>Field</th><th>Stored as</th></tr>
+  <tr><td><code>schedule_type</code></td><td>CYCLIC</td></tr>
+  <tr><td><code>cycle_on_minutes</code></td><td>10</td></tr>
+  <tr><td><code>cycle_off_minutes</code></td><td>20</td></tr>
+  <tr><td><code>power_loss_recovery</code></td><td>forced to <code>false</code> for CYCLIC.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 2.6 — Conflict with existing schedule</h3>
+<p><strong>Input:</strong> overlaps an existing non-archived schedule on the same motor.</p>
+<table>
+  <tr><th>Step</th><th>Result</th></tr>
+  <tr><td>Conflict detection</td><td><code>findConflictingSchedules</code> returns the overlap.</td></tr>
+  <tr><td>API response</td><td><code>400 BadRequestException</code> with conflicting schedule details. No row inserted.</td></tr>
+</table>
+</div>
+
+<h2 id="lifecycle">3. TIME_BASED Lifecycle Cases</h2>
+
+<p>For each case below: <strong>Schedule window 13:30 → 13:35</strong>, <code>runtime_minutes=5</code>.</p>
+
+<div class="case">
+<h3>Case 3.1 — Happy path (device works correctly)</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>actual_start</th><th>actual_run</th><th>Evaluator returns</th><th>DB status</th></tr>
+  <tr><td>13:00</td><td class="before">BEFORE</td><td>null</td><td>0</td><td>null</td><td>SCHEDULED</td></tr>
+  <tr><td>13:25</td><td class="before">BEFORE</td><td>null</td><td>0</td><td>null</td><td>SCHEDULED</td></tr>
+  <tr><td>13:30</td><td class="open">OPEN</td><td>"1330"</td><td>0</td><td>RUNNING</td><td>RUNNING ✅</td></tr>
+  <tr><td>13:32</td><td class="open">OPEN</td><td>"1330"</td><td>2</td><td>null (stay)</td><td>RUNNING</td></tr>
+  <tr><td>13:34</td><td class="open">OPEN</td><td>"1330"</td><td>4</td><td>null (stay)</td><td>RUNNING</td></tr>
+  <tr><td>13:35</td><td class="passed">PASSED</td><td>"1330"</td><td>5</td><td>COMPLETED</td><td>COMPLETED ✅</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 3.2 — Device pre-fills actual_start before window opens (your row #1329 bug)</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>actual_start</th><th>Evaluator returns</th><th>DB status</th></tr>
+  <tr><td>13:20</td><td class="before">BEFORE</td><td>"1330" (pre-filled)</td><td>null (stay)</td><td>SCHEDULED ✅</td></tr>
+  <tr><td>13:25</td><td class="before">BEFORE</td><td>"1330"</td><td>null (stay)</td><td>SCHEDULED</td></tr>
+  <tr><td>13:30</td><td class="open">OPEN</td><td>"1330"</td><td>RUNNING</td><td>RUNNING ✅</td></tr>
+</table>
+<div class="note">
+<strong>Fix:</strong> Evaluator now requires <code>windowOpen</code> (not just <code>!windowPassed</code>) to promote to RUNNING.
+</div>
+</div>
+
+<div class="case">
+<h3>Case 3.3 — Row was prematurely set to RUNNING by old code</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>DB status (before)</th><th>Evaluator returns</th><th>DB status (after)</th></tr>
+  <tr><td>13:20</td><td class="before">BEFORE</td><td>RUNNING (incorrect)</td><td>SCHEDULED (demote)</td><td>SCHEDULED ✅</td></tr>
+</table>
+<p><strong>Self-heal:</strong> First list call after deploy fixes the row.</p>
+</div>
+
+<div class="case">
+<h3>Case 3.4 — Motor ran partial duration</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>actual_start</th><th>actual_run</th><th>Evaluator returns</th><th>DB status</th></tr>
+  <tr><td>13:30</td><td class="open">OPEN</td><td>"1330"</td><td>0</td><td>RUNNING</td><td>RUNNING</td></tr>
+  <tr><td>13:33</td><td class="open">OPEN</td><td>"1330"</td><td>2 (motor died)</td><td>null (stay)</td><td>RUNNING</td></tr>
+  <tr><td>13:35</td><td class="passed">PASSED</td><td>"1330"</td><td>2</td><td>PARTIAL (2 &lt; 5)</td><td>PARTIAL</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 3.5 — Motor never started during window</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>actual_start</th><th>Evaluator returns</th><th>DB status</th></tr>
+  <tr><td>13:35</td><td class="passed">PASSED</td><td>null</td><td>MISSED</td><td>MISSED</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 3.6 — Device never acknowledged, window passed</h3>
+<table>
+  <tr><th>Time</th><th>acknowledgement</th><th>actual_start</th><th>Window</th><th>Evaluator returns</th><th>DB status</th></tr>
+  <tr><td>13:35</td><td>0</td><td>null</td><td class="passed">PASSED</td><td>FAILED</td><td>FAILED</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 3.7 — Motor ran over planned duration</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>actual_run</th><th>runtime_minutes</th><th>Evaluator</th><th>DB status</th></tr>
+  <tr><td>13:35</td><td class="passed">PASSED</td><td>7</td><td>5</td><td>COMPLETED (7 ≥ 5)</td><td>COMPLETED</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 3.8 — PARTIAL row inside its window (legacy bad data)</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>DB status (before)</th><th>Evaluator returns</th><th>DB status (after)</th></tr>
+  <tr><td>13:32</td><td class="open">OPEN</td><td>PARTIAL</td><td>RUNNING (promote)</td><td>RUNNING ✅</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 3.9 — PARTIAL upgrades to COMPLETED when actual catches up</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>actual_run</th><th>DB status (before)</th><th>Evaluator returns</th><th>DB status (after)</th></tr>
+  <tr><td>13:40</td><td class="passed">PASSED</td><td>6</td><td>PARTIAL</td><td>COMPLETED</td><td>COMPLETED</td></tr>
+</table>
+</div>
+
+<h2 id="cyclic">4. CYCLIC Lifecycle Cases</h2>
+
+<p>Schedule: <code>09:00 → 12:00</code>, <code>cycle_on=10</code>, <code>cycle_off=20</code>.</p>
+
+<div class="case">
+<h3>Case 4.1 — Normal cycle within window</h3>
+<table>
+  <tr><th>Time</th><th>Cycle position</th><th>Status</th></tr>
+  <tr><td>09:00</td><td>ON starts</td><td>RUNNING</td></tr>
+  <tr><td>09:10</td><td>ON ends, OFF starts</td><td>WAITING_NEXT_CYCLE</td></tr>
+  <tr><td>09:30</td><td>OFF ends, ON starts</td><td>RUNNING</td></tr>
+  <tr><td>09:40</td><td>ON ends, OFF starts</td><td>WAITING_NEXT_CYCLE</td></tr>
+  <tr><td>... continues ...</td><td>...</td><td>...</td></tr>
+  <tr><td>12:00</td><td>Window closes</td><td>COMPLETED / PARTIAL</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 4.2 — CYCLIC before window opens</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>DB status</th></tr>
+  <tr><td>08:50</td><td class="before">BEFORE</td><td>SCHEDULED (even if actual_start pre-filled)</td></tr>
+</table>
+</div>
+
+<h2 id="repeat">5. Repeating &amp; Date-Range Cases</h2>
+
+<div class="case">
+<h3>Case 5.1 — Repeat=1 with days [Mon, Wed, Fri], on a non-active day</h3>
+<table>
+  <tr><th>Today</th><th>Inside days_of_week?</th><th>isTodayValidForSchedule</th><th>Evaluator</th></tr>
+  <tr><td>Tuesday</td><td>no</td><td>false</td><td>null (no change)</td></tr>
+  <tr><td>Wednesday</td><td>yes</td><td>true</td><td>follows TIME_BASED lifecycle (Case 3.x)</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 5.2 — Day-bit stopped via <code>bit_wise_days</code></h3>
+<table>
+  <tr><th>days_of_week</th><th>bit_wise_days</th><th>Today</th><th>isTodayValid</th><th>Effect</th></tr>
+  <tr><td>[1,3,5]</td><td>0b0101000 (=40, Mon &amp; Fri only)</td><td>Wednesday</td><td>false (bit 3 cleared)</td><td>Schedule skips today.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 5.3 — Range with more days ahead, today's window closed</h3>
+<table>
+  <tr><th>Now</th><th>Today's window</th><th>schedule_end_date</th><th>Evaluator</th><th>DB</th></tr>
+  <tr><td>May 14, 13:36</td><td class="passed">PASSED</td><td>May 20 (future)</td><td>WAITING_NEXT_CYCLE</td><td>WAITING_NEXT_CYCLE</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 5.4 — WAITING_NEXT_CYCLE on the next active day</h3>
+<table>
+  <tr><th>Now</th><th>Window</th><th>actual_start</th><th>Evaluator</th></tr>
+  <tr><td>May 15, 13:30 (window opens)</td><td class="open">OPEN</td><td>"1330"</td><td>RUNNING</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 5.5 — Range finished (last day passed)</h3>
+<table>
+  <tr><th>Now</th><th>currentDate &gt; end_date?</th><th>Evaluator</th><th>DB</th></tr>
+  <tr><td>May 21</td><td>true (end was May 20)</td><td>resolveTerminal → COMPLETED / PARTIAL / MISSED based on actual_run_time</td><td>terminal</td></tr>
+</table>
+</div>
+
+<h2 id="mqtt">6. MQTT Delivery Cases</h2>
+
+<div class="case">
+<h3>Case 6.1 — Schedule created, device online → instant delivery</h3>
+<ol>
+  <li>Row created with <code>acknowledgement=0</code>, <code>PENDING</code>.</li>
+  <li>Next heartbeat (within ~30 s) → <code>pushPendingSchedulesForStarter</code> fires.</li>
+  <li><code>publishMultipleTimesInBackground</code> publishes T:3 with <code>st_ep</code>/<code>ed_ep</code>.</li>
+  <li>Device ACKs (usually &lt; 1 s) → <code>schedule_status = SCHEDULED</code>, <code>acknowledgement=1</code>.</li>
+</ol>
+</div>
+
+<div class="case">
+<h3>Case 6.2 — Device offline at creation</h3>
+<table>
+  <tr><th>Step</th><th>Behavior</th></tr>
+  <tr><td>Row created</td><td>PENDING, ack=0.</td></tr>
+  <tr><td>Heartbeat path</td><td>No heartbeat arrives (device offline) → no push.</td></tr>
+  <tr><td><code>/sync/pending</code> cron</td><td>Skips this starter (<code>signal_quality</code> not in 1–30). <code>skipped_offline++</code>.</td></tr>
+  <tr><td>Device reconnects</td><td>First heartbeat triggers push → schedule delivered.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 6.3 — Device ACK times out (3 attempts × 23 s total)</h3>
+<table>
+  <tr><th>Attempt</th><th>ACK wait</th><th>Result</th></tr>
+  <tr><td>1</td><td>10 s</td><td>no ACK</td></tr>
+  <tr><td>2</td><td>10 s</td><td>no ACK</td></tr>
+  <tr><td>3</td><td>3 s</td><td>no ACK</td></tr>
+  <tr><td colspan="3">Returns false. Row stays PENDING, ack=0. Retried on next heartbeat.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 6.4 — Settings publish (T:4) holds lock when schedule push fires</h3>
+<table>
+  <tr><th>Time</th><th>Action</th></tr>
+  <tr><td>T+0</td><td>Heartbeat arrives. Both T:4 and T:3 setImmediates queued.</td></tr>
+  <tr><td>T+1ms</td><td>T:4 publishes, sets <code>publishingMap[starter]=true</code>.</td></tr>
+  <tr><td>T+2ms</td><td>T:3 helper calls <code>waitForPublishLock</code>, polls every 500 ms.</td></tr>
+  <tr><td>T+~1s</td><td>T:4 ACK received, lock released.</td></tr>
+  <tr><td>T+~1.5s</td><td>T:3 publishes successfully.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 6.5 — Settings never ACKs (lock held 23s); schedule push waits</h3>
+<table>
+  <tr><th>Time</th><th>Action</th></tr>
+  <tr><td>T+0–23s</td><td>T:4 attempts × 3 fail.</td></tr>
+  <tr><td>T+23s</td><td>T:4 returns false, lock released.</td></tr>
+  <tr><td>T+~23.5s</td><td>T:3 acquires lock, publishes. May ACK successfully.</td></tr>
+</table>
+<div class="ok">Settings and schedules are independent. Settings failing does NOT block schedules permanently.</div>
+</div>
+
+<div class="case">
+<h3>Case 6.6 — Lock never frees within 30 s window</h3>
+<table>
+  <tr><th>Step</th><th>Result</th></tr>
+  <tr><td><code>waitForPublishLock</code></td><td>Returns false after 30 s.</td></tr>
+  <tr><td>Schedule helper</td><td>Logs warning, skips this chunk.</td></tr>
+  <tr><td>Next heartbeat</td><td>Retries from scratch — schedule still PENDING.</td></tr>
+</table>
+</div>
+
+<h2 id="heartbeat">7. Heartbeat-Driven Cases</h2>
+
+<div class="case">
+<h3>Case 7.1 — Device transitions offline → online</h3>
+<table>
+  <tr><th>Step</th><th>Action</th></tr>
+  <tr><td>Heartbeat arrives</td><td><code>signal_quality</code> updated in starter_boxes.</td></tr>
+  <tr><td>Online check</td><td><code>1 ≤ signal_quality ≤ 30</code> → ONLINE.</td></tr>
+  <tr><td>Push triggered</td><td>For each motor on this starter → <code>pushPendingSchedulesForStarter(motor.id)</code>.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 7.2 — Heartbeat with weak signal (e.g., signal_quality=0)</h3>
+<table>
+  <tr><th>Step</th><th>Action</th></tr>
+  <tr><td>isNowOnline</td><td>false (0 not in 1–30)</td></tr>
+  <tr><td>Push</td><td>Skipped entirely. starter_boxes still updated.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 7.3 — Settings already synced + schedules pending</h3>
+<table>
+  <tr><th>Step</th><th>Action</th></tr>
+  <tr><td>synced_settings_status</td><td>"true" → skip T:4 publish.</td></tr>
+  <tr><td>Schedule push</td><td>Fires immediately, no lock contention.</td></tr>
+  <tr><td>Total time</td><td>~0.5 s.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 7.4 — Everything synced, no pending schedules</h3>
+<table>
+  <tr><th>Step</th><th>Action</th></tr>
+  <tr><td>findPendingSchedulesForStarter</td><td>returns []</td></tr>
+  <tr><td>Helper</td><td>early-returns, no MQTT publish, no DB writes</td></tr>
+  <tr><td>Total time</td><td>&lt; 1 ms (single SELECT)</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 7.5 — Multiple motors per starter</h3>
+<table>
+  <tr><th>Step</th><th>Action</th></tr>
+  <tr><td>validMac.motors</td><td>[{id:7}, {id:8}]</td></tr>
+  <tr><td>Push triggered per motor</td><td>2 separate <code>pushPendingSchedulesForStarter</code> calls.</td></tr>
+  <tr><td>Lock</td><td>Sequenced via publishingMap — motor 7 first, motor 8 waits.</td></tr>
+</table>
+</div>
+
+<h2 id="manual">8. Manual Action Cases</h2>
+
+<div class="case">
+<h3>Case 8.1 — Stop a RUNNING schedule</h3>
+<table>
+  <tr><th>Before</th><th>API</th><th>DB after</th></tr>
+  <tr><td>RUNNING</td><td>POST /:id/stop</td><td>STOPPED, <code>manually_stopped=true</code>, <code>paused_at=now</code>, <code>enabled=false</code></td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 8.2 — Restart a STOPPED schedule</h3>
+<table>
+  <tr><th>Before</th><th>API</th><th>DB after</th></tr>
+  <tr><td>STOPPED</td><td>POST /:id/restart</td><td>SCHEDULED, <code>manually_stopped=false</code>, <code>restarted_at=now</code>, <code>enabled=true</code></td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 8.3 — Delete a schedule</h3>
+<table>
+  <tr><th>Before</th><th>Frontend</th><th>API</th><th>DB</th></tr>
+  <tr><td>RUNNING</td><td>Delete button hidden ⛔</td><td>—</td><td>—</td></tr>
+  <tr><td>PENDING</td><td>Delete button hidden ⛔</td><td>—</td><td>—</td></tr>
+  <tr><td>FAILED</td><td>Delete button hidden ⛔</td><td>—</td><td>—</td></tr>
+  <tr><td>SCHEDULED / COMPLETED / etc.</td><td>Delete button visible</td><td>DELETE /:id (cmd=3)</td><td><code>schedule_status=DELETED</code>, <code>deleted_at=now</code>, device receives delete cmd</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 8.4 — Edit a schedule</h3>
+<table>
+  <tr><th>Before</th><th>Frontend</th><th>API</th></tr>
+  <tr><td>RUNNING</td><td>Edit hidden ⛔</td><td>—</td></tr>
+  <tr><td>PENDING / FAILED</td><td>Edit hidden ⛔</td><td>—</td></tr>
+  <tr><td>SCHEDULED</td><td>Edit visible</td><td>PUT /:id → row updated, <code>acknowledgement=0</code>, re-pushed on next heartbeat</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 8.5 — Stop a day in a repeat schedule</h3>
+<table>
+  <tr><th>Before</th><th>Action</th><th>After</th></tr>
+  <tr><td>bit_wise_days = 0b0101010 (Mon, Wed, Fri)</td><td>stopDayInSchedule(scheduleId, 3) (Wed)</td><td>bit_wise_days = 0b0100010 (Mon, Fri only)</td></tr>
+</table>
+<p><strong>Note:</strong> <code>days_of_week</code> is NOT changed — the day can be restarted later.</p>
+</div>
+
+<h2 id="edge">9. Edge &amp; Error Cases</h2>
+
+<div class="case">
+<h3>Case 9.1 — Date range produces zero matching days</h3>
+<table>
+  <tr><th>Input</th><th>Result</th></tr>
+  <tr><td>sd=260514 (Thu), ed=260515 (Fri), days_of_week=[0] (Sun only)</td><td><code>BadRequestException</code> "No matching dates found…"</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 9.2 — Power loss during run</h3>
+<table>
+  <tr><th>Scenario</th><th>Setting</th><th>Outcome</th></tr>
+  <tr><td>outage ≤ <code>power_loss_recovery_time</code></td><td>power_loss_recovery=true</td><td>Motor resumes, schedule completes normally.</td></tr>
+  <tr><td>outage &gt; <code>power_loss_recovery_time</code></td><td>—</td><td>Schedule resolves to PARTIAL after window.</td></tr>
+  <tr><td>any outage</td><td>power_loss_recovery=false</td><td>Schedule resolves to PARTIAL after window.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 9.3 — Cloudflare 524 risk on <code>/sync/pending</code></h3>
+<table>
+  <tr><th>Scenario</th><th>Behavior</th></tr>
+  <tr><td>5 starters offline</td><td>Filtered by <code>signal_quality</code> — skipped instantly. <code>skipped_offline=5</code> in response.</td></tr>
+  <tr><td>All starters online</td><td>~23 s per chunk worst case. May still time out at very large scale → use heartbeat-driven path.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 9.4 — Conflict with existing on edit</h3>
+<table>
+  <tr><th>Edit input</th><th>Result</th></tr>
+  <tr><td>New time overlaps existing schedule on same motor (excluding self)</td><td>BadRequestException with conflicting schedule.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 9.5 — Schedule edited mid-run (RUNNING)</h3>
+<table>
+  <tr><th>Frontend</th><th>API behavior</th></tr>
+  <tr><td>Edit hidden — user cannot edit a RUNNING schedule.</td><td>Backend also rejects with <code>CANNOT_EDIT_RUNNING_SCHEDULE</code>.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 9.6 — Wrap-around window (e.g., 23:00 → 02:00)</h3>
+<table>
+  <tr><th>Aspect</th><th>Behavior</th></tr>
+  <tr><td>hasPassedEndTime</td><td>Handles wrap: passes when <code>now &gt;= end &amp;&amp; now &lt; start</code>.</td></tr>
+  <tr><td>isBeforeWindow</td><td>Returns false for wrap — relies on <code>windowPassed</code> semantics.</td></tr>
+  <tr><td>Practical effect</td><td>Wrap windows treated as always OPEN unless explicitly passed.</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 9.7 — RUNNING in DB with no actual_start_time (inconsistent)</h3>
+<table>
+  <tr><th>Time</th><th>Window</th><th>Evaluator</th></tr>
+  <tr><td>Inside window</td><td class="open">OPEN</td><td>null (defensive — leaves status alone, waits for actual_start_time to arrive)</td></tr>
+  <tr><td>After window</td><td class="passed">PASSED</td><td>resolveTerminalStatus → MISSED (no actual_start)</td></tr>
+</table>
+</div>
+
+<div class="case">
+<h3>Case 9.8 — Schedule for a future date with actual_start_time pre-filled</h3>
+<table>
+  <tr><th>schedule_start_date</th><th>currentDateNum</th><th>actual_start_time</th><th>isTodayActiveDate</th><th>Evaluator</th></tr>
+  <tr><td>260520</td><td>260514</td><td>"1330"</td><td>false</td><td>null (no change — stays SCHEDULED)</td></tr>
+</table>
+</div>
+
+<hr style="margin-top:24px;">
+<p class="meta">Document covers all currently handled cases. Source files: <code>src/helpers/schedule-status-evaluator.ts</code>, <code>src/services/db/motor-schedules-services.ts</code>, <code>src/handlers/motor-scheduling-handlers.ts</code>, <code>src/helpers/schedule-sync-helper.ts</code>, <code>src/services/db/mqtt-db-services.ts</code>.</p>
+
+</div>
+</body>
+</html>
