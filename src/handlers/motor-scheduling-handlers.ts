@@ -8,7 +8,11 @@ import {
   BULK_SCHEDULES_DELETED,
   BULK_SCHEDULES_RESTARTED,
   BULK_SCHEDULES_STOPPED,
+  CANNOT_DELETE_RUNNING_SCHEDULE,
+  CANNOT_DELETE_SCHEDULE,
   CANNOT_EDIT_RUNNING_SCHEDULE,
+  CANNOT_RESTART_SCHEDULE,
+  CANNOT_STOP_SCHEDULE,
   INVALID_SCHEDULE_CMD,
   MOTOR_NOT_FOUND,
   MULTIPLE_SCHEDULES_CREATED,
@@ -19,14 +23,18 @@ import {
   SCHEDULE_DELETED,
   SCHEDULE_DETAILS_FETCHED,
   SCHEDULE_HISTORY_FETCHED,
+  SCHEDULE_LIVE_DATA_FETCHED,
+  SCHEDULE_LIVE_DATA_NOT_FOUND,
+  SCHEDULE_LOGS_FETCHED,
   SCHEDULE_NOT_FOUND,
+  SCHEDULE_OPERATIONS_FETCHED,
   SCHEDULE_RESTARTED,
+  SCHEDULED_LIST_FETCHED,
   SCHEDULE_STATUS_SYNC_COMPLETED,
   SCHEDULE_STOPPED,
   SCHEDULE_UPDATED,
   SCHEDULED_CREATED,
-  SCHEDULED_LIST_FETCHED,
-  UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA
+  UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
 } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motorSchedules, type MotorSchedule, type MotorScheduleTable } from "../database/schemas/motor-schedules.js";
@@ -36,7 +44,7 @@ import BadRequestException from "../exceptions/bad-request-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import {
   checkMotorScheduleConflict,
-  validateScheduleTypeRules
+  validateScheduleTypeRules,
 } from "../helpers/motor-helper.js";
 import { buildMotorScheduleFilters, buildScheduleHistoryFilters } from "../helpers/motor-schedule-filter-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
@@ -55,14 +63,26 @@ import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js
 import {
   getRecordById,
   getSingleRecordByMultipleColumnValues,
-  updateRecordById
+  updateRecordById,
 } from "../services/db/base-db-services.js";
 import {
+  findOperationsByScheduleId,
+  insertScheduleOperation,
+  updateOperationAck,
+} from "../services/db/motor-schedule-operations-services.js";
+import {
+  findScheduleLogsByScheduleId,
+  insertScheduleLog,
+} from "../services/db/motor-schedule-logs-services.js";
+import {
+  findScheduleLiveData,
+} from "../services/db/motor-schedule-live-data-services.js";
+import {
   batchUpdateScheduleStatuses,
-  evaluateAndUpdateSchedulesOnRead,
   bulkCreateMotorSchedules,
   cancelSchedulesByIds,
   deleteDayFromSchedule,
+  evaluateAndUpdateSchedulesOnRead,
   findActiveScheduleById,
   findAllActiveSchedulesForMotor,
   findConflictingSchedules,
@@ -74,7 +94,7 @@ import {
   restartScheduleById,
   restartSchedulesByIds,
   stopDayInSchedule,
-  stopScheduleById
+  stopScheduleById,
 } from "../services/db/motor-schedules-services.js";
 import type { ScheduleForEvaluation } from "../types/app-types.js";
 import { handleAppError } from "../utils/on-error.js";
@@ -87,6 +107,8 @@ import { validatedRequest } from "../validations/validate-request.js";
 
 const paramsValidateException = new ParamsValidateException();
 
+const DELETE_BLOCKED_STATUSES = ["RUNNING", "PARTIAL", "MISSED", "COMPLETED", "FAILED"] as const;
+const STOPPABLE_STATUSES = ["SCHEDULED", "RUNNING", "RESTARTED"] as const;
 
 export class MotorScheduleHandler {
 
@@ -96,9 +118,22 @@ export class MotorScheduleHandler {
       const userPayload = c.get("user_payload");
       const reqData = await c.req.json();
 
-      await bulkCreateMotorSchedules(reqData, userPayload.id);
-
+      const created = await bulkCreateMotorSchedules(reqData, userPayload.id);
       const isBulk = Array.isArray(reqData) && reqData.length > 1;
+
+      if (Array.isArray(created) && created.length > 0) {
+        const logs = created.map((s: MotorSchedule) =>
+          insertScheduleLog({
+            schedule_id: s.id,
+            event_type: "CREATED",
+            actor_type: "user",
+            actor_id: userPayload.id,
+            new_status: "PENDING",
+          }).catch(() => null),
+        );
+        await Promise.all(logs);
+      }
+
       return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED);
     } catch (error: any) {
       handleAppError(error, "create Motor Schedule");
@@ -178,14 +213,31 @@ export class MotorScheduleHandler {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
-      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "schedule_status"]) as Pick<MotorSchedule, "id" | "schedule_status"> | null;
+      const existed = await getRecordById<MotorScheduleTable>(
+        motorSchedules, scheduleId, ["id", "schedule_status", "acknowledgement"],
+      ) as Pick<MotorSchedule, "id" | "schedule_status" | "acknowledgement"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
-      if (existed.schedule_status === "RUNNING") await stopScheduleById(scheduleId);
+      if (existed.schedule_status === "RUNNING") {
+        throw new BadRequestException(CANNOT_DELETE_RUNNING_SCHEDULE);
+      }
+      if ((DELETE_BLOCKED_STATUSES as readonly string[]).includes(existed.schedule_status)) {
+        throw new BadRequestException(`${CANNOT_DELETE_SCHEDULE}: ${existed.schedule_status}`);
+      }
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, existed.id, {
         schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false,
       });
+
+      if (existed.acknowledgement === 1) {
+        await Promise.all([
+          insertScheduleOperation({ schedule_id: scheduleId, operation: "DELETE", sent_at: new Date() }).catch(() => null),
+          insertScheduleLog({ schedule_id: scheduleId, event_type: "DELETE_SENT", actor_type: "user", actor_id: userPayload.id, old_status: existed.schedule_status }).catch(() => null),
+        ]);
+      } else {
+        insertScheduleLog({ schedule_id: scheduleId, event_type: "STATUS_CHANGED", actor_type: "user", actor_id: userPayload.id, old_status: existed.schedule_status, new_status: "DELETED" }).catch(() => null);
+      }
+
       return sendResponse(c, 200, SCHEDULE_DELETED);
     } catch (error: any) {
       handleAppError(error, "delete motor Schedule");
@@ -195,6 +247,7 @@ export class MotorScheduleHandler {
   // =================== UPDATE SCHEDULE STATUS ===================
   updateScheduleStatusHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
@@ -206,16 +259,29 @@ export class MotorScheduleHandler {
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       if (cmd === 1) {
-        const active = await findActiveScheduleById(scheduleId);
-        if (!active) throw new BadRequestException(NO_ACTIVE_SCHEDULE);
+        if (!(STOPPABLE_STATUSES as readonly string[]).includes(existed.schedule_status)) {
+          throw new BadRequestException(CANNOT_STOP_SCHEDULE);
+        }
         await stopScheduleById(scheduleId);
+        await Promise.all([
+          insertScheduleOperation({ schedule_id: scheduleId, operation: "STOP", sent_at: new Date() }).catch(() => null),
+          insertScheduleLog({ schedule_id: scheduleId, event_type: "STOP_SENT", actor_type: "user", actor_id: userPayload.id, old_status: existed.schedule_status, new_status: "STOPPED" }).catch(() => null),
+        ]);
         return sendResponse(c, 200, SCHEDULE_STOPPED);
+      }
+
+      if (existed.schedule_status !== "STOPPED") {
+        throw new BadRequestException(CANNOT_RESTART_SCHEDULE);
       }
 
       const conflicts = await findConflictingSchedules(existed.motor_id, existed.schedule_start_date, existed.schedule_end_date, existed.days_of_week ?? [], scheduleId);
       checkMotorScheduleConflict(existed, conflicts);
 
       await restartScheduleById(scheduleId);
+      await Promise.all([
+        insertScheduleOperation({ schedule_id: scheduleId, operation: "RESTART", sent_at: new Date() }).catch(() => null),
+        insertScheduleLog({ schedule_id: scheduleId, event_type: "RESTART_SENT", actor_type: "user", actor_id: userPayload.id, old_status: "STOPPED", new_status: "SCHEDULED" }).catch(() => null),
+      ]);
       return sendResponse(c, 200, SCHEDULE_RESTARTED);
     } catch (error: any) {
       handleAppError(error, "update schedule status");
@@ -266,21 +332,29 @@ export class MotorScheduleHandler {
     }
   };
 
+  // =================== UPDATE ACKNOWLEDGEMENT (single) ===================
   updateAcknowledgementHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
-      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id"]);
+      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "schedule_status"]) as Pick<MotorSchedule, "id" | "schedule_status"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" });
+
+      await Promise.all([
+        updateOperationAck(scheduleId, "CREATE", 1).catch(() => null),
+        insertScheduleLog({ schedule_id: scheduleId, event_type: "DEVICE_ACK_CREATE", actor_type: "device", old_status: existed.schedule_status, new_status: "SCHEDULED" }).catch(() => null),
+      ]);
+
       return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
     } catch (error: any) {
       handleAppError(error, "update acknowledgement");
     }
   };
 
+  // =================== BULK UPDATE ACKNOWLEDGEMENT ===================
   bulkUpdateAcknowledgementHandler = async (c: Context) => {
     try {
       const data = await c.req.json();
@@ -295,7 +369,6 @@ export class MotorScheduleHandler {
         .set({ acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" })
         .where(inArray(motorSchedules.id, scheduleIds));
 
-      // Fix 3: update schedule_id (device slot) per record if device confirmed a different slot
       if (slotUpdates && Array.isArray(slotUpdates) && slotUpdates.length > 0) {
         await Promise.all(
           slotUpdates.map(({ id, schedule_id }) =>
@@ -305,6 +378,13 @@ export class MotorScheduleHandler {
           )
         );
       }
+
+      await Promise.all(
+        scheduleIds.flatMap(id => [
+          updateOperationAck(id, "CREATE", 1).catch(() => null),
+          insertScheduleLog({ schedule_id: id, event_type: "DEVICE_ACK_CREATE", actor_type: "device", new_status: "SCHEDULED" }).catch(() => null),
+        ])
+      );
 
       return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
     } catch (error: any) {
@@ -324,7 +404,7 @@ export class MotorScheduleHandler {
 
       return sendResponse(c, 200, SCHEDULE_HISTORY_FETCHED, {
         pagination: result.pagination,
-        records
+        records,
       });
     } catch (error: any) {
       handleAppError(error, "get schedule history");
@@ -353,8 +433,13 @@ export class MotorScheduleHandler {
 
       const schedules = await db.query.motorSchedules.findMany({
         where: inArray(motorSchedules.id, ids),
-        columns: { id: true, motor_id: true, start_time: true, end_time: true, schedule_start_date: true, schedule_end_date: true, repeat: true, days_of_week: true },
+        columns: { id: true, motor_id: true, schedule_status: true, start_time: true, end_time: true, schedule_start_date: true, schedule_end_date: true, repeat: true, days_of_week: true },
       });
+
+      const nonStopped = schedules.filter(s => s.schedule_status !== "STOPPED");
+      if (nonStopped.length > 0) {
+        throw new BadRequestException(`${CANNOT_RESTART_SCHEDULE}. Non-STOPPED ids: ${nonStopped.map(s => s.id).join(", ")}`);
+      }
 
       for (const schedule of schedules) {
         const conflicts = await findConflictingSchedules(schedule.motor_id, schedule.schedule_start_date, schedule.schedule_end_date, schedule.days_of_week ?? [], ids);
@@ -375,6 +460,16 @@ export class MotorScheduleHandler {
       const userPayload = c.get("user_payload");
       const { ids }: { ids: number[] } = await c.req.json();
       if (!ids || !Array.isArray(ids) || ids.length === 0) throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
+
+      const schedules = await db.query.motorSchedules.findMany({
+        where: inArray(motorSchedules.id, ids),
+        columns: { id: true, schedule_status: true },
+      });
+
+      const blocked = schedules.filter(s => (DELETE_BLOCKED_STATUSES as readonly string[]).includes(s.schedule_status));
+      if (blocked.length > 0) {
+        throw new BadRequestException(`Cannot delete schedules with blocked statuses. Blocked ids: ${blocked.map(s => `${s.id}(${s.schedule_status})`).join(", ")}`);
+      }
 
       await db.update(motorSchedules)
         .set({ schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false, updated_at: new Date() })
@@ -421,6 +516,12 @@ export class MotorScheduleHandler {
         { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
       ]);
 
+      await Promise.all(
+        transitions.map(t =>
+          insertScheduleLog({ schedule_id: t.schedule_id, event_type: "STATUS_CHANGED", actor_type: "system", old_status: t.from, new_status: t.to }).catch(() => null)
+        )
+      );
+
       return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, { evaluated: schedules.length, updated: transitions.length, transitions });
     } catch (error: any) {
       handleAppError(error, "sync schedule statuses");
@@ -428,8 +529,6 @@ export class MotorScheduleHandler {
   };
 
   // =================== PER-DAY BITMASK UPDATE ===================
-  // PATCH /motor-schedules/:id/days
-  // Body: { action: "stop" | "restart" | "delete", day: 0-6 }
   updateDayBitmaskHandler = async (c: Context) => {
     try {
       const scheduleId = +c.req.param("id");
@@ -457,11 +556,9 @@ export class MotorScheduleHandler {
         return sendResponse(c, 200, "Day restarted");
       }
 
-      // action === "delete"
       const remainingDays = (existed.days_of_week ?? []).filter((d: number) => d !== day);
       await deleteDayFromSchedule(scheduleId, day);
 
-      // If no days remain, delete the whole record
       if (remainingDays.length === 0) {
         await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, {
           schedule_status: "DELETED", enabled: false,
@@ -492,8 +589,6 @@ export class MotorScheduleHandler {
         const starter = starterMap.get(starter_id);
         if (!starter) continue;
 
-        // Skip offline devices — signal_quality outside 1–30 means inactive/offline.
-        // Without this, every offline device burns ~23s waiting for ACK that never comes.
         if (!isOnline(starter.signal_quality)) {
           skippedOffline++;
           continue;
@@ -504,12 +599,72 @@ export class MotorScheduleHandler {
           totalChunks++;
           if (await publishMultipleTimesInBackground(payload, starter)) {
             await db.update(motorSchedules).set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() }).where(inArray(motorSchedules.id, dbIds));
+            await Promise.all(
+              dbIds.flatMap(id => [
+                insertScheduleOperation({ schedule_id: id, operation: "CREATE", sent_at: new Date() }).catch(() => null),
+                insertScheduleLog({ schedule_id: id, event_type: "SENT_TO_DEVICE", actor_type: "system", new_status: "SCHEDULED" }).catch(() => null),
+              ])
+            );
           }
         }
       }
       return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: totalDevices, total_chunks: totalChunks, skipped_offline: skippedOffline });
     } catch (error: any) {
       handleAppError(error, "get pending schedules for sync");
+    }
+  };
+
+  // =================== SCHEDULE LOGS ===================
+  getScheduleLogsHandler = async (c: Context) => {
+    try {
+      const scheduleId = +c.req.param("id");
+      paramsValidateException.validateId(scheduleId, "schedule id");
+
+      const query = c.req.query();
+      const page = +(query.page) || 1;
+      const limit = +(query.limit) || 20;
+
+      const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id"]);
+      if (!schedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      const result = await findScheduleLogsByScheduleId(scheduleId, page, limit);
+      return sendResponse(c, 200, SCHEDULE_LOGS_FETCHED, result);
+    } catch (error: any) {
+      handleAppError(error, "get schedule logs");
+    }
+  };
+
+  // =================== SCHEDULE LIVE DATA ===================
+  getScheduleLiveDataHandler = async (c: Context) => {
+    try {
+      const scheduleId = +c.req.param("id");
+      paramsValidateException.validateId(scheduleId, "schedule id");
+
+      const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id"]);
+      if (!schedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      const liveData = await findScheduleLiveData(scheduleId);
+      if (!liveData) throw new BadRequestException(SCHEDULE_LIVE_DATA_NOT_FOUND);
+
+      return sendResponse(c, 200, SCHEDULE_LIVE_DATA_FETCHED, liveData);
+    } catch (error: any) {
+      handleAppError(error, "get schedule live data");
+    }
+  };
+
+  // =================== SCHEDULE OPERATIONS ===================
+  getScheduleOperationsHandler = async (c: Context) => {
+    try {
+      const scheduleId = +c.req.param("id");
+      paramsValidateException.validateId(scheduleId, "schedule id");
+
+      const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id"]);
+      if (!schedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      const operations = await findOperationsByScheduleId(scheduleId);
+      return sendResponse(c, 200, SCHEDULE_OPERATIONS_FETCHED, operations);
+    } catch (error: any) {
+      handleAppError(error, "get schedule operations");
     }
   };
 }

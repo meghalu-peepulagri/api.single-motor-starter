@@ -20,6 +20,9 @@ import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { updateActualScheduleFields } from "./motor-schedules-services.js";
+import { upsertScheduleLiveData } from "./motor-schedule-live-data-services.js";
+import { insertScheduleLog } from "./motor-schedule-logs-services.js";
+import { uploadLiveDataPacket } from "../s3/s3-service.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
@@ -176,6 +179,33 @@ async function getLatestAlertsFaultsSnapshot(trx: any, starterId: number, motorI
     .limit(1);
 
   return record ?? null;
+}
+
+async function handleScheduleLiveData(insertedData: preparedLiveData, motorId: number, starterId: number) {
+  const scheduleId = insertedData.active_schedule_id;
+  if (!scheduleId) return;
+
+  const packet = {
+    schedule_id: scheduleId,
+    motor_id: motorId,
+    starter_id: starterId,
+    device_start_time: insertedData.active_schedule_start_time ?? null,
+    device_end_time: insertedData.active_schedule_end_time ?? null,
+    device_run_time: insertedData.active_schedule_runtime_minutes ?? null,
+    device_missed_minutes: insertedData.active_schedule_missed_minutes ?? 0,
+    failure_reason: insertedData.active_schedule_failure_reason ?? null,
+    received_at: new Date().toISOString(),
+  };
+
+  await Promise.all([
+    upsertScheduleLiveData(packet).catch(() => null),
+    insertScheduleLog({
+      schedule_id: scheduleId,
+      event_type: "LIVE_DATA_RECEIVED",
+      actor_type: "device",
+      details: packet,
+    }).catch(() => null),
+  ]);
 }
 
 export async function updateStates(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
@@ -467,6 +497,11 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       };
     });
 
+    if (motor_id && starter_id) {
+      handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+      uploadLiveDataPacket(starter_id, insertedData as any, insertedData.time_stamp).catch(() => null);
+    }
+
     if (notificationData.notificationDataState) {
       if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state ?? 0)) {
         await sendUserNotification(
@@ -689,6 +724,11 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
     return { notificationDataState, notificationDataMode };
   });
 
+  if (motor_id && starter_id) {
+    handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+    uploadLiveDataPacket(starter_id, insertedData as any, insertedData.time_stamp).catch(() => null);
+  }
+
   if (notificationData.notificationDataState) {
     if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
       await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
@@ -825,6 +865,11 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
     return { notificationDataState };
   });
 
+  if (motor_id && starter_id) {
+    handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+    uploadLiveDataPacket(starter_id, insertedData as any, insertedData.time_stamp).catch(() => null);
+  }
+
   if (notificationData.notificationDataState) {
     if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
       await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
@@ -953,6 +998,11 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 
     return { notificationDataMode };
   });
+
+  if (motor_id && starter_id) {
+    handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+    uploadLiveDataPacket(starter_id, insertedData as any, insertedData.time_stamp).catch(() => null);
+  }
 
   if (notificationData.notificationDataMode) {
     if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {

@@ -42,13 +42,13 @@ export async function getNextScheduleIdForMotor(motorId: number): Promise<number
     .from(motorSchedules)
     .where(and(
       eq(motorSchedules.motor_id, motorId),
-      sql`(${motorSchedules.status} = 'ARCHIVED' OR ${motorSchedules.schedule_status} IN ('DELETED', 'CANCELLED'))`,
+      sql`(${motorSchedules.status} = 'ARCHIVED' OR ${motorSchedules.schedule_status} = 'DELETED')`,
       sql`NOT EXISTS (
         SELECT 1 FROM motor_schedules ms2
         WHERE ms2.motor_id = ${motorId}
           AND ms2.schedule_id = ${motorSchedules.schedule_id}
           AND ms2.status != 'ARCHIVED'
-          AND ms2.schedule_status NOT IN ('DELETED', 'CANCELLED')
+          AND ms2.schedule_status != 'DELETED'
       )`,
     ))
     .orderBy(motorSchedules.schedule_id)
@@ -634,7 +634,8 @@ export async function updateActualScheduleFields(
       actual_type: actualData.actual_type,
       missed_minutes: actualData.missed_minutes ?? null,
       failure_at: actualData.failure_at ?? null,
-      failure_reason: actualData.failure_reason ?? null,
+      // failure_reason is a legacy integer code column; device_failure_reason (varchar) stores the string reason
+      failure_reason: null,
       updated_at: now,
     })
     .where(
@@ -724,8 +725,27 @@ export async function bulkCreateMotorSchedules(
     checkMotorScheduleConflict(schedule, existingInDb);
   }
 
+  // 4c. Schedule-id slot uniqueness check (mirrors the partial unique index filter).
+  // Guards against inserting into a slot that's still active for this motor.
+  const incomingSlots = [...new Set(expandedList.map((s) => s.schedule_id))];
+  const takenSlots = await db
+    .select({ schedule_id: motorSchedules.schedule_id })
+    .from(motorSchedules)
+    .where(and(
+      eq(motorSchedules.motor_id, motorId),
+      inArray(motorSchedules.schedule_id, incomingSlots),
+      ne(motorSchedules.status, "ARCHIVED"),
+      notInArray(motorSchedules.schedule_status, ["COMPLETED", "MISSED", "PARTIAL", "FAILED", "DELETED"]),
+    ));
+
+  if (takenSlots.length > 0) {
+    const ids = takenSlots.map((r) => r.schedule_id).join(", ");
+    throw new BadRequestException(
+      `Schedule slot(s) [${ids}] are already active for this motor. Stop or complete them before reusing.`,
+    );
+  }
+
   // 5. Finalize data and perform Bulk Database Insertion
-  // const startingScheduleId = await getNextScheduleIdForMotor(motorId);
 
   const finalPayload = expandedList.map((item) => ({
     ...buildScheduleData(item, item.schedule_start_date!),

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/highcharts@11.4.0/highcharts.js"></script>
+</head>
+
+<body>
+
+  <div id="container" style="height:400px;"></div>
+
+  <br>
+  <div style="position: relative;" id="container2" style="height:400px;"></div>
+
+
+  <script>
+    const motorData = [
+      [Date.UTC(2026, 3, 23, 10, 0), 1],
+      [Date.UTC(2026, 3, 23, 11, 0), null],
+      [Date.UTC(2026, 3, 23, 11, 30), 1],
+      [Date.UTC(2026, 3, 23, 12, 0), 0],
+    ];
+
+    const powerData = [
+      [Date.UTC(2026, 3, 23, 9, 0), 3],
+      [Date.UTC(2026, 3, 23, 10, 0), 3],
+      [Date.UTC(2026, 3, 23, 11, 0), null],
+      [Date.UTC(2026, 3, 23, 11, 30), 3],
+      [Date.UTC(2026, 3, 23, 12, 0), 3],
+      [Date.UTC(2026, 3, 23, 13, 0), 2],
+    ];
+
+
+    const motorOn = [
+      [Date.UTC(2026, 3, 23, 10, 0), 1],
+      [Date.UTC(2026, 3, 23, 11, 0), null], // break
+      [Date.UTC(2026, 3, 23, 11, 30), 1],
+      [Date.UTC(2026, 3, 23, 12, 0), null], // OFF → stop line
+    ];
+
+    const motorSignalLoss = [
+      [Date.UTC(2026, 3, 23, 11, 0), 1],
+      [Date.UTC(2026, 3, 23, 11, 30), 1],
+    ];
+
+    const powerOn = [
+      [Date.UTC(2026, 3, 23, 9, 0), 3],
+      [Date.UTC(2026, 3, 23, 11, 0), null],
+      [Date.UTC(2026, 3, 23, 11, 30), 3],
+      [Date.UTC(2026, 3, 23, 13, 0), null], // OFF
+    ];
+
+    const powerSignalLoss = [
+      [Date.UTC(2026, 3, 23, 11, 0), 3],
+      [Date.UTC(2026, 3, 23, 11, 30), 3],
+    ];
+
+    Highcharts.chart('container', {
+      chart: {
+        type: 'line',
+        zoomType: 'x'
+      },
+
+      title: {
+        text: 'Motor & Power State Timeline'
+      },
+
+      xAxis: {
+        type: 'datetime',
+        title: { text: 'Time' }
+      },
+
+      yAxis: {
+        tickPositions: [0, 1, 2, 3],
+        labels: {
+          formatter: function () {
+            switch (this.value) {
+              case 0: return 'Motor OFF';
+              case 1: return 'Motor ON';
+              case 2: return 'Power OFF';
+              case 3: return 'Power ON';
+            }
+          }
+        }
+      },
+
+      tooltip: {
+        shared: true,
+        formatter: function () {
+          return `
+        <b>${Highcharts.dateFormat('%H:%M', this.x)}</b><br/>
+        ${this.points.map(p => {
+            let val = p.y === null ? 'No Data' : (p.y === 1 ? 'ON' : 'OFF');
+            return `${p.series.name}: ${val}`;
+          }).join('<br/>')}
+      `;
+        }
+      },
+
+      plotOptions: {
+        series: {
+          step: 'left',
+          connectNulls: false, // 👈 creates gap for signal loss
+          marker: { enabled: false }
+        }
+      },
+
+      series: [
+        {
+          name: 'Motor',
+          data: motorData,
+          color: '#28a745'
+        },
+        {
+          name: 'Power',
+          data: powerData,
+          color: '#007bff'
+        }
+      ]
+    });
+
+    Highcharts.chart('container2', {
+      chart: { type: 'line' },
+
+      xAxis: { type: 'datetime' },
+
+      yAxis: {
+        tickPositions: [1, 3],
+        labels: {
+          formatter() {
+            return this.value === 1 ? 'Motor ON' : 'Power ON';
+          }
+        }
+      },
+
+      plotOptions: {
+        series: {
+          step: 'left',
+          connectNulls: false,
+          marker: { enabled: false }
+        }
+      },
+
+      series: [
+        // 🟢 Motor ON
+        {
+          name: 'Motor ON',
+          data: motorOn,
+          color: '#28a745',
+          lineWidth: 3
+        },
+
+        // 🔴 Motor Signal Loss
+        {
+          name: 'Motor Signal Loss',
+          data: motorSignalLoss,
+          color: '#dc3545',
+          dashStyle: 'Dash',
+          lineWidth: 2
+        },
+
+        // 🔵 Power ON
+        {
+          name: 'Power ON',
+          data: powerOn,
+          color: '#007bff',
+          lineWidth: 3
+        },
+
+        // 🔴 Power Signal Loss
+        {
+          name: 'Power Signal Loss',
+          data: powerSignalLoss,
+          color: '#dc3545',
+          dashStyle: 'Dash',
+          lineWidth: 2
+        }
+      ]
+    });
+
+  </script>
+
+
+</body>
+
+</html>

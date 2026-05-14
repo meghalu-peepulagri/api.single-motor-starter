@@ -19,6 +19,15 @@ motorScheduleRoute.get("/", isAuthorized, motorScheduleHandler.motorScheduleList
 // Get single schedule by id
 motorScheduleRoute.get("/:id", isAuthorized, motorScheduleHandler.getMotorScheduleByIdHandler);
 
+// Get full lifecycle audit trail for a schedule
+motorScheduleRoute.get("/:id/logs", isAuthorized, motorScheduleHandler.getScheduleLogsHandler);
+
+// Get latest device live data snapshot for a schedule
+motorScheduleRoute.get("/:id/live-data", isAuthorized, motorScheduleHandler.getScheduleLiveDataHandler);
+
+// Get all MQTT operations dispatched for a schedule
+motorScheduleRoute.get("/:id/operations", isAuthorized, motorScheduleHandler.getScheduleOperationsHandler);
+
 
 // =================== POST ROUTES ===================
 

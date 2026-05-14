@@ -15,6 +15,9 @@ import * as locationsSchema from "./schemas/locations.js";
 import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
 import * as motorStatusHistorySchema from "./schemas/motor-status-history.js";
 import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
+import * as motorScheduleOperationsSchema from "./schemas/motor-schedule-operations.js";
+import * as motorScheduleLiveDataSchema from "./schemas/motor-schedule-live-data.js";
+import * as motorScheduleLogsSchema from "./schemas/motor-schedule-logs.js";
 import * as motorsSchema from "./schemas/motors.js";
 import * as otpSchema from "./schemas/otp.js";
 import * as powerStatusHistorySchema from "./schemas/power-status-history.js";
@@ -54,6 +57,9 @@ const db = drizzle(dbClient, {
     ...starterBoxSchema,
     ...starterBoxParameters,
     ...motorSchedulesSchema,
+    ...motorScheduleOperationsSchema,
+    ...motorScheduleLiveDataSchema,
+    ...motorScheduleLogsSchema,
     ...DeviceRunTimeSchema,
     ...deviceStatusHistorySchema,
     ...MotorRunTimeSchema,
