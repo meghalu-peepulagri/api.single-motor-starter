@@ -244,7 +244,7 @@ export interface ScheduleForEvaluation {
 
 export interface ScheduleStatusUpdate {
   id: number;
-  newStatus: "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
+  newStatus: "SCHEDULED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
   last_started_at?: Date;
   last_stopped_at?: Date;
 }

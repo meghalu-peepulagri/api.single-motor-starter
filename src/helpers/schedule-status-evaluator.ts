@@ -45,6 +45,13 @@ function hasPassedEndTime(currentMinutes: number, startMinutes: number, endMinut
   return currentMinutes >= endMinutes && currentMinutes < startMinutes;
 }
 
+/** True when current time is BEFORE the window opens (window hasn't started yet today). */
+function isBeforeWindow(currentMinutes: number, startMinutes: number, endMinutes: number): boolean {
+  if (startMinutes < endMinutes) return currentMinutes < startMinutes;
+  // Wrap-around windows (e.g., 23:00 → 02:00): can't infer BEFORE/AFTER from time alone.
+  return false;
+}
+
 function plannedDurationMinutes(
   schedule: ScheduleForEvaluation,
   startMinutes: number,
@@ -90,6 +97,9 @@ export function evaluateScheduleStatus(
   const startMinutes = timeToMinutes(schedule.start_time);
   const endMinutes = timeToMinutes(schedule.end_time);
   const windowPassed = hasPassedEndTime(currentMinutes, startMinutes, endMinutes);
+  const windowBefore = isBeforeWindow(currentMinutes, startMinutes, endMinutes);
+  const windowOpen = !windowPassed && !windowBefore;
+  const isTodayActiveDate = isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek);
 
   const hasMoreRepeatRange = schedule.repeat === 1
     && !!schedule.schedule_end_date
@@ -97,18 +107,25 @@ export function evaluateScheduleStatus(
 
   // ── PENDING / SCHEDULED ──
   if (schedule.schedule_status === "PENDING" || schedule.schedule_status === "SCHEDULED") {
-    if (schedule.actual_start_time) {
-      // Motor has started. While the window is still open it MUST be RUNNING —
-      // do not compare actual_run_time against planned mid-window (that path was
-      // emitting false PARTIALs).
-      if (!windowPassed) {
-        return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
-      }
-      // Window closed → resolve terminal (or wait for next cycle on repeats).
+    // Devices may pre-fill actual_start_time / actual_end_time with the planned
+    // times before the motor really starts. So a non-null actual_start_time is
+    // NOT sufficient evidence the motor is running — the wall clock must also
+    // be inside today's window.
+    if (schedule.actual_start_time && isTodayActiveDate && windowOpen) {
+      return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
+    }
+
+    if (schedule.actual_start_time && isTodayActiveDate && windowPassed) {
       if (hasMoreRepeatRange) {
         return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
       }
       return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+    }
+
+    // actual_start_time set but we're BEFORE today's window (or it's not today's
+    // date) → stay PENDING/SCHEDULED; do nothing yet.
+    if (schedule.actual_start_time) {
+      return null;
     }
 
     // No actual_start_time
@@ -129,10 +146,15 @@ export function evaluateScheduleStatus(
 
   // ── RUNNING ──
   if (schedule.schedule_status === "RUNNING") {
+    // Demote rows that were prematurely flipped to RUNNING before the window opened.
+    if (windowBefore) {
+      return { id: schedule.id, newStatus: "SCHEDULED" };
+    }
+
     if (schedule.actual_start_time) {
       // Window still open → stay RUNNING. Never resolve terminal mid-window,
       // even if the device has reported an actual_end_time.
-      if (!windowPassed) return null;
+      if (windowOpen) return null;
 
       if (hasMoreRepeatRange) {
         return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
@@ -151,7 +173,7 @@ export function evaluateScheduleStatus(
   if (schedule.schedule_status === "PARTIAL") {
     // Self-heal rows that were prematurely flipped to PARTIAL while the window
     // is still open. As soon as the list endpoint is hit, they bounce back to RUNNING.
-    if (schedule.actual_start_time && !windowPassed) {
+    if (schedule.actual_start_time && windowOpen) {
       return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
     }
 
@@ -171,7 +193,7 @@ export function evaluateScheduleStatus(
       return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
     }
 
-    if (schedule.actual_start_time && !windowPassed) {
+    if (schedule.actual_start_time && windowOpen) {
       return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
     }
     return null;

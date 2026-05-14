@@ -520,7 +520,7 @@ export async function findPendingSchedulesForStarter(starterId: number, motorId?
  */
 export async function batchUpdateScheduleStatuses(
   groups: {
-    status: "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
+    status: "SCHEDULED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
     ids: number[];
     last_started_at?: Date;
     last_stopped_at?: Date;
@@ -859,6 +859,7 @@ export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<
   if (toEvaluate.length === 0) return;
 
   const groups = {
+    SCHEDULED: [] as number[],
     RUNNING: [] as number[],
     COMPLETED: [] as number[],
     PARTIAL: [] as number[],
@@ -878,6 +879,7 @@ export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<
   if (!Object.values(groups).some(ids => ids.length > 0)) return;
 
   await batchUpdateScheduleStatuses([
+    { status: "SCHEDULED", ids: groups.SCHEDULED },
     { status: "RUNNING", ids: groups.RUNNING, last_started_at: now },
     { status: "COMPLETED", ids: groups.COMPLETED, last_stopped_at: now, completed_at: now },
     { status: "PARTIAL", ids: groups.PARTIAL, last_stopped_at: now },

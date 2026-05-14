@@ -396,6 +396,7 @@ export class MotorScheduleHandler {
 
       const transitions: any[] = [];
       const groups = {
+        SCHEDULED: [] as number[],
         RUNNING: [] as number[],
         COMPLETED: [] as number[],
         PARTIAL: [] as number[],
@@ -412,6 +413,7 @@ export class MotorScheduleHandler {
       }
 
       await batchUpdateScheduleStatuses([
+        { status: "SCHEDULED",          ids: groups.SCHEDULED },
         { status: "RUNNING",            ids: groups.RUNNING,            last_started_at: now },
         { status: "COMPLETED",          ids: groups.COMPLETED,          last_stopped_at: now, completed_at: now },
         { status: "PARTIAL",            ids: groups.PARTIAL,            last_stopped_at: now },
