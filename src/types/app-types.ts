@@ -6,7 +6,7 @@ import type { validatedAddField } from "../validations/schema/field-validations.
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import type { ValidatedAddRepeatDays, ValidatedMotorSchedule, ValidatedMotorScheduleArray, ValidatedUpdateMotorSchedule } from "../validations/schema/motor-schedule-validators.js";
 import type { validatedAddMotor, validatedAssignMotorToDevice, validatedReplaceMotorDevice, validatedUpdateMotor, validatedUpdateMotorTestRunStatus } from "../validations/schema/motor-validations.js";
-import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus, validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
+import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedChangeRole, validatedReparent, validatedReplaceStarter, validatedUpdateDeployedStatus, validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { ValidatedAddStarterDispatch } from "../validations/schema/starter-dispatch-validations.js";
 import type { ValidatedAddGateway, ValidatedAssignGatewayToUser, ValidatedRenameGateway, ValidatedUpdateGatewayLabel, ValidatedUpdateGatewayNumber } from "../validations/schema/gateway-validations.js";
@@ -15,10 +15,10 @@ import type { PowerStatusHistoryTable } from "../database/schemas/power-status-h
 import type { DeviceStatusHistoryTable } from "../database/schemas/device-status-history.js";
 
 export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
-  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber | validatedAssignMotorToDevice | validatedReplaceMotorDevice | validatedUpdateInstalledLocation;
+  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber | validatedAssignMotorToDevice | validatedReplaceMotorDevice | validatedUpdateInstalledLocation | validatedChangeRole | validatedReparent;
 
 export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
-  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-gateway-details" | "remove-gateway-user" | "assign-motor-to-device" | "replace-motor-device" | "update-installed-location";
+  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-gateway-details" | "remove-gateway-user" | "assign-motor-to-device" | "replace-motor-device" | "update-installed-location" | "change-role" | "reparent-device";
 
 export interface IResp {
   status: ContentfulStatusCode;
@@ -59,6 +59,8 @@ export interface starterBoxPayloadType {
   mac_address?: string | null | undefined;
   gateway_id?: number | null | undefined;
   starter_type?: "SINGLE_STARTER" | "MULTI_STARTER";
+  role?: "STANDALONE" | "MASTER" | "CHILD" | undefined;
+  parent_starter_id?: number | null | undefined;
 }
 
 export interface ValidationOutput {

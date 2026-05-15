@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { CHILDREN_FETCHED, DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_IS_NOT_CHILD, DEVICE_IS_NOT_MASTER, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, DEVICE_ROLE_VALIDATION_CRITERIA, ELIGIBLE_PARENTS_FETCHED, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MASTER_HAS_CHILDREN, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, PARENT_UPDATED_SUCCESSFULLY, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, ROLE_CHANGED_SUCCESSFULLY, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, TOPOLOGY_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
@@ -18,11 +18,11 @@ import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilt
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getRawAlertFaultCounts, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
-import type { validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
+import type { validatedChangeRole, validatedReparent, validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, changeRoleWithTransaction, countChildrenOfMaster, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getChildrenOfStarter, getDeviceWithDispatchDetails, getEligibleParents, getStarterAnalytics, getStarterRunTime, getStarterTopologyContext, getTopologyTree, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, reparentWithTransaction, replaceStarterWithTransaction, resolveAndValidateParent, starterConnectedMotors } from "../services/db/starter-services.js";
 import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
@@ -47,6 +47,12 @@ export class StarterHandlers {
       const validStarterBoxReq = await validatedRequest<validatedAddStarter>("add-starter", starterBoxPayload, STARTER_BOX_VALIDATION_CRITERIA);
 
       const existedGateway = await gatewayConflicts(validStarterBoxReq.gateway_id ?? undefined);
+
+      // Cross-field validation for role/parent (CHILD must have a MASTER parent; others must not have one)
+      await resolveAndValidateParent(
+        (validStarterBoxReq.role ?? "STANDALONE") as "STANDALONE" | "MASTER" | "CHILD",
+        validStarterBoxReq.parent_starter_id ?? null,
+      );
 
       const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload, existedGateway?.id);
       const { id, ...restStarterData } = starter as StarterBox;
@@ -462,9 +468,150 @@ export class StarterHandlers {
         connectedMotors.dispatch.invoice_document_url = await generateDownloadUrl(connectedMotors.dispatch.invoice_document);
       }
 
+      // Attach topology context: parent (for CHILD) + children with their motors (for MASTER)
+      const topology = await getStarterTopologyContext(starterId);
+      if (topology && connectedMotors) {
+        connectedMotors.role = topology.role;
+        connectedMotors.parent_starter_id = topology.parent_starter_id;
+        connectedMotors.parent = topology.parent;
+        connectedMotors.children = topology.children;
+        connectedMotors.child_count = topology.child_count;
+      }
+
       return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
     } catch (error: any) {
       console.error("Error at starter connected motors :", error);
+      throw error;
+    }
+  }
+
+  changeRoleHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const reqData = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqData);
+
+      const validated = await validatedRequest<validatedChangeRole>("change-role", reqData, DEVICE_ROLE_VALIDATION_CRITERIA);
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      // If demoting a MASTER with children and no reassignment provided, require the client to pick one.
+      if (starter.role === "MASTER" && validated.role !== "MASTER") {
+        const childCount = await countChildrenOfMaster(starter.id);
+        if (childCount > 0 && !validated.reassignment) {
+          throw new ConflictException(MASTER_HAS_CHILDREN);
+        }
+      }
+
+      const result = await changeRoleWithTransaction(starter as any, validated, userPayload.id);
+
+      return sendResponse(c, 200, ROLE_CHANGED_SUCCESSFULLY, {
+        id: starter.id,
+        role: (result.updated as any)?.role,
+        parent_starter_id: (result.updated as any)?.parent_starter_id ?? null,
+        children_reassigned: result.childrenReassigned,
+      });
+    } catch (error: any) {
+      console.error("Error at change role :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
+  reparentHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const reqData = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqData);
+
+      const validated = await validatedRequest<validatedReparent>("reparent-device", reqData, DEVICE_ROLE_VALIDATION_CRITERIA);
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      if (starter.role !== "CHILD") {
+        throw new BadRequestException(DEVICE_IS_NOT_CHILD);
+      }
+
+      const updated = await reparentWithTransaction(starter as any, validated.parent_starter_id, userPayload.id);
+
+      return sendResponse(c, 200, PARENT_UPDATED_SUCCESSFULLY, {
+        id: starter.id,
+        parent_starter_id: (updated as any)?.parent_starter_id ?? null,
+      });
+    } catch (error: any) {
+      console.error("Error at reparent device :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
+  getChildrenHandler = async (c: Context) => {
+    try {
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+      if (starter.role !== "MASTER") throw new BadRequestException(DEVICE_IS_NOT_MASTER);
+
+      const children = await getChildrenOfStarter(starterId);
+      return sendResponse(c, 200, CHILDREN_FETCHED, { count: children.length, records: children });
+    } catch (error: any) {
+      console.error("Error at get children :", error);
+      throw error;
+    }
+  }
+
+  getTopologyHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const query = c.req.query();
+      const filters: { user_id?: number; location_id?: number; status?: string } = {};
+      if (query.location_id) filters.location_id = +query.location_id;
+      if (query.status) filters.status = query.status;
+      if (userPayload.user_type !== "ADMIN" && userPayload.user_type !== "SUPER_ADMIN") {
+        filters.user_id = userPayload.id;
+      } else if (query.user_id) {
+        filters.user_id = +query.user_id;
+      }
+
+      const tree = await getTopologyTree(filters);
+      return sendResponse(c, 200, TOPOLOGY_FETCHED, tree);
+    } catch (error: any) {
+      console.error("Error at get topology :", error);
+      throw error;
+    }
+  }
+
+  getEligibleParentsHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const query = c.req.query();
+      const params: { search?: string; user_id?: number; location_id?: number } = {};
+      if (query.search) params.search = query.search;
+      if (query.location_id) params.location_id = +query.location_id;
+      if (userPayload.user_type !== "ADMIN" && userPayload.user_type !== "SUPER_ADMIN") {
+        params.user_id = userPayload.id;
+      } else if (query.user_id) {
+        params.user_id = +query.user_id;
+      }
+
+      const records = await getEligibleParents(params);
+      return sendResponse(c, 200, ELIGIBLE_PARENTS_FETCHED, { count: records.length, records });
+    } catch (error: any) {
+      console.error("Error at get eligible parents :", error);
       throw error;
     }
   }

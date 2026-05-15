@@ -6,7 +6,7 @@ import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vAddMotorSchedule, vAddRepeatDays, vArrayOfMotorScheduleValidators, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
 import { vAddMotor, vAssignMotorToDevice, vReplaceMotorDevice, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
-import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation } from "./schema/starter-validations.js";
+import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vChangeRole, vReparent, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
@@ -48,6 +48,8 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "assign-motor-to-device": vAssignMotorToDevice,
   "replace-motor-device": vReplaceMotorDevice,
   "update-installed-location": vUpdateInstalledLocation,
+  "change-role": vChangeRole,
+  "reparent-device": vReparent,
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(

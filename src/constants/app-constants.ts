@@ -308,6 +308,27 @@ export const DEVICE_INFO_REQUEST_SENT = "Device info request sent successfully";
 export const FAULT_CLEARED_SUCCESSFULLY = "Fault cleared successfully";
 export const NO_ACTIVE_FAULT_FOUND = "No active fault record found for this motor and starter";
 
+// Device role / topology
+export const DEVICE_ROLES = ["STANDALONE", "MASTER", "CHILD"] as const;
+export const REASSIGNMENT_STRATEGIES = ["ORPHAN", "REPARENT"] as const;
+export const DEVICE_ROLE_VALIDATION_CRITERIA = "Device role details provided do not meet the required validation criteria";
+export const ROLE_CHANGED_SUCCESSFULLY = "Device role updated successfully";
+export const PARENT_UPDATED_SUCCESSFULLY = "Device parent updated successfully";
+export const CHILDREN_FETCHED = "Child devices fetched successfully";
+export const TOPOLOGY_FETCHED = "Device topology fetched successfully";
+export const ELIGIBLE_PARENTS_FETCHED = "Eligible parent devices fetched successfully";
+export const INVALID_ROLE = "Invalid device role";
+export const INVALID_REASSIGNMENT = "Invalid reassignment strategy";
+export const PARENT_REQUIRED_FOR_CHILD = "Parent device is required for CHILD role";
+export const PARENT_NOT_ALLOWED_FOR_NON_CHILD = "Parent device is only allowed for CHILD role";
+export const PARENT_NOT_FOUND = "Parent device not found";
+export const PARENT_MUST_BE_MASTER = "Parent device must be a MASTER";
+export const CANNOT_PARENT_SELF = "A device cannot be its own parent";
+export const MASTER_HAS_CHILDREN = "Master device has children — choose how to reassign them";
+export const NEW_PARENT_REQUIRED = "New parent is required for REPARENT strategy";
+export const DEVICE_IS_NOT_MASTER = "Device is not a MASTER";
+export const DEVICE_IS_NOT_CHILD = "Device is not a CHILD";
+
 // Starter Dispatch
 export const STARTER_DISPATCH_VALIDATION_CRITERIA = "Starter dispatch details provided do not meet the required validation criteria";
 export const STARTER_DISPATCH_ADDED_SUCCESSFULLY = "Dispatch details added successfully";

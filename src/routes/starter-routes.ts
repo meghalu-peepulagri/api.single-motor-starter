@@ -16,6 +16,8 @@ starterRoutes.get("/sim-recharge-expiry-notifications", starterHandlers.simRecha
 starterRoutes.get("/device-info-request", starterHandlers.deviceInfoRequestHandler);
 starterRoutes.post("/check-details", isAuthorized, starterHandlers.getDeviceDetailsHandler);
 starterRoutes.get("/basic-details", isAuthorized, isSuperAdminOrAdmin, starterHandlers.getBasicDetailsHandler);
+starterRoutes.get("/topology", isAuthorized, starterHandlers.getTopologyHandler);
+starterRoutes.get("/eligible-parents", isAuthorized, starterHandlers.getEligibleParentsHandler);
 
 starterRoutes.patch("/assign", isAuthorized, starterHandlers.assignStarterMobileHandler);
 starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWebHandler);
@@ -38,6 +40,10 @@ starterRoutes.patch("/:id/settings-sync", isAuthorized, starterHandlers.updateSe
 starterRoutes.patch("/:id/reset", isAuthorized, starterHandlers.deviceResetHandler);
 starterRoutes.get("/:id/installation-photo/upload-url", isAuthorized, starterHandlers.getInstallationPhotoUploadUrlHandler);
 starterRoutes.patch("/:id/installed-location", isAuthorized, starterHandlers.updateInstalledLocationHandler);
+
+starterRoutes.get("/:id/children", isAuthorized, starterHandlers.getChildrenHandler);
+starterRoutes.patch("/:id/role", isAuthorized, starterHandlers.changeRoleHandler);
+starterRoutes.patch("/:id/parent", isAuthorized, starterHandlers.reparentHandler);
 
 starterRoutes.patch("/:id", isAuthorized, starterHandlers.deleteStarterBoxHandler);
 

@@ -582,3 +582,277 @@ export async function getBasicStarterDetails(pageParams, search) {
         records,
     };
 }
+export async function getStarterById(id) {
+    return await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [id, "ARCHIVED"]);
+}
+/**
+ * Cross-field validation for role + parent_starter_id.
+ * Throws caller-supplied exceptions; returns nothing on success.
+ */
+export async function resolveAndValidateParent(role, parentStarterId, selfId) {
+    if (role !== "CHILD") {
+        return { parent: null };
+    }
+    if (!parentStarterId) {
+        throw new (await import("../../exceptions/bad-request-exception.js")).default((await import("../../constants/app-constants.js")).PARENT_REQUIRED_FOR_CHILD);
+    }
+    if (selfId && parentStarterId === selfId) {
+        throw new (await import("../../exceptions/bad-request-exception.js")).default((await import("../../constants/app-constants.js")).CANNOT_PARENT_SELF);
+    }
+    const parent = await getStarterById(parentStarterId);
+    if (!parent) {
+        throw new (await import("../../exceptions/not-found-exception.js")).default((await import("../../constants/app-constants.js")).PARENT_NOT_FOUND);
+    }
+    if (parent.role !== "MASTER") {
+        throw new (await import("../../exceptions/bad-request-exception.js")).default((await import("../../constants/app-constants.js")).PARENT_MUST_BE_MASTER);
+    }
+    return { parent };
+}
+export async function getChildrenOfStarter(masterId) {
+    return await db.query.starterBoxes.findMany({
+        where: and(eq(starterBoxes.parent_starter_id, masterId), ne(starterBoxes.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            name: true,
+            role: true,
+            mac_address: true,
+            pcb_number: true,
+            starter_number: true,
+            power: true,
+            signal_quality: true,
+            device_status: true,
+            status: true,
+            last_signal_received_at: true,
+            parent_starter_id: true,
+        },
+        with: {
+            motors: {
+                where: ne(motors.status, "ARCHIVED"),
+                columns: {
+                    id: true,
+                    name: true,
+                    alias_name: true,
+                    hp: true,
+                    state: true,
+                    mode: true,
+                },
+            },
+        },
+        orderBy: [asc(starterBoxes.id)],
+    });
+}
+export async function countChildrenOfMaster(masterId) {
+    return await getRecordsCount(starterBoxes, [
+        eq(starterBoxes.parent_starter_id, masterId),
+        ne(starterBoxes.status, "ARCHIVED"),
+    ]);
+}
+export async function getEligibleParents(query) {
+    const filters = [
+        eq(starterBoxes.role, "MASTER"),
+        ne(starterBoxes.status, "ARCHIVED"),
+    ];
+    if (query.user_id)
+        filters.push(eq(starterBoxes.user_id, Number(query.user_id)));
+    if (query.location_id)
+        filters.push(eq(starterBoxes.location_id, Number(query.location_id)));
+    if (query.search?.trim()) {
+        const s = `%${query.search.trim()}%`;
+        filters.push(or(ilike(starterBoxes.starter_number, s), ilike(starterBoxes.pcb_number, s), ilike(starterBoxes.mac_address, s), ilike(starterBoxes.name, s)));
+    }
+    return await db.query.starterBoxes.findMany({
+        where: and(...filters),
+        columns: {
+            id: true,
+            name: true,
+            role: true,
+            mac_address: true,
+            pcb_number: true,
+            starter_number: true,
+            device_status: true,
+        },
+        orderBy: [desc(starterBoxes.created_at)],
+        limit: 50,
+    });
+}
+/**
+ * Returns a nested tree of starters. Roots = devices with no parent_starter_id
+ * (STANDALONE or MASTER); children are nested under their parent_starter_id.
+ */
+export async function getTopologyTree(query) {
+    const filters = [ne(starterBoxes.status, "ARCHIVED")];
+    if (query.user_id)
+        filters.push(eq(starterBoxes.user_id, Number(query.user_id)));
+    if (query.location_id)
+        filters.push(eq(starterBoxes.location_id, Number(query.location_id)));
+    if (query.status)
+        filters.push(eq(starterBoxes.status, query.status));
+    const rows = await db.query.starterBoxes.findMany({
+        where: and(...filters),
+        columns: {
+            id: true,
+            name: true,
+            role: true,
+            parent_starter_id: true,
+            mac_address: true,
+            pcb_number: true,
+            starter_number: true,
+            power: true,
+            status: true,
+            device_status: true,
+            signal_quality: true,
+            last_signal_received_at: true,
+            device_mobile_number: true,
+        },
+        with: {
+            motors: {
+                where: ne(motors.status, "ARCHIVED"),
+                columns: { id: true, alias_name: true, hp: true, state: true },
+            },
+        },
+        orderBy: [asc(starterBoxes.parent_starter_id), asc(starterBoxes.id)],
+    });
+    const byId = new Map();
+    rows.forEach((r) => byId.set(r.id, { ...r, children: [] }));
+    const roots = [];
+    for (const r of byId.values()) {
+        if (r.parent_starter_id && byId.has(r.parent_starter_id)) {
+            byId.get(r.parent_starter_id).children.push(r);
+        }
+        else {
+            roots.push(r);
+        }
+    }
+    return roots;
+}
+export async function changeRoleWithTransaction(starter, payload, userId) {
+    const newRole = payload.role;
+    const oldRole = starter.role;
+    if (newRole === oldRole && newRole !== "CHILD") {
+        return { updated: starter, childrenReassigned: 0 };
+    }
+    await resolveAndValidateParent(newRole, payload.parent_starter_id ?? null, starter.id);
+    let childrenReassigned = 0;
+    if (oldRole === "MASTER" && newRole !== "MASTER") {
+        const childCount = await countChildrenOfMaster(starter.id);
+        if (childCount > 0) {
+            const strategy = payload.reassignment ?? "ORPHAN";
+            if (strategy === "REPARENT") {
+                if (!payload.new_parent_id) {
+                    throw new (await import("../../exceptions/bad-request-exception.js")).default((await import("../../constants/app-constants.js")).NEW_PARENT_REQUIRED);
+                }
+                if (payload.new_parent_id === starter.id) {
+                    throw new (await import("../../exceptions/bad-request-exception.js")).default((await import("../../constants/app-constants.js")).CANNOT_PARENT_SELF);
+                }
+                const newParent = await getStarterById(payload.new_parent_id);
+                if (!newParent) {
+                    throw new (await import("../../exceptions/not-found-exception.js")).default((await import("../../constants/app-constants.js")).PARENT_NOT_FOUND);
+                }
+                if (newParent.role !== "MASTER") {
+                    throw new (await import("../../exceptions/bad-request-exception.js")).default((await import("../../constants/app-constants.js")).PARENT_MUST_BE_MASTER);
+                }
+            }
+            childrenReassigned = childCount;
+        }
+    }
+    return await db.transaction(async (trx) => {
+        if (oldRole === "MASTER" && newRole !== "MASTER" && childrenReassigned > 0) {
+            const strategy = payload.reassignment ?? "ORPHAN";
+            if (strategy === "REPARENT") {
+                await trx.update(starterBoxes)
+                    .set({ parent_starter_id: payload.new_parent_id })
+                    .where(and(eq(starterBoxes.parent_starter_id, starter.id), ne(starterBoxes.status, "ARCHIVED")));
+            }
+            else {
+                await trx.update(starterBoxes)
+                    .set({ parent_starter_id: null })
+                    .where(and(eq(starterBoxes.parent_starter_id, starter.id), ne(starterBoxes.status, "ARCHIVED")));
+            }
+        }
+        const updateData = {
+            role: newRole,
+            parent_starter_id: newRole === "CHILD" ? (payload.parent_starter_id ?? null) : null,
+        };
+        if (newRole === "CHILD") {
+            updateData.device_mobile_number = null;
+        }
+        const updated = await updateRecordByIdWithTrx(starterBoxes, starter.id, updateData, trx);
+        await ActivityService.logActivity({
+            performedBy: userId,
+            action: "DEVICE_ROLE_CHANGED",
+            entityType: "STARTER",
+            entityId: starter.id,
+            oldData: { role: oldRole, parent_starter_id: starter.parent_starter_id },
+            newData: {
+                role: newRole,
+                parent_starter_id: updateData.parent_starter_id,
+                children_reassigned: childrenReassigned,
+                reassignment_strategy: childrenReassigned > 0 ? (payload.reassignment ?? "ORPHAN") : null,
+            },
+        }, trx);
+        return { updated, childrenReassigned };
+    });
+}
+export async function reparentWithTransaction(child, newParentId, userId) {
+    if (child.role !== "CHILD") {
+        throw new (await import("../../exceptions/bad-request-exception.js")).default((await import("../../constants/app-constants.js")).DEVICE_IS_NOT_CHILD);
+    }
+    await resolveAndValidateParent("CHILD", newParentId, child.id);
+    return await db.transaction(async (trx) => {
+        const oldParentId = child.parent_starter_id;
+        const updated = await updateRecordByIdWithTrx(starterBoxes, child.id, { parent_starter_id: newParentId }, trx);
+        await ActivityService.logActivity({
+            performedBy: userId,
+            action: "DEVICE_REPARENTED",
+            entityType: "STARTER",
+            entityId: child.id,
+            oldData: { parent_starter_id: oldParentId },
+            newData: { parent_starter_id: newParentId },
+        }, trx);
+        return updated;
+    });
+}
+/**
+ * Detail payload for a single device that includes its topology context:
+ *   - parent (if CHILD)
+ *   - children + each child's motors (if MASTER)
+ * Designed to be merged into the existing /:id/motors response by the handler.
+ */
+export async function getStarterTopologyContext(starterId) {
+    const starter = await db.query.starterBoxes.findFirst({
+        where: and(eq(starterBoxes.id, starterId), ne(starterBoxes.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            role: true,
+            parent_starter_id: true,
+        },
+    });
+    if (!starter)
+        return null;
+    let parent = null;
+    let children = [];
+    if (starter.role === "CHILD" && starter.parent_starter_id) {
+        parent = await db.query.starterBoxes.findFirst({
+            where: and(eq(starterBoxes.id, starter.parent_starter_id), ne(starterBoxes.status, "ARCHIVED")),
+            columns: {
+                id: true,
+                name: true,
+                role: true,
+                mac_address: true,
+                pcb_number: true,
+                starter_number: true,
+                device_status: true,
+            },
+        });
+    }
+    if (starter.role === "MASTER") {
+        children = await getChildrenOfStarter(starter.id);
+    }
+    return {
+        role: starter.role,
+        parent_starter_id: starter.parent_starter_id,
+        parent,
+        children,
+        child_count: children.length,
+    };
+}

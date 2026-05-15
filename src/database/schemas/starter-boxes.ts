@@ -10,6 +10,7 @@ import { starterDispatch } from "./starter-dispatch.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY", "TEST"]);
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
 export const motorSupportTypeEnum = pgEnum("motor_support_type", ["SINGLE_MOTOR", "MULTIPLE_MOTORS"]);
+export const deviceRoleEnum = pgEnum("device_role", ["STANDALONE", "MASTER", "CHILD"]);
 
 
 export const starterBoxes = pgTable("starter_boxes", {
@@ -31,6 +32,8 @@ export const starterBoxes = pgTable("starter_boxes", {
   network_type: varchar("network_type"),
   starter_type: starterType().notNull().default("SINGLE_STARTER"),
   motor_support_type: motorSupportTypeEnum().notNull().default("SINGLE_MOTOR"),
+  role: deviceRoleEnum().notNull().default("STANDALONE"),
+  parent_starter_id: integer("parent_starter_id").references((): any => starterBoxes.id),
 
   hardware_version: varchar("hardware_version"),
   temperature: real("temperature").default(0),
@@ -61,6 +64,8 @@ export const starterBoxes = pgTable("starter_boxes", {
   index("starter_box_starter_number_idx").on(table.starter_number),
   index("starter_box_location_id_idx").on(table.location_id),
   index("starter_box_power_idx").on(table.power),
+  index("starter_box_role_idx").on(table.role),
+  index("starter_box_parent_starter_id_idx").on(table.parent_starter_id),
 
   uniqueIndex("valid_starter_box_name").on(sql`lower(${table.name})`).where(sql`${table.status} != 'ARCHIVED'`),
   uniqueIndex("validate_mac_address").on(sql`lower(${table.mac_address})`).where(sql`${table.status} != 'ARCHIVED'`),
@@ -98,5 +103,12 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => 
     fields: [starterBoxes.id],
     references: [starterDispatch.starter_id],
   }),
+
+  parent: one(starterBoxes, {
+    fields: [starterBoxes.parent_starter_id],
+    references: [starterBoxes.id],
+    relationName: "parent_children",
+  }),
+  children: many(starterBoxes, { relationName: "parent_children" }),
 
 }));
