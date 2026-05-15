@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, notInArray, SQL, sql, getTableColumns, desc } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, ne, notInArray, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
@@ -396,7 +396,7 @@ export async function findSchedulesByFilters(
       eq(motorSchedules.starter_id, starterBoxes.id)
     )
     .where(whereClause)
-    .orderBy(desc(motorSchedules.created_at))
+    .orderBy(asc(motorSchedules.start_date_time))
     .limit(limit)
     .offset(offset);
 

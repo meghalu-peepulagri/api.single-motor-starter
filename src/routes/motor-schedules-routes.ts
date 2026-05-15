@@ -19,6 +19,9 @@ motorScheduleRoute.get("/", isAuthorized, motorScheduleHandler.motorScheduleList
 // Get single schedule by id
 motorScheduleRoute.get("/:id", isAuthorized, motorScheduleHandler.getMotorScheduleByIdHandler);
 
+// Get timeline history for a single schedule
+motorScheduleRoute.get("/:id/history", isAuthorized, motorScheduleHandler.getScheduleHistoryByIdHandler);
+
 // Get full lifecycle audit trail for a schedule
 motorScheduleRoute.get("/:id/logs", isAuthorized, motorScheduleHandler.getScheduleLogsHandler);
 

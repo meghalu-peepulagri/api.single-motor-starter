@@ -65,6 +65,8 @@ export const motorSchedules = pgTable("motor_schedules", {
   failure_at: timestamp("failure_at"),
   failure_reason: varchar("failure_reason"),
   // Device live data snapshot — overwritten every 2-min report; full history in motor_schedule_live_data + S3
+  start_date_time: timestamp("start_date_time"),
+  end_date_time: timestamp("end_date_time"),
   device_start_time: varchar("device_start_time"),
   device_end_time: varchar("device_end_time"),
   device_run_time: integer("device_run_time"),

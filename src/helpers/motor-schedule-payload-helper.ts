@@ -167,6 +167,17 @@ export function numericToDateString(value: number): string {
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // +5:30 in milliseconds
 
+/** Convert YYMMDD date + HHMM time (IST) to a UTC Date object */
+export function yymmddHhmmToUTCDate(yymmdd: number, hhmm: string): Date {
+  const dateStr = String(yymmdd).padStart(6, "0");
+  const yy = parseInt(dateStr.slice(0, 2), 10);
+  const mo = parseInt(dateStr.slice(2, 4), 10) - 1;
+  const dd = parseInt(dateStr.slice(4, 6), 10);
+  const hh = parseInt(hhmm.slice(0, 2), 10);
+  const mi = parseInt(hhmm.slice(2, 4), 10);
+  return new Date(Date.UTC(2000 + yy, mo, dd, hh, mi, 0) - IST_OFFSET_MS);
+}
+
 /** Convert a Date to IST and return { yy, mm, dd } */
 function toISTDate(date: Date) {
   const istTime = new Date(date.getTime() + IST_OFFSET_MS);
@@ -350,6 +361,7 @@ export function buildScheduleData(data: {
   power_loss_recovery_time?: number;
 }, scheduleStartDate: number) {
   const scheduleType: ScheduleType = (data.schedule_type as ScheduleType) || "TIME_BASED";
+  const endDateForDateTime = data.schedule_end_date ?? scheduleStartDate;
   return {
     motor_id: data.motor_id,
     starter_id: data.starter_id || null,
@@ -358,6 +370,8 @@ export function buildScheduleData(data: {
     schedule_end_date: data.schedule_end_date || null,
     start_time: data.start_time,
     end_time: data.end_time,
+    start_date_time: yymmddHhmmToUTCDate(scheduleStartDate, data.start_time),
+    end_date_time: yymmddHhmmToUTCDate(endDateForDateTime, data.end_time),
     days_of_week: data.days_of_week || [],
     bit_wise_days: data.bit_wise_days ?? 0,
     runtime_minutes: data.runtime_minutes || null,
