@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import { DEPLOYED_STATUS, DEVICE_ID_REQUIRED, DEVICE_ROLES, INVALID_REASSIGNMENT, INVALID_ROLE, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, REASSIGNMENT_STRATEGIES, USER_ID_REQUIRED } from "../../constants/app-constants.js";
+import { DEPLOYED_STATUS, DEVICE_ID_REQUIRED, DEVICE_ROLES, INVALID_REASSIGNMENT, INVALID_REPLACE_MODE, INVALID_ROLE, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, REASSIGNMENT_STRATEGIES, REPLACE_MASTER_MODES, USER_ID_REQUIRED } from "../../constants/app-constants.js";
 import { hardwareVersion, hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, pcbOrSerialNumberValidator, requiredNumber, simNumberValidator, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
 const deviceStatusValidator = v.picklist(DEPLOYED_STATUS, "Invalid device status");
 const roleValidator = v.picklist(DEVICE_ROLES, INVALID_ROLE);
@@ -71,6 +71,21 @@ export const vReparent = v.object({
   parent_starter_id: requiredNumber("Parent device is required"),
 });
 
+export const vReplaceMaster = v.object({
+  old_master_id: requiredNumber("Old master device is required"),
+  new_master_id: requiredNumber("New master device is required"),
+  // Modes:
+  //   SWAP_CHILDREN  → both MASTER. A's children become B's, and vice versa. Both stay alive.
+  //   MOVE_CHILDREN  → both MASTER. Move children from old → new.
+  //                    child_ids omitted/empty = move ALL.
+  //                    child_ids = [..] = move only those (must belong to old_master).
+  //   REPLACE_DEVICE → old MASTER + new STANDALONE. Children move to new, old archived,
+  //                    new takes over location/user/device_status.
+  // If mode is omitted, it is auto-detected from the device roles.
+  mode: v.optional(v.picklist(REPLACE_MASTER_MODES, INVALID_REPLACE_MODE)),
+  child_ids: v.optional(v.array(v.number())),
+});
+
 export type validatedAddStarter = v.InferOutput<typeof vAddStarter>;
 export type validatedAssignStarter = v.InferOutput<typeof vAssignStarter>;
 export type validatedReplaceStarter = v.InferOutput<typeof vReplaceStarter>;
@@ -80,3 +95,4 @@ export type validatedAssignLocationToStarter = v.InferOutput<typeof vAssignLocat
 export type validatedUpdateInstalledLocation = v.InferOutput<typeof vUpdateInstalledLocation>;
 export type validatedChangeRole = v.InferOutput<typeof vChangeRole>;
 export type validatedReparent = v.InferOutput<typeof vReparent>;
+export type validatedReplaceMaster = v.InferOutput<typeof vReplaceMaster>;

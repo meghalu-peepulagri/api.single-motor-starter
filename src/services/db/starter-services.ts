@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
@@ -158,11 +158,16 @@ export async function paginatedStarterList(
       network_type: true,
       device_mobile_number: true,
       starter_type: true,
+      role: true,
+      parent_starter_id: true,
     },
     with: {
       gateway: {
         where: ne(gateways.status, "ARCHIVED"),
         columns: { id: true, name: true, mac_address: true, pcb_number: true },
+      },
+      parent: {
+        columns: { id: true, name: true, starter_number: true, mac_address: true, role: true },
       },
       user: {
         where: ne(users.status, "ARCHIVED"),
@@ -239,8 +244,13 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
       device_mobile_number: true,
       device_installed_location: true,
       installation_photo_key: true,
+      role: true,
+      parent_starter_id: true,
     },
     with: {
+      parent: {
+        columns: { id: true, name: true, starter_number: true, mac_address: true, role: true },
+      },
       motors: {
         where: ne(motors.status, "ARCHIVED"),
         columns: {
@@ -827,6 +837,46 @@ export async function countChildrenOfMaster(masterId: number): Promise<number> {
   ]);
 }
 
+export async function getUnassignedMasters(
+  pageParams: { page: number; pageSize: number; offset: number },
+  search?: string,
+) {
+  const baseFilters: any[] = [
+    eq(starterBoxes.role, "MASTER"),
+    ne(starterBoxes.status, "ARCHIVED"),
+    isNull(starterBoxes.user_id),
+  ];
+
+  const trimmedSearch = search?.trim();
+  if (trimmedSearch) {
+    const s = `%${trimmedSearch}%`;
+    baseFilters.push(or(
+      ilike(starterBoxes.starter_number, s),
+      ilike(starterBoxes.mac_address, s),
+      ilike(starterBoxes.pcb_number, s),
+    ) as any);
+  }
+
+  const whereCondition = and(...baseFilters);
+
+  const records = await db.select({
+    id: starterBoxes.id,
+    mac_address: starterBoxes.mac_address,
+    pcb_number: starterBoxes.pcb_number,
+    starter_number: starterBoxes.starter_number,
+  })
+    .from(starterBoxes)
+    .where(whereCondition)
+    .orderBy(desc(starterBoxes.created_at))
+    .limit(pageParams.pageSize)
+    .offset(pageParams.offset);
+
+  const totalRecords = await getRecordsCount(starterBoxes, baseFilters);
+  const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
+
+  return { pagination_info: pagination, records };
+}
+
 export async function getEligibleParents(query: { search?: string; user_id?: number; location_id?: number }) {
   const filters: any[] = [
     eq(starterBoxes.role, "MASTER"),
@@ -1035,6 +1085,213 @@ export async function reparentWithTransaction(
     }, trx);
 
     return updated;
+  });
+}
+
+/**
+ * MODE A: SWAP_CHILDREN
+ * Swap children between two MASTER devices.
+ *  - A's children become B's children
+ *  - B's children become A's children
+ *  - Both devices remain MASTER and stay alive
+ *  - Done in one atomic UPDATE using CASE so we never violate FK during the flip
+ */
+export async function swapMastersChildrenWithTransaction(
+  masterA: StarterBox,
+  masterB: StarterBox,
+  userId: number,
+) {
+  return await db.transaction(async (trx) => {
+    // Count children on each side BEFORE the swap (for activity log / response)
+    const aChildrenBefore = await getRecordsCount(starterBoxes, [
+      eq(starterBoxes.parent_starter_id, masterA.id),
+      ne(starterBoxes.status, "ARCHIVED"),
+    ]);
+    const bChildrenBefore = await getRecordsCount(starterBoxes, [
+      eq(starterBoxes.parent_starter_id, masterB.id),
+      ne(starterBoxes.status, "ARCHIVED"),
+    ]);
+
+    // Atomic swap — one UPDATE with CASE so both sets flip without a transient
+    // state where children point at the wrong master.
+    await trx.update(starterBoxes)
+      .set({
+        parent_starter_id: sql`(CASE
+          WHEN ${starterBoxes.parent_starter_id} = ${masterA.id} THEN ${masterB.id}::integer
+          WHEN ${starterBoxes.parent_starter_id} = ${masterB.id} THEN ${masterA.id}::integer
+        END)`,
+      })
+      .where(and(
+        inArray(starterBoxes.parent_starter_id, [masterA.id, masterB.id]),
+        ne(starterBoxes.status, "ARCHIVED"),
+      ));
+
+    await ActivityService.logActivity({
+      performedBy: userId,
+      action: "MASTER_SWAPPED",
+      entityType: "STARTER",
+      entityId: masterA.id,
+      oldData: {
+        a_id: masterA.id, a_starter_number: masterA.starter_number, a_children: aChildrenBefore,
+        b_id: masterB.id, b_starter_number: masterB.starter_number, b_children: bChildrenBefore,
+      },
+      newData: {
+        a_now_has: bChildrenBefore,
+        b_now_has: aChildrenBefore,
+      },
+    }, trx);
+
+    return {
+      mode: "SWAP_CHILDREN" as const,
+      master_a_id: masterA.id,
+      master_b_id: masterB.id,
+      a_received: bChildrenBefore,  // A now has what B used to have
+      b_received: aChildrenBefore,  // B now has what A used to have
+    };
+  });
+}
+
+/**
+ * Move children from one MASTER to another MASTER.
+ *  - If childIds is null/empty → move ALL of from's children
+ *  - If childIds is provided   → move only those (each must belong to fromMaster)
+ *  - Both masters stay alive; only children's parent_starter_id changes
+ *  - Returns counts before/after so the UI can show "Moved 2 of 4"
+ */
+export async function moveChildrenWithTransaction(
+  fromMaster: StarterBox,
+  toMaster: StarterBox,
+  childIds: number[] | null,
+  userId: number,
+) {
+  return await db.transaction(async (trx) => {
+    // Count before, for the response & audit log
+    const fromBefore = await getRecordsCount(starterBoxes, [
+      eq(starterBoxes.parent_starter_id, fromMaster.id),
+      ne(starterBoxes.status, "ARCHIVED"),
+    ]);
+    const toBefore = await getRecordsCount(starterBoxes, [
+      eq(starterBoxes.parent_starter_id, toMaster.id),
+      ne(starterBoxes.status, "ARCHIVED"),
+    ]);
+
+    // Build the WHERE for the children we're going to move
+    const baseFilters: any[] = [
+      eq(starterBoxes.parent_starter_id, fromMaster.id),
+      ne(starterBoxes.status, "ARCHIVED"),
+    ];
+    if (childIds && childIds.length > 0) {
+      baseFilters.push(inArray(starterBoxes.id, childIds));
+    }
+
+    const moved = await trx.update(starterBoxes)
+      .set({ parent_starter_id: toMaster.id })
+      .where(and(...baseFilters))
+      .returning({ id: starterBoxes.id });
+
+    const movedCount = moved.length;
+    const fromAfter = fromBefore - movedCount;
+    const toAfter = toBefore + movedCount;
+
+    await ActivityService.logActivity({
+      performedBy: userId,
+      action: "CHILDREN_MOVED",
+      entityType: "STARTER",
+      entityId: fromMaster.id,
+      oldData: {
+        from_master_id: fromMaster.id, from_children_before: fromBefore,
+        to_master_id: toMaster.id, to_children_before: toBefore,
+        selected_child_ids: childIds ?? "ALL",
+      },
+      newData: {
+        moved_count: movedCount,
+        from_children_after: fromAfter,
+        to_children_after: toAfter,
+      },
+    }, trx);
+
+    return {
+      from_master_id: fromMaster.id,
+      to_master_id: toMaster.id,
+      moved_count: movedCount,
+      moved_ids: moved.map(m => m.id),
+      from_children_before: fromBefore,
+      from_children_after: fromAfter,
+      to_children_before: toBefore,
+      to_children_after: toAfter,
+    };
+  });
+}
+
+/**
+ * MODE B: REPLACE_DEVICE
+ * Replace an old MASTER with a new STANDALONE device (hardware swap).
+ *  - All children of old → repointed to new
+ *  - New device becomes MASTER, inherits old's user/location/device_status/assigned_at,
+ *    and name (only if new was unnamed)
+ *  - Old device is ARCHIVED
+ *  - Everything in one transaction so partial failures cannot leave bad state
+ */
+export async function replaceMasterDeviceWithTransaction(
+  oldMaster: StarterBox,
+  newDevice: StarterBox,
+  userId: number,
+) {
+  return await db.transaction(async (trx) => {
+    // 1. Re-parent every non-archived child of the old master to the new device
+    const movedChildren = await trx.update(starterBoxes)
+      .set({ parent_starter_id: newDevice.id })
+      .where(and(
+        eq(starterBoxes.parent_starter_id, oldMaster.id),
+        ne(starterBoxes.status, "ARCHIVED"),
+      ))
+      .returning({ id: starterBoxes.id });
+
+    // 2. Promote the new device — copy old's deployment context so it shows up
+    //    in the same place in the UI (same user, location, status)
+    const newDeviceUpdate: Record<string, any> = {
+      role: "MASTER",
+      user_id: oldMaster.user_id,
+      location_id: oldMaster.location_id,
+      device_status: oldMaster.device_status,
+      assigned_at: oldMaster.assigned_at,
+    };
+    if (!newDevice.name && oldMaster.name) newDeviceUpdate.name = oldMaster.name;
+
+    const updatedNew = await updateRecordByIdWithTrx<StarterBoxTable>(
+      starterBoxes, newDevice.id, newDeviceUpdate, trx,
+    );
+
+    // 3. Archive the old device (soft-delete — keeps all historical data intact)
+    const updatedOld = await updateRecordByIdWithTrx<StarterBoxTable>(
+      starterBoxes, oldMaster.id, { status: "ARCHIVED" }, trx,
+    );
+
+    await ActivityService.logActivity({
+      performedBy: userId,
+      action: "MASTER_REPLACED",
+      entityType: "STARTER",
+      entityId: oldMaster.id,
+      oldData: {
+        old_master_id: oldMaster.id,
+        old_master_starter_number: oldMaster.starter_number,
+        old_master_name: oldMaster.name,
+      },
+      newData: {
+        new_master_id: newDevice.id,
+        new_master_starter_number: newDevice.starter_number,
+        children_transferred: movedChildren.length,
+      },
+    }, trx);
+
+    return {
+      mode: "REPLACE_DEVICE" as const,
+      old_master_id: oldMaster.id,
+      new_master_id: newDevice.id,
+      children_transferred: movedChildren.length,
+      old: updatedOld,
+      new: updatedNew,
+    };
   });
 }
 

@@ -18,11 +18,13 @@ starterRoutes.post("/check-details", isAuthorized, starterHandlers.getDeviceDeta
 starterRoutes.get("/basic-details", isAuthorized, isSuperAdminOrAdmin, starterHandlers.getBasicDetailsHandler);
 starterRoutes.get("/topology", isAuthorized, starterHandlers.getTopologyHandler);
 starterRoutes.get("/eligible-parents", isAuthorized, starterHandlers.getEligibleParentsHandler);
+starterRoutes.get("/unassigned-masters", isAuthorized, starterHandlers.getUnassignedMastersHandler);
 
 starterRoutes.patch("/assign", isAuthorized, starterHandlers.assignStarterMobileHandler);
 starterRoutes.patch("/assign-web", isAuthorized, starterHandlers.assignStarterWebHandler);
 starterRoutes.patch("/assign-location", isAuthorized, starterHandlers.assignLocationToStarterHandler);
 starterRoutes.patch("/replace", isAuthorized, starterHandlers.replaceStarterLocationHandler);
+starterRoutes.patch("/replace-master", isAuthorized, starterHandlers.replaceMasterHandler);
 starterRoutes.patch("/update-status", starterHandlers.markStarterStatusHandler);
 
 starterRoutes.get("/:id/run-time", isAuthorized, starterHandlers.starterRunTimeHandler);
