@@ -1,12 +1,13 @@
 import { DEVICE_SCHEMA } from "../constants/app-constants.js";
-import { getGatewayByIdentifier } from "../services/db/gateway-services.js";
 import { insertParametersForUnmatchedMotor, saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
-import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
+import { findChildOfMasterByIdentifier, findMasterByIdentifier, getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { logger } from "../utils/logger.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { extractMultiMotorBlocks, isMultiMotorPayload, resolveMotorsFromPayload } from "./multi-motor-live-data-helper.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 export async function liveDataHandler(parsedMessage, topic) {
+    console.log('topic: ', topic);
+    console.log('parsedMessage: ', parsedMessage);
     try {
         if (!parsedMessage)
             return;
@@ -17,38 +18,39 @@ export async function liveDataHandler(parsedMessage, topic) {
         }
         // Always validate device MAC in DB
         const device = await getStarterByMacWithMotor(deviceId);
+        console.log('device: ', device);
         if (!device) {
             logger.error("Starter not found for MAC", undefined, { deviceId, topic });
             return null;
         }
-        // For 4-segment topics (peepul/{gateway}/{device}/status): also validate gateway
+        // For 4-segment topics (peepul/{master}/{device}/status): validate against
+        // the MASTER/CHILD topology. segment[1] must resolve to a MASTER; segment[2]
+        // must be either that master itself or a CHILD parented by it.
         if (gatewayId) {
-            const gateway = await getGatewayByIdentifier(gatewayId);
-            if (!gateway) {
-                logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
+            const resolved = await resolveMasterChildFromTopic(topic);
+            if (!resolved) {
+                logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { gatewayId, deviceId, topic });
                 return null;
             }
-            if (device.gateway_id !== gateway.id) {
-                logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
+            if (resolved.deviceId !== device.id) {
+                logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+                    resolvedDeviceId: resolved.deviceId,
+                    deviceId: device.id,
+                    topic,
+                });
                 return null;
             }
         }
         const formatted = validateLiveDataFormat(parsedMessage, topic);
         if (!formatted)
             return null;
-        if (device.starter_type === "MULTI_STARTER") {
-            await handleMultiStarterLiveData(parsedMessage, formatted, device);
-        }
-        else {
-            // SINGLE_STARTER — existing path, unchanged
-            const validated = validateLiveDataContent(formatted);
-            if (!validated)
-                return null;
-            const prepared = prepareLiveDataPayload(validated, device);
-            if (!prepared)
-                return null;
-            await saveLiveDataTopic(prepared, prepared.group_id, device);
-        }
+        const validated = validateLiveDataContent(formatted);
+        if (!validated)
+            return null;
+        const prepared = prepareLiveDataPayload(validated, device);
+        if (!prepared)
+            return null;
+        await saveLiveDataTopic(prepared, prepared.group_id, device);
     }
     catch (err) {
         logger.error("Error at live data topic handler", err);
@@ -118,6 +120,60 @@ export function getIdentifiersFromTopic(topic) {
         return { gatewayId: null, deviceId: segments[1] };
     }
     return { gatewayId: null, deviceId: null };
+}
+/**
+ * Resolve an MQTT topic against the master/child topology.
+ *
+ * Expected topic shape (4 segments):
+ *   peepul/{master_identifier}/{device_identifier}/{suffix}
+ *
+ * Identifiers are matched (case-insensitive) against `mac_address` or `pcb_number`.
+ * (starter_number is intentionally NOT used here.)
+ *
+ *   - segment[1] MUST resolve to a MASTER row (role=MASTER, not archived).
+ *   - segment[2] resolves to either:
+ *       (a) the same master row itself          → kind="MASTER_SELF"
+ *       (b) a CHILD whose parent_starter_id     → kind="CHILD_VIA_MASTER"
+ *           equals the master's id
+ *
+ * Returns null on any miss (unknown master / unknown device / wrong parent /
+ * not-a-child role). Caller should log and drop the packet on null.
+ *
+ * NOTE: this is a NEW resolver. The legacy `getIdentifiersFromTopic` and the
+ * gateway-based callers in mqtt-db-services.ts are untouched.
+ */
+export async function resolveMasterChildFromTopic(topic) {
+    const segments = topic.split("/");
+    if (segments.length !== 4) {
+        logger.warn("[resolveMasterChildFromTopic] expected 4-segment topic", { topic });
+        return null;
+    }
+    const seg1 = segments[1];
+    const seg2 = segments[2];
+    if (!seg1 || !seg2) {
+        logger.warn("[resolveMasterChildFromTopic] empty identifier segment", { topic });
+        return null;
+    }
+    // Step 1 — resolve master
+    const master = await findMasterByIdentifier(seg1);
+    if (!master) {
+        logger.warn("[resolveMasterChildFromTopic] unknown master identifier", { topic, seg1 });
+        return null;
+    }
+    // Step 2a — does segment 2 point at the master itself? (compare mac & pcb only)
+    const seg2Upper = seg2.trim().toUpperCase();
+    const masterMac = master.mac_address?.toUpperCase() ?? null;
+    const masterPcb = master.pcb_number?.toUpperCase() ?? null;
+    if (seg2Upper === masterMac || seg2Upper === masterPcb) {
+        return { deviceId: master.id, masterId: master.id, kind: "MASTER_SELF" };
+    }
+    // Step 2b — must be a CHILD of THIS master
+    const child = await findChildOfMasterByIdentifier(master.id, seg2);
+    if (!child) {
+        logger.warn("[resolveMasterChildFromTopic] segment 2 is not the master itself nor a child of this master", { topic, masterId: master.id, seg2 });
+        return null;
+    }
+    return { deviceId: child.id, masterId: master.id, kind: "CHILD_VIA_MASTER" };
 }
 export function randomSequenceNumber() {
     let lastNumber = null;

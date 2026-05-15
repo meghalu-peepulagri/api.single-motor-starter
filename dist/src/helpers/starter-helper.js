@@ -96,6 +96,9 @@ export function starterCountFilters(query) {
     if (query.status) {
         filters.push(eq(starterBoxes.status, query.status));
     }
+    if (query.role && ["STANDALONE", "MASTER", "CHILD"].includes(query.role)) {
+        filters.push(eq(starterBoxes.role, query.role));
+    }
     if (query.device_status) {
         filters.push(eq(starterBoxes.device_status, query.device_status));
     }

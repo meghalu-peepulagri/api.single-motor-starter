@@ -925,7 +925,7 @@ export class StarterHandlers {
       const query = c.req.query();
       const baseFilters = starterCountFilters(query);
 
-      const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
+      const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount, standaloneCount, masterCount, childCount] = await Promise.all([
         getRecordsCount(starterBoxes, [...baseFilters]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.status, "ACTIVE")]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.power, 1)]),
@@ -934,6 +934,9 @@ export class StarterHandlers {
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "TEST")]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "DEPLOYED")]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "ASSIGNED")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.role, "STANDALONE")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.role, "MASTER")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.role, "CHILD")]),
       ]);
 
       return sendResponse(c, 200, "Starter count fetched successfully", {
@@ -945,6 +948,9 @@ export class StarterHandlers {
         test_count: testCount,
         deployed_count: deployedCount,
         assigned_count: assignedCount,
+        standalone_count: standaloneCount,
+        master_count: masterCount,
+        child_count: childCount,
       });
 
     } catch (error: any) {

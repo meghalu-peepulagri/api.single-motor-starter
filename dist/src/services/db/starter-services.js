@@ -657,6 +657,34 @@ export async function countChildrenOfMaster(masterId) {
         ne(starterBoxes.status, "ARCHIVED"),
     ]);
 }
+/**
+ * Topic-resolution helper: find a MASTER row whose mac_address or pcb_number
+ * matches the given (case-insensitive) identifier from the MQTT topic.
+ * Returns null if no live MASTER matches.
+ */
+export async function findMasterByIdentifier(identifier) {
+    if (!identifier)
+        return null;
+    const upper = identifier.trim().toUpperCase();
+    return await db.query.starterBoxes.findFirst({
+        where: and(or(eq(starterBoxes.mac_address, upper), eq(starterBoxes.pcb_number, upper)), eq(starterBoxes.role, "MASTER"), ne(starterBoxes.status, "ARCHIVED")),
+    });
+}
+/**
+ * Topic-resolution helper: find a CHILD row that:
+ *   - matches mac_address or pcb_number
+ *   - has role = CHILD
+ *   - is parented by the given master id
+ * Returns null if no matching child belongs to THIS master.
+ */
+export async function findChildOfMasterByIdentifier(masterId, identifier) {
+    if (!identifier || !masterId)
+        return null;
+    const upper = identifier.trim().toUpperCase();
+    return await db.query.starterBoxes.findFirst({
+        where: and(or(eq(starterBoxes.mac_address, upper), eq(starterBoxes.pcb_number, upper)), eq(starterBoxes.role, "CHILD"), eq(starterBoxes.parent_starter_id, masterId), ne(starterBoxes.status, "ARCHIVED")),
+    });
+}
 export async function getUnassignedMasters(pageParams, search) {
     const baseFilters = [
         eq(starterBoxes.role, "MASTER"),

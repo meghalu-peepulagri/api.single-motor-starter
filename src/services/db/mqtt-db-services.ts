@@ -49,6 +49,8 @@ export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId:
 }
 
 export async function selectTopicAck(topicType: string, payload: any, topic: string) {
+  console.log('topic: ', topic);
+  console.log('topicType: ', topicType);
 
   switch (topicType) {
     case "LIVE_DATA":
@@ -127,6 +129,8 @@ async function getLatestAlertsFaultsSnapshot(trx: any, starterId: number, motorI
 }
 
 export async function updateStates(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
+  console.log('previousData: ', previousData);
+  console.log('insertedData: ', insertedData);
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);

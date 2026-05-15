@@ -112,6 +112,10 @@ export function starterCountFilters(query: any) {
     filters.push(eq(starterBoxes.status, query.status as "ACTIVE" | "INACTIVE" | "ARCHIVED"));
   }
 
+  if (query.role && ["STANDALONE", "MASTER", "CHILD"].includes(query.role)) {
+    filters.push(eq(starterBoxes.role, query.role as "STANDALONE" | "MASTER" | "CHILD"));
+  }
+
   if (query.device_status) {
     filters.push(eq(starterBoxes.device_status, query.device_status as "ASSIGNED" | "DEPLOYED" | "READY" | "TEST"));
   }
