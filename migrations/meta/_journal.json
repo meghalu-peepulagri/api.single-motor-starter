@@ -435,6 +435,13 @@
       "when": 1778762860361,
       "tag": "0061_redundant_vance_astro",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1778828796022,
+      "tag": "0062_sloppy_bug",
+      "breakpoints": true
     }
   ]
 }
