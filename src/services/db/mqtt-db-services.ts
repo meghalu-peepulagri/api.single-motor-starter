@@ -6,26 +6,24 @@ import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
 import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
-import { controlMode, getFaultNotificationMessage } from "../../helpers/control-helpers.js";
+import { controlMode } from "../../helpers/control-helpers.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
-import { getIdentifiersFromTopic, liveDataHandler } from "../../helpers/mqtt-helpers.js";
-import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
+import { getIdentifiersFromTopic, liveDataHandler, resolveMasterChildFromTopic } from "../../helpers/mqtt-helpers.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
+import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
 import { logger } from "../../utils/logger.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
-import { getGatewayByIdentifier } from "./gateway-services.js";
 import { updateActualScheduleFields } from "./motor-schedules-services.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
-import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
-import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
-import { gateways } from "../../database/schemas/gateways.js";
+import { applyDeviceAllocation, getMasterIdentifierById, getStarterByMacWithMotor } from "./starter-services.js";
+import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 // Live data
 export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId: string, previousData: previousPreparedLiveData) {
   switch (groupId) {
@@ -917,7 +915,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 // Motor control ack
 export async function motorControlAckHandler(message: any, topic: string) {
   try {
-    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
     if (!deviceId) {
       logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
       return;
@@ -929,23 +927,27 @@ export async function motorControlAckHandler(message: any, topic: string) {
       return;
     }
 
-    if (gatewayId) {
-      const gateway = await getGatewayByIdentifier(gatewayId);
-      if (!gateway) {
-        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
-        return;
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
       }
-      if (device.gateway_id !== gateway.id) {
-        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
-        return;
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
       }
     }
 
     const starter_id = device.id;
 
-    if (device.starter_type === "MULTI_STARTER") {
-      // message.D = { m1: { m_s: 1 }, m2: { m_s: 0 } }
-      const motorRefs = Object.keys(message.D ?? {});
+    if (typeof message.D === "object" && message.D !== null) {
+      // multi-motor payload: { m1: { m_s: 1 }, m2: { m_s: 0 } }
+      const motorRefs = Object.keys(message.D);
       const notifications: Array<{ data: any; newState: number }> = [];
 
       for (const ref of motorRefs) {
@@ -1032,7 +1034,7 @@ export async function motorControlAckHandler(message: any, topic: string) {
 // Motor mode ack
 export async function motorModeChangeAckHandler(message: any, topic: string) {
   try {
-    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
     if (!deviceId) {
       logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
       return null;
@@ -1044,21 +1046,25 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
       return null;
     }
 
-    if (gatewayId) {
-      const gateway = await getGatewayByIdentifier(gatewayId);
-      if (!gateway) {
-        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
         return null;
       }
-      if (device.gateway_id !== gateway.id) {
-        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
         return null;
       }
     }
 
-    if (device.starter_type === "MULTI_STARTER") {
-      // message.D = { m1: { mode: 1 }, m2: { mode: 0 } }
-      const motorRefs = Object.keys(message.D ?? {});
+    if (typeof message.D === "object" && message.D !== null) {
+      // multi-motor payload: { m1: { mode: 1 }, m2: { mode: 0 } }
+      const motorRefs = Object.keys(message.D);
       const notifications: Array<{ data: any; mode: string }> = [];
 
       for (const ref of motorRefs) {
@@ -1123,7 +1129,7 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
 
 export async function heartbeatHandler(message: any, topic: string) {
   try {
-    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
     if (!deviceId) {
       logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
       return null;
@@ -1135,14 +1141,18 @@ export async function heartbeatHandler(message: any, topic: string) {
       return null;
     }
 
-    if (gatewayId) {
-      const gateway = await getGatewayByIdentifier(gatewayId);
-      if (!gateway) {
-        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
         return null;
       }
-      if (device.gateway_id !== gateway.id) {
-        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
         return null;
       }
     }
@@ -1182,18 +1192,18 @@ export async function heartbeatHandler(message: any, topic: string) {
 
 export async function deviceSerialNumberAllocationAckHandler(message: any, topic: string) {
   try {
-    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
     if (!deviceId) return null;
     const upperId = deviceId.trim().toUpperCase();
 
     const byMac = await db.query.starterBoxes.findFirst({
       where: and(eq(starterBoxes.mac_address, upperId), ne(starterBoxes.status, "ARCHIVED")),
-      columns: { id: true, user_id: true, created_by: true, device_allocation: true, gateway_id: true },
+      columns: { id: true, user_id: true, created_by: true, device_allocation: true },
     });
     const matchType = byMac ? "mac" : "pcb";
     const starter = byMac ?? await db.query.starterBoxes.findFirst({
       where: and(eq(starterBoxes.pcb_number, upperId), ne(starterBoxes.status, "ARCHIVED")),
-      columns: { id: true, user_id: true, created_by: true, device_allocation: true, gateway_id: true },
+      columns: { id: true, user_id: true, created_by: true, device_allocation: true },
     });
 
     if (!starter?.id) {
@@ -1201,14 +1211,18 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
       return null;
     }
 
-    if (gatewayId) {
-      const gateway = await getGatewayByIdentifier(gatewayId);
-      if (!gateway) {
-        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
         return null;
       }
-      if (starter.gateway_id !== gateway.id) {
-        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
+      if (resolved.deviceId !== starter.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: starter.id,
+          topic,
+        });
         return null;
       }
     }
@@ -1231,17 +1245,31 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
   }
 }
 
-export function publishData(preparedData: any, starterData: StarterBox) {
+export async function publishData(preparedData: any, starterData: StarterBox) {
   if (!starterData) return null;
-  // const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
-  const macOrPcb = starterData.device_allocation === "false" ? starterData.mac_address : starterData.pcb_number;
-  const topic = `peepul/${macOrPcb}/cmd`;
-  const payload = JSON.stringify(preparedData);
-  mqttServiceInstance.publish(topic, payload);
+
+  const deviceKey = starterData.device_allocation === "false"
+    ? starterData.mac_address
+    : starterData.pcb_number;
+
+  let topic: string;
+
+  if ((starterData as any).role === "CHILD" && (starterData as any).parent_starter_id) {
+    const masterKey = await getMasterIdentifierById((starterData as any).parent_starter_id);
+    if (!masterKey) {
+      logger.error(`Master not found for child device [${deviceKey}]`, undefined, { deviceKey });
+      return null;
+    }
+    topic = `peepul/${masterKey}/${deviceKey}/cmd`;
+  } else {
+    topic = `peepul/${deviceKey}/cmd`;
+  }
+
+  mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
 }
 
 export async function deviceSyncUpdate(message: any, topic: string) {
-  const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+  const { masterId, deviceId } = getIdentifiersFromTopic(topic);
 
   try {
     if (!deviceId) {
@@ -1255,14 +1283,18 @@ export async function deviceSyncUpdate(message: any, topic: string) {
       return null;
     }
 
-    if (gatewayId) {
-      const gateway = await getGatewayByIdentifier(gatewayId);
-      if (!gateway) {
-        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
         return null;
       }
-      if (device.gateway_id !== gateway.id) {
-        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
         return null;
       }
     }
@@ -1318,7 +1350,7 @@ export async function adminConfigDataRequestAckHandler(
   topic: string
 ) {
   try {
-    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
     if (!deviceId) return null;
 
     const device = await getStarterByMacWithMotor(deviceId);
@@ -1327,14 +1359,18 @@ export async function adminConfigDataRequestAckHandler(
       return null;
     }
 
-    if (gatewayId) {
-      const gateway = await getGatewayByIdentifier(gatewayId);
-      if (!gateway) {
-        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
         return null;
       }
-      if (device.gateway_id !== gateway.id) {
-        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
         return null;
       }
     }
@@ -1365,7 +1401,7 @@ export async function adminConfigDataRequestAckHandler(
 
 export async function deviceResetAckHandler(message: any, topic: string) {
   try {
-    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
     if (!deviceId) return null;
 
     const device = await getStarterByMacWithMotor(deviceId);
@@ -1374,14 +1410,18 @@ export async function deviceResetAckHandler(message: any, topic: string) {
       return null;
     }
 
-    if (gatewayId) {
-      const gateway = await getGatewayByIdentifier(gatewayId);
-      if (!gateway) {
-        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
         return null;
       }
-      if (device.gateway_id !== gateway.id) {
-        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
         return null;
       }
     }
@@ -1401,7 +1441,7 @@ export async function deviceResetAckHandler(message: any, topic: string) {
 }
 
 export async function deviceInfoAckHandler(message: any, topic: string) {
-  const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+  const { masterId, deviceId } = getIdentifiersFromTopic(topic);
   if (!deviceId) return null;
   const updatedFields: Record<string, any> = {};
   try {
@@ -1417,14 +1457,18 @@ export async function deviceInfoAckHandler(message: any, topic: string) {
       return null;
     }
 
-    if (gatewayId) {
-      const gateway = await getGatewayByIdentifier(gatewayId);
-      if (!gateway) {
-        logger.error(`Gateway not found for identifier [${gatewayId}]`, undefined, { gatewayId, topic });
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
         return null;
       }
-      if (device.gateway_id !== gateway.id) {
-        logger.error(`Gateway and device mapping mismatch for topic [${topic}]`, undefined, { gatewayId, deviceId });
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
         return null;
       }
     }

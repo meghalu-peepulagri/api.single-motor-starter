@@ -95,6 +95,8 @@ export async function getStarterByMacWithMotor(mac) {
             sim_recharge_expires_at: true,
             device_mobile_number: true,
             starter_type: true,
+            role: true,
+            parent_starter_id: true,
         },
         with: {
             motors: {
@@ -685,6 +687,15 @@ export async function findChildOfMasterByIdentifier(masterId, identifier) {
         where: and(or(eq(starterBoxes.mac_address, upper), eq(starterBoxes.pcb_number, upper)), eq(starterBoxes.role, "CHILD"), eq(starterBoxes.parent_starter_id, masterId), ne(starterBoxes.status, "ARCHIVED")),
     });
 }
+export async function getMasterIdentifierById(masterId) {
+    const master = await db.query.starterBoxes.findFirst({
+        where: and(eq(starterBoxes.id, masterId), ne(starterBoxes.status, "ARCHIVED")),
+        columns: { mac_address: true, pcb_number: true, device_allocation: true },
+    });
+    if (!master)
+        return null;
+    return master.device_allocation === "false" ? master.mac_address : master.pcb_number;
+}
 export async function getUnassignedMasters(pageParams, search) {
     const baseFilters = [
         eq(starterBoxes.role, "MASTER"),
@@ -1076,6 +1087,7 @@ export async function getStarterTopologyContext(starterId) {
                 pcb_number: true,
                 starter_number: true,
                 device_status: true,
+                device_allocation: true,
             },
         });
     }

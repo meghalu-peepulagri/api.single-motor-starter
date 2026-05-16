@@ -13,9 +13,9 @@ export async function liveDataHandler(parsedMessage: any, topic: string) {
   console.log('parsedMessage: ', parsedMessage);
   try {
     if (!parsedMessage) return;
-    const { gatewayId, deviceId } = getIdentifiersFromTopic(topic);
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
     if (!deviceId) {
-      logger.error("Invalid MQTT topic or missing device MAC", undefined, { gatewayId, deviceId, topic });
+      logger.error("Invalid MQTT topic or missing device MAC", undefined, { masterId, deviceId, topic });
       return null;
     }
 
@@ -30,10 +30,10 @@ export async function liveDataHandler(parsedMessage: any, topic: string) {
     // For 4-segment topics (peepul/{master}/{device}/status): validate against
     // the MASTER/CHILD topology. segment[1] must resolve to a MASTER; segment[2]
     // must be either that master itself or a CHILD parented by it.
-    if (gatewayId) {
+    if (masterId && deviceId) {
       const resolved = await resolveMasterChildFromTopic(topic);
       if (!resolved) {
-        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { gatewayId, deviceId, topic });
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
         return null;
       }
       if (resolved.deviceId !== device.id) {
@@ -120,8 +120,8 @@ async function handleMultiStarterLiveData(parsedMessage: any, formatted: any, de
 export function getIdentifiersFromTopic(topic: string) {
   const segments = topic.split("/");
   if (segments.length === 4) {
-    // peepul/{gateway}/{device}/status
-    return { gatewayId: segments[1], deviceId: segments[2] };
+    // peepul/{master}/{device}/status
+    return { masterId: segments[1], deviceId: segments[2] };
   } else if (segments.length === 3) {
     // peepul/{device}/status
     return { gatewayId: null, deviceId: segments[1] };

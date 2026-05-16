@@ -318,6 +318,12 @@ export const FROM_AND_TO_MASTER_SAME = "Source and destination masters cannot be
 export const NO_CHILDREN_TO_MOVE = "Source master has no children to move";
 export const CHILD_NOT_BELONGS_TO_SOURCE = "One or more selected children do not belong to the source master";
 export const NO_CHILDREN_SELECTED = "No children selected to move";
+export const REPLACE_CHILD_VALIDATION_CRITERIA = "Replace child details do not meet the required validation criteria";
+export const OLD_AND_NEW_CHILD_SAME = "Old child and replacement device cannot be the same device";
+export const OLD_DEVICE_MUST_BE_CHILD = "Old device must be a CHILD";
+export const NEW_CHILD_MUST_BE_STANDALONE = "Replacement device must currently be a STANDALONE";
+export const CHILD_REPLACED_SUCCESSFULLY = "Child device replaced successfully";
+export const ELIGIBLE_STANDALONES_FETCHED = "Eligible standalone devices fetched successfully";
 // Starter Dispatch
 export const STARTER_DISPATCH_VALIDATION_CRITERIA = "Starter dispatch details provided do not meet the required validation criteria";
 export const STARTER_DISPATCH_ADDED_SUCCESSFULLY = "Dispatch details added successfully";
