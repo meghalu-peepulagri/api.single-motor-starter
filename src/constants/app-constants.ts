@@ -216,6 +216,18 @@ export const MOTOR_DETAILS_FETCHED = "Pump details fetched successfully";
 export const MOTOR_NAME_EXISTED = "Pump name already exist";
 export const MOTOR_NAME_ALREADY_LOCATION = "Pump name already exists in this location."
 export const MOTOR_TEST_RUN_STATUS_UPDATED = "Pump test run status updated successfully";
+export const MOTOR_ASSIGNED_TO_DEVICE = "Pump assigned to device successfully";
+export const MOTOR_ALREADY_ASSIGNED = "Pump is already assigned to a device";
+export const MOTOR_ASSIGN_VALIDATION_CRITERIA = "Assign pump to device details provided do not meet the required validation criteria";
+export const MAX_SINGLE_MOTOR_LIMIT_REACHED = "Device supports only 1 pump, limit already reached";
+export const MAX_MULTI_MOTOR_LIMIT_REACHED = "Device supports max 2 pumps, limit already reached";
+export const MOTOR_DETACHED_FROM_DEVICE = "Pump detached from device successfully";
+export const MOTOR_NOT_ASSIGNED_TO_DEVICE = "Pump is not assigned to any device";
+export const MOTOR_REPLACED_DEVICE = "Pump moved to new device successfully";
+export const MOTOR_SAME_DEVICE = "Pump is already assigned to the specified device";
+export const MOTOR_REPLACE_VALIDATION_CRITERIA = "Replace pump device details provided do not meet the required validation criteria";
+export const MOTOR_REFERENCE_SLOT_TAKEN = "Requested slot is already occupied on this device";
+export const MOTOR_REFERENCE_NOT_SUPPORTED = "This device only supports the m1 slot";
 
 
 // Starter Box
@@ -296,6 +308,48 @@ export const DEVICE_INFO_REQUEST_SENT = "Device info request sent successfully";
 export const FAULT_CLEARED_SUCCESSFULLY = "Fault cleared successfully";
 export const NO_ACTIVE_FAULT_FOUND = "No active fault record found for this motor and starter";
 
+// Device role / topology
+export const DEVICE_ROLES = ["STANDALONE", "MASTER", "CHILD"] as const;
+export const REASSIGNMENT_STRATEGIES = ["ORPHAN", "REPARENT"] as const;
+export const DEVICE_ROLE_VALIDATION_CRITERIA = "Device role details provided do not meet the required validation criteria";
+export const ROLE_CHANGED_SUCCESSFULLY = "Device role updated successfully";
+export const PARENT_UPDATED_SUCCESSFULLY = "Device parent updated successfully";
+export const CHILDREN_FETCHED = "Child devices fetched successfully";
+export const TOPOLOGY_FETCHED = "Device topology fetched successfully";
+export const ELIGIBLE_PARENTS_FETCHED = "Eligible parent devices fetched successfully";
+export const INVALID_ROLE = "Invalid device role";
+export const INVALID_REASSIGNMENT = "Invalid reassignment strategy";
+export const PARENT_REQUIRED_FOR_CHILD = "Parent device is required for CHILD role";
+export const PARENT_NOT_ALLOWED_FOR_NON_CHILD = "Parent device is only allowed for CHILD role";
+export const PARENT_NOT_FOUND = "Parent device not found";
+export const PARENT_MUST_BE_MASTER = "Parent device must be a MASTER";
+export const CANNOT_PARENT_SELF = "A device cannot be its own parent";
+export const MASTER_HAS_CHILDREN = "Master device has children — choose how to reassign them";
+export const NEW_PARENT_REQUIRED = "New parent is required for REPARENT strategy";
+export const DEVICE_IS_NOT_MASTER = "Device is not a MASTER";
+export const DEVICE_IS_NOT_CHILD = "Device is not a CHILD";
+export const REPLACE_MASTER_VALIDATION_CRITERIA = "Replace master details provided do not meet the required validation criteria";
+export const REPLACE_MASTER_MODES = ["SWAP_CHILDREN", "MOVE_CHILDREN", "REPLACE_DEVICE"] as const;
+export const INVALID_REPLACE_MODE = "Invalid replace mode";
+export const NEW_MASTER_MUST_BE_STANDALONE = "Replacement device must currently be a STANDALONE";
+export const BOTH_DEVICES_MUST_BE_MASTER = "Both devices must be MASTER role";
+export const OLD_DEVICE_MUST_BE_MASTER = "Old device must be a MASTER";
+export const OLD_AND_NEW_MASTER_SAME = "Old master and new master cannot be the same device";
+export const MASTER_SWAPPED_SUCCESSFULLY = "Master devices swapped successfully";
+export const MASTER_REPLACED_SUCCESSFULLY = "Master device replaced successfully";
+export const MOVE_CHILDREN_VALIDATION_CRITERIA = "Move children details provided do not meet the required validation criteria";
+export const CHILDREN_MOVED_SUCCESSFULLY = "Child devices moved successfully";
+export const FROM_AND_TO_MASTER_SAME = "Source and destination masters cannot be the same";
+export const NO_CHILDREN_TO_MOVE = "Source master has no children to move";
+export const CHILD_NOT_BELONGS_TO_SOURCE = "One or more selected children do not belong to the source master";
+export const NO_CHILDREN_SELECTED = "No children selected to move";
+export const REPLACE_CHILD_VALIDATION_CRITERIA = "Replace child details do not meet the required validation criteria";
+export const OLD_AND_NEW_CHILD_SAME = "Old child and replacement device cannot be the same device";
+export const OLD_DEVICE_MUST_BE_CHILD = "Old device must be a CHILD";
+export const NEW_CHILD_MUST_BE_STANDALONE = "Replacement device must currently be a STANDALONE";
+export const CHILD_REPLACED_SUCCESSFULLY = "Child device replaced successfully";
+export const ELIGIBLE_STANDALONES_FETCHED = "Eligible standalone devices fetched successfully";
+
 // Starter Dispatch
 export const STARTER_DISPATCH_VALIDATION_CRITERIA = "Starter dispatch details provided do not meet the required validation criteria";
 export const STARTER_DISPATCH_ADDED_SUCCESSFULLY = "Dispatch details added successfully";
@@ -330,6 +384,11 @@ export const GATEWAY_NUMBER_MIN_LEN = "Gateway number should be min 3 characters
 export const GATEWAY_IDENTIFIER_REQUIRED = "Mac address / PCB number / Gateway number / Gateway name is required";
 export const GATEWAY_ASSIGNED_SUCCESSFULLY = "Gateway assigned successfully";
 export const GATEWAY_ALREADY_ASSIGNED = "Gateway already assigned";
+export const DEVICE_ALREADY_CONNECTED_TO_GATEWAY = "Device is already connected to a gateway";
+export const GATEWAY_UPDATED = "Gateway updated successfully";
+export const GATEWAY_USER_REMOVED = "Gateway user removed successfully";
+export const GATEWAY_DEVICES_FETCHED = "Gateway devices fetched successfully";
+export const GATEWAY_ASSIGNED_TO_DEVICE = "Gateway assigned to device successfully";
 
 
 // Motor schedule 

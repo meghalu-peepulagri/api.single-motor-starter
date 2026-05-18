@@ -49,7 +49,8 @@ export class MqttService {
 
     this.client.on("connect", () => {
       this.subscribe([
-        "peepul/+/status"
+        "peepul/+/status",
+        "peepul/+/+/status"
       ]);
     });
 

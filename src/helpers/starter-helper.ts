@@ -13,15 +13,25 @@ import type { StarterDispatch } from "../database/schemas/starter-dispatch.js";
 
 export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User, dispatchDetails?: StarterDispatch | null, gatewayId?: number) {
 
-  const motorDetails = {
-    name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
-    hp: 2,
-  };
+  let motorDetails;
+  if (starterBoxPayload.starter_type !== "MULTI_STARTER") {
+    motorDetails = { name: `Pump 1 - ${starterBoxPayload.pcb_number}`, hp: 2 };
+  }
+
+  const role = starterBoxPayload.role ?? "STANDALONE";
+  // CHILDren have no SIM of their own; non-CHILDren cannot have a parent.
+  const isChild = role === "CHILD";
+  const parent_starter_id = isChild ? (starterBoxPayload.parent_starter_id ?? null) : null;
+  const device_mobile_number = isChild ? null : dispatchDetails?.sim_no;
 
   return {
     ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails
     , sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,
-    device_mobile_number: dispatchDetails?.sim_no, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
+    device_mobile_number, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId,
+    role, parent_starter_id,
+    ...(starterBoxPayload.starter_type === "MULTI_STARTER" && {
+      motor_support_type: "MULTIPLE_MOTORS"
+    })
   }
 };
 
@@ -65,7 +75,14 @@ export function starterFilters(query: any, user: any) {
     }
   }
   if (query.device_status) filters.push(eq(starterBoxes.device_status, query.device_status));
+  if (query.starter_type) filters.push(eq(starterBoxes.starter_type, query.starter_type));
   if (query.user_id) filters.push(eq(starterBoxes.user_id, query.user_id));
+  if (query.role && ["STANDALONE", "MASTER", "CHILD"].includes(query.role)) {
+    filters.push(eq(starterBoxes.role, query.role));
+  }
+  if (query.parent_starter_id) {
+    filters.push(eq(starterBoxes.parent_starter_id, Number(query.parent_starter_id)));
+  }
 
   if (user.user_type !== "ADMIN" && user.user_type !== "SUPER_ADMIN") filters.push(eq(starterBoxes.user_id, user.id));
 
@@ -95,6 +112,10 @@ export function starterCountFilters(query: any) {
     filters.push(eq(starterBoxes.status, query.status as "ACTIVE" | "INACTIVE" | "ARCHIVED"));
   }
 
+  if (query.role && ["STANDALONE", "MASTER", "CHILD"].includes(query.role)) {
+    filters.push(eq(starterBoxes.role, query.role as "STANDALONE" | "MASTER" | "CHILD"));
+  }
+
   if (query.device_status) {
     filters.push(eq(starterBoxes.device_status, query.device_status as "ASSIGNED" | "DEPLOYED" | "READY" | "TEST"));
   }
@@ -103,6 +124,8 @@ export function starterCountFilters(query: any) {
     const powerValue = query.power === "ON" ? 1 : query.power === "OFF" ? 0 : undefined;
     if (powerValue !== undefined) filters.push(eq(starterBoxes.power, powerValue));
   }
+
+  if (query.starter_type) filters.push(eq(starterBoxes.starter_type, query.starter_type));
 
   return filters;
 }

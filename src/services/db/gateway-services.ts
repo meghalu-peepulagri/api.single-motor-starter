@@ -1,7 +1,8 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import type { Gateway } from "../../database/schemas/gateways.js";
 import { gateways, type GatewayTable } from "../../database/schemas/gateways.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 import { GATEWAY_ALREADY_ASSIGNED, GATEWAY_NOT_FOUND, UNIQUE_INDEX_MESSAGES } from "../../constants/app-constants.js";
 import ConflictException from "../../exceptions/conflict-exception.js";
@@ -129,22 +130,17 @@ export async function getGatewayDetails(gatewayId: number) {
   });
 }
 
+
+
 export async function getGatewayForOwnerAction<C extends keyof Gateway>(
   gatewayId: number,
-  userId: number,
   columnsToSelect: C[],
 ): Promise<Pick<Gateway, C> | null> {
-  const gateway = await getSingleRecordConditionallyWithOr(
+  const gateway = await getSingleRecordByMultipleColumnValues<typeof gateways>(
     gateways,
-    {
-      columns: ["id", "status"],
-      relations: ["=", "!="],
-      values: [gatewayId, "ARCHIVED"],
-      or: [
-        { columns: ["user_id"], relations: ["="], values: [userId] },
-        { columns: ["created_by"], relations: ["="], values: [userId] },
-      ],
-    },
+    ["id", "status"],
+    ["=", "!="],
+    [gatewayId, "ARCHIVED"],
     columnsToSelect,
   );
 
@@ -152,34 +148,18 @@ export async function getGatewayForOwnerAction<C extends keyof Gateway>(
 }
 
 export async function assignGatewayToUser(data: {
-  mac_address?: string;
-  pcb_number?: string;
-  gateway_number?: string;
-  name?: string;
+  gateway_id: number;
   targetUserId: number;
   performedByUserId: number;
 }, trx?: any): Promise<{ gateway_id: number; name: string; old_user_id: number | null } | null> {
   const queryBuilder = trx || db;
 
-  const conditions: any[] = [ne(gateways.status, "ARCHIVED")];
-  if (data.mac_address) conditions.push(eq(gateways.mac_address, data.mac_address));
-  if (data.pcb_number) conditions.push(eq(gateways.pcb_number, data.pcb_number));
-  if (data.gateway_number) conditions.push(sql`lower(${gateways.gateway_number}) = ${data.gateway_number.toLowerCase()}`);
-  if (data.name) conditions.push(sql`lower(${gateways.name}) = ${data.name.toLowerCase()}`);
-
   const matched = await queryBuilder
-    .select({
-      id: gateways.id,
-      name: gateways.name,
-      user_id: gateways.user_id,
-    })
+    .select({ id: gateways.id, name: gateways.name, user_id: gateways.user_id })
     .from(gateways)
-    .where(and(...conditions));
+    .where(and(eq(gateways.id, data.gateway_id), ne(gateways.status, "ARCHIVED")));
 
   if (matched.length === 0) return null;
-  if (matched.length > 1) {
-    throw new BadRequestException("Multiple gateways found with given identifiers");
-  }
 
   const gateway = matched[0];
   if (gateway.user_id && gateway.user_id !== data.targetUserId) {
@@ -189,6 +169,10 @@ export async function assignGatewayToUser(data: {
   await updateRecordById<GatewayTable>(gateways, gateway.id, { user_id: data.targetUserId }, trx);
 
   return { gateway_id: gateway.id, name: gateway.name, old_user_id: gateway.user_id };
+}
+
+export async function removeUserFromGateway(gatewayId: number, trx?: any): Promise<void> {
+  await updateRecordById<GatewayTable>(gateways, gatewayId, { user_id: null }, trx);
 }
 
 export async function gatewayConflicts(gatewayId?: number): Promise<Gateway | null> {
@@ -211,21 +195,26 @@ export async function gatewayConflicts(gatewayId?: number): Promise<Gateway | nu
 }
 
 export async function assertGatewayIdentifiersUnique(data: {
-  nameLower: string;
+  nameLower: string | null;
   macLower: string;
   pcbLower: string;
   gatewayNumberLower: string | null;
-}, trx?: any) {
+}, trx?: any, excludeId?: number) {
   const queryBuilder = trx || db;
 
-  const orConditions = [
-    sql`lower(${gateways.name}) = ${data.nameLower}`,
-    sql`lower(${gateways.mac_address}) = ${data.macLower}`,
-    sql`lower(${gateways.pcb_number}) = ${data.pcbLower}`,
+  const orConditions: any[] = [];
+  if (data.macLower) orConditions.push(sql`lower(${gateways.mac_address}) = ${data.macLower}`);
+  if (data.pcbLower) orConditions.push(sql`lower(${gateways.pcb_number}) = ${data.pcbLower}`);
+  if (data.nameLower) orConditions.push(sql`lower(${gateways.name}) = ${data.nameLower}`);
+  if (data.gatewayNumberLower) orConditions.push(sql`lower(${gateways.gateway_number}) = ${data.gatewayNumberLower}`);
+
+  if (orConditions.length === 0) return;
+
+  const whereConditions: any[] = [
+    ne(gateways.status, "ARCHIVED"),
+    sql`(${sql.join(orConditions, sql` OR `)})`,
   ];
-  if (data.gatewayNumberLower) {
-    orConditions.push(sql`lower(${gateways.gateway_number}) = ${data.gatewayNumberLower}`);
-  }
+  if (excludeId) whereConditions.push(ne(gateways.id, excludeId));
 
   const matched = await queryBuilder
     .select({
@@ -235,10 +224,7 @@ export async function assertGatewayIdentifiersUnique(data: {
       gateway_number: gateways.gateway_number,
     })
     .from(gateways)
-    .where(and(
-      ne(gateways.status, "ARCHIVED"),
-      sql`(${sql.join(orConditions, sql` OR `)})`,
-    ))
+    .where(and(...whereConditions))
     .limit(1);
 
   if (!Array.isArray(matched) || matched.length === 0) {
@@ -251,7 +237,7 @@ export async function assertGatewayIdentifiersUnique(data: {
   const existingPcbLower = duplicate.pcb_number?.trim().toLowerCase() ?? null;
   const existingGatewayNumberLower = duplicate.gateway_number?.trim().toLowerCase() ?? null;
 
-  if (existingNameLower === data.nameLower) {
+  if (data.nameLower && existingNameLower === data.nameLower) {
     throw new ConflictException(UNIQUE_INDEX_MESSAGES["validate_gateway_name"]);
   }
   if (data.gatewayNumberLower && existingGatewayNumberLower === data.gatewayNumberLower) {
@@ -265,4 +251,59 @@ export async function assertGatewayIdentifiersUnique(data: {
   }
 
   throw new ConflictException();
+}
+
+export async function getGatewayWithDevices(gatewayId: number) {
+  const gateway = await db.query.gateways.findFirst({
+    where: and(eq(gateways.id, gatewayId), ne(gateways.status, "ARCHIVED")),
+    columns: {
+      id: true,
+      name: true,
+      gateway_number: true,
+      label: true,
+      mac_address: true,
+      pcb_number: true,
+      status: true,
+    },
+    with: {
+      starterBoxes: {
+        where: ne(starterBoxes.status, "ARCHIVED"),
+        orderBy: [desc(starterBoxes.created_at)],
+        columns: {
+          id: true,
+          name: true,
+          starter_number: true,
+          mac_address: true,
+          pcb_number: true,
+          device_status: true,
+          power: true,
+          starter_type: true,
+        },
+      },
+    },
+  } as any);
+
+  return gateway ?? null;
+}
+
+export async function assignGatewayToDevice(
+  gatewayId: number,
+  starterId: number,
+  trx?: any,
+): Promise<void> {
+  const qb = trx || db;
+  await qb
+    .update(starterBoxes)
+    .set({ gateway_id: gatewayId, updated_at: new Date() })
+    .where(eq(starterBoxes.id, starterId));
+}
+
+export async function getGatewayByIdentifier(identifier: string) {
+  const upperId = identifier.trim().toUpperCase();
+  return await db.query.gateways.findFirst({
+    where: and(
+      or(eq(gateways.mac_address, upperId), eq(gateways.pcb_number, upperId)),
+      ne(gateways.status, "ARCHIVED")
+    ),
+  });
 }

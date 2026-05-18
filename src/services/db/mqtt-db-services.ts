@@ -9,10 +9,10 @@ import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { controlMode } from "../../helpers/control-helpers.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
-import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
-import { prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
+import { getIdentifiersFromTopic, liveDataHandler, resolveMasterChildFromTopic } from "../../helpers/mqtt-helpers.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
+import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
 import { logger } from "../../utils/logger.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
@@ -24,10 +24,10 @@ import { upsertScheduleLiveData } from "./motor-schedule-live-data-services.js";
 import { insertScheduleLog } from "./motor-schedule-logs-services.js";
 import { uploadLiveDataPacket } from "../s3/s3-service.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
-import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
-import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
+import { applyDeviceAllocation, getMasterIdentifierById, getStarterByMacWithMotor } from "./starter-services.js";
 import { pushPendingSchedulesForStarter } from "../../helpers/schedule-sync-helper.js";
+import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 // Postgres deadlock code. Concurrent MQTT messages for the same device can
 // race on (starter_boxes, motors) row locks; the loser is killed with 40P01.
 // The transaction was never committed, so a simple retry is safe.
@@ -71,7 +71,6 @@ function runSerializedPerDevice<T>(starterId: number | null | undefined, fn: () 
   });
   return next;
 }
-
 // Live data
 export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId: string, previousData: previousPreparedLiveData) {
   const starterId = insertedData?.starter_id;
@@ -104,6 +103,8 @@ export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId:
 }
 
 export async function selectTopicAck(topicType: string, payload: any, topic: string) {
+  console.log('topic: ', topic);
+  console.log('topicType: ', topicType);
 
   switch (topicType) {
     case "LIVE_DATA":
@@ -209,6 +210,8 @@ async function handleScheduleLiveData(insertedData: preparedLiveData, motorId: n
 }
 
 export async function updateStates(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
+  console.log('previousData: ', previousData);
+  console.log('insertedData: ', insertedData);
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
@@ -221,7 +224,7 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
   try {
     const notificationData = await db.transaction(async (trx) => {
       await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, record, trx);
-      await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
+      if (motor_id) await saveSingleRecord<DeviceTemperatureTable>(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
 
       const starterBoxUpdates: Record<string, any> = {};
       let trackPowerChange = false;
@@ -1015,71 +1018,118 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 // Motor control ack
 export async function motorControlAckHandler(message: any, topic: string) {
   try {
-    const macAddress = topic.split("/")[1];
-    if (!macAddress) {
-      console.error("Invalid topic format: MAC address not found");
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId) {
+      logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
       return;
     }
 
-    const validMac = await getStarterByMacWithMotor(macAddress);
-    if (!validMac?.id || !validMac.motors || validMac.motors.length === 0) {
-      console.error(`No starter found with MAC address [${macAddress}] or no motors attached`);
+    const device = await getStarterByMacWithMotor(deviceId);
+    if (!device?.id || !device.motors || device.motors.length === 0) {
+      logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
       return;
     }
 
-    const motor: any = validMac.motors[0];
-    const starter_id = validMac.id;
-    const motor_id = motor.id;
-    const location_id = motor.location_id;
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
+      }
+    }
 
-    const mode_description = motor.mode;
-    const prevState = motor.state;
-    const newState = message.D;
+    const starter_id = device.id;
 
-    const stateChanged = newState !== prevState;
-    const shouldWriteMotorHistory = newState === 0 || newState === 1;
+    if (typeof message.D === "object" && message.D !== null) {
+      // multi-motor payload: { m1: { m_s: 1 }, m2: { m_s: 0 } }
+      const motorRefs = Object.keys(message.D);
+      const notifications: Array<{ data: any; newState: number }> = [];
 
-    const notificationData = await db.transaction(async (trx) => {
-      // Update motor state ONLY if changed
-      if (stateChanged && (newState === 0 || newState === 1)) {
-        const updateData: any = { state: newState, updated_at: new Date() };
-        if (newState === 1) updateData.motor_last_on_at = new Date();
-        else if (newState === 0) updateData.motor_last_off_at = new Date();
-        await trx.update(motors).set(updateData).where(eq(motors.id, motor.id));
+      for (const ref of motorRefs) {
+        const motor: any = device.motors.find((m: any) => m.motor_reference === ref);
+        if (!motor) {
+          logger.warn(`[MULTI_STARTER] MOTOR_CONTROL_ACK: no DB motor with motor_reference="${ref}" — skipping`);
+          continue;
+        }
 
-        await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
-      } else {
-        const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
-        if (isFirstRecord) {
-          await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+        const newState = message.D[ref]?.m_s;
+        if (newState === undefined || newState === null) continue;
+
+        const prevState = motor.state;
+        const mode_description = motor.mode;
+        const motor_id = motor.id;
+        const location_id = motor.location_id;
+        const stateChanged = newState !== prevState;
+
+        const notificationData = await db.transaction(async (trx) => {
+          if (stateChanged && (newState === 0 || newState === 1)) {
+            await trx.update(motors).set({ state: newState, updated_at: new Date() }).where(eq(motors.id, motor_id));
+            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+          } else {
+            const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+            if (isFirstRecord) {
+              await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+            }
+          }
+          await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor_id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+          return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, device.starter_number) : null;
+        });
+
+        if (notificationData) notifications.push({ data: notificationData, newState });
+      }
+
+      for (const { data, newState } of notifications) {
+        if (shouldSendNotification(data.motorId, "state", newState)) {
+          await sendUserNotification(data.userId, data.title, data.message, data.motorId, starter_id);
         }
       }
+    } else {
+      // SINGLE_STARTER
+      const motor: any = device.motors[0];
+      const motor_id = motor.id;
+      const location_id = motor.location_id;
+      const mode_description = motor.mode;
+      const prevState = motor.state;
+      const newState = message.D;
+      const stateChanged = newState !== prevState;
+      const shouldWriteMotorHistory = newState === 0 || newState === 1;
 
-      if (shouldWriteMotorHistory) {
-        await writeMotorStatusHistoryIfChanged({
-          starter_id,
-          motor_id,
-          status: newState === 1 ? "ON" : "OFF",
-          time_stamp: new Date(),
-          trx,
-        });
-      }
+      const notificationData = await db.transaction(async (trx) => {
+        if (stateChanged && (newState === 0 || newState === 1)) {
+          const updateData: any = { state: newState, updated_at: new Date() };
+          if (newState === 1) updateData.motor_last_on_at = new Date();
+          else if (newState === 0) updateData.motor_last_off_at = new Date();
+          await trx.update(motors).set(updateData).where(eq(motors.id, motor.id));
+          await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+        } else {
+          const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+          if (isFirstRecord) {
+            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+          }
+        }
+        if (shouldWriteMotorHistory) {
+          await writeMotorStatusHistoryIfChanged({ starter_id, motor_id, status: newState === 1 ? "ON" : "OFF", time_stamp: new Date(), trx });
+        }
+        await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+        return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, device.starter_number) : null;
+      });
 
-      // Always log ACK (changed or not)
-      await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
-      return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, validMac.starter_number) : null;
-
-    });
-
-    // Send notification after transaction completes (debounced)
-    if (notificationData) {
-      if (shouldSendNotification(notificationData.motorId, "state", newState)) {
-        await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, starter_id);
+      if (notificationData) {
+        if (shouldSendNotification(notificationData.motorId, "state", newState)) {
+          await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, starter_id);
+        }
       }
     }
   } catch (error: any) {
     logger.error("Error at motor control ack handler", error);
-    console.error("Error at motor control ack handler", error);
     throw error;
   }
 }
@@ -1087,37 +1137,94 @@ export async function motorControlAckHandler(message: any, topic: string) {
 // Motor mode ack
 export async function motorModeChangeAckHandler(message: any, topic: string) {
   try {
-    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-    if (!validMac?.id || !validMac.motors.length) {
-      logger.error(`Any starter found with given MAC [${topic}]`)
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId) {
+      logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
       return null;
-    };
+    }
 
-    const mode = controlMode(message.D);
-    const motor = validMac.motors[0];
+    const device = await getStarterByMacWithMotor(deviceId);
+    if (!device?.id || !device.motors.length) {
+      logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
+      return null;
+    }
 
-    await db.transaction(async (trx) => {
-      if (mode !== motor.mode) {
-        if (mode == "MANUAL" || mode == "AUTO" || mode == "SCHEDULE") {
-          await trx.update(motors).set({ mode: mode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
+      }
+    }
+
+    if (typeof message.D === "object" && message.D !== null) {
+      // multi-motor payload: { m1: { mode: 1 }, m2: { mode: 0 } }
+      const motorRefs = Object.keys(message.D);
+      const notifications: Array<{ data: any; mode: string }> = [];
+
+      for (const ref of motorRefs) {
+        const motor: any = device.motors.find((m: any) => m.motor_reference === ref);
+        if (!motor) {
+          logger.warn(`[MULTI_STARTER] MODE_CHANGE_ACK: no DB motor with motor_reference="${ref}" — skipping`);
+          continue;
+        }
+
+        const rawMode = message.D[ref]?.mode;
+        if (rawMode === undefined || rawMode === null) continue;
+
+        const mode = controlMode(rawMode);
+        const modeChanged = mode !== motor.mode;
+
+        await db.transaction(async (trx) => {
+          if (modeChanged && (mode === "MANUAL" || mode === "AUTO")) {
+            await trx.update(motors).set({ mode: mode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
+          }
+          await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { mode: motor.mode }, { mode }, "MOTOR_MODE_ACK", trx, device.id);
+        });
+
+        if (modeChanged) {
+          notifications.push({ data: prepareMotorModeControlNotificationData(motor, mode, device.id, device.starter_number), mode });
         }
       }
 
-      await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id,
-        { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, validMac.id);
-    });
+      for (const { data, mode } of notifications) {
+        if (shouldSendNotification(data.motorId, "mode", mode)) {
+          await sendUserNotification(data.userId, data.title, data.message, data.motorId, data.starterId);
+        }
+      }
+    } else {
+      // SINGLE_STARTER — existing path unchanged
+      const mode = controlMode(message.D);
+      const motor = device.motors[0];
 
-    const modeChanged = mode !== motor.mode;
-    const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, validMac.id, validMac.starter_number) : null;
+      await db.transaction(async (trx) => {
+        if (mode !== motor.mode) {
+          if (mode == "MANUAL" || mode == "AUTO") {
+            await trx.update(motors).set({ mode: mode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
+          }
+        }
+        await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { mode: motor.mode }, { mode }, "MOTOR_MODE_ACK", trx, device.id);
+      });
 
-    if (notificationData) {
-      if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
-        await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
+      const modeChanged = mode !== motor.mode;
+      const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, device.id, device.starter_number) : null;
+
+      if (notificationData) {
+        if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
+          await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
+        }
       }
     }
   } catch (error: any) {
     logger.error("Error at motor mode change ack handler", error);
-    console.error("Error at motor mode change ack handler", error);
     throw error;
   }
 }
@@ -1125,17 +1232,40 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
 
 export async function heartbeatHandler(message: any, topic: string) {
   try {
-    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
-    if (!validMac?.id) {
-      console.error(`Any starter found with given MAC [${topic}]`)
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId) {
+      logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
       return null;
-    };
+    }
+
+    const device = await getStarterByMacWithMotor(deviceId);
+    if (!device?.id) {
+      logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
+      return null;
+    }
+
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
+      }
+    }
+
     const heartbeatAt = new Date();
     const { strength, status } = getValidStrength(message.D.s_q);
     const validNetwork = getValidNetwork(message.D.nwt);
-    const statusChanged = validMac.status !== status;
-    const signalChanged = validMac.signal_quality !== strength;
-    const networkChanged = validMac.network_type !== validNetwork;
+    const statusChanged = device.status !== status;
+    const signalChanged = device.signal_quality !== strength;
+    const networkChanged = device.network_type !== validNetwork;
 
     const starterBoxUpdates: any = { last_signal_received_at: heartbeatAt };
     if (signalChanged || networkChanged || statusChanged) {
@@ -1146,16 +1276,16 @@ export async function heartbeatHandler(message: any, topic: string) {
 
     if (statusChanged) {
       await writeDeviceStatusHistoryIfChanged({
-        starter_id: validMac.id,
+        starter_id: device.id,
         status,
         time_stamp: heartbeatAt,
       });
     }
 
     await db.transaction(async (trx) => {
-      await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, validMac.id, starterBoxUpdates, trx);
+      await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, device.id, starterBoxUpdates, trx);
 
-      if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
+      if (message.D.s_q >= 2 && message.D.s_q <= 30 && device.synced_settings_status === "false") await publishDeviceSettings(device);
     });
 
     // Heartbeat-driven schedule push: whenever the device is online (signal 1–30),
@@ -1166,32 +1296,32 @@ export async function heartbeatHandler(message: any, topic: string) {
     // Fire-and-forget so the heartbeat handler never blocks on MQTT ACK timeouts.
     const isNowOnline = strength != null && strength >= 1 && strength <= 30;
     if (isNowOnline) {
-      const motorList = Array.isArray((validMac as any).motors) ? (validMac as any).motors : [];
+      const motorList = Array.isArray((device as any).motors) ? (device as any).motors : [];
       setImmediate(() => {
         if (motorList.length === 0) {
-          pushPendingSchedulesForStarter(validMac).catch((err) =>
-            logger.error(`heartbeat schedule push failed for starter ${validMac.id}: ${err?.message}`),
+          pushPendingSchedulesForStarter(device).catch((err) =>
+            logger.error(`heartbeat schedule push failed for starter ${device.id}: ${err?.message}`),
           );
           return;
         }
         for (const motor of motorList) {
-          pushPendingSchedulesForStarter(validMac, motor.id).catch((err) =>
-            logger.error(`heartbeat schedule push failed for starter ${validMac.id} motor ${motor.id}: ${err?.message}`),
+          pushPendingSchedulesForStarter(device, motor.id).catch((err) =>
+            logger.error(`heartbeat schedule push failed for starter ${device.id} motor ${motor.id}: ${err?.message}`),
           );
         }
       });
     }
   } catch (error: any) {
-    console.error("Error at heartbeat topic handler:", error);
+    logger.error("Error at heartbeat topic handler", error);
     throw error;
   }
 }
 
 export async function deviceSerialNumberAllocationAckHandler(message: any, topic: string) {
   try {
-    const identifier = topic.split("/")[1];
-    const upperId = identifier?.trim().toUpperCase();
-    if (!upperId) return null;
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId) return null;
+    const upperId = deviceId.trim().toUpperCase();
 
     const byMac = await db.query.starterBoxes.findFirst({
       where: and(eq(starterBoxes.mac_address, upperId), ne(starterBoxes.status, "ARCHIVED")),
@@ -1204,8 +1334,24 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
     });
 
     if (!starter?.id) {
-      console.error(`No starter found with identifier [${upperId}]`);
+      logger.error(`Device not found for identifier [${upperId}]`, undefined, { deviceId, topic });
       return null;
+    }
+
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== starter.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: starter.id,
+          topic,
+        });
+        return null;
+      }
     }
 
     if (message.D !== 1) return null;
@@ -1221,78 +1367,107 @@ export async function deviceSerialNumberAllocationAckHandler(message: any, topic
 
     await applyDeviceAllocation(starter.id, newAllocation, userId);
   } catch (error: any) {
-    console.error("Error at device serial number allocation ack handler:", error);
+    logger.error("Error at device serial number allocation ack handler", error);
     throw error;
   }
 }
 
-export function publishData(preparedData: any, starterData: StarterBox) {
+export async function publishData(preparedData: any, starterData: StarterBox) {
   if (!starterData) return null;
-  // const macOrPcb = starterData.device_status === 'READY' || starterData.device_status === 'TEST' ? starterData.mac_address : starterData.pcb_number;
-  const macOrPcb = starterData.device_allocation === "false" ? starterData.mac_address : starterData.pcb_number;
-  const topic = `peepul/${macOrPcb}/cmd`;
-  const payload = JSON.stringify(preparedData);
-  mqttServiceInstance.publish(topic, payload);
+
+  const deviceKey = starterData.device_allocation === "false"
+    ? starterData.mac_address
+    : starterData.pcb_number;
+
+  let topic: string;
+
+  if ((starterData as any).role === "CHILD" && (starterData as any).parent_starter_id) {
+    const masterKey = await getMasterIdentifierById((starterData as any).parent_starter_id);
+    if (!masterKey) {
+      logger.error(`Master not found for child device [${deviceKey}]`, undefined, { deviceKey });
+      return null;
+    }
+    topic = `peepul/${masterKey}/${deviceKey}/cmd`;
+  } else {
+    topic = `peepul/${deviceKey}/cmd`;
+  }
+
+  mqttServiceInstance.publish(topic, JSON.stringify(preparedData));
 }
 
 export async function deviceSyncUpdate(message: any, topic: string) {
-  const macFromTopic = topic.split("/")[1];
+  const { masterId, deviceId } = getIdentifiersFromTopic(topic);
 
   try {
-    if (!macFromTopic) {
-      console.error("Invalid topic format: MAC/PCB not found");
+    if (!deviceId) {
+      logger.error("Invalid topic format: Device MAC not found", undefined, { topic });
       return null;
+    }
+
+    const device = await getStarterByMacWithMotor(deviceId);
+    if (!device?.id) {
+      logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
+      return null;
+    }
+
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
+      }
     }
 
     if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
-      console.error(`Invalid message data in calibration ack [${message.D}]`);
+      logger.error(`Invalid message data in calibration ack [${message.D}]`, undefined, { deviceId });
       return null;
     }
 
-    // Match PCB/MAC and sequence number from pendingAckMap
-    const pendingAck = pendingAckMap.get(macFromTopic);
+    const pendingAck = pendingAckMap.get(deviceId);
 
     if (!pendingAck) {
-      logger.warn(`No pending ACK found for ${macFromTopic}`);
+      logger.warn(`No pending ACK found for ${deviceId}`);
       return null;
     }
 
-    // Validate sequence number matches
     if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
-      logger.warn(`Sequence number mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+      logger.warn(`Schedule ACK sequence mismatch for ${deviceId}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
       return null;
     }
 
     if (message.D === 1) {
-      // ACK success — resolve true so caller proceeds with DB update
       pendingAck.resolve(true);
-      pendingAckMap.delete(macFromTopic);
-      logger.info(`Calibration ACK success for ${macFromTopic}`);
+      pendingAckMap.delete(deviceId);
+      logger.info(`Calibration ACK success for ${deviceId}`);
 
-      // Update DB: mark settings as acknowledged
-      const validMac = await getStarterByMacWithMotor(macFromTopic);
-      if (validMac?.id) {
-        await updateLatestStarterSettings(validMac.id, message.D);
-
-        if (validMac.synced_settings_status === "false") {
-          await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
+      const updatedDevice = await getStarterByMacWithMotor(deviceId);
+      if (updatedDevice?.id) {
+        await updateLatestStarterSettings(updatedDevice.id, message.D);
+        if (updatedDevice.synced_settings_status === "false") {
+          await updateRecordById<StarterBoxTable>(starterBoxes, updatedDevice.id, { synced_settings_status: "true" });
         }
       }
     } else {
-      // ACK failed (D === 0) — resolve false, do NOT update DB
       pendingAck.resolve(false);
-      pendingAckMap.delete(macFromTopic);
-      logger.warn(`Calibration ACK failed (D=0) for ${macFromTopic}, skipping DB update`);
+      pendingAckMap.delete(deviceId);
+      logger.warn(`Calibration ACK failed (D=0) for ${deviceId}, skipping DB update`);
     }
 
   } catch (error: any) {
-    // On error, reject the pending ACK so caller doesn't hang
-    const pendingAck = pendingAckMap.get(macFromTopic);
+    const pendingAck = deviceId ? pendingAckMap.get(deviceId) : undefined;
     if (pendingAck) {
       pendingAck.resolve(false);
-      pendingAckMap.delete(macFromTopic);
+      pendingAckMap.delete(deviceId!);
     }
-    console.error("Error at device sync update (calibration ack):", error);
+    logger.error("Error at device sync update (calibration ack)", error);
     throw error;
   }
 }
@@ -1302,50 +1477,50 @@ export async function adminConfigDataRequestAckHandler(
   topic: string
 ) {
   try {
-    const macFromTopic = topic.split("/")[1];
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId) return null;
 
-    const validMac = await getStarterByMacWithMotor(macFromTopic);
-
-    if (!validMac?.id) {
-      console.error(`No starter found with given MAC [${topic}]`);
+    const device = await getStarterByMacWithMotor(deviceId);
+    if (!device?.id) {
+      logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
       return null;
     }
 
-    if (
-      message.D === undefined ||
-      message.D === null ||
-      (message.D !== 0 && message.D !== 1)
-    ) {
-      console.error(
-        `Invalid message data in admin config ack [${message.D}]`
-      );
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
+      }
+    }
+
+    if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
+      logger.error(`Invalid message data in admin config ack [${message.D}]`, undefined, { deviceId });
       return null;
     }
 
-    //  Resolve ACK to stop retries
-    const pendingAck = pendingAckMap.get(macFromTopic);
-
+    const pendingAck = pendingAckMap.get(deviceId);
     if (pendingAck) {
       pendingAck.resolve(true);
-      pendingAckMap.delete(macFromTopic);
+      pendingAckMap.delete(deviceId);
     }
 
-    // Update DB
-    await updateLatestStarterSettings(validMac.id, message.D);
+    await updateLatestStarterSettings(device.id, message.D);
 
-    if (
-      validMac &&
-      validMac.synced_settings_status === "false"
-    ) {
-      await updateRecordById<StarterBoxTable>(
-        starterBoxes,
-        validMac.id,
-        { synced_settings_status: "true" }
-      );
+    if (device.synced_settings_status === "false") {
+      await updateRecordById<StarterBoxTable>(starterBoxes, device.id, { synced_settings_status: "true" });
     }
 
   } catch (error: any) {
-    console.error("Error at admin config ack handler:", error);
+    logger.error("Error at admin config ack handler", error);
     throw error;
   }
 }
@@ -1353,106 +1528,136 @@ export async function adminConfigDataRequestAckHandler(
 
 export async function deviceResetAckHandler(message: any, topic: string) {
   try {
-    const macFromTopic = topic.split("/")[1];
-    const validMac = await getStarterByMacWithMotor(macFromTopic);
-    if (!validMac?.id) {
-      console.error(`No starter found with given MAC [${topic}]`);
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId) return null;
+
+    const device = await getStarterByMacWithMotor(deviceId);
+    if (!device?.id) {
+      logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
       return null;
     }
 
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
+      }
+    }
+
     if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
-      console.error(`Invalid message data in admin config ack [${message.D}]`);
+      logger.error(`Invalid message data in device reset ack [${message.D}]`, undefined, { deviceId });
       return null;
     }
 
     const updatedFields = { device_reset_status: message.D === 1 ? "true" : "false" };
-    const changedStatus = validMac.device_reset_status !== updatedFields.device_reset_status;
-    if (changedStatus) await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, updatedFields);
+    const changedStatus = device.device_reset_status !== updatedFields.device_reset_status;
+    if (changedStatus) await updateRecordById<StarterBoxTable>(starterBoxes, device.id, updatedFields);
   } catch (error: any) {
-    console.error("Error at device reset ack topic:", error);
+    logger.error("Error at device reset ack handler", error);
     throw error;
   }
 }
 
 export async function deviceInfoAckHandler(message: any, topic: string) {
-  const macFromTopic = topic.split("/")[1];
+  const { masterId, deviceId } = getIdentifiersFromTopic(topic);
+  if (!deviceId) return null;
   const updatedFields: Record<string, any> = {};
   try {
-    // Resolve pending ACK to stop retry publishing
-    const pendingAck = pendingAckMap.get(macFromTopic);
+    const pendingAck = pendingAckMap.get(deviceId);
     if (pendingAck) {
       pendingAck.resolve(true);
-      pendingAckMap.delete(macFromTopic);
+      pendingAckMap.delete(deviceId);
     }
 
-    const validMac = await getStarterByMacWithMotor(macFromTopic);
-    if (!validMac?.id) {
-      console.error(`No starter found with given MAC [${topic}]`);
+    const device = await getStarterByMacWithMotor(deviceId);
+    if (!device?.id) {
+      logger.error(`Device not found for identifier [${deviceId}]`, undefined, { deviceId, topic });
       return null;
+    }
+
+    if (masterId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
+      }
     }
 
     if (!message.D) {
-      console.error(`Invalid message data in device info ack`);
+      logger.error("Invalid message data in device info ack", undefined, { deviceId });
       return null;
     }
 
-    if (message.D.version && message.D.version !== validMac.hardware_version) {
+    if (message.D.version && message.D.version !== device.hardware_version) {
       updatedFields.hardware_version = message.D.version;
     }
 
     const hasValue = (value: any) => value !== undefined && value !== null &&
       typeof value === "string" && value.trim() !== "";
 
-    // SIM recharge expiration date (validated)
-    if (hasValue(message.D.val) && message.D.val !== validMac.sim_recharge_expires_at) {
+    if (hasValue(message.D.val) && message.D.val !== device.sim_recharge_expires_at) {
       updatedFields.sim_recharge_expires_at = message.D.val;
     }
 
-    // SIM number (validated) — strip country code, take up to 40 digits
     if (hasValue(message.D.sim_num)) {
-      const rawSim = String(message.D.sim_num).replace(/^\+91/, ''); // remove +91 country code
-      const simNumber = rawSim.slice(0, 40); // take up to 40 digits
-      if (simNumber.length >= 1 && simNumber.length <= 40 && simNumber !== validMac.device_mobile_number) {
+      const rawSim = String(message.D.sim_num).replace(/^\+91/, '');
+      const simNumber = rawSim.slice(0, 40);
+      if (simNumber.length >= 1 && simNumber.length <= 40 && simNumber !== device.device_mobile_number) {
         updatedFields.device_mobile_number = simNumber;
       }
     }
 
     if (Object.keys(updatedFields).length > 0) {
-      await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, updatedFields);
+      await updateRecordById<StarterBoxTable>(starterBoxes, device.id, updatedFields);
     }
   } catch (error: any) {
-    // On error, resolve pending ACK as false so caller doesn't hang
-    const pendingAck = pendingAckMap.get(macFromTopic);
+    const pendingAck = pendingAckMap.get(deviceId);
     if (pendingAck) {
       pendingAck.resolve(false);
-      pendingAckMap.delete(macFromTopic);
+      pendingAckMap.delete(deviceId);
     }
 
     if (error?.code === "23505" || error?.cause?.code === "23505") {
       const duplicateMobile = updatedFields.device_mobile_number;
-      logger.info(`Device Info ACK failed for ${macFromTopic} - Duplicate mobile number: ${duplicateMobile}`);
-      logger.mqtt(`Duplicate SIM number detected during device info ACK | MAC: ${macFromTopic} | Mobile: ${duplicateMobile}`);
+      logger.info(`Device Info ACK failed for ${deviceId} - Duplicate mobile number: ${duplicateMobile}`);
+      logger.mqtt(`Duplicate SIM number detected during device info ACK | MAC: ${deviceId} | Mobile: ${duplicateMobile}`);
       return;
     }
 
-    logger.error(`Device Info ACK error for ${macFromTopic}: ${error.message}`);
-    logger.mqtt(`MQTT Device Info ACK error | MAC: ${macFromTopic} | Error: ${error.message}`);
-    console.error("Error at device info ack handler:", error);
+    logger.error(`Device Info ACK error for ${deviceId}: ${error.message}`);
+    logger.mqtt(`MQTT Device Info ACK error | MAC: ${deviceId} | Error: ${error.message}`);
   }
 }
 
 function scheduleCreationAckResolver(message: any, topic: string) {
-  const macFromTopic = topic.split("/")[1];
-  if (!macFromTopic) return;
+  const { deviceId } = getIdentifiersFromTopic(topic);
+  if (!deviceId) return;
 
-  const pendingAck = pendingAckMap.get(macFromTopic);
+  const pendingAck = pendingAckMap.get(deviceId);
   if (!pendingAck) {
-    logger.warn(`No pending schedule ACK found for ${macFromTopic}`);
+    logger.warn(`No pending schedule ACK found for ${deviceId}`);
     return;
   }
 
   if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
-    logger.warn(`Schedule ACK sequence mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+    logger.warn(`Schedule ACK sequence mismatch for ${deviceId}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
     return;
   }
 
@@ -1461,8 +1666,8 @@ function scheduleCreationAckResolver(message: any, topic: string) {
   // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
   const ackSuccess = dValue === 1 || dValue === 4;
   pendingAck.resolve(ackSuccess);
-  pendingAckMap.delete(macFromTopic);
-  logger.info(`Schedule creation ACK resolved for ${macFromTopic}, D=${dValue}, success=${ackSuccess}`);
+  pendingAckMap.delete(deviceId);
+  logger.info(`Schedule creation ACK resolved for ${deviceId}, D=${dValue}, success=${ackSuccess}`);
 }
 
 export const waitForAck = (
@@ -1520,3 +1725,61 @@ export const waitForAck = (
     mqttClient.on("message", onMessage);
   });
 };
+
+/**
+ * Inserts a starter_parameters record for an unmatched motor_reference block
+ * (motor was unassigned from the device but the hardware keeps sending data).
+ *
+ * Resolves motor_id via two fallbacks (history lookup → motor_index lookup).
+ * If no motor_id can be resolved, inserts with motor_id = null (column is now nullable).
+ * Does NOT update motor state, mode, or any related tables.
+ */
+export async function insertParametersForUnmatchedMotor(
+  device: any,
+  motorRef: string,
+  validated: any,
+) {
+  const starterId: number = device.id;
+
+  // 1st: look for the last motor_id recorded for this starter + motor_reference
+  const lastRecord = await db
+    .select({ motor_id: starterBoxParameters.motor_id })
+    .from(starterBoxParameters)
+    .where(and(
+      eq(starterBoxParameters.starter_id, starterId),
+      eq(starterBoxParameters.motor_reference, motorRef),
+    ))
+    .orderBy(desc(starterBoxParameters.time_stamp))
+    .limit(1);
+
+  let motorId: number | null = lastRecord[0]?.motor_id ?? null;
+
+  // 2nd fallback: motor is still assigned but has no motor_reference set —
+  // match by motor_index (m1 → index 1, m2 → index 2)
+  if (!motorId) {
+    const motorIndex = motorRef === "m1" ? 1 : 2;
+    const motorRecord = await db
+      .select({ id: motors.id })
+      .from(motors)
+      .where(and(
+        eq(motors.starter_id, starterId),
+        eq(motors.motor_index, motorIndex),
+        ne(motors.status, "ARCHIVED"),
+      ))
+      .limit(1);
+    motorId = motorRecord[0]?.id ?? null;
+  }
+
+  // motor_id is now nullable — proceed with null when no motor exists at all
+  const stubMotor = { id: motorId, motor_reference: motorRef, state: 0, mode: "AUTO" };
+  const prepared = prepareLiveDataPayload(validated, device, stubMotor);
+  if (!prepared) return;
+
+  const record = prepareStarterParametersRecord(prepared);
+  try {
+    await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, record);
+    logger.info(`[MULTI_STARTER] Parameters-only insert: starter_id=${starterId} motor_reference="${motorRef}" motor_id=${motorId}`);
+  } catch (err: any) {
+    logger.error(`[MULTI_STARTER] Parameters-only insert failed for motor_reference="${motorRef}"`, err);
+  }
+}

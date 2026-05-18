@@ -6,9 +6,11 @@ import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.j
 import type { preparedLiveData } from "../types/app-types.js";
 import type { NewStarterBoxParameters } from "../database/schemas/starter-parameters.js";
 
-export function prepareLiveDataPayload(validatedData: any, starterData: any) {
+export function prepareLiveDataPayload(validatedData: any, starterData: any, motor?: any) {
+  // motor can be explicitly provided (multi-motor path) or derived from motors[0] (single-motor path)
+  const resolvedMotor = motor ?? starterData?.motors?.[0];
 
-  if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
+  if (!validatedData || !starterData || !resolvedMotor) {
     logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
     console.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
     return null;
@@ -72,7 +74,8 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
     starter_id: starterData.id || null,
     gateway_id: starterData.gateway_id || null,
     user_id: starterData.created_by || null,
-    motor_id: starterData.motors[0].id || null,
+    motor_id: resolvedMotor.id || null,
+    motor_reference: resolvedMotor.motor_reference ?? null,
 
     // Schedule
     active_schedule_id: sch?.id ?? null,
@@ -103,6 +106,7 @@ export function prepareStarterParametersRecord(insertedData: preparedLiveData): 
     mode_description: insertedData.mode_description,
     motor_state: insertedData.motor_state,
     motor_description: insertedData.motor_description,
+    motor_reference: insertedData.motor_reference,
     alert_code: insertedData.alert_code,
     alert_description: insertedData.alert_description,
     fault: insertedData.fault,

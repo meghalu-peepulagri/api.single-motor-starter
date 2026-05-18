@@ -4,11 +4,12 @@ import { sql, relations } from "drizzle-orm";
 import { users } from "./users.js";
 import { uniqueIndex } from "drizzle-orm/gel-core";
 import { statusEnum } from "../../constants/enum-types.js";
+import { starterBoxes } from "./starter-boxes.js";
 
 
 export const gateways = pgTable("gateways", {
   id: serial("id").primaryKey(),
-  name: varchar("name").notNull(),
+  name: varchar("name"),
   gateway_number: varchar("gateway_number"),
   label: varchar("label"),
   mac_address: varchar("mac_address"),
@@ -34,7 +35,7 @@ export type Gateway = typeof gateways.$inferSelect;
 export type NewGateway = typeof gateways.$inferInsert;
 export type GatewayTable = typeof gateways;
 
-export const gatewaysRelations = relations(gateways, ({ one }) => ({
+export const gatewaysRelations = relations(gateways, ({ one, many }) => ({
   location: one(locations, {
     fields: [gateways.location_id],
     references: [locations.id],
@@ -43,4 +44,5 @@ export const gatewaysRelations = relations(gateways, ({ one }) => ({
     fields: [gateways.user_id],
     references: [users.id],
   }),
+  starterBoxes: many(starterBoxes),
 }));

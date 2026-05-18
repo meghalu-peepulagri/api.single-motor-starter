@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { BOTH_DEVICES_MUST_BE_MASTER, CHILDREN_FETCHED, CHILDREN_MOVED_SUCCESSFULLY, CHILD_NOT_BELONGS_TO_SOURCE, DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_IS_NOT_CHILD, DEVICE_IS_NOT_MASTER, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, DEVICE_ROLE_VALIDATION_CRITERIA, ELIGIBLE_PARENTS_FETCHED, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MASTER_HAS_CHILDREN, MASTER_REPLACED_SUCCESSFULLY, MASTER_SWAPPED_SUCCESSFULLY, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NEW_MASTER_MUST_BE_STANDALONE, NO_ACTIVE_FAULT_FOUND, NO_CHILDREN_SELECTED, NO_CHILDREN_TO_MOVE, OLD_AND_NEW_MASTER_SAME, OLD_DEVICE_MUST_BE_MASTER, PARENT_UPDATED_SUCCESSFULLY, REPLACE_MASTER_VALIDATION_CRITERIA, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, ROLE_CHANGED_SUCCESSFULLY, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, TOPOLOGY_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
@@ -18,11 +18,11 @@ import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilt
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getRawAlertFaultCounts, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
-import type { validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
+import type { validatedChangeRole, validatedReparent, validatedReplaceMaster, validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, changeRoleWithTransaction, countChildrenOfMaster, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getChildrenOfStarter, getDeviceWithDispatchDetails, getEligibleParents, getStarterAnalytics, getStarterRunTime, getStarterTopologyContext, getTopologyTree, getUnassignedMasters, getUniqueStarterIdsWithInTime, moveChildrenWithTransaction, paginatedStarterList, paginatedStarterListForMobile, replaceMasterDeviceWithTransaction, reparentWithTransaction, replaceStarterWithTransaction, resolveAndValidateParent, starterConnectedMotors, swapMastersChildrenWithTransaction } from "../services/db/starter-services.js";
 import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
@@ -47,6 +47,12 @@ export class StarterHandlers {
       const validStarterBoxReq = await validatedRequest<validatedAddStarter>("add-starter", starterBoxPayload, STARTER_BOX_VALIDATION_CRITERIA);
 
       const existedGateway = await gatewayConflicts(validStarterBoxReq.gateway_id ?? undefined);
+
+      // Cross-field validation for role/parent (CHILD must have a MASTER parent; others must not have one)
+      await resolveAndValidateParent(
+        (validStarterBoxReq.role ?? "STANDALONE") as "STANDALONE" | "MASTER" | "CHILD",
+        validStarterBoxReq.parent_starter_id ?? null,
+      );
 
       const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload, existedGateway?.id);
       const { id, ...restStarterData } = starter as StarterBox;
@@ -298,22 +304,32 @@ export class StarterHandlers {
     try {
       const query = c.req.query();
       const starterId = +c.req.param("id")!;
-      const motorId = +query.motor_id
       paramsValidateException.validateId(starterId, "Device id");
-      if (motorId) paramsValidateException.validateId(motorId, "Motor id");
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
-      if (motorId) {
-        const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
-        if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
+      const motorParam = query.motor_id;
+      let motorId: number | undefined;
+      let motorReference: string | undefined;
+
+      if (motorParam) {
+        const numericId = Number(motorParam);
+        if (Number.isInteger(numericId) && numericId > 0) {
+          motorId = numericId;
+          paramsValidateException.validateId(motorId, "Motor id");
+          const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+          if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
+        } else {
+          // motor_reference string like "m1" or "m2" — motor may no longer be assigned
+          motorReference = motorParam;
+        }
       }
 
       const parameter = query.parameter;
       const { fromDateUTC, toDateUTC } = parseQueryDates(query);
 
-      const starterList = await getStarterAnalytics(starterId, fromDateUTC, toDateUTC, parameter, motorId);
+      const starterList = await getStarterAnalytics(starterId, fromDateUTC, toDateUTC, parameter, motorId, motorReference);
       return sendResponse(c, 200, DEVICE_ANALYTICS_FETCHED, starterList);
     } catch (error: any) {
       console.error("Error at starter analytics :", error);
@@ -452,9 +468,252 @@ export class StarterHandlers {
         connectedMotors.dispatch.invoice_document_url = await generateDownloadUrl(connectedMotors.dispatch.invoice_document);
       }
 
+      // Attach topology context: parent (for CHILD) + children with their motors (for MASTER)
+      const topology = await getStarterTopologyContext(starterId);
+      if (topology && connectedMotors) {
+        connectedMotors.role = topology.role;
+        connectedMotors.parent_starter_id = topology.parent_starter_id;
+        connectedMotors.parent = topology.parent;
+        connectedMotors.children = topology.children;
+        connectedMotors.child_count = topology.child_count;
+      }
+
       return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
     } catch (error: any) {
       console.error("Error at starter connected motors :", error);
+      throw error;
+    }
+  }
+
+  changeRoleHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const reqData = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqData);
+
+      const validated = await validatedRequest<validatedChangeRole>("change-role", reqData, DEVICE_ROLE_VALIDATION_CRITERIA);
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      // If demoting a MASTER with children and no reassignment provided, require the client to pick one.
+      if (starter.role === "MASTER" && validated.role !== "MASTER") {
+        const childCount = await countChildrenOfMaster(starter.id);
+        if (childCount > 0 && !validated.reassignment) {
+          throw new ConflictException(MASTER_HAS_CHILDREN);
+        }
+      }
+
+      const result = await changeRoleWithTransaction(starter as any, validated, userPayload.id);
+
+      return sendResponse(c, 200, ROLE_CHANGED_SUCCESSFULLY, {
+        id: starter.id,
+        role: (result.updated as any)?.role,
+        parent_starter_id: (result.updated as any)?.parent_starter_id ?? null,
+        children_reassigned: result.childrenReassigned,
+      });
+    } catch (error: any) {
+      console.error("Error at change role :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
+  reparentHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const reqData = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqData);
+
+      const validated = await validatedRequest<validatedReparent>("reparent-device", reqData, DEVICE_ROLE_VALIDATION_CRITERIA);
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      if (starter.role !== "CHILD") {
+        throw new BadRequestException(DEVICE_IS_NOT_CHILD);
+      }
+
+      const updated = await reparentWithTransaction(starter as any, validated.parent_starter_id, userPayload.id);
+
+      return sendResponse(c, 200, PARENT_UPDATED_SUCCESSFULLY, {
+        id: starter.id,
+        parent_starter_id: (updated as any)?.parent_starter_id ?? null,
+      });
+    } catch (error: any) {
+      console.error("Error at reparent device :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
+  getChildrenHandler = async (c: Context) => {
+    try {
+      const starterId = +c.req.param("id");
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+      if (starter.role !== "MASTER") throw new BadRequestException(DEVICE_IS_NOT_MASTER);
+
+      const children = await getChildrenOfStarter(starterId);
+      return sendResponse(c, 200, CHILDREN_FETCHED, { count: children.length, records: children });
+    } catch (error: any) {
+      console.error("Error at get children :", error);
+      throw error;
+    }
+  }
+
+  getTopologyHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const query = c.req.query();
+      const filters: { user_id?: number; location_id?: number; status?: string } = {};
+      if (query.location_id) filters.location_id = +query.location_id;
+      if (query.status) filters.status = query.status;
+      if (userPayload.user_type !== "ADMIN" && userPayload.user_type !== "SUPER_ADMIN") {
+        filters.user_id = userPayload.id;
+      } else if (query.user_id) {
+        filters.user_id = +query.user_id;
+      }
+
+      const tree = await getTopologyTree(filters);
+      return sendResponse(c, 200, TOPOLOGY_FETCHED, tree);
+    } catch (error: any) {
+      console.error("Error at get topology :", error);
+      throw error;
+    }
+  }
+
+  getUnassignedMastersHandler = async (c: Context) => {
+    try {
+      const query = c.req.query();
+      const paginationParams = getPaginationOffParams(query);
+      const search = query.search_string ?? query.search;
+      const result = await getUnassignedMasters(paginationParams, search);
+      return sendResponse(c, 200, ELIGIBLE_PARENTS_FETCHED, result);
+    } catch (error: any) {
+      console.error("Error at get unassigned masters :", error);
+      throw error;
+    }
+  }
+
+  getEligibleParentsHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const query = c.req.query();
+      const params: { search?: string; user_id?: number; location_id?: number } = {};
+      if (query.search) params.search = query.search;
+      if (query.location_id) params.location_id = +query.location_id;
+      if (userPayload.user_type !== "ADMIN" && userPayload.user_type !== "SUPER_ADMIN") {
+        params.user_id = userPayload.id;
+      } else if (query.user_id) {
+        params.user_id = +query.user_id;
+      }
+
+      const records = await getEligibleParents(params);
+      return sendResponse(c, 200, ELIGIBLE_PARENTS_FETCHED, { count: records.length, records });
+    } catch (error: any) {
+      console.error("Error at get eligible parents :", error);
+      throw error;
+    }
+  }
+
+  replaceMasterHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const reqData = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqData);
+
+      const validated = await validatedRequest<validatedReplaceMaster>("replace-master", reqData, REPLACE_MASTER_VALIDATION_CRITERIA);
+
+      // ─── Shared guards ───────────────────────────────────────────────
+      if (validated.old_master_id === validated.new_master_id) {
+        throw new BadRequestException(OLD_AND_NEW_MASTER_SAME);
+      }
+
+      const oldRow = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [validated.old_master_id, "ARCHIVED"]);
+      if (!oldRow) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      const newRow = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [validated.new_master_id, "ARCHIVED"]);
+      if (!newRow) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      // ─── Pick the mode ───────────────────────────────────────────────
+      // Explicit `mode` in body wins. Otherwise auto-detect:
+      //   - both MASTER + child_ids provided     → MOVE_CHILDREN (selected)
+      //   - both MASTER + no child_ids           → SWAP_CHILDREN
+      //   - old MASTER + new STANDALONE          → REPLACE_DEVICE
+      //   - otherwise                            → reject
+      const requestedChildIds = validated.child_ids ?? [];
+      let mode = validated.mode;
+      if (!mode) {
+        if (oldRow.role === "MASTER" && newRow.role === "MASTER") {
+          mode = requestedChildIds.length > 0 ? "MOVE_CHILDREN" : "SWAP_CHILDREN";
+        } else if (oldRow.role === "MASTER" && newRow.role === "STANDALONE") {
+          mode = "REPLACE_DEVICE";
+        } else if (oldRow.role !== "MASTER") {
+          throw new BadRequestException(OLD_DEVICE_MUST_BE_MASTER);
+        } else {
+          throw new BadRequestException(NEW_MASTER_MUST_BE_STANDALONE);
+        }
+      }
+
+      // ─── Dispatch ────────────────────────────────────────────────────
+      if (mode === "SWAP_CHILDREN") {
+        if (oldRow.role !== "MASTER" || newRow.role !== "MASTER") {
+          throw new BadRequestException(BOTH_DEVICES_MUST_BE_MASTER);
+        }
+        const result = await swapMastersChildrenWithTransaction(oldRow as any, newRow as any, userPayload.id);
+        return sendResponse(c, 200, MASTER_SWAPPED_SUCCESSFULLY, result);
+      }
+
+      if (mode === "MOVE_CHILDREN") {
+        if (oldRow.role !== "MASTER" || newRow.role !== "MASTER") {
+          throw new BadRequestException(BOTH_DEVICES_MUST_BE_MASTER);
+        }
+
+        // If specific ids were given, verify they all belong to oldRow.
+        // If none given, fall back to "move all" — source must have at least one child.
+        if (requestedChildIds.length > 0) {
+          const owned = await getChildrenOfStarter(oldRow.id);
+          const ownedIds = new Set(owned.map((c: any) => c.id));
+          const notOwned = requestedChildIds.filter(id => !ownedIds.has(id));
+          if (notOwned.length > 0) throw new BadRequestException(CHILD_NOT_BELONGS_TO_SOURCE);
+        } else {
+          const count = await countChildrenOfMaster(oldRow.id);
+          if (count === 0) throw new BadRequestException(NO_CHILDREN_TO_MOVE);
+        }
+
+        const result = await moveChildrenWithTransaction(
+          oldRow as any,
+          newRow as any,
+          requestedChildIds.length > 0 ? requestedChildIds : null,
+          userPayload.id,
+        );
+        if (result.moved_count === 0) throw new BadRequestException(NO_CHILDREN_SELECTED);
+        return sendResponse(c, 200, CHILDREN_MOVED_SUCCESSFULLY, result);
+      }
+
+      // mode === "REPLACE_DEVICE"
+      if (oldRow.role !== "MASTER") throw new BadRequestException(OLD_DEVICE_MUST_BE_MASTER);
+      if (newRow.role !== "STANDALONE") throw new BadRequestException(NEW_MASTER_MUST_BE_STANDALONE);
+      const result = await replaceMasterDeviceWithTransaction(oldRow as any, newRow as any, userPayload.id);
+      return sendResponse(c, 200, MASTER_REPLACED_SUCCESSFULLY, result);
+    } catch (error: any) {
+      console.error("Error at replace master :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
       throw error;
     }
   }
@@ -666,7 +925,7 @@ export class StarterHandlers {
       const query = c.req.query();
       const baseFilters = starterCountFilters(query);
 
-      const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
+      const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount, standaloneCount, masterCount, childCount] = await Promise.all([
         getRecordsCount(starterBoxes, [...baseFilters]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.status, "ACTIVE")]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.power, 1)]),
@@ -675,6 +934,9 @@ export class StarterHandlers {
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "TEST")]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "DEPLOYED")]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "ASSIGNED")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.role, "STANDALONE")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.role, "MASTER")]),
+        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.role, "CHILD")]),
       ]);
 
       return sendResponse(c, 200, "Starter count fetched successfully", {
@@ -686,6 +948,9 @@ export class StarterHandlers {
         test_count: testCount,
         deployed_count: deployedCount,
         assigned_count: assignedCount,
+        standalone_count: standaloneCount,
+        master_count: masterCount,
+        child_count: childCount,
       });
 
     } catch (error: any) {

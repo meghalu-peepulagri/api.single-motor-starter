@@ -69,6 +69,7 @@ export class ActivityService {
     action: string;
     entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
     entityId?: number;
+    deviceId?: number;
     oldData?: Record<string, unknown>;
     newData?: Record<string, unknown>;
   }, trx?: Transaction) {

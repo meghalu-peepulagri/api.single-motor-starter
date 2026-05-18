@@ -2,17 +2,61 @@ import { eq, ilike, isNull, ne, or } from "drizzle-orm";
 import { gateways } from "../database/schemas/gateways.js";
 
 export function getGatewayIdentifierLowers(data: {
-  name: string;
+  name?: string | null;
   mac_address: string;
   pcb_number: string;
   gateway_number?: string | null;
 }) {
-  const nameLower = data.name.trim().toLowerCase();
+  const nameLower = data.name?.trim().toLowerCase() ?? null;
   const macLower = data.mac_address.trim().toLowerCase();
   const pcbLower = data.pcb_number.trim().toLowerCase();
   const gatewayNumberLower = data.gateway_number?.trim().toLowerCase() ?? null;
 
   return { nameLower, macLower, pcbLower, gatewayNumberLower };
+}
+
+export function buildGatewayUpdatePayload(
+  validReq: {
+    name?: string | null | undefined;
+    gateway_number?: string | null | undefined;
+    label?: string | null | undefined;
+    mac_address?: string | null | undefined;
+    pcb_number?: string | null | undefined;
+  },
+  current: {
+    name?: string | null;
+    gateway_number?: string | null;
+    label?: string | null;
+    mac_address?: string | null;
+    pcb_number?: string | null;
+  }
+) {
+  const nameLower = validReq.name && validReq.name !== current.name
+    ? validReq.name.toLowerCase() : null;
+  const gatewayNumberLower = validReq.gateway_number && validReq.gateway_number !== current.gateway_number
+    ? validReq.gateway_number.toLowerCase() : null;
+  const macLower = validReq.mac_address && validReq.mac_address !== current.mac_address
+    ? validReq.mac_address.toLowerCase() : null;
+  const pcbLower = validReq.pcb_number && validReq.pcb_number !== current.pcb_number
+    ? validReq.pcb_number.toLowerCase() : null;
+
+  const updateData: Record<string, any> = {};
+  if (validReq.name !== undefined) updateData.name = validReq.name;
+  if (validReq.gateway_number !== undefined) updateData.gateway_number = validReq.gateway_number;
+  if (validReq.label !== undefined) updateData.label = validReq.label;
+  if (validReq.mac_address !== undefined) updateData.mac_address = validReq.mac_address;
+  if (validReq.pcb_number !== undefined) updateData.pcb_number = validReq.pcb_number;
+
+  const oldData: Record<string, any> = {};
+  for (const key of Object.keys(updateData)) {
+    oldData[key] = (current as any)[key] ?? null;
+  }
+
+  return {
+    updateData,
+    oldData,
+    changedIdentifiers: { nameLower, gatewayNumberLower, macLower, pcbLower },
+  };
 }
 
 export function gatewayFilters(query: any, userId?: number) {
@@ -21,10 +65,12 @@ export function gatewayFilters(query: any, userId?: number) {
 
   if (query.search_string?.trim()) {
     const s = `%${query.search_string.trim()}%`;
-    filters.push(ilike(gateways.name, s));
-    filters.push(ilike(gateways.pcb_number, s));
-    filters.push(ilike(gateways.mac_address, s));
-    filters.push(ilike(gateways.gateway_number, s));
+    filters.push(or(
+      ilike(gateways.name, s),
+      ilike(gateways.pcb_number, s),
+      ilike(gateways.mac_address, s),
+      ilike(gateways.gateway_number, s),
+    ));
   }
 
   if (query.status) {

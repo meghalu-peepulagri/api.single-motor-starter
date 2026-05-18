@@ -587,7 +587,7 @@ export const publishMultipleTimesInBackground = async (
       );
 
       // Publish Data
-      publishData(devicePayload, starterDetails);
+      await publishData(devicePayload, starterDetails);
 
       logger.info(
         `[${publishTime}] Waiting for ACK for ${ackWaitTimesInSeconds[i]} seconds on key: ${publishedKey}, sequence: ${devicePayload.S}`

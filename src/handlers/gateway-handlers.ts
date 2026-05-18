@@ -1,22 +1,25 @@
-import { eq } from "drizzle-orm";
+﻿import { eq } from "drizzle-orm";
 import type { Context } from "hono";
-import { GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED } from "../constants/app-constants.js";
+import { DEVICE_ALREADY_CONNECTED_TO_GATEWAY, GATEWAY_ADDED, GATEWAY_ASSIGNED_SUCCESSFULLY, GATEWAY_ASSIGNED_TO_DEVICE, GATEWAY_DELETED, GATEWAY_DETAILS_FETCHED, GATEWAY_DEVICES_FETCHED, GATEWAY_LABEL_UPDATED, GATEWAY_NOT_FOUND, GATEWAY_NUMBER_UPDATED, GATEWAY_RENAMED, GATEWAY_UPDATED, GATEWAY_USER_REMOVED, GATEWAY_VALIDATION_CRITERIA, GATEWAYS_FETCHED, STARTER_BOX_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { gateways, type GatewayTable } from "../database/schemas/gateways.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDeletedLog, prepareGatewayLabelUpdatedLog, prepareGatewayNumberUpdatedLog, prepareGatewayRenamedLog } from "../helpers/gateway-activity-helper.js";
-import { gatewayDropdownFilters, gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
+import { prepareGatewayAddedLog, prepareGatewayAssignedLog, prepareGatewayDeletedLog, prepareGatewayDetailsUpdatedLog, prepareGatewayLabelUpdatedLog, prepareGatewayNumberUpdatedLog, prepareGatewayRenamedLog, prepareGatewayUserRemovedLog } from "../helpers/gateway-activity-helper.js";
+import { buildGatewayUpdatePayload, gatewayDropdownFilters, gatewayFilters, getGatewayIdentifierLowers } from "../helpers/gateway-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { assertGatewayIdentifiersUnique, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysDropdownList, getGatewaysList } from "../services/db/gateway-services.js";
+import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
+import { assertGatewayIdentifiersUnique, assignGatewayToDevice, assignGatewayToUser, getGatewayDetails, getGatewayForOwnerAction, getGatewaysDropdownList, getGatewaysList, getGatewayWithDevices, removeUserFromGateway } from "../services/db/gateway-services.js";
+import { getSingleRecordByMultipleColumnValues as getStarter } from "../services/db/base-db-services.js";
+import type { StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
-import type { ValidatedAddGateway, ValidatedAssignGatewayToUser, ValidatedRenameGateway, ValidatedUpdateGatewayLabel, ValidatedUpdateGatewayNumber } from "../validations/schema/gateway-validations.js";
+import type { ValidatedAddGateway, ValidatedAssignGatewayToUser, ValidatedRemoveGatewayUser, ValidatedRenameGateway, ValidatedUpdateGatewayDetails, ValidatedUpdateGatewayLabel, ValidatedUpdateGatewayNumber } from "../validations/schema/gateway-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ForbiddenException from "../exceptions/forbidden-exception.js";
+import ConflictException from "../exceptions/conflict-exception.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 
 const paramsValidateException = new ParamsValidateException();
@@ -31,15 +34,13 @@ export class GatewayHandlers {
 
       const validGatewayReq = await validatedRequest<ValidatedAddGateway>("add-gateway", gatewayPayload, GATEWAY_VALIDATION_CRITERIA);
 
-      const gatewayName = validGatewayReq.name?.trim()
-        ? validGatewayReq.name.trim()
-        : validGatewayReq.gateway_number.trim();
+      const gatewayName = validGatewayReq.name?.trim() || null;
       const identifiers = getGatewayIdentifierLowers({ ...validGatewayReq, name: gatewayName });
       await assertGatewayIdentifiersUnique(identifiers);
 
       const newGateway = {
         ...validGatewayReq,
-        name: gatewayName,
+        name: gatewayName ?? validGatewayReq.gateway_number.trim(),
         user_id: null,
         created_by: userPayload.id,
       };
@@ -79,10 +80,7 @@ export class GatewayHandlers {
 
       const result = await db.transaction(async (tx) => {
         const assignment = await assignGatewayToUser({
-          mac_address: validReq.mac_address ?? undefined,
-          pcb_number: validReq.pcb_number ?? undefined,
-          gateway_number: validReq.gateway_number ?? undefined,
-          name: validReq.name ?? undefined,
+          gateway_id: validReq.gateway_id,
           targetUserId,
           performedByUserId: userPayload.id,
         }, tx);
@@ -172,7 +170,7 @@ export class GatewayHandlers {
       const gatewayId = +c.req.param("id")!;
       paramsValidateException.validateId(gatewayId, "gateway id");
 
-      const foundGateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "name", "label", "status", "user_id"]);
+      const foundGateway = await getGatewayForOwnerAction(gatewayId, ["id", "name", "label", "status", "user_id"]);
       if (!foundGateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
 
       await db.transaction(async (tx) => {
@@ -209,7 +207,7 @@ export class GatewayHandlers {
         "Gateway label details provided do not meet the required validation criteria",
       );
 
-      const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "label", "user_id"]);
+      const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "label", "user_id"]);
 
       if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
 
@@ -248,7 +246,7 @@ export class GatewayHandlers {
         "Gateway rename details provided do not meet the required validation criteria",
       );
 
-      const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "name", "user_id"]);
+      const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "name", "user_id"]);
 
       if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
 
@@ -258,7 +256,7 @@ export class GatewayHandlers {
           performedBy: userPayload.id,
           userId: gateway.user_id ?? userPayload.id,
           gatewayId,
-          oldName: gateway.name,
+          oldName: gateway.name!,
           newName: validReq.name,
         });
         await ActivityService.saveActivityLogs([log], tx);
@@ -287,7 +285,7 @@ export class GatewayHandlers {
         "Gateway number details provided do not meet the required validation criteria",
       );
 
-      const gateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "gateway_number", "user_id", "name"]);
+      const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "gateway_number", "user_id", "name"]);
       if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
 
       await db.transaction(async (tx) => {
@@ -296,7 +294,7 @@ export class GatewayHandlers {
           performedBy: userPayload.id,
           userId: gateway.user_id ?? userPayload.id,
           gatewayId,
-          gatewayName: gateway.name,
+          gatewayName: gateway.name!,
           oldGatewayNumber: gateway.gateway_number,
           newGatewayNumber: validReq.gateway_number,
         });
@@ -306,6 +304,136 @@ export class GatewayHandlers {
       return sendResponse(c, 200, GATEWAY_NUMBER_UPDATED);
     } catch (error: any) {
       console.error("Error at update gateway number :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
+  updateGatewayDetailsHandler = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const gatewayId = +c.req.param("id");
+      paramsValidateException.validateId(gatewayId, "gateway id");
+
+      const reqBody = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqBody);
+      const validReq = await validatedRequest<ValidatedUpdateGatewayDetails>(
+        "update-gateway-details",
+        reqBody,
+        GATEWAY_VALIDATION_CRITERIA,
+      );
+
+      const gateway = await getGatewayForOwnerAction(gatewayId, [
+        "id", "name", "gateway_number", "label", "mac_address", "pcb_number", "user_id",
+      ]);
+      if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
+
+      const { updateData, oldData, changedIdentifiers } = buildGatewayUpdatePayload(validReq, gateway);
+      const { nameLower, gatewayNumberLower, macLower, pcbLower } = changedIdentifiers;
+
+      if (nameLower || gatewayNumberLower || macLower || pcbLower) {
+        await assertGatewayIdentifiersUnique({
+          nameLower,
+          macLower: macLower ?? gateway.mac_address?.toLowerCase() ?? "",
+          pcbLower: pcbLower ?? gateway.pcb_number?.toLowerCase() ?? "",
+          gatewayNumberLower,
+        }, undefined, gatewayId);
+      }
+
+      await db.transaction(async (tx) => {
+        await updateRecordById<GatewayTable>(gateways, gatewayId, updateData, tx);
+        const log = prepareGatewayDetailsUpdatedLog({
+          performedBy: userPayload.id,
+          userId: gateway.user_id ?? userPayload.id,
+          gatewayId,
+          oldData,
+          newData: updateData,
+        });
+        await ActivityService.saveActivityLogs([log], tx);
+      });
+
+      return sendResponse(c, 200, GATEWAY_UPDATED);
+    } catch (error: any) {
+      console.error("Error at update gateway details :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
+  getGatewayDevicesHandler = async (c: Context) => {
+    try {
+      const gatewayId = +c.req.param("id");
+      paramsValidateException.validateId(gatewayId, "Gateway id");
+
+      const result = await getGatewayWithDevices(gatewayId);
+      if (!result) throw new NotFoundException(GATEWAY_NOT_FOUND);
+
+      return sendResponse(c, 200, GATEWAY_DEVICES_FETCHED, result);
+    } catch (error: any) {
+      console.error("Error at get gateway devices :", error);
+      throw error;
+    }
+  }
+
+  assignGatewayToDeviceHandler = async (c: Context) => {
+    try {
+      const gatewayId = +c.req.param("id");
+      paramsValidateException.validateId(gatewayId, "Gateway id");
+
+      const reqBody = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqBody);
+
+      const starterId = +reqBody.starter_id;
+      paramsValidateException.validateId(starterId, "Starter id");
+
+      const gateway = await getGatewayForOwnerAction(gatewayId, ["id", "status"]);
+      if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
+
+      const starter = await getStarter<StarterBoxTable>(starterBoxes, ["id", "status", "gateway_id"], ["=", "!="], [starterId, "ARCHIVED"],);
+      if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+      if ((starter as any).gateway_id) throw new ConflictException(DEVICE_ALREADY_CONNECTED_TO_GATEWAY);
+
+      await assignGatewayToDevice(gatewayId, starterId);
+
+      return sendResponse(c, 200, GATEWAY_ASSIGNED_TO_DEVICE);
+    } catch (error: any) {
+      console.error("Error at assign gateway to device :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      throw error;
+    }
+  }
+
+  removeGatewayUserHandler = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const reqBody = await c.req.json();
+      paramsValidateException.emptyBodyValidation(reqBody);
+
+      const validReq = await validatedRequest<ValidatedRemoveGatewayUser>("remove-gateway-user", reqBody, GATEWAY_VALIDATION_CRITERIA);
+
+      const gateway = await getSingleRecordByMultipleColumnValues(gateways, ["id", "status"], ["=", "!="], [validReq.gateway_id, "ARCHIVED"], ["id", "name", "user_id"]);
+      if (!gateway) throw new NotFoundException(GATEWAY_NOT_FOUND);
+
+      await db.transaction(async (tx) => {
+        await removeUserFromGateway(gateway.id, tx);
+        const log = prepareGatewayUserRemovedLog({
+          performedBy: userPayload.id,
+          userId: validReq.user_id,
+          gatewayId: gateway.id,
+          gatewayName: gateway.name!,
+          oldUserId: gateway.user_id,
+        });
+        await ActivityService.saveActivityLogs([log], tx);
+      });
+
+      return sendResponse(c, 200, GATEWAY_USER_REMOVED);
+    } catch (error: any) {
+      console.error("Error at remove gateway user :", error);
       handleJsonParseError(error);
       parseDatabaseError(error);
       handleForeignKeyViolationError(error);

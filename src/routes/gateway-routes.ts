@@ -11,9 +11,13 @@ gatewayRoutes.get("/", isAuthorized, gatewayHandlers.listGatewaysHandler);
 gatewayRoutes.get("/basic-details", isAuthorized, gatewayHandlers.listGatewaysDropdownHandler);
 gatewayRoutes.get("/:id", isAuthorized, gatewayHandlers.getGatewayDetailsHandler);
 gatewayRoutes.patch("/assign", isAuthorized, gatewayHandlers.assignGatewayToUserHandler);
+gatewayRoutes.patch("/remove-user", isAuthorized, gatewayHandlers.removeGatewayUserHandler);
 gatewayRoutes.post("/:id/label", isAuthorized, gatewayHandlers.updateGatewayLabelHandler);
 gatewayRoutes.post("/:id/rename", isAuthorized, gatewayHandlers.renameGatewayHandler);
 gatewayRoutes.post("/:id/number", isAuthorized, gatewayHandlers.updateGatewayNumberHandler);
-gatewayRoutes.patch("/:id", isAuthorized, gatewayHandlers.deleteGatewayHandler);
+gatewayRoutes.get("/:id/devices", isAuthorized, gatewayHandlers.getGatewayDevicesHandler);
+gatewayRoutes.patch("/:id/assign-device", isAuthorized, gatewayHandlers.assignGatewayToDeviceHandler);
+gatewayRoutes.patch("/:id", isAuthorized, gatewayHandlers.updateGatewayDetailsHandler);
+gatewayRoutes.delete("/:id", isAuthorized, gatewayHandlers.deleteGatewayHandler);
 
 export default gatewayRoutes;

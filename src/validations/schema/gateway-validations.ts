@@ -55,22 +55,10 @@ export const vRenameGateway = v.object({
 
 export type ValidatedRenameGateway = v.InferOutput<typeof vRenameGateway>;
 
-export const vAssignGatewayToUser = v.pipe(
-  v.object({
-    mac_address: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, MAC_MIN_LEN)))),
-    pcb_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, PCB_MIN_LEN)))),
-    gateway_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, GATEWAY_NUMBER_MIN_LEN)))),
-    name: v.nullish(v.optional(v.pipe(v.string(), v.transform(value => value.trim()), v.minLength(3, GATEWAY_NAME_MIN_LEN)))),
-    user_id: v.nullish(v.optional(v.number(INVALID_USER_ID))),
-  }),
-  v.check((data) => {
-    const mac = (data as any).mac_address?.trim();
-    const pcb = (data as any).pcb_number?.trim();
-    const gno = (data as any).gateway_number?.trim();
-    const name = (data as any).name?.trim();
-    return Boolean(mac || pcb || gno || name);
-  }, GATEWAY_IDENTIFIER_REQUIRED),
-);
+export const vAssignGatewayToUser = v.object({
+  gateway_id: v.number(),
+  user_id: v.nullish(v.optional(v.number(INVALID_USER_ID))),
+});
 
 export type ValidatedAssignGatewayToUser = v.InferOutput<typeof vAssignGatewayToUser>;
 
@@ -84,3 +72,26 @@ export const vUpdateGatewayNumber = v.object({
 });
 
 export type ValidatedUpdateGatewayNumber = v.InferOutput<typeof vUpdateGatewayNumber>;
+
+export const vUpdateGatewayDetails = v.pipe(
+  v.object({
+    name: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, GATEWAY_NAME_MIN_LEN)))),
+    gateway_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, GATEWAY_NUMBER_MIN_LEN)))),
+    label: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, GATEWAY_LABEL_MIN_LEN)))),
+    mac_address: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, MAC_MIN_LEN)))),
+    pcb_number: v.nullish(v.optional(v.pipe(v.string(), v.transform(v => v.trim()), v.minLength(3, PCB_MIN_LEN)))),
+  }),
+  v.check(
+    data => Object.values(data).some(v => v !== null && v !== undefined),
+    "At least one field must be provided to update"
+  ),
+);
+
+export type ValidatedUpdateGatewayDetails = v.InferOutput<typeof vUpdateGatewayDetails>;
+
+export const vRemoveGatewayUser = v.object({
+  gateway_id: v.number(),
+  user_id: v.number(INVALID_USER_ID),
+});
+
+export type ValidatedRemoveGatewayUser = v.InferOutput<typeof vRemoveGatewayUser>;

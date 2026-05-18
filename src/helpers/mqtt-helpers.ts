@@ -1,47 +1,199 @@
 import { DEVICE_SCHEMA } from "../constants/app-constants.js";
-import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
-import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
+import { insertParametersForUnmatchedMotor, saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
+import { findChildOfMasterByIdentifier, findMasterByIdentifier, getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import type { RetryOptions } from "../types/app-types.js";
 import { logger } from "../utils/logger.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
+import { extractMultiMotorBlocks, isMultiMotorPayload, resolveMotorsFromPayload } from "./multi-motor-live-data-helper.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 
 
 export async function liveDataHandler(parsedMessage: any, topic: string) {
+  console.log('topic: ', topic);
+  console.log('parsedMessage: ', parsedMessage);
   try {
     if (!parsedMessage) return;
-    const mac = typeof topic === "string" && topic.includes("/") ? topic.split("/")[1] : null;
-    if (!mac) {
-      logger.error("Invalid MQTT topic or missing MAC", undefined, { mac, topic });
+    const { masterId, deviceId } = getIdentifiersFromTopic(topic);
+    if (!deviceId) {
+      logger.error("Invalid MQTT topic or missing device MAC", undefined, { masterId, deviceId, topic });
       return null;
     }
 
-    // Validate MAC in DB
-    const validMac = await getStarterByMacWithMotor(mac);
-    if (!validMac) {
-      logger.error("Starter not found for MAC", undefined, { mac, topic });
+    // Always validate device MAC in DB
+    const device = await getStarterByMacWithMotor(deviceId);
+    console.log('device: ', device);
+    if (!device) {
+      logger.error("Starter not found for MAC", undefined, { deviceId, topic });
       return null;
     }
 
-    // Format raw payload 
+    // For 4-segment topics (peepul/{master}/{device}/status): validate against
+    // the MASTER/CHILD topology. segment[1] must resolve to a MASTER; segment[2]
+    // must be either that master itself or a CHILD parented by it.
+    if (masterId && deviceId) {
+      const resolved = await resolveMasterChildFromTopic(topic);
+      if (!resolved) {
+        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
+        return null;
+      }
+      if (resolved.deviceId !== device.id) {
+        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
+          resolvedDeviceId: resolved.deviceId,
+          deviceId: device.id,
+          topic,
+        });
+        return null;
+      }
+    }
+
     const formatted = validateLiveDataFormat(parsedMessage, topic);
     if (!formatted) return null;
 
-    // Validate live data content 
     const validated = validateLiveDataContent(formatted);
     if (!validated) return null;
-
-    //  Prepare payload for DB 
-    const prepared = prepareLiveDataPayload(validated, validMac);
+    const prepared = prepareLiveDataPayload(validated, device);
     if (!prepared) return null;
-
-    // Save final payload
-    await saveLiveDataTopic(prepared, prepared.group_id, validMac);
+    await saveLiveDataTopic(prepared, prepared.group_id, device);
   }
+
   catch (err: any) {
     logger.error("Error at live data topic handler", err);
     return null;
   }
+}
+
+async function handleMultiStarterLiveData(parsedMessage: any, formatted: any, device: any) {
+  // Identify which group is present (G01 / G02 / G03 / G04)
+  const groupKey = Object.keys(formatted.groups)[0] as string;
+  const rawGroupData = parsedMessage?.D?.[groupKey];
+
+  // If the device is MULTI_STARTER but the payload has no m1/m2 keys (e.g. legacy firmware),
+  // fall back to the single-motor path to stay backward-compatible.
+  if (!isMultiMotorPayload(rawGroupData)) {
+    const validated = validateLiveDataContent(formatted);
+    if (!validated) return;
+    const prepared = prepareLiveDataPayload(validated, device);
+    if (!prepared) return;
+    await saveLiveDataTopic(prepared, prepared.group_id, device);
+    return;
+  }
+
+  // Extract per-motor blocks, merging shared group fields (p_v, pwr, llv) into each block
+  const blocks = extractMultiMotorBlocks(rawGroupData);
+
+  // Match each block to a DB motor via motor_reference
+  const { matched, unmatched } = resolveMotorsFromPayload(blocks, device.motors);
+
+  // Process each matched motor through the full pipeline (insert + motor state/mode updates)
+  for (const { motorRef, motor, mergedData } of matched) {
+    const syntheticPayload = {
+      T: parsedMessage.T,
+      S: parsedMessage.S,
+      D: { [groupKey]: mergedData, ct: parsedMessage.D?.ct ?? null },
+    };
+    const validated = validateLiveDataContent({ original: syntheticPayload, groups: { [groupKey]: mergedData } });
+    if (!validated) {
+      logger.warn(`[MULTI_STARTER] Validation failed for motor_reference="${motorRef}" — skipping`, { mac: device.mac_address });
+      continue;
+    }
+    const prepared = prepareLiveDataPayload(validated, device, motor);
+    if (!prepared) continue;
+    await saveLiveDataTopic(prepared, prepared.group_id, device);
+  }
+
+  // Process unmatched blocks — motor no longer assigned, insert parameters only (no motor/mode updates)
+  for (const { motorRef, mergedData } of unmatched) {
+    const syntheticPayload = {
+      T: parsedMessage.T,
+      S: parsedMessage.S,
+      D: { [groupKey]: mergedData, ct: parsedMessage.D?.ct ?? null },
+    };
+    const validated = validateLiveDataContent({ original: syntheticPayload, groups: { [groupKey]: mergedData } });
+    if (!validated) {
+      logger.warn(`[MULTI_STARTER] Validation failed for unmatched motor_reference="${motorRef}" — skipping`, { mac: device.mac_address });
+      continue;
+    }
+    await insertParametersForUnmatchedMotor(device, motorRef, validated);
+  }
+}
+
+export function getIdentifiersFromTopic(topic: string) {
+  const segments = topic.split("/");
+  if (segments.length === 4) {
+    // peepul/{master}/{device}/status
+    return { masterId: segments[1], deviceId: segments[2] };
+  } else if (segments.length === 3) {
+    // peepul/{device}/status
+    return { gatewayId: null, deviceId: segments[1] };
+  }
+  return { gatewayId: null, deviceId: null };
+}
+
+/**
+ * Resolve an MQTT topic against the master/child topology.
+ *
+ * Expected topic shape (4 segments):
+ *   peepul/{master_identifier}/{device_identifier}/{suffix}
+ *
+ * Identifiers are matched (case-insensitive) against `mac_address` or `pcb_number`.
+ * (starter_number is intentionally NOT used here.)
+ *
+ *   - segment[1] MUST resolve to a MASTER row (role=MASTER, not archived).
+ *   - segment[2] resolves to either:
+ *       (a) the same master row itself          → kind="MASTER_SELF"
+ *       (b) a CHILD whose parent_starter_id     → kind="CHILD_VIA_MASTER"
+ *           equals the master's id
+ *
+ * Returns null on any miss (unknown master / unknown device / wrong parent /
+ * not-a-child role). Caller should log and drop the packet on null.
+ *
+ * NOTE: this is a NEW resolver. The legacy `getIdentifiersFromTopic` and the
+ * gateway-based callers in mqtt-db-services.ts are untouched.
+ */
+export async function resolveMasterChildFromTopic(topic: string): Promise<{
+  deviceId: number;
+  masterId: number;
+  kind: "MASTER_SELF" | "CHILD_VIA_MASTER";
+} | null> {
+  const segments = topic.split("/");
+  if (segments.length !== 4) {
+    logger.warn("[resolveMasterChildFromTopic] expected 4-segment topic", { topic });
+    return null;
+  }
+
+  const seg1 = segments[1];
+  const seg2 = segments[2];
+  if (!seg1 || !seg2) {
+    logger.warn("[resolveMasterChildFromTopic] empty identifier segment", { topic });
+    return null;
+  }
+
+  // Step 1 — resolve master
+  const master = await findMasterByIdentifier(seg1);
+  if (!master) {
+    logger.warn("[resolveMasterChildFromTopic] unknown master identifier", { topic, seg1 });
+    return null;
+  }
+
+  // Step 2a — does segment 2 point at the master itself? (compare mac & pcb only)
+  const seg2Upper = seg2.trim().toUpperCase();
+  const masterMac = master.mac_address?.toUpperCase() ?? null;
+  const masterPcb = master.pcb_number?.toUpperCase() ?? null;
+  if (seg2Upper === masterMac || seg2Upper === masterPcb) {
+    return { deviceId: master.id, masterId: master.id, kind: "MASTER_SELF" };
+  }
+
+  // Step 2b — must be a CHILD of THIS master
+  const child = await findChildOfMasterByIdentifier(master.id, seg2);
+  if (!child) {
+    logger.warn(
+      "[resolveMasterChildFromTopic] segment 2 is not the master itself nor a child of this master",
+      { topic, masterId: master.id, seg2 },
+    );
+    return null;
+  }
+
+  return { deviceId: child.id, masterId: master.id, kind: "CHILD_VIA_MASTER" };
 }
 
 

@@ -5,13 +5,13 @@ import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vAddMotorSchedule, vAddRepeatDays, vArrayOfMotorScheduleValidators, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
-import { vAddMotor, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
-import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation } from "./schema/starter-validations.js";
+import { vAddMotor, vAssignMotorToDevice, vReplaceMotorDevice, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
+import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vChangeRole, vReparent, vReplaceMaster, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
 import { vAddStarterDispatch } from "./schema/starter-dispatch-validations.js";
-import { vAddGateway, vAssignGatewayToUser, vRenameGateway, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
+import { vAddGateway, vAssignGatewayToUser, vRemoveGatewayUser, vRenameGateway, vUpdateGatewayDetails, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 import { ConsoleLogWriter } from "drizzle-orm";
 
@@ -44,7 +44,14 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "rename-gateway": vRenameGateway,
   "assign-gateway": vAssignGatewayToUser,
   "update-gateway-number": vUpdateGatewayNumber,
+  "update-gateway-details": vUpdateGatewayDetails,
+  "remove-gateway-user": vRemoveGatewayUser,
+  "assign-motor-to-device": vAssignMotorToDevice,
+  "replace-motor-device": vReplaceMotorDevice,
   "update-installed-location": vUpdateInstalledLocation,
+  "change-role": vChangeRole,
+  "reparent-device": vReparent,
+  "replace-master": vReplaceMaster,
 };
 
 export async function validatedRequest<R extends ValidatedRequest>(

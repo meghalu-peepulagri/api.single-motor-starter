@@ -1,0 +1,15 @@
+import factory from "../factory.js";
+import { MotorHandlers } from "../handlers/motor-handlers.js";
+import { isAuthorized } from "../middlewares/isAuthorized.js";
+const motorHandlers = new MotorHandlers();
+const motorRoutes = factory.createApp();
+motorRoutes.post("/", isAuthorized, motorHandlers.addMotorHandler);
+motorRoutes.get("/", isAuthorized, motorHandlers.getAllMotorsHandler);
+motorRoutes.get("/:id", isAuthorized, motorHandlers.getSingleMotorHandler);
+motorRoutes.patch("/:id", isAuthorized, motorHandlers.updateMotorHandler);
+motorRoutes.delete("/:id", isAuthorized, motorHandlers.deleteMotorHandler);
+motorRoutes.patch("/:id/test-run-status", isAuthorized, motorHandlers.updateMotorTestRunStatusHandler);
+motorRoutes.patch("/:id/assign-device", isAuthorized, motorHandlers.assignMotorToDeviceHandler);
+motorRoutes.patch("/:id/detach-device", isAuthorized, motorHandlers.detachMotorFromDeviceHandler);
+motorRoutes.patch("/:id/replace-device", isAuthorized, motorHandlers.replaceMotorDeviceHandler);
+export default motorRoutes;

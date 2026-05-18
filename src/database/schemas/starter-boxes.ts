@@ -104,4 +104,11 @@ export const starterBoxesRelations = relations(starterBoxes, ({ one, many }) => 
     references: [starterDispatch.starter_id],
   }),
 
+  parent: one(starterBoxes, {
+    fields: [starterBoxes.parent_starter_id],
+    references: [starterBoxes.id],
+    relationName: "parent_children",
+  }),
+  children: many(starterBoxes, { relationName: "parent_children" }),
+
 }));
