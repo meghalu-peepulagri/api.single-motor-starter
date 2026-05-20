@@ -13,10 +13,9 @@ import type { StarterDispatch } from "../database/schemas/starter-dispatch.js";
 
 export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User, dispatchDetails?: StarterDispatch | null, gatewayId?: number) {
 
-  const motorDetails = {
-    name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
-    hp: 2,
-  };
+  const motorDetails = starterBoxPayload.starter_type === "MULTI_STARTER"
+    ? undefined
+    : { name: `Pump 1 - ${starterBoxPayload.pcb_number}`, hp: 2 };
 
   return {
     ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails
