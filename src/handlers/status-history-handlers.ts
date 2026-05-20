@@ -8,12 +8,7 @@ import {
 import { logger } from "../utils/logger.js";
 import { sendResponse } from "../utils/send-response.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
-import {
-  DEVICE_STATUS_HISTORY_FETCHED,
-  MOTOR_STATUS_HISTORY_FETCHED,
-  POWER_STATUS_HISTORY_FETCHED,
-  STARTER_RUNTIME_FETCHED,
-} from "../constants/app-constants.js";
+import { DEVICE_STATUS_HISTORY_FETCHED, MOTOR_STATUS_HISTORY_FETCHED, POWER_STATUS_HISTORY_FETCHED, STARTER_RUNTIME_FETCHED, } from "../constants/app-constants.js";
 import { parseStatusHistoryFilters } from "../helpers/status-history-helpers.js";
 
 export class StatusHistoryHandlers {
