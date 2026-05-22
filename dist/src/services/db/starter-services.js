@@ -32,7 +32,9 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload, 
     const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
     return await db.transaction(async (trx) => {
         const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
-        await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+        if (preparedStarerData.motorDetails) {
+            await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+        }
         await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
         await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
         await saveSingleRecord(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
@@ -93,6 +95,7 @@ export async function getStarterByMacWithMotor(mac) {
             hardware_version: true,
             sim_recharge_expires_at: true,
             device_mobile_number: true,
+            starter_type: true,
         },
         with: {
             motors: {
@@ -106,6 +109,7 @@ export async function getStarterByMacWithMotor(mac) {
                     location_id: true,
                     created_by: true,
                     alias_name: true,
+                    motor_reference: true,
                 },
             },
         },
@@ -130,6 +134,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             signal_quality: true,
             network_type: true,
             device_mobile_number: true,
+            starter_type: true,
         },
         with: {
             gateway: {
@@ -150,6 +155,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     mode: true,
                     alias_name: true,
                     test_run_status: true,
+                    motor_reference: true,
                 },
                 with: {
                     location: {
@@ -371,6 +377,7 @@ export async function starterConnectedMotors(starterId) {
             installation_photo_key: true,
             device_installed_location: true,
             warranty_expiry_date: true,
+            starter_type: true,
         },
         with: {
             gateway: {
@@ -392,6 +399,7 @@ export async function starterConnectedMotors(starterId) {
                     mode: true,
                     alias_name: true,
                     test_run_completed_at: true,
+                    motor_reference: true,
                 },
             },
             location: {

@@ -1,7 +1,10 @@
+import { and, eq, ne } from "drizzle-orm";
 import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
+import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
@@ -25,12 +28,21 @@ export class MotorHandlers {
             const motorPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(motorPayload);
             const validMotorReq = await validatedRequest("add-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
+            if (validMotorReq.starter_id && validMotorReq.motor_reference) {
+                const slotTaken = await db.query.motors.findFirst({
+                    where: and(eq(motors.starter_id, validMotorReq.starter_id), eq(motors.motor_reference, validMotorReq.motor_reference), ne(motors.status, "ARCHIVED"))
+                });
+                if (slotTaken)
+                    throw new ConflictException("Motor slot already occupied");
+            }
             const preparedMotorPayload = {
                 name: validMotorReq.name,
                 alias_name: validMotorReq.name,
                 created_by: userPayload.id,
                 location_id: validMotorReq.location_id,
                 hp: validMotorReq.hp.toString(),
+                starter_id: validMotorReq.starter_id ?? undefined,
+                motor_reference: validMotorReq.motor_reference ?? undefined,
             };
             await db.transaction(async (trx) => {
                 const motor = await saveSingleRecord(motors, preparedMotorPayload, trx);
@@ -134,14 +146,134 @@ export class MotorHandlers {
             await db.transaction(async (trx) => {
                 await updateRecordById(motors, motor.id, { status: "ARCHIVED" }, trx);
                 if (motor.starter_id) {
-                    await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null }, trx);
+                    const remaining = await trx
+                        .select({ id: motors.id })
+                        .from(motors)
+                        .where(and(eq(motors.starter_id, motor.starter_id), ne(motors.status, "ARCHIVED"), ne(motors.id, motor.id)));
+                    if (remaining.length === 0) {
+                        await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null }, trx);
+                    }
                 }
+                await trx.update(motorSchedules)
+                    .set({ status: "ARCHIVED" })
+                    .where(and(eq(motorSchedules.motor_id, motor.id), ne(motorSchedules.status, "ARCHIVED")));
                 await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx, motor.starter_id || undefined);
             });
             return sendResponse(c, 200, MOTOR_DELETED);
         }
         catch (error) {
             console.error("Error at delete motor :", error);
+            throw error;
+        }
+    };
+    assignMotorHandler = async (c) => {
+        try {
+            const motorId = +c.req.param("id");
+            paramsValidateException.validateId(motorId, "motor id");
+            const payload = await c.req.json();
+            paramsValidateException.emptyBodyValidation(payload);
+            const userPayload = c.get("user_payload");
+            const validPayload = await validatedRequest("assign-motor", payload, MOTOR_VALIDATION_CRITERIA);
+            const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+            if (!motor)
+                throw new NotFoundException(MOTOR_NOT_FOUND);
+            if (motor.starter_id !== null) {
+                throw new ConflictException("Motor is already assigned to a device. Detach it first.");
+            }
+            const slotTaken = await db.query.motors.findFirst({
+                where: and(eq(motors.starter_id, validPayload.starter_id), eq(motors.motor_reference, validPayload.motor_reference), ne(motors.status, "ARCHIVED"))
+            });
+            if (slotTaken)
+                throw new ConflictException("Motor slot already occupied on target device");
+            await db.transaction(async (trx) => {
+                await updateRecordById(motors, motorId, {
+                    starter_id: validPayload.starter_id,
+                    motor_reference: validPayload.motor_reference,
+                    assigned_at: new Date(),
+                }, trx);
+                await ActivityService.writeMotorAssignedLog(userPayload.id, motorId, validPayload.starter_id, validPayload.motor_reference, trx);
+            });
+            return sendResponse(c, 200, "Motor assigned successfully");
+        }
+        catch (error) {
+            console.error("Error at assign motor :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            throw error;
+        }
+    };
+    detachMotorHandler = async (c) => {
+        try {
+            const motorId = +c.req.param("id");
+            paramsValidateException.validateId(motorId, "motor id");
+            const userPayload = c.get("user_payload");
+            const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+            if (!motor)
+                throw new NotFoundException(MOTOR_NOT_FOUND);
+            if (motor.starter_id === null) {
+                throw new BadRequestException("Motor is not assigned to any device");
+            }
+            const starterId = motor.starter_id;
+            await db.transaction(async (trx) => {
+                await updateRecordById(motors, motorId, {
+                    starter_id: null,
+                    motor_reference: null,
+                }, trx);
+                const remaining = await trx
+                    .select({ id: motors.id })
+                    .from(motors)
+                    .where(and(eq(motors.starter_id, starterId), ne(motors.status, "ARCHIVED"), ne(motors.id, motorId)));
+                if (remaining.length === 0) {
+                    await updateRecordById(starterBoxes, starterId, { device_status: "DEPLOYED", user_id: null }, trx);
+                }
+                await ActivityService.writeMotorDetachedLog(userPayload.id, motorId, starterId, trx);
+            });
+            return sendResponse(c, 200, "Motor detached successfully");
+        }
+        catch (error) {
+            console.error("Error at detach motor :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            throw error;
+        }
+    };
+    replaceMotorHandler = async (c) => {
+        try {
+            const motorId = +c.req.param("id");
+            paramsValidateException.validateId(motorId, "motor id");
+            const payload = await c.req.json();
+            paramsValidateException.emptyBodyValidation(payload);
+            const userPayload = c.get("user_payload");
+            const validPayload = await validatedRequest("replace-motor", payload, MOTOR_VALIDATION_CRITERIA);
+            const oldMotor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+            if (!oldMotor)
+                throw new NotFoundException(MOTOR_NOT_FOUND);
+            if (!oldMotor.starter_id || !oldMotor.motor_reference) {
+                throw new BadRequestException("Motor is not assigned to any device slot");
+            }
+            await db.transaction(async (trx) => {
+                await trx.update(motors)
+                    .set({ status: "ARCHIVED", updated_at: new Date() })
+                    .where(eq(motors.id, oldMotor.id));
+                const newMotor = await saveSingleRecord(motors, {
+                    name: validPayload.name,
+                    alias_name: validPayload.name,
+                    hp: validPayload.hp.toString(),
+                    location_id: validPayload.location_id,
+                    starter_id: oldMotor.starter_id,
+                    motor_reference: oldMotor.motor_reference,
+                    created_by: userPayload.id,
+                    assigned_at: new Date(),
+                }, trx);
+                await ActivityService.writeMotorReplacedLog(userPayload.id, oldMotor.id, newMotor.id, oldMotor.starter_id, oldMotor.motor_reference, trx);
+            });
+            return sendResponse(c, 200, "Motor replaced successfully");
+        }
+        catch (error) {
+            console.error("Error at replace motor :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
             throw error;
         }
     };

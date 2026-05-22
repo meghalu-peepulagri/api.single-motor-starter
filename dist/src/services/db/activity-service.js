@@ -80,6 +80,41 @@ export class ActivityService {
             await this.saveActivityLogs(logs, trx);
         }
     }
+    static async writeMotorAssignedLog(userId, motorId, starterId, motorReference, trx) {
+        const log = prepareActionLog({
+            userId,
+            action: "MOTOR_ASSIGNED",
+            entityType: "MOTOR",
+            entityId: motorId,
+            deviceId: starterId,
+            newData: { starter_id: starterId, motor_reference: motorReference }
+        });
+        await this.saveActivityLogs([log], trx);
+    }
+    static async writeMotorDetachedLog(userId, motorId, starterId, trx) {
+        const log = prepareActionLog({
+            userId,
+            action: "MOTOR_DETACHED",
+            entityType: "MOTOR",
+            entityId: motorId,
+            deviceId: starterId,
+            oldData: { starter_id: starterId },
+            newData: { starter_id: null, motor_reference: null }
+        });
+        await this.saveActivityLogs([log], trx);
+    }
+    static async writeMotorReplacedLog(userId, oldMotorId, newMotorId, starterId, motorReference, trx) {
+        const log = prepareActionLog({
+            userId,
+            action: "MOTOR_REPLACED",
+            entityType: "MOTOR",
+            entityId: newMotorId,
+            deviceId: starterId,
+            oldData: { motor_id: oldMotorId, motor_reference: motorReference },
+            newData: { motor_id: newMotorId, motor_reference: motorReference }
+        });
+        await this.saveActivityLogs([log], trx);
+    }
     /**
      * Logs a motor deletion event
      */

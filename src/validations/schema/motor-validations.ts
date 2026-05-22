@@ -6,6 +6,19 @@ export const vAddMotor = v.object({
   name: motorNameValidator,
   hp: hpValidator,
   location_id: requiredNumber(LOCATION_REQUIRED),
+  starter_id: v.optional(v.number()),
+  motor_reference: v.optional(v.picklist(["m1", "m2"])),
+});
+
+export const vAssignMotor = v.object({
+  starter_id: requiredNumber("Starter id is required"),
+  motor_reference: v.picklist(["m1", "m2"], "Motor reference must be m1 or m2"),
+});
+
+export const vReplaceMotor = v.object({
+  name: motorNameValidator,
+  hp: hpValidator,
+  location_id: requiredNumber(LOCATION_REQUIRED),
 });
 
 export const vUpdateMotor = v.object({
@@ -22,3 +35,5 @@ export const vUpdateMotorTestRunStatus = v.object({
 export type validatedAddMotor = v.InferOutput<typeof vAddMotor>;
 export type validatedUpdateMotor = v.InferOutput<typeof vUpdateMotor>;
 export type validatedUpdateMotorTestRunStatus = v.InferOutput<typeof vUpdateMotorTestRunStatus>;
+export type validatedAssignMotor = v.InferOutput<typeof vAssignMotor>;
+export type validatedReplaceMotor = v.InferOutput<typeof vReplaceMotor>;

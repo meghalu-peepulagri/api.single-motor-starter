@@ -114,6 +114,7 @@ export async function getStarterByMacWithMotor(mac: string) {
       hardware_version: true,
       sim_recharge_expires_at: true,
       device_mobile_number: true,
+      starter_type: true,
     },
     with: {
       motors: {
@@ -127,6 +128,7 @@ export async function getStarterByMacWithMotor(mac: string) {
           location_id: true,
           created_by: true,
           alias_name: true,
+          motor_reference: true,
         },
       },
     },
@@ -157,6 +159,7 @@ export async function paginatedStarterList(
       signal_quality: true,
       network_type: true,
       device_mobile_number: true,
+      starter_type: true,
     },
     with: {
       gateway: {
@@ -177,6 +180,7 @@ export async function paginatedStarterList(
           mode: true,
           alias_name: true,
           test_run_status: true,
+          motor_reference: true,
         },
         with: {
           location: {
@@ -449,6 +453,7 @@ export async function starterConnectedMotors(starterId: number) {
       installation_photo_key: true,
       device_installed_location: true,
       warranty_expiry_date: true,
+      starter_type: true,
     },
     with: {
       gateway: {
@@ -470,6 +475,7 @@ export async function starterConnectedMotors(starterId: number) {
           mode: true,
           alias_name: true,
           test_run_completed_at: true,
+          motor_reference: true,
         },
       },
       location: {

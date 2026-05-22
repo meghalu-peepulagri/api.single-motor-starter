@@ -452,6 +452,15 @@ export class StarterHandlers {
         connectedMotors.dispatch.invoice_document_url = await generateDownloadUrl(connectedMotors.dispatch.invoice_document);
       }
 
+      if (connectedMotors?.starter_type === "MULTI_STARTER") {
+        const ALL_SLOTS = ["m1", "m2"];
+        const filledSlots = (connectedMotors.motors ?? [])
+          .map((m: any) => m.motor_reference)
+          .filter(Boolean);
+        connectedMotors.filled_slots = filledSlots;
+        connectedMotors.available_slots = ALL_SLOTS.filter((s: string) => !filledSlots.includes(s));
+      }
+
       return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
     } catch (error: any) {
       console.error("Error at starter connected motors :", error);

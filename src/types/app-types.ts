@@ -5,7 +5,7 @@ import type { ValidatedUpdateDefaultSettings } from "../validations/schema/defau
 import type { validatedAddField } from "../validations/schema/field-validations.js";
 import type { ValidatedAddLocation } from "../validations/schema/location-validations.js";
 import type { ValidatedAddRepeatDays, ValidatedMotorSchedule, ValidatedMotorScheduleArray, ValidatedUpdateMotorSchedule } from "../validations/schema/motor-schedule-validators.js";
-import type { validatedAddMotor, validatedUpdateMotor, validatedUpdateMotorTestRunStatus } from "../validations/schema/motor-validations.js";
+import type { validatedAddMotor, validatedAssignMotor, validatedReplaceMotor, validatedUpdateMotor, validatedUpdateMotorTestRunStatus } from "../validations/schema/motor-validations.js";
 import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus, validatedUpdateInstalledLocation } from "../validations/schema/starter-validations.js";
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { ValidatedAddStarterDispatch } from "../validations/schema/starter-dispatch-validations.js";
@@ -14,10 +14,10 @@ import type { MotorStatusHistoryTable } from "../database/schemas/motor-status-h
 import type { PowerStatusHistoryTable } from "../database/schemas/power-status-history.js";
 import type { DeviceStatusHistoryTable } from "../database/schemas/device-status-history.js";
 
-export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
+export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedAssignMotor | validatedReplaceMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
   | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber | validatedUpdateInstalledLocation;
 
-export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "assign-motor" | "detach-motor" | "replace-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
   "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-installed-location";
 
 export interface IResp {
