@@ -36,6 +36,13 @@ export async function pushPendingSchedulesForStarter(
   starter: StarterForPublish,
   motorId?: number,
 ): Promise<{ chunks: number; acked: number }> {
+  // A publish is already in flight for this starter (from a previous heartbeat or settings sync).
+  // Skip rather than queue up a duplicate fetch with stale PENDING records — next heartbeat will retry.
+  if (publishingMap.get(starter.id)) {
+    logger.info(`[schedule-sync] publish already in progress for starter=${starter.id}, skipping`);
+    return { chunks: 0, acked: 0 };
+  }
+
   let chunksSent = 0;
   let acked = 0;
 
@@ -48,10 +55,22 @@ export async function pushPendingSchedulesForStarter(
       for (const { payload, dbIds } of chunks) {
         chunksSent++;
 
-        // Settings publish (T:4) may have grabbed publishingMap; wait it out.
+        // Settings publish (T:4) may have grabbed publishingMap after our check above; wait it out.
         const lockFree = await waitForPublishLock(starter.id);
         if (!lockFree) {
           logger.warn(`[schedule-sync] publish lock still held after wait for starter=${starter.id}; will retry next heartbeat`);
+          continue;
+        }
+
+        // Re-verify these records are still PENDING before publishing — a concurrent
+        // heartbeat may have already delivered and acknowledged them while we waited for the lock.
+        const stillPendingIds = await db.query.motorSchedules.findMany({
+          where: (ms, { and, inArray: inArr, eq }) => and(inArr(ms.id, dbIds), eq(ms.acknowledgement, 0)),
+          columns: { id: true },
+        }).then((rows) => rows.map((r) => r.id));
+
+        if (stillPendingIds.length === 0) {
+          logger.info(`[schedule-sync] starter=${starter.id} chunk already acknowledged, skipping`);
           continue;
         }
 
@@ -66,7 +85,10 @@ export async function pushPendingSchedulesForStarter(
               acknowledged_at: new Date(),
               updated_at: new Date(),
             })
-            .where(inArray(motorSchedules.id, dbIds));
+            .where(inArray(motorSchedules.id, stillPendingIds));
+          logger.info(`[schedule-sync] starter=${starter.id} updated ${stillPendingIds.length} schedule(s) to SCHEDULED`);
+        } else {
+          logger.warn(`[schedule-sync] starter=${starter.id} publish failed or no ACK, will retry next heartbeat`);
         }
       }
     }

@@ -1,6 +1,7 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
+import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../../database/schemas/device-temperature.js";
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
@@ -1447,19 +1448,60 @@ function scheduleCreationAckResolver(message: any, topic: string) {
 
   const pendingAck = pendingAckMap.get(macFromTopic);
   if (!pendingAck) {
-    logger.warn(`No pending schedule ACK found for ${macFromTopic}`);
+    // ACK arrived after the in-memory timeout was cleaned up (server restart or slow device).
+    // Parse D and, on success, update the DB directly so the schedule doesn't stay stuck as PENDING.
+    let dValue: number;
+    if (typeof message.D === "number") {
+      dValue = message.D;
+    } else if (message.D !== null && typeof message.D === "object" && typeof message.D.ack === "number") {
+      dValue = message.D.ack;
+    } else {
+      dValue = -1;
+    }
+    const lateSuccess = dValue === 1 || dValue === 4;
+    logger.warn(`[schedule-ack] late ACK for ${macFromTopic} D=${dValue} success=${lateSuccess} — no pending map entry (timeout or restart)`);
+    if (lateSuccess) {
+      getStarterByMacWithMotor(macFromTopic)
+        .then(async (starter) => {
+          if (!starter?.id) return;
+          await db
+            .update(motorSchedules)
+            .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+            .where(and(
+              eq(motorSchedules.starter_id, starter.id),
+              eq(motorSchedules.acknowledgement, 0),
+              inArray(motorSchedules.schedule_status, ["PENDING"]),
+            ));
+          logger.info(`[schedule-ack] late ACK: marked PENDING schedules as SCHEDULED for starter=${starter.id}`);
+        })
+        .catch((err) => logger.error(`[schedule-ack] late ACK DB update failed for ${macFromTopic}: ${err?.message}`));
+    }
     return;
   }
 
   if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
-    logger.warn(`Schedule ACK sequence mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+    logger.warn(`Schedule ACK sequence mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S} — ignoring stale ACK`);
+    // Do NOT return here without resolving: the entry would stay in the map as a zombie,
+    // blocking any subsequent ACK lookup until the timeout fires. Resolve false so the
+    // in-flight waitForAck times out cleanly and retries.
+    pendingAck.resolve(false);
+    pendingAckMap.delete(macFromTopic);
     return;
   }
 
-  const dValue = typeof message.D === "number" ? message.D : -1;
+  // D may be a plain number or an object like { ids: <id>, ack: <value> }
+  let dValue: number;
+  if (typeof message.D === "number") {
+    dValue = message.D;
+  } else if (message.D !== null && typeof message.D === "object" && typeof message.D.ack === "number") {
+    dValue = message.D.ack;
+  } else {
+    dValue = -1;
+  }
 
   // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
   const ackSuccess = dValue === 1 || dValue === 4;
+  logger.info(`[schedule-ack] ${macFromTopic} D=${dValue} success=${ackSuccess}`);
   pendingAck.resolve(ackSuccess);
   pendingAckMap.delete(macFromTopic);
   logger.info(`Schedule creation ACK resolved for ${macFromTopic}, D=${dValue}, success=${ackSuccess}`);
