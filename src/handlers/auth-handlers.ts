@@ -42,9 +42,9 @@ export class AuthHandlers {
             const validUserReq = await validatedRequest<ValidatedSignUpUser>("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
             const allPhones = checkInternalPhoneUniqueness(validUserReq);
 
-            const isPhoneUnique = await checkPhoneUniqueness(allPhones);
-            if (!isPhoneUnique) {
-                throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
+            const duplicatePhone = await checkPhoneUniqueness(allPhones);
+            if (duplicatePhone) {
+                throw new ConflictException(`${MOBILE_NUMBER_ALREADY_EXIST}: ${duplicatePhone}`);
             }
 
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
