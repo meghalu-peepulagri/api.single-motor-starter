@@ -6,7 +6,7 @@ import { deviceTemperature, type DeviceTemperatureTable } from "../../database/s
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
-import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
+import { pendingAckMap, schedulePartialAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { controlMode } from "../../helpers/control-helpers.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
@@ -1501,6 +1501,26 @@ function scheduleCreationAckResolver(message: any, topic: string) {
 
   // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
   const ackSuccess = dValue === 1 || dValue === 4;
+
+  // Partial ACK: ids is a bitmask from the device.
+  // Bit N (0-indexed) set → schedule_id (N+1) was saved.
+  // e.g. ids=4 (binary 100) → bit 2 → schedule_id 3 confirmed.
+  if (ackSuccess && message.D !== null && typeof message.D === "object") {
+    const rawIds = message.D.ids;
+    if (typeof rawIds === "number" && rawIds > 0) {
+      const acknowledgedIds: number[] = [];
+      for (let bit = 0; bit < 32; bit++) {
+        if (rawIds & (1 << bit)) {
+          acknowledgedIds.push(bit + 1);
+        }
+      }
+      if (acknowledgedIds.length > 0) {
+        schedulePartialAckMap.set(macFromTopic, acknowledgedIds);
+        logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: bitmask=${rawIds} (0b${rawIds.toString(2)}) → ids=[${acknowledgedIds.join(",")}]`);
+      }
+    }
+  }
+
   logger.info(`[schedule-ack] ${macFromTopic} D=${dValue} success=${ackSuccess}`);
   pendingAck.resolve(ackSuccess);
   pendingAckMap.delete(macFromTopic);

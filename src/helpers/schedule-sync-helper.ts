@@ -8,7 +8,7 @@ import { logger } from "../utils/logger.js";
 import { findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
 import { buildDeviceSyncPayloads } from "./motor-schedule-payload-helper.js";
 import { publishMultipleTimesInBackground } from "./settings-helpers.js";
-import { publishingMap } from "./ack-tracker-hepler.js";
+import { publishingMap, schedulePartialAckMap } from "./ack-tracker-hepler.js";
 
 /**
  * Settings publishes (T:4) and our schedule publish (T:3) share the same
@@ -50,9 +50,13 @@ export async function pushPendingSchedulesForStarter(
     const records = await findPendingSchedulesForStarter(starter.id, motorId);
     if (!records || records.length === 0) return { chunks: 0, acked: 0 };
 
+    // Derive the publish key (MAC or PCB) the same way publishMultipleTimesInBackground does,
+    // so we can look up partial ACK results in schedulePartialAckMap after publish.
+    const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
+
     const grouped = buildDeviceSyncPayloads(records);
     for (const { chunks } of grouped) {
-      for (const { payload, dbIds } of chunks) {
+      for (const { payload, dbIds, scheduleIds } of chunks) {
         chunksSent++;
 
         // Settings publish (T:4) may have grabbed publishingMap after our check above; wait it out.
@@ -64,12 +68,12 @@ export async function pushPendingSchedulesForStarter(
 
         // Re-verify these records are still PENDING before publishing — a concurrent
         // heartbeat may have already delivered and acknowledged them while we waited for the lock.
-        const stillPendingIds = await db.query.motorSchedules.findMany({
+        const stillPending = await db.query.motorSchedules.findMany({
           where: (ms, { and, inArray: inArr, eq }) => and(inArr(ms.id, dbIds), eq(ms.acknowledgement, 0)),
-          columns: { id: true },
-        }).then((rows) => rows.map((r) => r.id));
+          columns: { id: true, schedule_id: true },
+        });
 
-        if (stillPendingIds.length === 0) {
+        if (stillPending.length === 0) {
           logger.info(`[schedule-sync] starter=${starter.id} chunk already acknowledged, skipping`);
           continue;
         }
@@ -77,18 +81,42 @@ export async function pushPendingSchedulesForStarter(
         const ok = await publishMultipleTimesInBackground(payload, starter as StarterBox);
         if (ok) {
           acked++;
-          await db
-            .update(motorSchedules)
-            .set({
-              schedule_status: "SCHEDULED",
-              acknowledgement: 1,
-              acknowledged_at: new Date(),
-              updated_at: new Date(),
-            })
-            .where(inArray(motorSchedules.id, stillPendingIds));
-          logger.info(`[schedule-sync] starter=${starter.id} updated ${stillPendingIds.length} schedule(s) to SCHEDULED`);
+
+          // Check for partial ACK: device may have only confirmed a subset of schedule_ids.
+          // schedulePartialAckMap is populated by scheduleCreationAckResolver before resolving.
+          const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
+          if (publishKey) schedulePartialAckMap.delete(publishKey);
+
+          let idsToUpdate: number[];
+          if (partialIds && partialIds.length > 0) {
+            const confirmedSet = new Set(partialIds);
+            idsToUpdate = stillPending
+              .filter((r) => confirmedSet.has(r.schedule_id))
+              .map((r) => r.id);
+            const unmatched = scheduleIds.filter((sid) => !confirmedSet.has(sid));
+            if (unmatched.length > 0) {
+              logger.warn(`[schedule-sync] starter=${starter.id} partial ACK: confirmed=[${partialIds.join(",")}] unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
+            }
+          } else {
+            idsToUpdate = stillPending.map((r) => r.id);
+          }
+
+          if (idsToUpdate.length > 0) {
+            await db
+              .update(motorSchedules)
+              .set({
+                schedule_status: "SCHEDULED",
+                acknowledgement: 1,
+                acknowledged_at: new Date(),
+                updated_at: new Date(),
+              })
+              .where(inArray(motorSchedules.id, idsToUpdate));
+            logger.info(`[schedule-sync] starter=${starter.id} updated ${idsToUpdate.length}/${stillPending.length} schedule(s) to SCHEDULED`);
+          }
         } else {
           logger.warn(`[schedule-sync] starter=${starter.id} publish failed or no ACK, will retry next heartbeat`);
+          // Clean up any stale partial ACK entry that arrived despite the publish failure.
+          if (publishKey) schedulePartialAckMap.delete(publishKey);
         }
       }
     }

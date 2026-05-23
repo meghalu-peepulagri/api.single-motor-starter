@@ -544,7 +544,7 @@ function toCompactSchedule(record: any): Record<string, any> | null {
  * Each chunk is a single payload object:
  * { T: "SCHEDULE CREATION", S: seq, D: { idx, last, sch_cnt, plr, m1: [...] } }
  */
-export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; chunks: { payload: any; dbIds: number[] }[] }[] {
+export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] {
   // Group schedules by starter_id
   const grouped = new Map<number, any[]>();
   for (const record of records) {
@@ -554,7 +554,7 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
     grouped.set(record.starter_id, list);
   }
 
-  const result: { starter_id: number; chunks: { payload: any; dbIds: number[] }[] }[] = [];
+  const result: { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] = [];
 
   for (const [starterId, schedules] of grouped) {
     // Limit to first MAX_SCHEDULES_PER_DEVICE schedules per device, skip invalid
@@ -573,10 +573,12 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
     const plr = validRecords[0]?.power_loss_recovery_time ?? 30;
 
     // Split into chunks of MAX_ITEMS_PER_CHUNK
-    const chunks: { payload: any; dbIds: number[] }[] = [];
+    const chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] = [];
     for (let i = 0; i < compactItems.length; i += MAX_ITEMS_PER_CHUNK) {
       const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK);
-      const dbIds = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK).map((r: any) => r.id);
+      const recordSlice = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK);
+      const dbIds = recordSlice.map((r: any) => r.id);
+      const scheduleIds = recordSlice.map((r: any) => r.schedule_id);
       const chunkIdx = chunks.length + 1;
       const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
 
@@ -593,6 +595,7 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
           },
         },
         dbIds,
+        scheduleIds,
       });
     }
 
