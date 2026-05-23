@@ -104,9 +104,9 @@ export class UserHandlers {
 
       const allPhones = checkInternalPhoneUniqueness(validUserReq);
 
-      const isPhoneUnique = await checkPhoneUniqueness(allPhones, userId);
-      if (!isPhoneUnique) {
-        throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
+      const duplicatePhone = await checkPhoneUniqueness(allPhones, userId);
+      if (duplicatePhone) {
+        throw new ConflictException(`${MOBILE_NUMBER_ALREADY_EXIST}: ${duplicatePhone}`);
       }
 
       const verifiedUser = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["id", "status"], ["=", "!="], [userId, "ARCHIVED"]);

@@ -39,7 +39,7 @@ const dbClient = new Pool({
         rejectUnauthorized: true,
         ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
     },
-    //connectionString: dbConfig.connectionString,
+    // connectionString: dbConfig.connectionString,
 });
 const db = drizzle(dbClient, {
     schema: {
