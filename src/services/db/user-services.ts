@@ -1,13 +1,18 @@
 import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
+import { deviceTokens } from "../../database/schemas/device-tokens.js";
+import { fields } from "../../database/schemas/fields.js";
+import { gateways } from "../../database/schemas/gateways.js";
 import { locations } from "../../database/schemas/locations.js";
+import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { motors } from "../../database/schemas/motors.js";
+import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { users, type UsersTable } from "../../database/schemas/users.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import type { OrderByQueryData, WhereQueryDataWithOr } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
-import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { ActivityService } from "./activity-service.js";
 
 
 export async function paginatedUsersList(whereQueryData: WhereQueryDataWithOr<UsersTable>, orderByQueryData: OrderByQueryData<UsersTable>,
