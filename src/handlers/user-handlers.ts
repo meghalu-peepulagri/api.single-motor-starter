@@ -169,7 +169,7 @@ export class UserHandlers {
   deleteUserHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const userId = +c.req.param("id");
+      const userId = +c.req.param("id") || 0;
       paramsValidateException.validateId(userId, "user id");
 
       const targetUser = await getSingleRecordByMultipleColumnValues<UsersTable>(
