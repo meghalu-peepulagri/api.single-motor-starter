@@ -406,6 +406,21 @@ export class StarterHandlers {
             if (connectedMotors?.dispatch?.invoice_document) {
                 connectedMotors.dispatch.invoice_document_url = await generateDownloadUrl(connectedMotors.dispatch.invoice_document);
             }
+            // Derive slot metadata from motors
+            const ALL_SLOTS = ["m1", "m2"];
+            const motorsList = connectedMotors?.motors ?? [];
+            const filledSlots = motorsList
+                .map((m) => m.motor_reference)
+                .filter((ref) => ref === "m1" || ref === "m2");
+            const availableSlots = ALL_SLOTS.filter((s) => !filledSlots.includes(s));
+            const starterType = connectedMotors?.motor_support_type === "MULTIPLE_MOTORS"
+                ? "MULTI_STARTER"
+                : "SINGLE_STARTER";
+            if (connectedMotors) {
+                connectedMotors.filled_slots = filledSlots;
+                connectedMotors.available_slots = availableSlots;
+                connectedMotors.starter_type = starterType;
+            }
             // Attach topology context: parent (for CHILD) + children with their motors (for MASTER)
             const topology = await getStarterTopologyContext(starterId);
             if (topology && connectedMotors) {

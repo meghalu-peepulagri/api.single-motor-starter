@@ -204,6 +204,7 @@ export const MAX_MULTI_MOTOR_LIMIT_REACHED = "Device supports max 2 pumps, limit
 export const MOTOR_DETACHED_FROM_DEVICE = "Pump detached from device successfully";
 export const MOTOR_NOT_ASSIGNED_TO_DEVICE = "Pump is not assigned to any device";
 export const MOTOR_REPLACED_DEVICE = "Pump moved to new device successfully";
+export const MOTOR_REPLACED = "Pump replaced successfully";
 export const MOTOR_SAME_DEVICE = "Pump is already assigned to the specified device";
 export const MOTOR_REPLACE_VALIDATION_CRITERIA = "Replace pump device details provided do not meet the required validation criteria";
 export const MOTOR_REFERENCE_SLOT_TAKEN = "Requested slot is already occupied on this device";

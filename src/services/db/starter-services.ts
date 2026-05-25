@@ -467,6 +467,9 @@ export async function starterConnectedMotors(starterId: number) {
       installation_photo_key: true,
       device_installed_location: true,
       warranty_expiry_date: true,
+      motor_support_type: true,
+      user_id: true,
+      location_id: true,
     },
     with: {
       gateway: {
@@ -487,6 +490,8 @@ export async function starterConnectedMotors(starterId: number) {
           state: true,
           mode: true,
           alias_name: true,
+          motor_reference: true,
+          motor_index: true,
           test_run_completed_at: true,
         },
       },
@@ -700,6 +705,7 @@ export async function getBasicStarterDetails(
 ) {
   const trimmedSearch = search?.trim();
   const whereCondition = and(
+    eq(starterBoxes.starter_type, "MULTI_STARTER"),
     ne(starterBoxes.status, "ARCHIVED"),
     ...(trimmedSearch ? [or(
       ilike(starterBoxes.starter_number, `%${trimmedSearch}%`),
@@ -723,6 +729,8 @@ export async function getBasicStarterDetails(
         columns: {
           id: true,
           name: true,
+          motor_reference: true,
+          starter_id: true
         },
       },
     },

@@ -392,6 +392,9 @@ export async function starterConnectedMotors(starterId) {
             installation_photo_key: true,
             device_installed_location: true,
             warranty_expiry_date: true,
+            motor_support_type: true,
+            user_id: true,
+            location_id: true,
         },
         with: {
             gateway: {
@@ -412,6 +415,8 @@ export async function starterConnectedMotors(starterId) {
                     state: true,
                     mode: true,
                     alias_name: true,
+                    motor_reference: true,
+                    motor_index: true,
                     test_run_completed_at: true,
                 },
             },

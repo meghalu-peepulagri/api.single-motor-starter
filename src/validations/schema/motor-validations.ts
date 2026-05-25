@@ -5,7 +5,10 @@ import { hpValidator, motorNameValidator, requiredNumber } from "./common-valida
 export const vAddMotor = v.object({
   name: motorNameValidator,
   hp: hpValidator,
-  location_id: requiredNumber(LOCATION_REQUIRED),
+  location_id: v.nullish(v.optional(v.number())),
+  starter_id: v.optional(v.number()),
+  motor_reference: v.optional(v.picklist(["m1", "m2"], "Motor reference must be m1 or m2")),
+  user_id: v.nullish(v.optional(v.number())),
 });
 
 export const vUpdateMotor = v.object({
@@ -25,8 +28,9 @@ export const vAssignMotorToDevice = v.object({
 });
 
 export const vReplaceMotorDevice = v.object({
-  new_starter_id: requiredNumber(DEVICE_ID_REQUIRED),
-  motor_reference: v.optional(v.picklist(["m1", "m2"], "Motor reference must be m1 or m2")),
+  name: motorNameValidator,
+  hp: hpValidator,
+  location_id: v.nullish(v.optional(v.number())),
 });
 
 export type validatedAddMotor = v.InferOutput<typeof vAddMotor>;

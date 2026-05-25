@@ -420,6 +420,44 @@ export function prepareMotorModeControlNotificationData(motor, mode_description,
     }
     return null;
 }
+// =================== MOTOR PAYLOAD BUILDERS ===================
+/**
+ * Builds the NewMotor insert payload for creating a motor.
+ * If starterAssignment is provided, the motor is immediately attached to that slot.
+ */
+export function prepareNewMotorPayload(params) {
+    return {
+        name: params.name,
+        alias_name: params.name,
+        created_by: params.createdBy,
+        location_id: params.locationId,
+        hp: params.hp.toString(),
+        ...(params.starterAssignment ? {
+            starter_id: params.starterAssignment.starter_id,
+            motor_reference: params.starterAssignment.motor_reference,
+            motor_index: params.starterAssignment.motor_index,
+            assigned_at: new Date(),
+        } : {}),
+    };
+}
+/**
+ * Builds the NewMotor insert payload for a replacement motor.
+ * The new motor takes the same slot (starter_id, motor_reference, motor_index)
+ * as the motor being replaced.
+ */
+export function prepareReplacementMotorPayload(params) {
+    return {
+        name: params.name,
+        alias_name: params.name,
+        created_by: params.createdBy,
+        location_id: params.locationId,
+        hp: params.hp.toString(),
+        starter_id: params.existingMotor.starter_id,
+        motor_reference: params.existingMotor.motor_reference,
+        motor_index: params.existingMotor.motor_index,
+        assigned_at: new Date(),
+    };
+}
 export function validateScheduleTypeRules(data) {
     const scheduleType = data.schedule_type || "TIME_BASED";
     if (scheduleType === "CYCLIC") {

@@ -69,7 +69,7 @@ export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?
 
 
 export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsTable>, orderByQueryData: OrderByQueryData<MotorsTable>,
-  pageParams: { page: number; pageSize: number; offset: number }
+  pageParams: { page: number; pageSize: number; offset: number },
 ) {
   const whereConditions = prepareWhereQueryConditions<MotorsTable>(motors, whereQueryData);
   const whereQuery = whereConditions?.length ? and(...whereConditions) : undefined;
@@ -134,6 +134,13 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
               current_b: true,
             },
           },
+        },
+      },
+
+      created_by_user: {
+        columns: {
+          id: true,
+          full_name: true,
         },
       },
     },

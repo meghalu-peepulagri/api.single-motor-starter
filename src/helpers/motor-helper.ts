@@ -11,7 +11,7 @@ import {
 } from "../constants/app-constants.js";
 
 import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
-import type { Motor, MotorsTable } from "../database/schemas/motors.js";
+import type { Motor, MotorsTable, NewMotor } from "../database/schemas/motors.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
@@ -58,6 +58,10 @@ export function motorFilters(query: any, user: any) {
     whereQueryData.columns.push("created_by");
     whereQueryData.relations.push("=");
     whereQueryData.values.push(user.id);
+  } else if ((user.user_type === "ADMIN" || user.user_type === "SUPER_ADMIN") && query.user_id) {
+    whereQueryData.columns.push("created_by");
+    whereQueryData.relations.push("=");
+    whereQueryData.values.push(parseInt(query.user_id, 10));
   }
 
   if (query.location_id) {
@@ -562,6 +566,67 @@ export function prepareMotorModeControlNotificationData(motor: any, mode_descrip
   }
 
   return null;
+}
+
+// =================== MOTOR PAYLOAD BUILDERS ===================
+
+/**
+ * Builds the NewMotor insert payload for creating a motor.
+ * If starterAssignment is provided, the motor is immediately attached to that slot.
+ */
+export function prepareNewMotorPayload(params: {
+  name: string;
+  hp: number;
+  locationId?: number | null;
+  createdBy: number | null;
+  starterAssignment?: {
+    starter_id: number;
+    motor_reference: string;
+    motor_index: number;
+  } | null;
+}): NewMotor {
+  return {
+    name: params.name,
+    alias_name: params.name,
+    created_by: params.createdBy,
+    location_id: params.locationId,
+    hp: params.hp.toString(),
+    ...(params.starterAssignment ? {
+      starter_id: params.starterAssignment.starter_id,
+      motor_reference: params.starterAssignment.motor_reference,
+      motor_index: params.starterAssignment.motor_index,
+      assigned_at: new Date(),
+    } : {}),
+  };
+}
+
+/**
+ * Builds the NewMotor insert payload for a replacement motor.
+ * The new motor takes the same slot (starter_id, motor_reference, motor_index)
+ * as the motor being replaced.
+ */
+export function prepareReplacementMotorPayload(params: {
+  name: string;
+  hp: number;
+  locationId?: number | null;
+  createdBy: number | null;
+  existingMotor: {
+    starter_id: number;
+    motor_reference: string | null;
+    motor_index: number | null;
+  };
+}): NewMotor {
+  return {
+    name: params.name,
+    alias_name: params.name,
+    created_by: params.createdBy,
+    location_id: params.locationId,
+    hp: params.hp.toString(),
+    starter_id: params.existingMotor.starter_id,
+    motor_reference: params.existingMotor.motor_reference,
+    motor_index: params.existingMotor.motor_index,
+    assigned_at: new Date(),
+  };
 }
 
 export function validateScheduleTypeRules(data: {
