@@ -126,7 +126,7 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
             const validReqData = await validatedRequest("verify-otp", reqBody, VERIFY_OTP_VALIDATION_CRITERIA);
             const user = await checkPhoneUniquenessVerify([validReqData.phone]);
-            if (user === true)
+            if (!Array.isArray(user) || user.length === 0)
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = await otpService.fetchOtp({ phone: validReqData.phone });
             const now = new Date();

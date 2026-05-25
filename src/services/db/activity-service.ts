@@ -1,5 +1,5 @@
 import { userActivityLogs, type NewUserActivityLog } from "../../database/schemas/user-activity-logs.js";
-import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
+import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserDeletedLog, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
 import type { User } from "../../database/schemas/users.js";
@@ -289,6 +289,20 @@ export class ActivityService {
     if (logs.length > 0) {
       await this.saveActivityLogs(logs, trx);
     }
+  }
+
+  /**
+   * Logs a user deletion event (self-delete or admin-delete)
+   */
+  static async writeUserDeletedLog(
+    userId: number,
+    performedBy: number,
+    isSelfDelete: boolean,
+    userSnapshot: { full_name: string | null; phone: string; email: string | null; user_type: string | null },
+    trx?: Transaction
+  ) {
+    const log = prepareUserDeletedLog({ userId, performedBy, isSelfDelete, userSnapshot });
+    await this.saveActivityLogs([log], trx);
   }
 
   /**

@@ -437,6 +437,43 @@ export function prepareUserUpdateLogs(data: {
   return logs;
 }
 /**
+ * Helper to prepare user deletion log (self-delete or admin-delete)
+ */
+export function prepareUserDeletedLog(data: {
+  userId: number;
+  performedBy: number;
+  isSelfDelete: boolean;
+  userSnapshot: {
+    full_name: string | null;
+    phone: string;
+    email: string | null;
+    user_type: string | null;
+  };
+}): NewUserActivityLog {
+  const name = data.userSnapshot.full_name ?? "Unknown";
+  const message = data.isSelfDelete
+    ? `'${name}' deleted their own account`
+    : `'${name}' account deleted by admin`;
+
+  return ActivityService.prepareActivityLog({
+    userId: data.userId,
+    performedBy: data.performedBy,
+    action: "USER_DELETED",
+    entityType: "USER",
+    entityId: data.userId,
+    oldData: {
+      full_name: data.userSnapshot.full_name,
+      phone: data.userSnapshot.phone,
+      email: data.userSnapshot.email,
+      user_type: data.userSnapshot.user_type,
+      status: "ACTIVE",
+    },
+    newData: { status: "ARCHIVED" },
+    message,
+  });
+}
+
+/**
  * Helper to prepare granular activity logs for starter settings updates
  */
 export function prepareSettingsUpdateLogs(data: {

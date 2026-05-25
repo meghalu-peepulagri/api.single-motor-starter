@@ -219,3 +219,103 @@ export async function getUserDetailsWithLocations(userId: number, pageParams: { 
     },
   };
 }
+
+export type UserDeleteSnapshot = {
+  full_name: string | null;
+  phone: string;
+  email: string | null;
+  user_type: string | null;
+};
+
+export async function deleteUserWithCascade(
+  userId: number,
+  performedBy: number,
+  isSelfDelete: boolean,
+  userSnapshot: UserDeleteSnapshot,
+): Promise<void> {
+  await db.transaction(async (trx) => {
+    const now = new Date();
+
+    // Revoke all active sessions
+    await trx.update(deviceTokens)
+      .set({ status: "INACTIVE" })
+      .where(eq(deviceTokens.user_id, userId));
+
+    // Find all starters owned by this user
+    const userStarters = await trx
+      .select({ id: starterBoxes.id })
+      .from(starterBoxes)
+      .where(and(eq(starterBoxes.user_id, userId), ne(starterBoxes.status, "ARCHIVED")));
+
+    const starterIds = userStarters.map(s => s.id);
+
+    if (starterIds.length > 0) {
+      // Find all motors under those starters
+      const starterMotors = await trx
+        .select({ id: motors.id })
+        .from(motors)
+        .where(and(inArray(motors.starter_id, starterIds), ne(motors.status, "ARCHIVED")));
+
+      const motorIds = starterMotors.map(m => m.id);
+
+      if (motorIds.length > 0) {
+        // Cancel active schedules — pump may be running, must stop cleanly
+        await trx.update(motorSchedules)
+          .set({
+            status: "ARCHIVED",
+            schedule_status: "DELETED",
+            enabled: false,
+            deleted_at: now,
+            deleted_by: performedBy,
+            updated_at: now,
+          })
+          .where(and(
+            inArray(motorSchedules.motor_id, motorIds),
+            inArray(motorSchedules.schedule_status, ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"]),
+          ));
+
+        // Archive motors — they are logical associations, not hardware.
+        // Device returns to DEPLOYED pool; new motors are created on reassignment.
+        await trx.update(motors)
+          .set({ status: "ARCHIVED", state: 0, location_id: null, updated_at: now })
+          .where(and(inArray(motors.starter_id, starterIds), ne(motors.status, "ARCHIVED")));
+      }
+
+      // Release devices back to the DEPLOYED inventory pool
+      await trx.update(starterBoxes)
+        .set({
+          status: "INACTIVE",
+          device_status: "DEPLOYED",
+          user_id: null,
+          location_id: null,
+          gateway_id: null,
+          assigned_at: null,
+          updated_at: now,
+        })
+        .where(and(eq(starterBoxes.user_id, userId), ne(starterBoxes.status, "ARCHIVED")));
+    }
+
+    // 7. Release gateways back to unassigned state
+    await trx.update(gateways)
+      .set({ status: "INACTIVE", user_id: null, location_id: null, updated_at: now })
+      .where(and(eq(gateways.user_id, userId), ne(gateways.status, "ARCHIVED")));
+
+    // 8. Archive user-owned fields
+    await trx.update(fields)
+      .set({ status: "ARCHIVED", updated_at: now })
+      .where(and(eq(fields.created_by, userId), ne(fields.status, "ARCHIVED")));
+
+    // 9. Archive user-owned locations
+    await trx.update(locations)
+      .set({ status: "ARCHIVED", updated_at: now })
+      .where(and(eq(locations.user_id, userId), ne(locations.status, "ARCHIVED")));
+
+    // Archive the user
+    await trx.update(users)
+      .set({ status: "ARCHIVED", updated_at: now })
+      .where(eq(users.id, userId));
+
+    // 11. Audit trail
+    await ActivityService.writeUserDeletedLog(userId, performedBy, isSelfDelete, userSnapshot, trx);
+  });
+}
