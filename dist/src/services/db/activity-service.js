@@ -1,5 +1,5 @@
 import { userActivityLogs } from "../../database/schemas/user-activity-logs.js";
-import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
+import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserDeletedLog, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
 /**
@@ -217,6 +217,13 @@ export class ActivityService {
         if (logs.length > 0) {
             await this.saveActivityLogs(logs, trx);
         }
+    }
+    /**
+     * Logs a user deletion event (self-delete or admin-delete)
+     */
+    static async writeUserDeletedLog(userId, performedBy, isSelfDelete, userSnapshot, trx) {
+        const log = prepareUserDeletedLog({ userId, performedBy, isSelfDelete, userSnapshot });
+        await this.saveActivityLogs([log], trx);
     }
     /**
      * Logs starter settings update events
