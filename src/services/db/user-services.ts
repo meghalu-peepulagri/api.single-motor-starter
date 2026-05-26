@@ -63,23 +63,17 @@ export async function checkPhoneUniqueness(phones: string[], excludeUserId?: num
 }
 
 
-export async function checkPhoneUniquenessVerify(phones: string[], excludeUserId?: number) {
-  if (phones.length === 0) return true;
+export async function checkPhoneUniquenessVerify(phones: string, excludeUserId?: number) {
+  if (phones.length === 0) return null;
 
-  const phoneConditions = or(
-    inArray(users.phone, phones),
-    inArray(users.alternate_phone_1, phones),
-    inArray(users.alternate_phone_2, phones),
-    inArray(users.alternate_phone_3, phones),
-    inArray(users.alternate_phone_4, phones),
-    inArray(users.alternate_phone_5, phones)
-  );
+  const phoneConditions = eq(users.phone, phones);
 
   let finalCondition = and(ne(users.status, "ARCHIVED"), phoneConditions);
   if (excludeUserId) {
     finalCondition = and(finalCondition, ne(users.id, excludeUserId));
   }
-  return await db.select({ id: users.id }).from(users).where(finalCondition).limit(1);
+  const result = await db.select({ id: users.id }).from(users).where(finalCondition).limit(1);
+  return result[0] ?? null;
 }
 
 
