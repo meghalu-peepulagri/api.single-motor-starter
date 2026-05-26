@@ -4,39 +4,59 @@ import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { logger } from "../utils/logger.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
-export async function liveDataHandler(parsedMessage, topic) {
-    try {
-        if (!parsedMessage)
-            return;
-        const mac = typeof topic === "string" && topic.includes("/") ? topic.split("/")[1] : null;
-        if (!mac) {
-            logger.error("Invalid MQTT topic or missing MAC", undefined, { mac, topic });
-            return null;
-        }
-        // Validate MAC in DB
-        const validMac = await getStarterByMacWithMotor(mac);
-        if (!validMac) {
-            logger.error("Starter not found for MAC", undefined, { mac, topic });
-            return null;
-        }
-        // Format raw payload 
-        const formatted = validateLiveDataFormat(parsedMessage, topic);
-        if (!formatted)
-            return null;
-        // Validate live data content 
-        const validated = validateLiveDataContent(formatted);
-        if (!validated)
-            return null;
-        //  Prepare payload for DB 
-        const prepared = prepareLiveDataPayload(validated, validMac);
-        if (!prepared)
-            return null;
-        // Save final payload
-        await saveLiveDataTopic(prepared, prepared.group_id, validMac);
+// Serialize per-MAC to prevent concurrent transaction deadlocks.
+// starter_parameters has FK → both starter_boxes and motors; two concurrent
+// transactions for the same device can deadlock when one holds a motors X-lock
+// while the other holds a starter_boxes X-lock and each waits for the other's
+// row via FK ShareLock checks on INSERT into child tables.
+const liveDataQueues = new Map();
+async function processLiveData(parsedMessage, topic, mac) {
+    const validMac = await getStarterByMacWithMotor(mac);
+    if (!validMac) {
+        logger.error("Starter not found for MAC", undefined, { mac, topic });
+        return;
     }
-    catch (err) {
-        logger.error("Error at live data topic handler", err);
+    const formatted = validateLiveDataFormat(parsedMessage, topic);
+    if (!formatted)
+        return;
+    const validated = validateLiveDataContent(formatted);
+    if (!validated)
+        return;
+    const prepared = prepareLiveDataPayload(validated, validMac);
+    if (!prepared)
+        return;
+    const MAX_DEADLOCK_RETRIES = 2;
+    for (let attempt = 0; attempt <= MAX_DEADLOCK_RETRIES; attempt++) {
+        try {
+            await saveLiveDataTopic(prepared, prepared.group_id, validMac);
+            return;
+        }
+        catch (err) {
+            const pgCode = err?.cause?.code ?? err?.code;
+            if (pgCode === "40P01" && attempt < MAX_DEADLOCK_RETRIES) {
+                await new Promise(r => setTimeout(r, Math.random() * 50 + 20 * (attempt + 1)));
+                continue;
+            }
+            throw err;
+        }
+    }
+}
+export async function liveDataHandler(parsedMessage, topic) {
+    if (!parsedMessage)
+        return;
+    const mac = typeof topic === "string" && topic.includes("/") ? topic.split("/")[1] : null;
+    if (!mac) {
+        logger.error("Invalid MQTT topic or missing MAC", undefined, { mac, topic });
         return null;
+    }
+    const prev = liveDataQueues.get(mac) ?? Promise.resolve();
+    const next = prev
+        .then(() => processLiveData(parsedMessage, topic, mac))
+        .catch((err) => { logger.error("Error at live data topic handler", err); });
+    liveDataQueues.set(mac, next);
+    await next;
+    if (liveDataQueues.get(mac) === next) {
+        liveDataQueues.delete(mac);
     }
 }
 export function randomSequenceNumber() {
