@@ -3,7 +3,6 @@ import { LOGGED_OUT, MOBILE_NUMBER_ALREADY_EXIST, USER_DELETED, USER_DETAILS_FET
 import db from "../database/configuration.js";
 import { deviceTokens, type DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import { users, type UsersTable } from "../database/schemas/users.js";
-import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import ForbiddenException from "../exceptions/forbidden-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
@@ -106,9 +105,9 @@ export class UserHandlers {
 
       const allPhones = checkInternalPhoneUniqueness(validUserReq);
 
-      const duplicatePhone = await checkPhoneUniqueness(allPhones, userId);
-      if (duplicatePhone) {
-        throw new ConflictException(`${MOBILE_NUMBER_ALREADY_EXIST}: ${duplicatePhone}`);
+      const isPhoneUnique = await checkPhoneUniqueness(allPhones, userId);
+      if (!isPhoneUnique) {
+        throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
       }
 
       const verifiedUser = await getSingleRecordByMultipleColumnValues<UsersTable>(users, ["id", "status"], ["=", "!="], [userId, "ARCHIVED"]);

@@ -35,9 +35,9 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
             const allPhones = checkInternalPhoneUniqueness(validUserReq);
-            const duplicatePhone = await checkPhoneUniqueness(allPhones);
-            if (duplicatePhone) {
-                throw new ConflictException(`${MOBILE_NUMBER_ALREADY_EXIST}: ${duplicatePhone}`);
+            const isPhoneUnique = await checkPhoneUniqueness(allPhones);
+            if (!isPhoneUnique) {
+                throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
             }
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
             const isAdmin = userPayload?.user_type === "ADMIN" || userPayload?.user_type === "SUPER_ADMIN";
@@ -107,7 +107,7 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
             const validatedPhone = await validatedRequest("signin-phone", reqBody, LOGIN_VALIDATION_CRITERIA);
             const loginUser = await checkPhoneUniqueness([validatedPhone.phone]);
-            if (loginUser === null)
+            if (loginUser === true)
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = prepareOTPData(validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
@@ -127,7 +127,7 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
             const validReqData = await validatedRequest("verify-otp", reqBody, VERIFY_OTP_VALIDATION_CRITERIA);
             const user = await checkPhoneUniquenessVerify([validReqData.phone]);
-            if (!Array.isArray(user) || user.length === 0)
+            if (user === true)
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = await otpService.fetchOtp({ phone: validReqData.phone });
             const now = new Date();

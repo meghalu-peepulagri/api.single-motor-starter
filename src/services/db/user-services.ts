@@ -41,8 +41,8 @@ export async function paginatedUsersList(whereQueryData: WhereQueryDataWithOr<Us
   };
 }
 
-export async function checkPhoneUniqueness(phones: string[], excludeUserId?: number): Promise<string | null> {
-  if (phones.length === 0) return null;
+export async function checkPhoneUniqueness(phones: string[], excludeUserId?: number): Promise<boolean> {
+  if (phones.length === 0) return true;
 
   const phoneConditions = or(
     inArray(users.phone, phones),
@@ -58,20 +58,8 @@ export async function checkPhoneUniqueness(phones: string[], excludeUserId?: num
     finalCondition = and(finalCondition, ne(users.id, excludeUserId));
   }
 
-  const existingUsers = await db.select({
-    phone: users.phone,
-    alternate_phone_1: users.alternate_phone_1,
-    alternate_phone_2: users.alternate_phone_2,
-    alternate_phone_3: users.alternate_phone_3,
-    alternate_phone_4: users.alternate_phone_4,
-    alternate_phone_5: users.alternate_phone_5,
-  }).from(users).where(finalCondition).limit(1);
-
-  if (existingUsers.length === 0) return null;
-
-  const row = existingUsers[0];
-  const allExisting = [row.phone, row.alternate_phone_1, row.alternate_phone_2, row.alternate_phone_3, row.alternate_phone_4, row.alternate_phone_5].filter(Boolean) as string[];
-  return phones.find(p => allExisting.includes(p)) ?? allExisting[0];
+  const existingUsers = await db.select({ id: users.id }).from(users).where(finalCondition).limit(1);
+  return existingUsers.length === 0;
 }
 
 
