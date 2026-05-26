@@ -702,23 +702,29 @@ export async function getDeviceWithDispatchDetails(search: string) {
 export async function getBasicStarterDetails(
   pageParams: { page: number; pageSize: number; offset: number },
   search?: string,
+  userId?: number,
+  starterType?: string,
 ) {
   const trimmedSearch = search?.trim();
-  const whereCondition = and(
-    eq(starterBoxes.starter_type, "MULTI_STARTER"),
-    ne(starterBoxes.status, "ARCHIVED"),
-    ...(trimmedSearch ? [or(
+
+  const conditions: any[] = [ne(starterBoxes.status, "ARCHIVED")];
+  if (userId) conditions.push(eq(starterBoxes.user_id, userId));
+  if (starterType) conditions.push(eq(starterBoxes.starter_type, starterType as any));
+  if (trimmedSearch) {
+    conditions.push(or(
       ilike(starterBoxes.starter_number, `%${trimmedSearch}%`),
       ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`),
       ilike(starterBoxes.mac_address, `%${trimmedSearch}%`),
-    )] : []),
-  );
+    ) as any);
+  }
 
   const records = await db.query.starterBoxes.findMany({
-    where: whereCondition,
+    where: and(...conditions),
     columns: {
       id: true,
       starter_number: true,
+      starter_type: true,
+      device_status: true,
       pcb_number: true,
       mac_address: true,
       device_allocation: true,
@@ -729,9 +735,17 @@ export async function getBasicStarterDetails(
         columns: {
           id: true,
           name: true,
+          alias_name: true,
+          state: true,
           motor_reference: true,
-          starter_id: true
+          starter_id: true,
         },
+      },
+      location: {
+        columns: { id: true, name: true },
+      },
+      user: {
+        columns: { id: true, full_name: true },
       },
     },
     orderBy: [desc(starterBoxes.created_at)],
@@ -739,21 +753,24 @@ export async function getBasicStarterDetails(
     offset: pageParams.offset,
   });
 
-  const totalFilters = [ne(starterBoxes.status, "ARCHIVED")];
-  if (trimmedSearch) {
-    totalFilters.push(or(
-      ilike(starterBoxes.starter_number, `%${trimmedSearch}%`),
-      ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`),
-      ilike(starterBoxes.mac_address, `%${trimmedSearch}%`),
-    ) as any);
-  }
+  const ALL_SLOTS: string[] = ["m1", "m2"];
+  const enrichedRecords = records.map(r => {
+    const filledSlots = (r.motors ?? [])
+      .map(m => m.motor_reference)
+      .filter(Boolean) as string[];
+    return {
+      ...r,
+      filled_slots: filledSlots,
+      available_slots: ALL_SLOTS.filter(s => !filledSlots.includes(s)),
+    };
+  });
 
-  const totalRecords = await getRecordsCount(starterBoxes, totalFilters);
+  const totalRecords = await getRecordsCount(starterBoxes, conditions);
   const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
 
   return {
     pagination_info: pagination,
-    records,
+    records: enrichedRecords,
   };
 }
 

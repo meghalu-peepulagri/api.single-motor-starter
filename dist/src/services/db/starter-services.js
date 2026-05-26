@@ -563,14 +563,23 @@ export async function getDeviceWithDispatchDetails(search) {
         },
     });
 }
-export async function getBasicStarterDetails(pageParams, search) {
+export async function getBasicStarterDetails(pageParams, search, userId, starterType) {
     const trimmedSearch = search?.trim();
-    const whereCondition = and(ne(starterBoxes.status, "ARCHIVED"), ...(trimmedSearch ? [or(ilike(starterBoxes.starter_number, `%${trimmedSearch}%`), ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`), ilike(starterBoxes.mac_address, `%${trimmedSearch}%`))] : []));
+    const conditions = [ne(starterBoxes.status, "ARCHIVED")];
+    if (userId)
+        conditions.push(eq(starterBoxes.user_id, userId));
+    if (starterType)
+        conditions.push(eq(starterBoxes.starter_type, starterType));
+    if (trimmedSearch) {
+        conditions.push(or(ilike(starterBoxes.starter_number, `%${trimmedSearch}%`), ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`), ilike(starterBoxes.mac_address, `%${trimmedSearch}%`)));
+    }
     const records = await db.query.starterBoxes.findMany({
-        where: whereCondition,
+        where: and(...conditions),
         columns: {
             id: true,
             starter_number: true,
+            starter_type: true,
+            device_status: true,
             pcb_number: true,
             mac_address: true,
             device_allocation: true,
@@ -581,22 +590,39 @@ export async function getBasicStarterDetails(pageParams, search) {
                 columns: {
                     id: true,
                     name: true,
+                    alias_name: true,
+                    state: true,
+                    motor_reference: true,
+                    starter_id: true,
                 },
+            },
+            location: {
+                columns: { id: true, name: true },
+            },
+            user: {
+                columns: { id: true, full_name: true },
             },
         },
         orderBy: [desc(starterBoxes.created_at)],
         limit: pageParams.pageSize,
         offset: pageParams.offset,
     });
-    const totalFilters = [ne(starterBoxes.status, "ARCHIVED")];
-    if (trimmedSearch) {
-        totalFilters.push(or(ilike(starterBoxes.starter_number, `%${trimmedSearch}%`), ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`), ilike(starterBoxes.mac_address, `%${trimmedSearch}%`)));
-    }
-    const totalRecords = await getRecordsCount(starterBoxes, totalFilters);
+    const ALL_SLOTS = ["m1", "m2"];
+    const enrichedRecords = records.map(r => {
+        const filledSlots = (r.motors ?? [])
+            .map(m => m.motor_reference)
+            .filter(Boolean);
+        return {
+            ...r,
+            filled_slots: filledSlots,
+            available_slots: ALL_SLOTS.filter(s => !filledSlots.includes(s)),
+        };
+    });
+    const totalRecords = await getRecordsCount(starterBoxes, conditions);
     const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
     return {
         pagination_info: pagination,
-        records,
+        records: enrichedRecords,
     };
 }
 export async function getStarterById(id) {

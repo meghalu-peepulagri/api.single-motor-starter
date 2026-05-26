@@ -7,6 +7,7 @@ export const vAddMotor = v.object({
     location_id: v.nullish(v.optional(v.number())),
     starter_id: v.optional(v.number()),
     motor_reference: v.optional(v.picklist(["m1", "m2"], "Motor reference must be m1 or m2")),
+    user_id: v.nullish(v.optional(v.number())),
 });
 export const vUpdateMotor = v.object({
     name: motorNameValidator,

@@ -68,6 +68,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
             state: true,
             alias_name: true,
             test_run_status: true,
+            motor_reference: true
         },
         with: {
             location: {
@@ -107,6 +108,12 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
                             current_b: true,
                         },
                     },
+                },
+            },
+            created_by_user: {
+                columns: {
+                    id: true,
+                    full_name: true,
                 },
             },
         },

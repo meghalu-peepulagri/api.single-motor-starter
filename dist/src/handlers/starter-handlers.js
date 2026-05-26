@@ -1024,7 +1024,9 @@ export class StarterHandlers {
             const query = c.req.query();
             const paginationParams = getPaginationOffParams(query);
             const search = query.search_string ?? query.search ?? "";
-            const basicDetails = await getBasicStarterDetails(paginationParams, search);
+            const userId = query.user_id ? parseInt(query.user_id, 10) : undefined;
+            const starterType = query.starter_type ?? undefined;
+            const basicDetails = await getBasicStarterDetails(paginationParams, search, userId, starterType);
             return sendResponse(c, 200, "Basic device details fetched successfully", basicDetails);
         }
         catch (error) {

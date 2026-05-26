@@ -1,5 +1,5 @@
 import { eq, ne } from "drizzle-orm";
-import { MAX_MULTI_MOTOR_LIMIT_REACHED, MAX_SINGLE_MOTOR_LIMIT_REACHED, MOTOR_REFERENCE_NOT_SUPPORTED, MOTOR_REFERENCE_SLOT_TAKEN, } from "../constants/app-constants.js";
+import { MAX_MULTI_MOTOR_LIMIT_REACHED, MAX_SINGLE_MOTOR_LIMIT_REACHED, MOTOR_REFERENCE_NOT_SUPPORTED, } from "../constants/app-constants.js";
 import { motors } from "../database/schemas/motors.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
@@ -77,7 +77,7 @@ export async function resolveMotorSlot(targetStarter, requestedReference) {
             eq(motors.motor_reference, requestedReference),
         ]);
         if (slotCount > 0) {
-            throw new ConflictException(MOTOR_REFERENCE_SLOT_TAKEN);
+            throw new ConflictException(`Slot ${requestedReference.toUpperCase()} is already occupied on this device`);
         }
         // Case 4: slot is free — honour the request
         return {

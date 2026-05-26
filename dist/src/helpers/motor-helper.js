@@ -37,6 +37,11 @@ export function motorFilters(query, user) {
         whereQueryData.relations.push("=");
         whereQueryData.values.push(user.id);
     }
+    else if ((user.user_type === "ADMIN" || user.user_type === "SUPER_ADMIN") && query.user_id) {
+        whereQueryData.columns.push("created_by");
+        whereQueryData.relations.push("=");
+        whereQueryData.values.push(parseInt(query.user_id, 10));
+    }
     if (query.location_id) {
         whereQueryData.columns.push("location_id");
         whereQueryData.relations.push("=");

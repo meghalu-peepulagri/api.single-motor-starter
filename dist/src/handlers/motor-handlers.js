@@ -39,11 +39,18 @@ export class MotorHandlers {
                 starterAssignment = { starter_id: starter.id, motor_reference: motorReference, motor_index: motorIndex };
             }
             const isAdmin = userPayload.user_type === "ADMIN" || userPayload.user_type === "SUPER_ADMIN";
+            let createdBy;
+            if (isAdmin) {
+                createdBy = validMotorReq.user_id ?? null;
+            }
+            else {
+                createdBy = userPayload.id;
+            }
             const preparedMotorPayload = prepareNewMotorPayload({
                 name: validMotorReq.name,
                 hp: validMotorReq.hp,
                 locationId: validMotorReq.location_id,
-                createdBy: isAdmin ? null : userPayload.id,
+                createdBy,
                 starterAssignment,
             });
             await db.transaction(async (trx) => {
@@ -164,7 +171,8 @@ export class MotorHandlers {
             const userPayload = c.get("user_payload");
             const query = c.req.query();
             const paginationParams = getPaginationOffParams(query);
-            const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type, "assigned_at", "desc");
+            const isAdmin = userPayload.user_type === "ADMIN" || userPayload.user_type === "SUPER_ADMIN";
+            const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type, isAdmin ? "created_at" : "assigned_at", "desc");
             const whereQueryData = motorFilters(query, userPayload);
             const motorsData = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
             const motorIds = motorsData.records.map((m) => m.id).filter(Boolean);
