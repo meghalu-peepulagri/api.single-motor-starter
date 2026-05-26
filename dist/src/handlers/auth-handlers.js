@@ -34,9 +34,9 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
             const validUserReq = await validatedRequest("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
             const allPhones = checkInternalPhoneUniqueness(validUserReq);
-            const duplicatePhone = await checkPhoneUniqueness(allPhones);
-            if (duplicatePhone) {
-                throw new ConflictException(`${MOBILE_NUMBER_ALREADY_EXIST}: ${duplicatePhone}`);
+            const isPhoneUnique = await checkPhoneUniqueness(allPhones);
+            if (!isPhoneUnique) {
+                throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
             }
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
             const isAdmin = userPayload?.user_type === "ADMIN" || userPayload?.user_type === "SUPER_ADMIN";
@@ -106,7 +106,7 @@ export class AuthHandlers {
             paramsValidateException.emptyBodyValidation(reqBody);
             const validatedPhone = await validatedRequest("signin-phone", reqBody, LOGIN_VALIDATION_CRITERIA);
             const loginUser = await checkPhoneUniqueness([validatedPhone.phone]);
-            if (loginUser === null)
+            if (loginUser === true)
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = prepareOTPData(validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
@@ -125,8 +125,8 @@ export class AuthHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validReqData = await validatedRequest("verify-otp", reqBody, VERIFY_OTP_VALIDATION_CRITERIA);
-            const user = await checkPhoneUniquenessVerify([validReqData.phone]);
-            if (!Array.isArray(user) || user.length === 0)
+            const user = await checkPhoneUniquenessVerify(validReqData.phone);
+            if (!user)
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = await otpService.fetchOtp({ phone: validReqData.phone });
             const now = new Date();
@@ -139,17 +139,17 @@ export class AuthHandlers {
                 throw new UnprocessableEntityException(VERIFY_OTP_VALIDATION_CRITERIA, otpValidationErrors);
             }
             const validOtp = otp;
-            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user[0].id);
-            const { access_token, refresh_token } = await genJWTTokensForUser(user[0].id);
+            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
+            const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
             const { password, ...userDetails } = updatedUser;
             const data = { user_details: userDetails, access_token, refresh_token };
             if (validReqData.fcm_token) {
                 const fcmToken = validReqData.fcm_token;
-                const existingToken = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user[0].id]);
+                const existingToken = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user.id]);
                 if (!existingToken) {
-                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues(deviceTokens, ["user_id"], ["="], [user[0].id]);
+                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues(deviceTokens, ["user_id"], ["="], [user.id]);
                     if (!checkOtherDevice || checkOtherDevice.device_token !== fcmToken) {
-                        await saveSingleRecord(deviceTokens, { device_token: fcmToken, user_id: user[0].id });
+                        await saveSingleRecord(deviceTokens, { device_token: fcmToken, user_id: user.id });
                     }
                 }
             }
