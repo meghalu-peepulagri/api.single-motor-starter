@@ -42,9 +42,9 @@ export class AuthHandlers {
             const validUserReq = await validatedRequest<ValidatedSignUpUser>("signup", reqBody, SIGNUP_VALIDATION_CRITERIA);
             const allPhones = checkInternalPhoneUniqueness(validUserReq);
 
-            const duplicatePhone = await checkPhoneUniqueness(allPhones);
-            if (duplicatePhone) {
-                throw new ConflictException(`${MOBILE_NUMBER_ALREADY_EXIST}: ${duplicatePhone}`);
+            const isPhoneUnique = await checkPhoneUniqueness(allPhones);
+            if (!isPhoneUnique) {
+                throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
             }
 
             const hashedPassword = validUserReq.password ? await argon2.hash(validUserReq.password) : await argon2.hash("i@123456");
@@ -123,7 +123,7 @@ export class AuthHandlers {
             const validatedPhone = await validatedRequest<ValidatedSignInPhone>("signin-phone", reqBody, LOGIN_VALIDATION_CRITERIA);
 
             const loginUser = await checkPhoneUniqueness([validatedPhone.phone])
-            if (loginUser === null) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
+            if (loginUser === true) throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
 
             const otpData = prepareOTPData(validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
