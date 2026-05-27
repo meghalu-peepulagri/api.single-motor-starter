@@ -1461,6 +1461,25 @@ function scheduleCreationAckResolver(message: any, topic: string) {
     const lateSuccess = dValue === 1 || dValue === 4;
     logger.warn(`[schedule-ack] late ACK for ${macFromTopic} D=${dValue} success=${lateSuccess} — no pending map entry (timeout or restart)`);
     if (lateSuccess) {
+      // Decode bitmask from D.ids to know exactly which schedule_id slots the device confirmed.
+      // Without this filter, every PENDING row for the starter would be blindly marked SCHEDULED.
+      let acknowledgedSlots: number[] | null = null;
+      if (message.D !== null && typeof message.D === "object" && typeof message.D.ids === "number" && message.D.ids > 0) {
+        acknowledgedSlots = [];
+        for (let bit = 0; bit < 32; bit++) {
+          if (message.D.ids & (1 << bit)) acknowledgedSlots.push(bit + 1);
+        }
+        logger.info(`[schedule-ack] late ACK bitmask=${message.D.ids} → slots=[${acknowledgedSlots.join(",")}]`);
+      }
+
+      if (!acknowledgedSlots) {
+        // No bitmask — we cannot know which slots were confirmed. Leave rows as PENDING so the
+        // next heartbeat sync re-publishes and gets a proper per-slot ACK.
+        logger.warn(`[schedule-ack] late ACK for ${macFromTopic}: no bitmask in D, leaving PENDING rows unchanged for next heartbeat sync`);
+        return;
+      }
+
+      const slots = acknowledgedSlots;
       getStarterByMacWithMotor(macFromTopic)
         .then(async (starter) => {
           if (!starter?.id) return;
@@ -1471,8 +1490,9 @@ function scheduleCreationAckResolver(message: any, topic: string) {
               eq(motorSchedules.starter_id, starter.id),
               eq(motorSchedules.acknowledgement, 0),
               inArray(motorSchedules.schedule_status, ["PENDING"]),
+              inArray(motorSchedules.schedule_id, slots),
             ));
-          logger.info(`[schedule-ack] late ACK: marked PENDING schedules as SCHEDULED for starter=${starter.id}`);
+          logger.info(`[schedule-ack] late ACK: marked PENDING schedules as SCHEDULED for starter=${starter.id} slots=[${slots.join(",")}]`);
         })
         .catch((err) => logger.error(`[schedule-ack] late ACK DB update failed for ${macFromTopic}: ${err?.message}`));
     }
