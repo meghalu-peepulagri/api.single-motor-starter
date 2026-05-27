@@ -39,7 +39,7 @@ export class StarterDefaultSettingsHandlers {
   updateStarterDefaultSettingsHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const defaultSettingId = +c.req.param("id");
+      const defaultSettingId = +c.req.param("id")!;
       const reqBody = await c.req.json();
       paramsValidateException.emptyBodyValidation(reqBody);
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettings>("update-default-settings", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA);
@@ -84,7 +84,7 @@ export class StarterDefaultSettingsHandlers {
 
   getAcknowledgedStarterSettingsHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +c.req.param("starter_id")!;
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
 
@@ -99,7 +99,7 @@ export class StarterDefaultSettingsHandlers {
   insertStarterSettingHandler = async (c: Context) => {
     try {
       const user = c.get("user_payload");
-      const starterId = Number(c.req.param("starter_id"));
+      const starterId = Number(c.req.param("starter_id")!);
       const body = await c.req.json();
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes,
@@ -158,7 +158,7 @@ export class StarterDefaultSettingsHandlers {
 
   getStarterSettingsLimitsHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +c.req.param("starter_id")!;
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
 
@@ -172,7 +172,7 @@ export class StarterDefaultSettingsHandlers {
 
   updateStarterSettingsLimitsHandler = async (c: Context) => {
     try {
-      const settingId = +c.req.param("id");
+      const settingId = +c.req.param("id")!;
       const body = await c.req.json();
       const { id, starter_id, created_at, updated_at, ...rest } = body;
 
@@ -190,7 +190,7 @@ export class StarterDefaultSettingsHandlers {
 
   getStarterAckHistoryHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +c.req.param("starter_id")!;
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
 
@@ -210,7 +210,7 @@ export class StarterDefaultSettingsHandlers {
 
   getStarterSettingDetailsMobileHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +c.req.param("starter_id")!;
       const query = c.req.query();
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
@@ -234,7 +234,7 @@ export class StarterDefaultSettingsHandlers {
 
   getStarterSettingsLimitsMobileHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +c.req.param("starter_id")!;
       const query = c.req.query();
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
@@ -276,7 +276,7 @@ export class StarterDefaultSettingsHandlers {
   updateStarterDefaultSettingsLimitsHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const defaultSettingLimitsId = +c.req.param("id");
+      const defaultSettingLimitsId = +c.req.param("id")!;
       const reqBody = await c.req.json();
 
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettingsLimits>(
@@ -335,7 +335,7 @@ export class StarterDefaultSettingsHandlers {
 
   updateLatestSettingAckByStarterHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +c.req.param("starter_id")!;
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
       await db.update(starterSettings).set({ acknowledgement: "TRUE", updated_at: sql`CURRENT_TIMESTAMP` }).where(sql`${starterSettings.id} = (SELECT ${starterSettings.id} FROM ${starterSettings} WHERE ${starterSettings.starter_id} = ${starterId} AND ${starterSettings.acknowledgement} = 'FALSE' ORDER BY ${starterSettings.created_at} DESC LIMIT 1)`);

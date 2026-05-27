@@ -19,6 +19,18 @@ motorScheduleRoute.get("/", isAuthorized, motorScheduleHandler.motorScheduleList
 // Get single schedule by id
 motorScheduleRoute.get("/:id", isAuthorized, motorScheduleHandler.getMotorScheduleByIdHandler);
 
+// Get timeline history for a single schedule
+motorScheduleRoute.get("/:id/history", isAuthorized, motorScheduleHandler.getScheduleHistoryByIdHandler);
+
+// Get full lifecycle audit trail for a schedule
+motorScheduleRoute.get("/:id/logs", isAuthorized, motorScheduleHandler.getScheduleLogsHandler);
+
+// Get latest device live data snapshot for a schedule
+motorScheduleRoute.get("/:id/live-data", isAuthorized, motorScheduleHandler.getScheduleLiveDataHandler);
+
+// Get all MQTT operations dispatched for a schedule
+motorScheduleRoute.get("/:id/operations", isAuthorized, motorScheduleHandler.getScheduleOperationsHandler);
+
 
 // =================== POST ROUTES ===================
 
@@ -52,6 +64,9 @@ motorScheduleRoute.patch("/bulk/ack", isAuthorized, motorScheduleHandler.bulkUpd
 
 // Add repeat days to an existing schedule
 motorScheduleRoute.patch("/repeat-days/:id", isAuthorized, motorScheduleHandler.addRepeatDaysHandler);
+
+// Per-day stop / restart / delete  { action: "stop"|"restart"|"delete", day: 0-6 }
+motorScheduleRoute.patch("/:id/days", isAuthorized, motorScheduleHandler.updateDayBitmaskHandler);
 
 // Ack schedule (mark as acknowledged)
 motorScheduleRoute.patch("/:id/ack", isAuthorized, motorScheduleHandler.updateAcknowledgementHandler);

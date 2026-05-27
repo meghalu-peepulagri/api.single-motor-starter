@@ -234,10 +234,12 @@ export interface ScheduleForEvaluation {
   schedule_start_date: number | null;  // Numeric YYMMDD (e.g., 260415)
   schedule_end_date: number | null;    // Numeric YYMMDD (e.g., 260416)
   days_of_week: number[];
+  bit_wise_days?: number | null;  // active-day bitmask; cleared bit = stopped day
   repeat: number;
   runtime_minutes: number | null;
   last_started_at: Date | null;
   enabled: boolean;
+  acknowledgement?: number | null;     // 0 = not acknowledged by device, 1 = acknowledged
   actual_start_time?: string | null;
   actual_end_time?: string | null;
   actual_run_time?: number | null;
@@ -245,7 +247,7 @@ export interface ScheduleForEvaluation {
 
 export interface ScheduleStatusUpdate {
   id: number;
-  newStatus: "RUNNING" | "COMPLETED" | "WAITING_NEXT_CYCLE";
+  newStatus: "SCHEDULED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
   last_started_at?: Date;
   last_stopped_at?: Date;
 }
@@ -308,7 +310,7 @@ export type previousPreparedLiveData = {
     created_by: number | null;
     id: number;
     name: string;
-    mode: "AUTO" | "MANUAL"
+    mode: "AUTO" | "MANUAL" | "SCHEDULE"
     location_id: number | null;
     hp: string;
     state: number;

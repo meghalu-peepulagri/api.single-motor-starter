@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+// @ts-ignore — date-fns v4 missing index.d.ts for NodeNext ESM resolution
 import { isBefore } from "date-fns";
 import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, MOBILE_NUMBER_ALREADY_EXIST, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
@@ -125,8 +126,8 @@ export class AuthHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validReqData = await validatedRequest("verify-otp", reqBody, VERIFY_OTP_VALIDATION_CRITERIA);
-            const user = await checkPhoneUniquenessVerify([validReqData.phone]);
-            if (user === true)
+            const user = await checkPhoneUniquenessVerify(validReqData.phone);
+            if (!user)
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = await otpService.fetchOtp({ phone: validReqData.phone });
             const now = new Date();
@@ -139,17 +140,17 @@ export class AuthHandlers {
                 throw new UnprocessableEntityException(VERIFY_OTP_VALIDATION_CRITERIA, otpValidationErrors);
             }
             const validOtp = otp;
-            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user[0].id);
-            const { access_token, refresh_token } = await genJWTTokensForUser(user[0].id);
+            const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
+            const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
             const { password, ...userDetails } = updatedUser;
             const data = { user_details: userDetails, access_token, refresh_token };
             if (validReqData.fcm_token) {
                 const fcmToken = validReqData.fcm_token;
-                const existingToken = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user[0].id]);
+                const existingToken = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user.id]);
                 if (!existingToken) {
-                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues(deviceTokens, ["user_id"], ["="], [user[0].id]);
+                    const checkOtherDevice = await getSingleRecordByMultipleColumnValues(deviceTokens, ["user_id"], ["="], [user.id]);
                     if (!checkOtherDevice || checkOtherDevice.device_token !== fcmToken) {
-                        await saveSingleRecord(deviceTokens, { device_token: fcmToken, user_id: user[0].id });
+                        await saveSingleRecord(deviceTokens, { device_token: fcmToken, user_id: user.id });
                     }
                 }
             }

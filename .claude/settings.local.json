@@ -1,9 +1,17 @@
 {
   "permissions": {
     "allow": [
+<<<<<<< HEAD
       "Bash(Get-Content \"D:\\\\orotron\\\\Single-motor-Starter\\\\peepulagri-api.single-motor-starter\\\\src\\\\services\\\\db\\\\mqtt-db-services.ts\")",
       "Bash(Measure-Object -Line)",
       "Bash(Select-Object -ExpandProperty Lines)"
+=======
+      "Bash(npx drizzle-kit *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\orotron\\\\Single-motor-Starter\\\\peepulagri-api.single-motor-starter\\\\src\" -Recurse -Include \"*schedule*\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(where pandoc *)",
+      "Bash(pandoc --version)"
+>>>>>>> dev
     ]
   }
 }

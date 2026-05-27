@@ -2,7 +2,6 @@ import { getFailureReason } from "./control-helpers.js";
 import { randomSequenceNumber } from "./mqtt-helpers.js";
 
 type ScheduleType = "TIME_BASED" | "CYCLIC";
-
 const VALID_SCHEDULE_TYPES: ScheduleType[] = ["TIME_BASED", "CYCLIC"];
 
 function isObject(value: unknown): value is Record<string, any> {
@@ -168,6 +167,17 @@ export function numericToDateString(value: number): string {
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // +5:30 in milliseconds
 
+/** Convert YYMMDD date + HHMM time (IST) to a UTC Date object */
+export function yymmddHhmmToUTCDate(yymmdd: number, hhmm: string): Date {
+  const dateStr = String(yymmdd).padStart(6, "0");
+  const yy = parseInt(dateStr.slice(0, 2), 10);
+  const mo = parseInt(dateStr.slice(2, 4), 10) - 1;
+  const dd = parseInt(dateStr.slice(4, 6), 10);
+  const hh = parseInt(hhmm.slice(0, 2), 10);
+  const mi = parseInt(hhmm.slice(2, 4), 10);
+  return new Date(Date.UTC(2000 + yy, mo, dd, hh, mi, 0) - IST_OFFSET_MS);
+}
+
 /** Convert a Date to IST and return { yy, mm, dd } */
 function toISTDate(date: Date) {
   const istTime = new Date(date.getTime() + IST_OFFSET_MS);
@@ -188,6 +198,33 @@ export function todayAsYYMMDD(): number {
 export function dateToYYMMDD(date: Date): number {
   const { yy, mm, dd } = toISTDate(date);
   return yy * 10000 + mm * 100 + dd;
+}
+
+/** Convert a YYMMDD number to a UTC midnight Date object */
+function yymmddToDate(yymmdd: number): Date {
+  const yy = Math.floor(yymmdd / 10000);
+  const mm = Math.floor((yymmdd % 10000) / 100);
+  const dd = yymmdd % 100;
+  return new Date(Date.UTC(2000 + yy, mm - 1, dd));
+}
+
+/**
+ * Expand a YYMMDD date range into individual dates matching the given days of week.
+ * Returns YYMMDD numbers only for dates whose day-of-week is in daysOfWeek.
+ * Days: 0=Sunday, 1=Monday, ..., 6=Saturday.
+ */
+export function expandDateRangeByDays(startDate: number, endDate: number, daysOfWeek: number[]): number[] {
+  if (daysOfWeek.length === 0) return [];
+  const result: number[] = [];
+  const current = yymmddToDate(startDate);
+  const end = yymmddToDate(endDate);
+  while (current <= end) {
+    if (daysOfWeek.includes(current.getUTCDay())) {
+      result.push(dateToYYMMDD(current));
+    }
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return result;
 }
 
 function inferScheduleType(payload: Record<string, any>): ScheduleType {
@@ -246,6 +283,14 @@ function normalizeSingleSchedulePayload(payload: Record<string, any>): Record<st
   const finalStartTime = startTime ?? payload.start_time;
   const finalEndTime = hasEndInput ? (explicitEnd ?? rawEndInput) : (endTime ?? payload.end_time);
 
+  // Derive bit_wise_days from days_of_week if not supplied
+  const rawBitWiseDays = payload.bit_wise_days !== undefined ? payload.bit_wise_days : undefined;
+  const derivedBitWiseDays = rawBitWiseDays !== undefined
+    ? rawBitWiseDays
+    : daysOfWeek.length > 0
+      ? daysOfWeek.reduce((m: number, d: number) => m | (1 << d), 0)
+      : 0;
+
   const normalized: Record<string, any> = {
     ...payload,
     schedule_type: scheduleType,
@@ -257,6 +302,7 @@ function normalizeSingleSchedulePayload(payload: Record<string, any>): Record<st
     cycle_on_minutes: cycleOnMinutes ?? payload.cycle_on_minutes,
     cycle_off_minutes: cycleOffMinutes ?? payload.cycle_off_minutes,
     days_of_week: daysOfWeek,
+    bit_wise_days: derivedBitWiseDays,
   };
 
   // power_loss_recovery: keep explicit input for validation; default CYCLIC to false only if not provided
@@ -315,6 +361,7 @@ export function buildScheduleData(data: {
   power_loss_recovery_time?: number;
 }, scheduleStartDate: number) {
   const scheduleType: ScheduleType = (data.schedule_type as ScheduleType) || "TIME_BASED";
+  const endDateForDateTime = data.schedule_end_date ?? scheduleStartDate;
   return {
     motor_id: data.motor_id,
     starter_id: data.starter_id || null,
@@ -323,6 +370,8 @@ export function buildScheduleData(data: {
     schedule_end_date: data.schedule_end_date || null,
     start_time: data.start_time,
     end_time: data.end_time,
+    start_date_time: yymmddHhmmToUTCDate(scheduleStartDate, data.start_time),
+    end_date_time: yymmddHhmmToUTCDate(endDateForDateTime, data.end_time),
     days_of_week: data.days_of_week || [],
     bit_wise_days: data.bit_wise_days ?? 0,
     runtime_minutes: data.runtime_minutes || null,
@@ -354,9 +403,9 @@ export function formatMotorScheduleResponse(record: any, queryDate?: number): an
     schedule_type: scheduleType,
     schedule_status: displayStatus,
     days_of_week: Array.isArray(rest.days_of_week) ? rest.days_of_week : [],
-    start_time: rest.actual_start_time ?? rest.start_time,
-    end_time: rest.actual_end_time ?? rest.end_time,
-    runtime_minutes: rest.actual_run_time ?? rest.runtime_minutes,
+    start_time: rest.start_time,
+    end_time: rest.end_time,
+    runtime_minutes: rest.runtime_minutes,
     failure_reason_description: getFailureReason(rest.failure_reason),
     failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
   };
@@ -384,7 +433,10 @@ export function buildScheduleTimeline(record: any): any {
   if (record.last_started_at) events.push({ event: "RUNNING", timestamp: new Date(record.last_started_at).toISOString() });
   if (record.paused_at) events.push({ event: "PAUSED", timestamp: new Date(record.paused_at).toISOString() });
   if (record.restarted_at) events.push({ event: "RESTARTED", timestamp: new Date(record.restarted_at).toISOString() });
-  if (record.last_stopped_at) events.push({ event: "STOPPED", timestamp: new Date(record.last_stopped_at).toISOString() });
+  if (record.last_stopped_at) {
+    const terminalEventMap: Record<string, string> = { MISSED: "MISSED", PARTIAL: "PARTIAL" };
+    events.push({ event: terminalEventMap[record.schedule_status] ?? "STOPPED", timestamp: new Date(record.last_stopped_at).toISOString() });
+  }
   if (record.failure_at) events.push({ event: "FAILED", timestamp: new Date(record.failure_at).toISOString() });
   if (record.deleted_at) events.push({ event: "DELETED", timestamp: new Date(record.deleted_at).toISOString() });
   if (record.edited_at) events.push({ event: "EDITED", timestamp: new Date(record.edited_at).toISOString() });
@@ -403,6 +455,13 @@ export function buildScheduleTimeline(record: any): any {
     end_time: record.end_time,
     schedule_start_date: record.schedule_start_date,
     schedule_end_date: record.schedule_end_date,
+    actual_start_time: record.actual_start_time,
+    actual_end_time: record.actual_end_time,
+    runtime_minutes: record.runtime_minutes,
+    actual_run_time: record.actual_run_time,
+    failure_reason: record.failure_reason,
+    missed_minutes: record.missed_minutes,
+    failure_at: record.failure_at,
     repeat: record.repeat,
     created_at: record.created_at,
     events,
@@ -414,23 +473,58 @@ export function buildScheduleTimeline(record: any): any {
 const MAX_SCHEDULES_PER_DEVICE = 12;
 const MAX_ITEMS_PER_CHUNK = 8;
 
+/**
+ * Combine a YYMMDD date and HHMM time (both in IST) into a UTC epoch second.
+ * Device needs absolute timestamps (st_ep / ed_ep) so it can act independently
+ * of its own clock-format assumptions.
+ */
+function yymmddHhmmToEpochSeconds(yymmdd: number, hhmm: number | string): number {
+  const dateStr = String(yymmdd).padStart(6, "0");
+  const yy = parseInt(dateStr.slice(0, 2), 10);
+  const mo = parseInt(dateStr.slice(2, 4), 10) - 1;
+  const dd = parseInt(dateStr.slice(4, 6), 10);
+
+  const timeStr = String(hhmm).padStart(4, "0");
+  const hh = parseInt(timeStr.slice(0, 2), 10);
+  const mi = parseInt(timeStr.slice(2, 4), 10);
+
+  // Date.UTC builds the instant as if Y/M/D h:m were UTC. We want IST (UTC+5:30),
+  // so subtract the IST offset to land on the correct UTC instant.
+  const utcMs = Date.UTC(2000 + yy, mo, dd, hh, mi, 0) - IST_OFFSET_MS;
+  return Math.floor(utcMs / 1000);
+}
+
 /** Format a single schedule record into compact m1 item based on schedule type */
 function toCompactSchedule(record: any): Record<string, any> | null {
   // Skip schedules without valid start date
   if (!record.schedule_start_date) return null;
 
   const isCyclic = record.schedule_type === "CYCLIC";
+  const sd = record.schedule_start_date;
+  const ed = record.schedule_end_date ?? record.schedule_start_date;
+  const stRaw = parseInt(record.start_time, 10);
+  const etRaw = parseInt(record.end_time, 10);
 
-  // TIME_BASED format: {id, sd, ed, st, et, en, pwr_rec}
+  // TIME_BASED format: {id, sd, ed, st, et, st_ep, ed_ep, en, pwr_rec}
   const item: Record<string, any> = {
     id: record.schedule_id,
-    sd: record.schedule_start_date,
-    ed: record.schedule_end_date ?? record.schedule_start_date,
-    st: parseInt(record.start_time, 10),
-    et: parseInt(record.end_time, 10),
+    sd,
+    ed,
+    st: stRaw,
+    et: etRaw,
+    st_ep: yymmddHhmmToEpochSeconds(sd, stRaw),
+    ed_ep: yymmddHhmmToEpochSeconds(ed, etRaw),
     en: record.enabled ? 1 : 0,
     pwr_rec: record.power_loss_recovery ? 1 : 0,
   };
+
+  // Send active-day bitmask to firmware when repeat schedule has specific days
+  if (record.repeat === 1 && record.bit_wise_days != null && record.bit_wise_days > 0) {
+    item.dow = record.bit_wise_days;
+  } else if (record.repeat === 1 && Array.isArray(record.days_of_week) && record.days_of_week.length > 0) {
+    // Derive from days_of_week if bit_wise_days missing
+    item.dow = record.days_of_week.reduce((m: number, d: number) => m | (1 << d), 0);
+  }
 
   // CYCLIC format adds: {cy, on, off}
   if (isCyclic) {
@@ -450,7 +544,7 @@ function toCompactSchedule(record: any): Record<string, any> | null {
  * Each chunk is a single payload object:
  * { T: "SCHEDULE CREATION", S: seq, D: { idx, last, sch_cnt, plr, m1: [...] } }
  */
-export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; chunks: { payload: any; dbIds: number[] }[] }[] {
+export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] {
   // Group schedules by starter_id
   const grouped = new Map<number, any[]>();
   for (const record of records) {
@@ -460,7 +554,7 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
     grouped.set(record.starter_id, list);
   }
 
-  const result: { starter_id: number; chunks: { payload: any; dbIds: number[] }[] }[] = [];
+  const result: { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] = [];
 
   for (const [starterId, schedules] of grouped) {
     // Limit to first MAX_SCHEDULES_PER_DEVICE schedules per device, skip invalid
@@ -479,10 +573,12 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
     const plr = validRecords[0]?.power_loss_recovery_time ?? 30;
 
     // Split into chunks of MAX_ITEMS_PER_CHUNK
-    const chunks: { payload: any; dbIds: number[] }[] = [];
+    const chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] = [];
     for (let i = 0; i < compactItems.length; i += MAX_ITEMS_PER_CHUNK) {
       const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK);
-      const dbIds = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK).map((r: any) => r.id);
+      const recordSlice = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK);
+      const dbIds = recordSlice.map((r: any) => r.id);
+      const scheduleIds = recordSlice.map((r: any) => r.schedule_id);
       const chunkIdx = chunks.length + 1;
       const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
 
@@ -499,6 +595,7 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
           },
         },
         dbIds,
+        scheduleIds,
       });
     }
 

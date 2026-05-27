@@ -9,6 +9,7 @@ userRoutes.get("/basic", isAuthorized, userHandlers.usersBasicListHandler);
 userRoutes.get("/profile", isAuthorized, userHandlers.userProfileHandler);
 userRoutes.get("/:id/details", isAuthorized, userHandlers.userDetailsWithLocationsHandler);
 userRoutes.patch("/:id", isAuthorized, userHandlers.updateUserDetailsHandler);
+userRoutes.delete("/:id", isAuthorized, userHandlers.deleteUserHandler);
 userRoutes.get("/", isAuthorized, userHandlers.listUsersHandler);
 userRoutes.post("/:id/log-out", userHandlers.userLogOutHandler);
 

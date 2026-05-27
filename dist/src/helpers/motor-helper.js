@@ -170,7 +170,7 @@ export function extractPreviousData(previousData, motorId) {
 export function prepareMotorSyncChangeData(params) {
     const { currentState, currentMode, incomingState, incomingMode, timeStamp } = params;
     const normalizedState = incomingState === 0 || incomingState === 1 ? incomingState : null;
-    const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" ? incomingMode : null;
+    const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" || incomingMode === "SCHEDULE" ? incomingMode : null;
     const hasStateChanged = normalizedState !== null && normalizedState !== currentState;
     const hasModeChanged = normalizedMode !== null && normalizedMode !== currentMode;
     const updateData = {};
@@ -201,6 +201,13 @@ export function timeToMinutes(time) {
     const h = parseInt(time.substring(0, 2), 10);
     const m = parseInt(time.substring(2, 4), 10);
     return h * 60 + m;
+}
+// Wall-clock minutes between two HHMM timestamps. Handles midnight crossover.
+// "1015" → "1020" returns 5.
+export function wallClockMinutes(startHHMM, endHHMM) {
+    const s = timeToMinutes(startHHMM);
+    const e = timeToMinutes(endHHMM);
+    return e >= s ? e - s : (1440 - s) + e;
 }
 /**
  * Check if two time ranges overlap, accounting for midnight crossing.
@@ -302,6 +309,7 @@ export function checkMotorScheduleConflict(newSchedule, existingSchedules) {
             continue;
         const conflictInfo = {
             conflicting_schedule_id: existing.id,
+            conflicting_schedule_slot: existing.schedule_id,
             existing_start_time: existing.start_time,
             existing_end_time: existing.end_time,
             existing_date: existing.schedule_start_date || null,
@@ -405,7 +413,7 @@ export function prepareMotorStateControlNotificationData(motor, newState, mode_d
 }
 export function prepareMotorModeControlNotificationData(motor, mode_description, starter_id, starter_number) {
     const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
-    const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO";
+    const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO" || mode_description === "SCHEDULE";
     const title = isValidMode
         ? `Pump ${pumpName} mode changed to ${mode_description}`
         : `Pump ${pumpName} mode not updated`;

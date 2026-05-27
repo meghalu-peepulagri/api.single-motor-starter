@@ -12,6 +12,7 @@ import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.j
 import { vAddStarterDispatch } from "./schema/starter-dispatch-validations.js";
 import { vAddGateway, vAssignGatewayToUser, vRemoveGatewayUser, vRenameGateway, vUpdateGatewayDetails, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
+import { ConsoleLogWriter } from "drizzle-orm";
 const schemaMap = {
     "signup": vSignUp,
     "signin-email": vSignInEmail,

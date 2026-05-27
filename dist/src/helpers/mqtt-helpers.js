@@ -6,8 +6,6 @@ import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-he
 import { extractMultiMotorBlocks, isMultiMotorPayload, resolveMotorsFromPayload } from "./multi-motor-live-data-helper.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 export async function liveDataHandler(parsedMessage, topic) {
-    console.log('topic: ', topic);
-    console.log('parsedMessage: ', parsedMessage);
     try {
         if (!parsedMessage)
             return;
@@ -18,7 +16,6 @@ export async function liveDataHandler(parsedMessage, topic) {
         }
         // Always validate device MAC in DB
         const device = await getStarterByMacWithMotor(deviceId);
-        console.log('device: ', device);
         if (!device) {
             logger.error("Starter not found for MAC", undefined, { deviceId, topic });
             return null;

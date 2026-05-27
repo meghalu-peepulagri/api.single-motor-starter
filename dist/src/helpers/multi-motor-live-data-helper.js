@@ -1,6 +1,8 @@
 import { logger } from "../utils/logger.js";
-// Fields that live at the GROUP level and are shared across all motors in the payload
-const GROUP_LEVEL_FIELDS = ["p_v", "pwr", "llv", "temp"];
+// Fields that live at the GROUP level and are shared across all motors in the payload.
+// r_s (relay status) is a device-level field in G01 — include it so the validator
+// does not log a "Missing key: r_s" error when processing multi-motor blocks.
+const GROUP_LEVEL_FIELDS = ["p_v", "pwr", "llv", "temp", "r_s"];
 // Valid motor reference keys inside a multi-motor group
 const MOTOR_REF_KEYS = ["m1", "m2"];
 /**

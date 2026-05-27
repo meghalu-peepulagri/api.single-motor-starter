@@ -27,7 +27,6 @@ import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
-
 import { starterDispatch, type StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../database/schemas/starter-parameters.js";
 import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
@@ -70,8 +69,8 @@ export class StarterHandlers {
   getConsecutiveAlertsFaultsHandler = async (c: Context) => {
     try {
       const query = c.req.query();
-      const starterId = +c.req.param("starter_id");
-      const motorId = +c.req.param("motor_id");
+      const starterId = +c.req.param("starter_id")!;
+      const motorId = +c.req.param("motor_id")!;
       const type = query.type as string || "alert";
 
       // Validate IDs
@@ -109,8 +108,8 @@ export class StarterHandlers {
   getUnifiedLogsHandler = async (c: Context) => {
     try {
       const query = c.req.query();
-      const starterId = +c.req.param("starter_id");
-      const motorId = +c.req.param("motor_id");
+      const starterId = +c.req.param("starter_id")!;
+      const motorId = +c.req.param("motor_id")!;
 
       paramsValidateException.validateId(starterId, "Starter id");
       paramsValidateException.validateId(motorId, "Motor id");
@@ -226,7 +225,7 @@ export class StarterHandlers {
   deleteStarterBoxHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       const isUser = userPayload.user_type === "USER";
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
@@ -340,7 +339,7 @@ export class StarterHandlers {
   starterRunTimeHandler = async (c: Context) => {
     try {
       const query = c.req.query();
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       const motorId = +query.motor_id;
       paramsValidateException.validateId(starterId, "Device id");
 
@@ -407,7 +406,7 @@ export class StarterHandlers {
     try {
       const userPayload = c.get("user_payload");
       const reqData = await c.req.json();
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       paramsValidateException.validateId(starterId, "Device id");
       paramsValidateException.emptyBodyValidation(reqData);
 
@@ -454,7 +453,7 @@ export class StarterHandlers {
 
   starterConnectedMotorsHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       paramsValidateException.validateId(starterId, "Device id");
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
@@ -767,7 +766,7 @@ export class StarterHandlers {
 
   updateStarterDetailsHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       const reqData = await c.req.json();
       paramsValidateException.validateId(starterId, "Device id");
       paramsValidateException.emptyBodyValidation(reqData);
@@ -852,7 +851,7 @@ export class StarterHandlers {
   getTemperatureHandler = async (c: Context) => {
     try {
       const query = c.req.query();
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       const motor_id = +query.motor_id;
       paramsValidateException.validateId(starterId, "Device id");
       if (motor_id) paramsValidateException.validateId(motor_id, "Motor id");
@@ -887,7 +886,7 @@ export class StarterHandlers {
   updateDeviceAllocationHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       const { allocation_status: allocationStatus } = await c.req.json();
       paramsValidateException.validateId(starterId, "Device id");
 
@@ -917,7 +916,7 @@ export class StarterHandlers {
 
   updateSettingsSyncStatusHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       const body = await c.req.json();
       const syncStatus = body.synced_settings_status;
       paramsValidateException.validateId(starterId, "Device id");
@@ -979,7 +978,7 @@ export class StarterHandlers {
 
   deviceResetHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       paramsValidateException.validateId(starterId, "Device id");
       const body = await c.req.json();
       const deviceResetStatus = body.device_reset_status;
@@ -1000,7 +999,7 @@ export class StarterHandlers {
 
   updateInstalledLocationHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       paramsValidateException.validateId(starterId, "Device id");
 
       const reqData = await c.req.json();
@@ -1020,7 +1019,7 @@ export class StarterHandlers {
 
   getInstallationPhotoUploadUrlHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("id");
+      const starterId = +c.req.param("id")!;
       paramsValidateException.validateId(starterId, "Device id");
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
@@ -1093,8 +1092,8 @@ export class StarterHandlers {
 
   faultClearedHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
-      const motorId = +c.req.param("motor_id");
+      const starterId = +c.req.param("starter_id")!;
+      const motorId = +c.req.param("motor_id")!;
       paramsValidateException.validateId(starterId, "Device id");
       paramsValidateException.validateId(motorId, "Motor id");
 

@@ -17,7 +17,6 @@ import { writeDeviceStatusHistoryIfChanged } from "./status-history-services.js"
 
 // Extract transaction type from Drizzle's db.transaction callback
 type DbTransaction = Parameters<Parameters<typeof db["transaction"]>[0]>[0];
-
 export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?: string | null; hp?: number | null }>, trx?: DbTransaction): Promise<void> {
   if (!motorsToUpdate || motorsToUpdate.length === 0) return;
 
@@ -614,6 +613,7 @@ export async function getMotorsTotalRunOnTime(motorIds: number[]) {
   // Default to today's date range in IST
   const IST = "Asia/Kolkata";
   const { toZonedTime, fromZonedTime } = await import("date-fns-tz");
+  // @ts-ignore — date-fns v4 missing index.d.ts for NodeNext ESM resolution
   const { startOfDay, endOfDay } = await import("date-fns");
   const nowIST = toZonedTime(new Date(), IST);
   const fromDateObj = fromZonedTime(startOfDay(nowIST), IST);

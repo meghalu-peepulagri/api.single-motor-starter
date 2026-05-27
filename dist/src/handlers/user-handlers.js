@@ -1,20 +1,21 @@
-import { LOGGED_OUT, MOBILE_NUMBER_ALREADY_EXIST, USER_DETAILS_FETCHED, USER_DETAILS_WITH_LOCATIONS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
+import { LOGGED_OUT, MOBILE_NUMBER_ALREADY_EXIST, USER_DELETED, USER_DETAILS_FETCHED, USER_DETAILS_WITH_LOCATIONS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
+import { deviceTokens } from "../database/schemas/device-tokens.js";
 import { users } from "../database/schemas/users.js";
 import ConflictException from "../exceptions/conflict-exception.js";
+import ForbiddenException from "../exceptions/forbidden-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { checkInternalPhoneUniqueness, userFilters } from "../helpers/user-helper.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { deleteRecordById, getRecordsConditionally, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
-import { checkPhoneUniqueness, getUserDetailsWithLocations, paginatedUsersList } from "../services/db/user-services.js";
+import { checkPhoneUniqueness, deleteUserWithCascade, getUserDetailsWithLocations, paginatedUsersList } from "../services/db/user-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
+import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
-import { deviceTokens } from "../database/schemas/device-tokens.js";
-import { logger } from "../utils/logger.js";
 const paramsValidateException = new ParamsValidateException();
 export class UserHandlers {
     listUsersHandler = async (c) => {
@@ -145,6 +146,39 @@ export class UserHandlers {
             logger.error("Error at logout", err);
             console.error("Error at logout", err.message);
             throw err;
+        }
+    };
+    deleteUserHandler = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const userId = +(c.req.param("id") ?? "");
+            paramsValidateException.validateId(userId, "user id");
+            const targetUser = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [userId, "ARCHIVED"], ["id", "user_type", "full_name", "phone", "email"]);
+            if (!targetUser)
+                throw new NotFoundException(USER_NOT_FOUND);
+            const isSelf = userPayload.id === userId;
+            if (!isSelf) {
+                if (userPayload.user_type === "USER") {
+                    throw new ForbiddenException("Unauthorized");
+                }
+                if (targetUser.user_type === "SUPER_ADMIN") {
+                    throw new ForbiddenException("Cannot delete a SUPER_ADMIN account");
+                }
+                if (userPayload.user_type === "ADMIN" && targetUser.user_type === "ADMIN") {
+                    throw new ForbiddenException("ADMIN cannot delete another ADMIN account");
+                }
+            }
+            await deleteUserWithCascade(userId, userPayload.id, isSelf, {
+                full_name: targetUser.full_name ?? null,
+                phone: targetUser.phone,
+                email: targetUser.email ?? null,
+                user_type: targetUser.user_type ?? null,
+            });
+            return sendResponse(c, 200, USER_DELETED);
+        }
+        catch (error) {
+            console.error("Error at delete user :", error);
+            throw error;
         }
     };
 }

@@ -216,7 +216,7 @@ export function prepareMotorSyncChangeData(params: {
   const { currentState, currentMode, incomingState, incomingMode, timeStamp } = params;
 
   const normalizedState = incomingState === 0 || incomingState === 1 ? incomingState : null;
-  const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" ? incomingMode : null;
+  const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" || incomingMode === "SCHEDULE" ? incomingMode : null;
 
   const hasStateChanged = normalizedState !== null && normalizedState !== currentState;
   const hasModeChanged = normalizedMode !== null && normalizedMode !== currentMode;
@@ -251,6 +251,14 @@ export function timeToMinutes(time: string): number {
   const h = parseInt(time.substring(0, 2), 10);
   const m = parseInt(time.substring(2, 4), 10);
   return h * 60 + m;
+}
+
+// Wall-clock minutes between two HHMM timestamps. Handles midnight crossover.
+// "1015" → "1020" returns 5.
+export function wallClockMinutes(startHHMM: string, endHHMM: string): number {
+  const s = timeToMinutes(startHHMM);
+  const e = timeToMinutes(endHHMM);
+  return e >= s ? e - s : (1440 - s) + e;
 }
 
 /**
@@ -384,6 +392,7 @@ export function checkMotorScheduleConflict(
   },
   existingSchedules: Array<{
     id: number;
+    schedule_id?: number;
     start_time: string;
     end_time: string;
     schedule_start_date?: number | null;
@@ -399,6 +408,7 @@ export function checkMotorScheduleConflict(
 
     const conflictInfo = {
       conflicting_schedule_id: existing.id,
+      conflicting_schedule_slot: existing.schedule_id,
       existing_start_time: existing.start_time,
       existing_end_time: existing.end_time,
       existing_date: existing.schedule_start_date || null,
@@ -543,7 +553,7 @@ export function prepareMotorStateControlNotificationData(motor: Motor, newState:
 
 export function prepareMotorModeControlNotificationData(motor: any, mode_description: string, starter_id: number, starter_number: string): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string } | null {
   const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
-  const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO";
+  const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO" || mode_description === "SCHEDULE";
 
   const title = isValidMode
     ? `Pump ${pumpName} mode changed to ${mode_description}`

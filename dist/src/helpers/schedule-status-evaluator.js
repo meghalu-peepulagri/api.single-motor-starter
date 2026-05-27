@@ -1,6 +1,6 @@
 import { timeToMinutes } from "./motor-helper.js";
 // =================== IST TIMEZONE HELPERS ===================
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // +5:30 in milliseconds
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 function toIST(date) {
     const istTime = new Date(date.getTime() + IST_OFFSET_MS);
     const yy = istTime.getUTCFullYear() - 2000;
@@ -8,30 +8,56 @@ function toIST(date) {
     const dd = istTime.getUTCDate();
     return {
         totalMinutes: istTime.getUTCHours() * 60 + istTime.getUTCMinutes(),
-        dayOfWeek: istTime.getUTCDay(), // 0=Sunday
-        dateNum: yy * 10000 + mm * 100 + dd, // Numeric YYMMDD
+        dayOfWeek: istTime.getUTCDay(),
+        dateNum: yy * 10000 + mm * 100 + dd,
     };
 }
-// =================== INTERNAL HELPERS ===================
+// =================== HELPERS ===================
 function isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek) {
     if (schedule.repeat === 1) {
         if (schedule.days_of_week.length === 0)
             return true;
-        return schedule.days_of_week.map(Number).includes(currentDayOfWeek);
+        // Is today an intended day?
+        if (!schedule.days_of_week.map(Number).includes(currentDayOfWeek))
+            return false;
+        // Is today's day currently active (not stopped via bit_wise_days)?
+        if (schedule.bit_wise_days != null) {
+            return !!((schedule.bit_wise_days >> currentDayOfWeek) & 1);
+        }
+        return true;
     }
     return schedule.schedule_start_date === currentDateNum;
 }
 function hasPassedEndTime(currentMinutes, startMinutes, endMinutes) {
-    if (startMinutes < endMinutes) {
+    if (startMinutes < endMinutes)
         return currentMinutes >= endMinutes;
-    }
     return currentMinutes >= endMinutes && currentMinutes < startMinutes;
 }
-function isWithinTimeWindow(currentMinutes, startMinutes, endMinutes) {
-    if (startMinutes < endMinutes) {
-        return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+/** True when current time is BEFORE the window opens (window hasn't started yet today). */
+function isBeforeWindow(currentMinutes, startMinutes, endMinutes) {
+    if (startMinutes < endMinutes)
+        return currentMinutes < startMinutes;
+    // Wrap-around windows (e.g., 23:00 → 02:00): can't infer BEFORE/AFTER from time alone.
+    return false;
+}
+function plannedDurationMinutes(schedule, startMinutes, endMinutes) {
+    if (schedule.runtime_minutes != null)
+        return schedule.runtime_minutes;
+    return endMinutes > startMinutes
+        ? endMinutes - startMinutes
+        : (1440 - startMinutes) + endMinutes;
+}
+// =================== TERMINAL STATUS RESOLVER ===================
+function resolveTerminalStatus(schedule, startMinutes, endMinutes, now) {
+    const planned = plannedDurationMinutes(schedule, startMinutes, endMinutes);
+    const actual = schedule.actual_run_time ?? 0;
+    if (!schedule.actual_start_time) {
+        return { id: schedule.id, newStatus: "MISSED", last_stopped_at: now };
     }
-    return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+    if (actual >= planned) {
+        return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+    }
+    return { id: schedule.id, newStatus: "PARTIAL", last_stopped_at: now };
 }
 // =================== MAIN EVALUATOR ===================
 export function evaluateScheduleStatus(schedule, now) {
@@ -39,62 +65,93 @@ export function evaluateScheduleStatus(schedule, now) {
     const currentMinutes = ist.totalMinutes;
     const currentDateNum = ist.dateNum;
     const currentDayOfWeek = ist.dayOfWeek;
-    const effectiveStartTime = schedule.actual_start_time || schedule.start_time;
-    const effectiveEndTime = schedule.actual_end_time || schedule.end_time;
-    const effectiveRuntime = schedule.actual_run_time || schedule.runtime_minutes;
-    const startMinutes = timeToMinutes(effectiveStartTime);
-    const endMinutes = timeToMinutes(effectiveEndTime);
-    const isTodayValid = isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek);
-    // ── SCHEDULED → RUNNING / WAITING_NEXT_CYCLE / COMPLETED (missed window) ──
-    if (schedule.schedule_status === "SCHEDULED") {
-        if (!isTodayValid)
-            return null;
-        if (isWithinTimeWindow(currentMinutes, startMinutes, endMinutes)) {
+    const startMinutes = timeToMinutes(schedule.start_time);
+    const endMinutes = timeToMinutes(schedule.end_time);
+    const windowPassed = hasPassedEndTime(currentMinutes, startMinutes, endMinutes);
+    const windowBefore = isBeforeWindow(currentMinutes, startMinutes, endMinutes);
+    const windowOpen = !windowPassed && !windowBefore;
+    const isTodayActiveDate = isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek);
+    const hasMoreRepeatRange = schedule.repeat === 1
+        && !!schedule.schedule_end_date
+        && currentDateNum <= schedule.schedule_end_date;
+    // ── PENDING / SCHEDULED ──
+    if (schedule.schedule_status === "PENDING" || schedule.schedule_status === "SCHEDULED") {
+        // Devices may pre-fill actual_start_time / actual_end_time with the planned
+        // times before the motor really starts. So a non-null actual_start_time is
+        // NOT sufficient evidence the motor is running — the wall clock must also
+        // be inside today's window.
+        if (schedule.actual_start_time && isTodayActiveDate && windowOpen) {
             return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
         }
-        if (hasPassedEndTime(currentMinutes, startMinutes, endMinutes)) {
-            if (schedule.repeat === 1) {
-                if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-                    return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
-                }
+        if (schedule.actual_start_time && isTodayActiveDate && windowPassed) {
+            if (hasMoreRepeatRange) {
                 return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
             }
-            return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+            return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+        }
+        // actual_start_time set but we're BEFORE today's window (or it's not today's
+        // date) → stay PENDING/SCHEDULED; do nothing yet.
+        if (schedule.actual_start_time) {
+            return null;
+        }
+        // No actual_start_time
+        if (!isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek))
+            return null;
+        if (windowPassed) {
+            // Device never ACKed and the window has passed → FAILED
+            if (schedule.acknowledgement === 0)
+                return { id: schedule.id, newStatus: "FAILED" };
+            if (hasMoreRepeatRange) {
+                return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
+            }
+            return resolveTerminalStatus(schedule, startMinutes, endMinutes, now); // → MISSED
         }
         return null;
     }
-    // ── RUNNING → COMPLETED / WAITING_NEXT_CYCLE ──
+    // ── RUNNING ──
     if (schedule.schedule_status === "RUNNING") {
-        let shouldComplete = false;
-        if (hasPassedEndTime(currentMinutes, startMinutes, endMinutes)) {
-            shouldComplete = true;
+        // Demote rows that were prematurely flipped to RUNNING before the window opened.
+        if (windowBefore) {
+            return { id: schedule.id, newStatus: "SCHEDULED" };
         }
-        if (!shouldComplete && effectiveRuntime && schedule.last_started_at) {
-            const elapsedMs = now.getTime() - new Date(schedule.last_started_at).getTime();
-            const elapsedMinutes = elapsedMs / 60000;
-            if (elapsedMinutes >= effectiveRuntime) {
-                shouldComplete = true;
-            }
-        }
-        if (shouldComplete) {
-            if (schedule.repeat === 1) {
-                if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-                    return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
-                }
+        if (schedule.actual_start_time) {
+            // Window still open → stay RUNNING. Never resolve terminal mid-window,
+            // even if the device has reported an actual_end_time.
+            if (windowOpen)
+                return null;
+            if (hasMoreRepeatRange) {
                 return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
             }
-            return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+            return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+        }
+        // RUNNING in DB but no actual_start_time? Inconsistent — handle by window.
+        if (windowPassed) {
+            return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
         }
         return null;
     }
-    // ── WAITING_NEXT_CYCLE → RUNNING / COMPLETED ──
+    // ── PARTIAL ──
+    if (schedule.schedule_status === "PARTIAL") {
+        // Self-heal rows that were prematurely flipped to PARTIAL while the window
+        // is still open. As soon as the list endpoint is hit, they bounce back to RUNNING.
+        if (schedule.actual_start_time && windowOpen) {
+            return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
+        }
+        // Window closed — if actual_run_time catches up to planned, promote to COMPLETED.
+        if (schedule.actual_run_time != null) {
+            const planned = plannedDurationMinutes(schedule, startMinutes, endMinutes);
+            if (schedule.actual_run_time >= planned) {
+                return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+            }
+        }
+        return null;
+    }
+    // ── WAITING_NEXT_CYCLE ──
     if (schedule.schedule_status === "WAITING_NEXT_CYCLE") {
         if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
-            return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+            return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
         }
-        if (!isTodayValid)
-            return null;
-        if (isWithinTimeWindow(currentMinutes, startMinutes, endMinutes)) {
+        if (schedule.actual_start_time && windowOpen) {
             return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
         }
         return null;

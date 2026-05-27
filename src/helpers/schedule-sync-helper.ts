@@ -1,0 +1,136 @@
+import { inArray } from "drizzle-orm";
+import db from "../database/configuration.js";
+import { motorSchedules } from "../database/schemas/motor-schedules.js";
+import type { StarterBox } from "../database/schemas/starter-boxes.js";
+
+type StarterForPublish = Pick<StarterBox, "id" | "mac_address" | "pcb_number" | "device_allocation">;
+import { logger } from "../utils/logger.js";
+import { findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
+import { buildDeviceSyncPayloads } from "./motor-schedule-payload-helper.js";
+import { publishMultipleTimesInBackground } from "./settings-helpers.js";
+import { publishingMap, schedulePartialAckMap } from "./ack-tracker-hepler.js";
+
+/**
+ * Settings publishes (T:4) and our schedule publish (T:3) share the same
+ * publishingMap lock keyed by starter id. If T:4 is in flight when we fire,
+ * publishMultipleTimesInBackground would return false immediately. Poll the
+ * lock briefly so we can publish once it clears, instead of dropping the chunk.
+ */
+async function waitForPublishLock(starterId: number, maxWaitMs = 30000, intervalMs = 500): Promise<boolean> {
+  const start = Date.now();
+  while (publishingMap.get(starterId)) {
+    if (Date.now() - start > maxWaitMs) return false;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return true;
+}
+
+/**
+ * Push all unacknowledged motor schedules for ONE starter via MQTT.
+ * Returns counts for observability. Safe to call fire-and-forget — errors are caught
+ * and logged so MQTT message handlers never crash because of a sync failure.
+ *
+ * Called from the heartbeat handler when a device transitions to online.
+ */
+export async function pushPendingSchedulesForStarter(
+  starter: StarterForPublish,
+  motorId?: number,
+): Promise<{ chunks: number; acked: number }> {
+  // A publish is already in flight for this starter (from a previous heartbeat or settings sync).
+  // Skip rather than queue up a duplicate fetch with stale PENDING records — next heartbeat will retry.
+  if (publishingMap.get(starter.id)) {
+    logger.info(`[schedule-sync] publish already in progress for starter=${starter.id}, skipping`);
+    return { chunks: 0, acked: 0 };
+  }
+
+  let chunksSent = 0;
+  let acked = 0;
+
+  try {
+    const records = await findPendingSchedulesForStarter(starter.id, motorId);
+    if (!records || records.length === 0) return { chunks: 0, acked: 0 };
+
+    // Derive the publish key (MAC or PCB) the same way publishMultipleTimesInBackground does,
+    // so we can look up partial ACK results in schedulePartialAckMap after publish.
+    const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
+
+    const grouped = buildDeviceSyncPayloads(records);
+    for (const { chunks } of grouped) {
+      for (const { payload, dbIds, scheduleIds } of chunks) {
+        chunksSent++;
+
+        // Settings publish (T:4) may have grabbed publishingMap after our check above; wait it out.
+        const lockFree = await waitForPublishLock(starter.id);
+        if (!lockFree) {
+          logger.warn(`[schedule-sync] publish lock still held after wait for starter=${starter.id}; will retry next heartbeat`);
+          continue;
+        }
+
+        // Re-verify these records are still PENDING before publishing — a concurrent
+        // heartbeat may have already delivered and acknowledged them while we waited for the lock.
+        const stillPending = await db.query.motorSchedules.findMany({
+          where: (ms, { and, inArray: inArr, eq }) => and(inArr(ms.id, dbIds), eq(ms.acknowledgement, 0)),
+          columns: { id: true, schedule_id: true },
+        });
+
+        if (stillPending.length === 0) {
+          logger.info(`[schedule-sync] starter=${starter.id} chunk already acknowledged, skipping`);
+          continue;
+        }
+
+        const ok = await publishMultipleTimesInBackground(payload, starter as StarterBox);
+        if (ok) {
+          acked++;
+
+          // Check for partial ACK: device may have only confirmed a subset of schedule_ids.
+          // schedulePartialAckMap is populated by scheduleCreationAckResolver before resolving.
+          const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
+          if (publishKey) schedulePartialAckMap.delete(publishKey);
+
+          let idsToUpdate: number[];
+          if (partialIds && partialIds.length > 0) {
+            const confirmedSet = new Set(partialIds);
+            idsToUpdate = stillPending
+              .filter((r) => confirmedSet.has(r.schedule_id))
+              .map((r) => r.id);
+            const unmatched = scheduleIds.filter((sid) => !confirmedSet.has(sid));
+            if (unmatched.length > 0) {
+              logger.warn(`[schedule-sync] starter=${starter.id} partial ACK: confirmed=[${partialIds.join(",")}] unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
+            }
+          } else {
+            idsToUpdate = stillPending.map((r) => r.id);
+          }
+
+          if (idsToUpdate.length > 0) {
+            await db
+              .update(motorSchedules)
+              .set({
+                schedule_status: "SCHEDULED",
+                acknowledgement: 1,
+                acknowledged_at: new Date(),
+                updated_at: new Date(),
+              })
+              .where(inArray(motorSchedules.id, idsToUpdate));
+            logger.info(`[schedule-sync] starter=${starter.id} updated ${idsToUpdate.length}/${stillPending.length} schedule(s) to SCHEDULED`);
+          }
+        } else {
+          logger.warn(`[schedule-sync] starter=${starter.id} publish failed or no ACK, will retry next heartbeat`);
+          // Clean up any stale partial ACK entry that arrived despite the publish failure.
+          if (publishKey) schedulePartialAckMap.delete(publishKey);
+        }
+      }
+    }
+
+    if (chunksSent > 0) {
+      logger.info(
+        `[schedule-sync] starter=${starter.id} chunks=${chunksSent} acked=${acked}`,
+      );
+    }
+  } catch (err) {
+    logger.error(
+      `[schedule-sync] failed for starter=${starter.id}: ${(err as Error)?.message}`,
+    );
+  }
+
+  return { chunks: chunksSent, acked };
+}

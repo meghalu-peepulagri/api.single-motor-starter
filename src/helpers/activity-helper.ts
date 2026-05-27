@@ -10,7 +10,7 @@ function meaningfulLastOffOnStateMessage(
   lastOnDesc?: string,
   lastOffDesc?: string
 ): string {
-  const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode} mode` : "";
+  const modeLabel = (mode === "AUTO" || mode === "MANUAL" || mode === "SCHEDULE") ? ` in ${mode} mode` : "";
 
   if (state === 1) {
     return `Pump turned ON${modeLabel}`;
@@ -24,7 +24,7 @@ function meaningfulLastOffOnStateMessage(
 }
 
 export function meaningfulModeMessage(oldMode: string | undefined | null, newMode: string | null): string {
-  if (newMode === "MANUAL" || newMode === "AUTO") {
+  if (newMode === "MANUAL" || newMode === "AUTO" || newMode === "SCHEDULE") {
     return `Pump switched from ${oldMode} to ${newMode} mode.`;
   }
   return `Mode not updated due to '${newMode}'`;
@@ -436,6 +436,43 @@ export function prepareUserUpdateLogs(data: {
 
   return logs;
 }
+/**
+ * Helper to prepare user deletion log (self-delete or admin-delete)
+ */
+export function prepareUserDeletedLog(data: {
+  userId: number;
+  performedBy: number;
+  isSelfDelete: boolean;
+  userSnapshot: {
+    full_name: string | null;
+    phone: string;
+    email: string | null;
+    user_type: string | null;
+  };
+}): NewUserActivityLog {
+  const name = data.userSnapshot.full_name ?? "Unknown";
+  const message = data.isSelfDelete
+    ? `'${name}' deleted their own account`
+    : `'${name}' account deleted by admin`;
+
+  return ActivityService.prepareActivityLog({
+    userId: data.userId,
+    performedBy: data.performedBy,
+    action: "USER_DELETED",
+    entityType: "USER",
+    entityId: data.userId,
+    oldData: {
+      full_name: data.userSnapshot.full_name,
+      phone: data.userSnapshot.phone,
+      email: data.userSnapshot.email,
+      user_type: data.userSnapshot.user_type,
+      status: "ACTIVE",
+    },
+    newData: { status: "ARCHIVED" },
+    message,
+  });
+}
+
 /**
  * Helper to prepare granular activity logs for starter settings updates
  */

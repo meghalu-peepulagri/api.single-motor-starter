@@ -1,11 +1,12 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
+import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../../database/schemas/device-temperature.js";
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
-import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
+import { pendingAckMap, schedulePartialAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { controlMode } from "../../helpers/control-helpers.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
@@ -20,26 +21,83 @@ import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { updateActualScheduleFields } from "./motor-schedules-services.js";
+import { upsertScheduleLiveData } from "./motor-schedule-live-data-services.js";
+import { insertScheduleLog } from "./motor-schedule-logs-services.js";
+import { uploadLiveDataPacket } from "../s3/s3-service.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { applyDeviceAllocation, getMasterIdentifierById, getStarterByMacWithMotor } from "./starter-services.js";
 import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
+import { pushPendingSchedulesForStarter } from "../../helpers/schedule-sync-helper.js";
+// Postgres deadlock code. Concurrent MQTT messages for the same device can
+// race on (starter_boxes, motors) row locks; the loser is killed with 40P01.
+// The transaction was never committed, so a simple retry is safe.
+const PG_DEADLOCK_CODE = "40P01";
+const PG_SERIALIZATION_CODE = "40001";
+
+async function withDeadlockRetry<T>(label: string, fn: () => Promise<T>, maxAttempts = 5): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const code = err?.cause?.code ?? err?.code;
+      const isRetryable = code === PG_DEADLOCK_CODE || code === PG_SERIALIZATION_CODE;
+      attempt++;
+      if (!isRetryable || attempt >= maxAttempts) throw err;
+      // Exponential backoff with jitter: 50ms → 100ms → 200ms → 400ms, +0-100ms jitter.
+      const backoffMs = 50 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100);
+      logger?.warn?.(`[${label}] ${code} on attempt ${attempt} — retrying in ${backoffMs}ms`);
+      await new Promise(r => setTimeout(r, backoffMs));
+    }
+  }
+}
+
+// Per-device serialization. Concurrent MQTT messages for the SAME starter_id
+// would otherwise race on the same (starter_boxes, motors) rows and deadlock
+// repeatedly even with retries. By chaining work per key, only one tx for a
+// given device runs at a time. Different devices remain fully parallel.
+const deviceLocks = new Map<number, Promise<unknown>>();
+
+function runSerializedPerDevice<T>(starterId: number | null | undefined, fn: () => Promise<T>): Promise<T> {
+  // Without a starter_id we can't shard; fall through unserialised.
+  if (!starterId) return fn();
+  const prev = deviceLocks.get(starterId) ?? Promise.resolve();
+  const next = prev.catch(() => undefined).then(fn);
+  deviceLocks.set(starterId, next);
+  // Clean up the map entry once this tail is the current one and it's done,
+  // so the Map doesn't grow forever for short-lived devices.
+  next.finally(() => {
+    if (deviceLocks.get(starterId) === next) deviceLocks.delete(starterId);
+  });
+  return next;
+}
+
 // Live data
 export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId: string, previousData: previousPreparedLiveData) {
+  const starterId = insertedData?.starter_id;
   switch (groupId) {
     case "G01": //  Live data topic
-      await updateStates(insertedData, previousData);
+      await runSerializedPerDevice(starterId, () =>
+        withDeadlockRetry("updateStates", () => updateStates(insertedData, previousData))
+      );
       break;
     case "G02":
       // Update Device power & motor state to ON
-      await updateDevicePowerAndMotorStateToON(insertedData, previousData);
+      await runSerializedPerDevice(starterId, () =>
+        withDeadlockRetry("updateDevicePowerAndMotorStateToON", () => updateDevicePowerAndMotorStateToON(insertedData, previousData))
+      );
       break;
     case "G03":
       // Update Device power On & motor state to Off
-      await updateDevicePowerONAndMotorStateOFF(insertedData, previousData);
+      await runSerializedPerDevice(starterId, () =>
+        withDeadlockRetry("updateDevicePowerONAndMotorStateOFF", () => updateDevicePowerONAndMotorStateOFF(insertedData, previousData))
+      );
       break;
     case "G04":
-      await updateDevicePowerAndMotorStateOFF(insertedData, previousData);
+      await runSerializedPerDevice(starterId, () =>
+        withDeadlockRetry("updateDevicePowerAndMotorStateOFF", () => updateDevicePowerAndMotorStateOFF(insertedData, previousData))
+      );
       break;
     default:
       return null;
@@ -47,9 +105,6 @@ export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId:
 }
 
 export async function selectTopicAck(topicType: string, payload: any, topic: string) {
-  console.log('topic: ', topic);
-  console.log('topicType: ', topicType);
-
   switch (topicType) {
     case "LIVE_DATA":
       await liveDataHandler(payload, topic);
@@ -91,7 +146,7 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
 }
 
 
-const VALID_MODES = ["AUTO", "MANUAL"] as const;
+const VALID_MODES = ["AUTO", "MANUAL", "SCHEDULE"] as const;
 type ValidMode = typeof VALID_MODES[number];
 
 async function getLockedMotorSnapshot(trx: any, motorId: number) {
@@ -126,9 +181,34 @@ async function getLatestAlertsFaultsSnapshot(trx: any, starterId: number, motorI
   return record ?? null;
 }
 
+async function handleScheduleLiveData(insertedData: preparedLiveData, motorId: number, starterId: number) {
+  const scheduleId = insertedData.active_schedule_id;
+  if (!scheduleId) return;
+
+  const packet = {
+    schedule_id: scheduleId,
+    motor_id: motorId,
+    starter_id: starterId,
+    device_start_time: insertedData.active_schedule_start_time ?? null,
+    device_end_time: insertedData.active_schedule_end_time ?? null,
+    device_run_time: insertedData.active_schedule_runtime_minutes ?? null,
+    device_missed_minutes: insertedData.active_schedule_missed_minutes ?? 0,
+    failure_reason: insertedData.active_schedule_failure_reason ?? null,
+    received_at: new Date().toISOString(),
+  };
+
+  await Promise.all([
+    upsertScheduleLiveData(packet).catch(() => null),
+    insertScheduleLog({
+      schedule_id: scheduleId,
+      event_type: "LIVE_DATA_RECEIVED",
+      actor_type: "device",
+      details: packet,
+    }).catch(() => null),
+  ]);
+}
+
 export async function updateStates(insertedData: preparedLiveData, previousData: previousPreparedLiveData) {
-  console.log('previousData: ', previousData);
-  console.log('insertedData: ', insertedData);
   const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code,
     alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
   const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
@@ -417,6 +497,11 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
       };
     });
 
+    if (motor_id && starter_id) {
+      handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+      uploadLiveDataPacket(starter_id, insertedData as any, insertedData.time_stamp).catch(() => null);
+    }
+
     if (notificationData.notificationDataState) {
       if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state ?? 0)) {
         await sendUserNotification(
@@ -639,6 +724,11 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
     return { notificationDataState, notificationDataMode };
   });
 
+  if (motor_id && starter_id) {
+    handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+    uploadLiveDataPacket(starter_id, insertedData as any, insertedData.time_stamp).catch(() => null);
+  }
+
   if (notificationData.notificationDataState) {
     if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
       await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
@@ -775,6 +865,11 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
     return { notificationDataState };
   });
 
+  if (motor_id && starter_id) {
+    handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+    uploadLiveDataPacket(starter_id, insertedData as any, insertedData.time_stamp).catch(() => null);
+  }
+
   if (notificationData.notificationDataState) {
     if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
       await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
@@ -903,6 +998,11 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 
     return { notificationDataMode };
   });
+
+  if (motor_id && starter_id) {
+    handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+    uploadLiveDataPacket(starter_id, insertedData as any, insertedData.time_stamp).catch(() => null);
+  }
 
   if (notificationData.notificationDataMode) {
     if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {
@@ -1046,22 +1146,6 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
       return null;
     }
 
-    if (masterId) {
-      const resolved = await resolveMasterChildFromTopic(topic);
-      if (!resolved) {
-        logger.error(`Master/child resolution failed for topic [${topic}]`, undefined, { masterId, deviceId, topic });
-        return null;
-      }
-      if (resolved.deviceId !== device.id) {
-        logger.error(`Master/child and device mapping mismatch for topic [${topic}]`, undefined, {
-          resolvedDeviceId: resolved.deviceId,
-          deviceId: device.id,
-          topic,
-        });
-        return null;
-      }
-    }
-
     if (typeof message.D === "object" && message.D !== null) {
       // multi-motor payload: { m1: { mode: 1 }, m2: { mode: 0 } }
       const motorRefs = Object.keys(message.D);
@@ -1074,22 +1158,21 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
           continue;
         }
 
-        const rawMode = message.D[ref]?.mode;
-        if (rawMode === undefined || rawMode === null) continue;
-
+        const rawMode = message.D[ref]?.mode ?? message.D[ref];
         const mode = controlMode(rawMode);
         const modeChanged = mode !== motor.mode;
 
         await db.transaction(async (trx) => {
-          if (modeChanged && (mode === "MANUAL" || mode === "AUTO")) {
-            await trx.update(motors).set({ mode: mode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
+          if (modeChanged) {
+            if (mode == "MANUAL" || mode == "AUTO" || mode == "SCHEDULE") {
+              await trx.update(motors).set({ mode: mode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
+            }
           }
           await ActivityService.writeMotorAckLogs(motor.created_by || device.created_by, motor.id, { mode: motor.mode }, { mode }, "MOTOR_MODE_ACK", trx, device.id);
         });
 
-        if (modeChanged) {
-          notifications.push({ data: prepareMotorModeControlNotificationData(motor, mode, device.id, device.starter_number), mode });
-        }
+        const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, device.id, device.starter_number) : null;
+        if (notificationData) notifications.push({ data: notificationData, mode });
       }
 
       for (const { data, mode } of notifications) {
@@ -1184,6 +1267,30 @@ export async function heartbeatHandler(message: any, topic: string) {
 
       if (message.D.s_q >= 2 && message.D.s_q <= 30 && device.synced_settings_status === "false") await publishDeviceSettings(device);
     });
+
+    // Heartbeat-driven schedule push: whenever the device is online (signal 1–30),
+    // check for unacknowledged schedules and push them. The push helper early-returns
+    // if there are no pending rows, so calling it on every heartbeat is cheap
+    // (one DB query) — but it means a freshly created schedule reaches the device
+    // on the very next heartbeat, regardless of prior connection state.
+    // Fire-and-forget so the heartbeat handler never blocks on MQTT ACK timeouts.
+    const isNowOnline = strength != null && strength >= 1 && strength <= 30;
+    if (isNowOnline) {
+      const motorList = Array.isArray((device as any).motors) ? (device as any).motors : [];
+      setImmediate(() => {
+        if (motorList.length === 0) {
+          pushPendingSchedulesForStarter(device).catch((err) =>
+            logger.error(`heartbeat schedule push failed for starter ${device.id}: ${err?.message}`),
+          );
+          return;
+        }
+        for (const motor of motorList) {
+          pushPendingSchedulesForStarter(device, motor.id).catch((err) =>
+            logger.error(`heartbeat schedule push failed for starter ${device.id} motor ${motor.id}: ${err?.message}`),
+          );
+        }
+      });
+    }
   } catch (error: any) {
     logger.error("Error at heartbeat topic handler", error);
     throw error;
@@ -1525,19 +1632,93 @@ function scheduleCreationAckResolver(message: any, topic: string) {
 
   const pendingAck = pendingAckMap.get(deviceId);
   if (!pendingAck) {
-    logger.warn(`No pending schedule ACK found for ${deviceId}`);
+    // ACK arrived after the in-memory timeout was cleaned up (server restart or slow device).
+    // Parse D and, on success, update the DB directly so the schedule doesn't stay stuck as PENDING.
+    let dValue: number;
+    if (typeof message.D === "number") {
+      dValue = message.D;
+    } else if (message.D !== null && typeof message.D === "object" && typeof message.D.ack === "number") {
+      dValue = message.D.ack;
+    } else {
+      dValue = -1;
+    }
+    const lateSuccess = dValue === 1 || dValue === 4;
+    logger.warn(`[schedule-ack] late ACK for ${deviceId} D=${dValue} success=${lateSuccess} — no pending map entry (timeout or restart)`);
+    if (lateSuccess) {
+      let acknowledgedSlots: number[] | null = null;
+      if (message.D !== null && typeof message.D === "object" && typeof message.D.ids === "number" && message.D.ids > 0) {
+        acknowledgedSlots = [];
+        for (let bit = 0; bit < 32; bit++) {
+          if (message.D.ids & (1 << bit)) acknowledgedSlots.push(bit + 1);
+        }
+        logger.info(`[schedule-ack] late ACK bitmask=${message.D.ids} → slots=[${acknowledgedSlots.join(",")}]`);
+      }
+
+      if (!acknowledgedSlots) {
+        logger.warn(`[schedule-ack] late ACK for ${deviceId}: no bitmask in D, leaving PENDING rows unchanged for next heartbeat sync`);
+        return;
+      }
+
+      const slots = acknowledgedSlots;
+      getStarterByMacWithMotor(deviceId)
+        .then(async (starter) => {
+          if (!starter?.id) return;
+          await db
+            .update(motorSchedules)
+            .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+            .where(and(
+              eq(motorSchedules.starter_id, starter.id),
+              eq(motorSchedules.acknowledgement, 0),
+              inArray(motorSchedules.schedule_status, ["PENDING"]),
+              inArray(motorSchedules.schedule_id, slots),
+            ));
+          logger.info(`[schedule-ack] late ACK: marked PENDING schedules as SCHEDULED for starter=${starter.id} slots=[${slots.join(",")}]`);
+        })
+        .catch((err) => logger.error(`[schedule-ack] late ACK DB update failed for ${deviceId}: ${err?.message}`));
+    }
     return;
   }
 
   if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
-    logger.warn(`Schedule ACK sequence mismatch for ${deviceId}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+    logger.warn(`Schedule ACK sequence mismatch for ${deviceId}: expected ${pendingAck.sequenceNumber}, received ${message.S} — ignoring stale ACK`);
+    pendingAck.resolve(false);
+    pendingAckMap.delete(deviceId);
     return;
   }
 
-  const dValue = typeof message.D === "number" ? message.D : -1;
+  // D may be a plain number or an object like { ids: <id>, ack: <value> }
+  let dValue: number;
+  if (typeof message.D === "number") {
+    dValue = message.D;
+  } else if (message.D !== null && typeof message.D === "object" && typeof message.D.ack === "number") {
+    dValue = message.D.ack;
+  } else {
+    dValue = -1;
+  }
 
   // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
   const ackSuccess = dValue === 1 || dValue === 4;
+
+  // Partial ACK: ids is a bitmask from the device.
+  // Bit N (0-indexed) set → schedule_id (N+1) was saved.
+  // e.g. ids=4 (binary 100) → bit 2 → schedule_id 3 confirmed.
+  if (ackSuccess && message.D !== null && typeof message.D === "object") {
+    const rawIds = message.D.ids;
+    if (typeof rawIds === "number" && rawIds > 0) {
+      const acknowledgedIds: number[] = [];
+      for (let bit = 0; bit < 32; bit++) {
+        if (rawIds & (1 << bit)) {
+          acknowledgedIds.push(bit + 1);
+        }
+      }
+      if (acknowledgedIds.length > 0) {
+        schedulePartialAckMap.set(deviceId, acknowledgedIds);
+        logger.info(`[schedule-ack] partial ACK for ${deviceId}: bitmask=${rawIds} (0b${rawIds.toString(2)}) → ids=[${acknowledgedIds.join(",")}]`);
+      }
+    }
+  }
+
+  logger.info(`[schedule-ack] ${deviceId} D=${dValue} success=${ackSuccess}`);
   pendingAck.resolve(ackSuccess);
   pendingAckMap.delete(deviceId);
   logger.info(`Schedule creation ACK resolved for ${deviceId}, D=${dValue}, success=${ackSuccess}`);

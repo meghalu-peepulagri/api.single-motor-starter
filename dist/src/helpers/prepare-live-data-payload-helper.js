@@ -62,7 +62,7 @@ export function prepareLiveDataPayload(validatedData, starterData, motor) {
         motor_reference: resolvedMotor.motor_reference ?? null,
         // Schedule
         active_schedule_id: sch?.id ?? null,
-        active_schedule_type: null,
+        active_schedule_type: sch ? (sch.cy === 1 ? "CYCLIC" : "TIME_BASED") : null,
         active_schedule_start_time: schStartTime,
         active_schedule_runtime_minutes: schRuntime,
         active_schedule_end_time: schEndTime,

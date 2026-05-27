@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "id": "047174d4-1c2c-4846-8148-9db5e979155a",
+=======
+  "id": "4e98dbcb-77a9-4f71-bcea-41f25cdb2d3a",
+>>>>>>> dev
   "prevId": "b3d9fc29-4661-4756-a6de-670505025efe",
   "version": "7",
   "dialect": "postgresql",
@@ -1235,7 +1239,11 @@
           "name": "name",
           "type": "varchar",
           "primaryKey": false,
+<<<<<<< HEAD
           "notNull": false
+=======
+          "notNull": true
+>>>>>>> dev
         },
         "gateway_number": {
           "name": "gateway_number",
@@ -1738,6 +1746,7 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+<<<<<<< HEAD
     "public.motor_schedule_live_data": {
       "name": "motor_schedule_live_data",
       "schema": "",
@@ -2091,6 +2100,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+=======
+>>>>>>> dev
     "public.motor_schedules": {
       "name": "motor_schedules",
       "schema": "",
@@ -2664,12 +2675,15 @@
           "notNull": true,
           "default": "'AUTO'"
         },
+<<<<<<< HEAD
         "user_id": {
           "name": "user_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
+=======
+>>>>>>> dev
         "created_by": {
           "name": "created_by",
           "type": "integer",
@@ -2757,6 +2771,7 @@
         }
       },
       "indexes": {
+<<<<<<< HEAD
         "motor_created_by_idx": {
           "name": "motor_created_by_idx",
           "columns": [
@@ -2772,11 +2787,17 @@
           "method": "btree",
           "with": {}
         },
+=======
+>>>>>>> dev
         "motor_user_id_idx": {
           "name": "motor_user_id_idx",
           "columns": [
             {
+<<<<<<< HEAD
               "expression": "user_id",
+=======
+              "expression": "created_by",
+>>>>>>> dev
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2847,6 +2868,7 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+<<<<<<< HEAD
         "motors_user_id_users_id_fk": {
           "name": "motors_user_id_users_id_fk",
           "tableFrom": "motors",
@@ -2860,6 +2882,8 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+=======
+>>>>>>> dev
         "motors_created_by_users_id_fk": {
           "name": "motors_created_by_users_id_fk",
           "tableFrom": "motors",
@@ -3201,6 +3225,7 @@
           "notNull": true,
           "default": "'SINGLE_MOTOR'"
         },
+<<<<<<< HEAD
         "role": {
           "name": "role",
           "type": "device_role",
@@ -3215,6 +3240,8 @@
           "primaryKey": false,
           "notNull": false
         },
+=======
+>>>>>>> dev
         "hardware_version": {
           "name": "hardware_version",
           "type": "varchar",
@@ -3473,6 +3500,7 @@
           "method": "btree",
           "with": {}
         },
+<<<<<<< HEAD
         "starter_box_role_idx": {
           "name": "starter_box_role_idx",
           "columns": [
@@ -3503,6 +3531,8 @@
           "method": "btree",
           "with": {}
         },
+=======
+>>>>>>> dev
         "valid_starter_box_name": {
           "name": "valid_starter_box_name",
           "columns": [
@@ -3636,6 +3666,7 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+<<<<<<< HEAD
         },
         "starter_boxes_parent_starter_id_starter_boxes_id_fk": {
           "name": "starter_boxes_parent_starter_id_starter_boxes_id_fk",
@@ -3649,6 +3680,8 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+=======
+>>>>>>> dev
         }
       },
       "compositePrimaryKeys": {},
@@ -8182,6 +8215,7 @@
         "INACTIVE"
       ]
     },
+<<<<<<< HEAD
     "public.schedule_log_event": {
       "name": "schedule_log_event",
       "schema": "public",
@@ -8210,6 +8244,8 @@
         "DELETE"
       ]
     },
+=======
+>>>>>>> dev
     "public.schedule_status": {
       "name": "schedule_status",
       "schema": "public",
@@ -8219,6 +8255,11 @@
         "RUNNING",
         "STOPPED",
         "COMPLETED",
+<<<<<<< HEAD
+=======
+        "PARTIAL",
+        "MISSED",
+>>>>>>> dev
         "FAILED",
         "CANCELLED",
         "DELETED",
@@ -8252,6 +8293,7 @@
         "PROCESSING"
       ]
     },
+<<<<<<< HEAD
     "public.device_role": {
       "name": "device_role",
       "schema": "public",
@@ -8261,6 +8303,8 @@
         "CHILD"
       ]
     },
+=======
+>>>>>>> dev
     "public.device_status": {
       "name": "device_status",
       "schema": "public",

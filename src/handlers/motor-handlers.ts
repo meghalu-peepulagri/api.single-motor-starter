@@ -88,7 +88,7 @@ export class MotorHandlers {
   updateMotorHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const motorId = +c.req.param("id");
+      const motorId = +c.req.param("id")!;
       const motorPayload = await c.req.json();
       paramsValidateException.emptyBodyValidation(motorPayload);
       const validMotorReq = await validatedRequest<validatedUpdateMotor>("update-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
@@ -144,7 +144,7 @@ export class MotorHandlers {
 
   getSingleMotorHandler = async (c: Context) => {
     try {
-      const motorId = +c.req.param("id");
+      const motorId = +c.req.param("id")!;
       const query = c.req.query();
       paramsValidateException.validateId(motorId, "motor id");
       const defaultColumns = ["id", "name", "hp", "status", "state", "mode"];
@@ -168,7 +168,7 @@ export class MotorHandlers {
 
   deleteMotorHandler = async (c: Context) => {
     try {
-      const motorId = +c.req.param("id");
+      const motorId = +c.req.param("id")!;
       paramsValidateException.validateId(motorId, "motor id");
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
@@ -290,7 +290,7 @@ export class MotorHandlers {
   updateMotorTestRunStatusHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const motorId = +c.req.param("id");
+      const motorId = +c.req.param("id")!;
       paramsValidateException.validateId(motorId, "motor id");
 
       const motorPayload = await c.req.json();

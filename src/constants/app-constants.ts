@@ -488,6 +488,14 @@ export const ADD_REPEAT_DAYS_VALIDATION_CRITERIA = "Add repeat days details prov
 // Starter ID
 export const STARTER_ID_REQUIRED = "Device is required";
 export const CANNOT_EDIT_RUNNING_SCHEDULE = "Cannot edit a running schedule. Stop it first";
+export const CANNOT_DELETE_RUNNING_SCHEDULE = "Cannot delete a running schedule. Stop it first";
+export const CANNOT_DELETE_SCHEDULE = "Cannot delete schedule with status";
+export const CANNOT_STOP_SCHEDULE = "Cannot stop schedule. Only SCHEDULED, RUNNING, or RESTARTED schedules can be stopped";
+export const CANNOT_RESTART_SCHEDULE = "Cannot restart schedule. Only STOPPED schedules can be restarted";
+export const SCHEDULE_LOGS_FETCHED = "Schedule logs fetched successfully";
+export const SCHEDULE_LIVE_DATA_FETCHED = "Schedule live data fetched successfully";
+export const SCHEDULE_LIVE_DATA_NOT_FOUND = "No live data found for this schedule";
+export const SCHEDULE_OPERATIONS_FETCHED = "Schedule operations fetched successfully";
 
 export const All_USER_TYPES = ["OWNER", "MANAGER", "SUPERVISOR", "USER"];
 export const ALL_ADMIN_TYPES = ["ADMIN", "SUPER_ADMIN"];
