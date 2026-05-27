@@ -235,15 +235,21 @@ export class MotorHandlers {
 
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
-      if (motor.starter_id) throw new ConflictException(MOTOR_ALREADY_ASSIGNED);
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       if (starter.device_status !== "DEPLOYED" && starter.device_status !== "ASSIGNED") throw new BadRequestException(STARTER_NOT_DEPLOYED);
 
-      await checkDeviceMotorCapacity(starter);
-      const { motorReference, motorIndex } = await resolveMotorSlot(starter, validatedReqData.motor_reference);
+      // When reassigning from the same device, exclude this motor from capacity/slot counts
+      const isSameDevice = motor.starter_id === starter.id;
+      const excludeMotorId = isSameDevice ? motor.id : undefined;
+
+      await checkDeviceMotorCapacity(starter, excludeMotorId);
+      const { motorReference, motorIndex } = await resolveMotorSlot(starter, validatedReqData.motor_reference, excludeMotorId);
+
+      // If the new device belongs to a different user, the motor follows that user
+      const ownerChanged = starter.user_id != null && starter.user_id !== motor.created_by;
 
       await db.transaction(async (trx) => {
         await updateRecordById<MotorsTable>(motors, motorId, {
@@ -251,6 +257,7 @@ export class MotorHandlers {
           assigned_at: new Date(),
           motor_reference: motorReference,
           motor_index: motorIndex,
+          ...(ownerChanged && { created_by: starter.user_id }),
         }, trx);
         await ActivityService.logActivity({
           performedBy: userPayload.id,
@@ -258,7 +265,17 @@ export class MotorHandlers {
           entityType: "MOTOR",
           entityId: motorId,
           deviceId: starter.id,
-          newData: { starter_id: starter.id, motor_reference: motorReference, motor_index: motorIndex }
+          oldData: {
+            starter_id: motor.starter_id,
+            motor_reference: motor.motor_reference,
+            created_by: motor.created_by,
+          },
+          newData: {
+            starter_id: starter.id,
+            motor_reference: motorReference,
+            motor_index: motorIndex,
+            ...(ownerChanged && { created_by: starter.user_id }),
+          },
         }, trx);
       });
 

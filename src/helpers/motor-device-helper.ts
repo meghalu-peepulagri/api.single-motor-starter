@@ -18,11 +18,13 @@ import { getRecordsCount } from "../services/db/base-db-services.js";
  *
  * Throws ConflictException when the limit is already reached.
  */
-export async function checkDeviceMotorCapacity(targetStarter: StarterBox): Promise<void> {
-  const motorCount = await getRecordsCount(motors, [
+export async function checkDeviceMotorCapacity(targetStarter: StarterBox, excludeMotorId?: number): Promise<void> {
+  const filters: any[] = [
     eq(motors.starter_id, targetStarter.id),
     ne(motors.status, "ARCHIVED"),
-  ]);
+  ];
+  if (excludeMotorId !== undefined) filters.push(ne(motors.id, excludeMotorId));
+  const motorCount = await getRecordsCount(motors, filters);
 
   const maxAllowed = targetStarter.motor_support_type === "SINGLE_MOTOR" ? 1 : 2;
 
@@ -75,11 +77,13 @@ export async function checkDeviceMotorCapacity(targetStarter: StarterBox): Promi
 export async function resolveMotorSlot(
   targetStarter: StarterBox,
   requestedReference?: string | null,
+  excludeMotorId?: number,
 ): Promise<{ motorReference: string; motorIndex: number }> {
-  const activeFilters = [
+  const activeFilters: any[] = [
     eq(motors.starter_id, targetStarter.id),
     ne(motors.status, "ARCHIVED"),
   ];
+  if (excludeMotorId !== undefined) activeFilters.push(ne(motors.id, excludeMotorId));
 
   if (requestedReference) {
     // Case 1: m2 not supported on SINGLE_MOTOR devices
