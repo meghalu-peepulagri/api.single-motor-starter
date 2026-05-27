@@ -16,6 +16,7 @@ export const motors = pgTable("motors", {
     location_id: integer("location_id").references(() => locations.id),
     state: integer("state").notNull().default(0),
     mode: modeEnum().default("AUTO").notNull(),
+    user_id: integer("user_id").references(() => users.id),
     created_by: integer("created_by").references(() => users.id),
     starter_id: integer("starter_id").references(() => starterBoxes.id),
     motor_index: integer("motor_index").default(1),

@@ -854,7 +854,7 @@ export async function findScheduleHistoryByMotorAndStarter(
     })
       .from(motorSchedules)
       .where(conditions)
-      .orderBy(sql`${motorSchedules.created_at} DESC`)
+      .orderBy(sql`${motorSchedules.schedule_start_date} ASC`)
       .limit(pageParams.pageSize)
       .offset(pageParams.offset),
 
