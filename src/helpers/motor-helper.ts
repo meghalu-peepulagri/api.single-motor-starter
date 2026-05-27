@@ -55,11 +55,11 @@ export function motorFilters(query: any, user: any) {
   }
 
   if (user.id && user.user_type !== "ADMIN" && user.user_type !== "SUPER_ADMIN") {
-    whereQueryData.columns.push("created_by");
+    whereQueryData.columns.push("user_id");
     whereQueryData.relations.push("=");
     whereQueryData.values.push(user.id);
   } else if ((user.user_type === "ADMIN" || user.user_type === "SUPER_ADMIN") && query.user_id) {
-    whereQueryData.columns.push("created_by");
+    whereQueryData.columns.push("user_id");
     whereQueryData.relations.push("=");
     whereQueryData.values.push(parseInt(query.user_id, 10));
   }
@@ -579,6 +579,7 @@ export function prepareNewMotorPayload(params: {
   hp: number;
   locationId?: number | null;
   createdBy: number | null;
+  userId?: number | null;
   starterAssignment?: {
     starter_id: number;
     motor_reference: string;
@@ -589,6 +590,7 @@ export function prepareNewMotorPayload(params: {
     name: params.name,
     alias_name: params.name,
     created_by: params.createdBy,
+    user_id: params.userId ?? null,
     location_id: params.locationId,
     hp: params.hp.toString(),
     ...(params.starterAssignment ? {
@@ -610,6 +612,7 @@ export function prepareReplacementMotorPayload(params: {
   hp: number;
   locationId?: number | null;
   createdBy: number | null;
+  userId?: number | null;
   existingMotor: {
     starter_id: number;
     motor_reference: string | null;
@@ -620,6 +623,7 @@ export function prepareReplacementMotorPayload(params: {
     name: params.name,
     alias_name: params.name,
     created_by: params.createdBy,
+    user_id: params.userId ?? null,
     location_id: params.locationId,
     hp: params.hp.toString(),
     starter_id: params.existingMotor.starter_id,

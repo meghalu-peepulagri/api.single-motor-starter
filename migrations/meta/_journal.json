@@ -393,6 +393,13 @@
       "when": 1778060222390,
       "tag": "0055_lucky_infant_terrible",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1779862705469,
+      "tag": "0056_smart_iron_man",
+      "breakpoints": true
     }
   ]
 }

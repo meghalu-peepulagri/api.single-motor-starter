@@ -110,7 +110,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
                     },
                 },
             },
-            created_by_user: {
+            user: {
                 columns: {
                     id: true,
                     full_name: true,

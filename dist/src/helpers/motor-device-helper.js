@@ -12,11 +12,14 @@ import { getRecordsCount } from "../services/db/base-db-services.js";
  *
  * Throws ConflictException when the limit is already reached.
  */
-export async function checkDeviceMotorCapacity(targetStarter) {
-    const motorCount = await getRecordsCount(motors, [
+export async function checkDeviceMotorCapacity(targetStarter, excludeMotorId) {
+    const filters = [
         eq(motors.starter_id, targetStarter.id),
         ne(motors.status, "ARCHIVED"),
-    ]);
+    ];
+    if (excludeMotorId !== undefined)
+        filters.push(ne(motors.id, excludeMotorId));
+    const motorCount = await getRecordsCount(motors, filters);
     const maxAllowed = targetStarter.motor_support_type === "SINGLE_MOTOR" ? 1 : 2;
     if (motorCount >= maxAllowed) {
         throw new ConflictException(targetStarter.motor_support_type === "SINGLE_MOTOR"
@@ -61,11 +64,13 @@ export async function checkDeviceMotorCapacity(targetStarter) {
  * device A — no explicit update to device A is needed. The old
  * reference (m1/m2) is captured in the activity log oldData for audit.
  */
-export async function resolveMotorSlot(targetStarter, requestedReference) {
+export async function resolveMotorSlot(targetStarter, requestedReference, excludeMotorId) {
     const activeFilters = [
         eq(motors.starter_id, targetStarter.id),
         ne(motors.status, "ARCHIVED"),
     ];
+    if (excludeMotorId !== undefined)
+        activeFilters.push(ne(motors.id, excludeMotorId));
     if (requestedReference) {
         // Case 1: m2 not supported on SINGLE_MOTOR devices
         if (requestedReference === "m2" && targetStarter.motor_support_type === "SINGLE_MOTOR") {

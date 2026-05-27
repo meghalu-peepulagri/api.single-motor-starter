@@ -138,7 +138,7 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
         },
       },
 
-      created_by_user: {
+      user: {
         columns: {
           id: true,
           full_name: true,

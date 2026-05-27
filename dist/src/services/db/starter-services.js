@@ -46,7 +46,7 @@ export async function assignStarterWithTransaction(payload, userPayload, starter
     const assignedAt = new Date();
     const motorDetails = {
         alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
-        location_id: payload.location_id, created_by: userPayload.id, assigned_at: assignedAt,
+        location_id: payload.location_id, user_id: userPayload.id, assigned_at: assignedAt,
     };
     const existedMotorData = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterBoxPayload.id);
     const action = async (trx) => {
@@ -95,6 +95,7 @@ export async function getStarterByMacWithMotor(mac) {
             sim_recharge_expires_at: true,
             device_mobile_number: true,
             starter_type: true,
+            motor_support_type: true,
             role: true,
             parent_starter_id: true,
         },
@@ -362,7 +363,7 @@ export async function assignStarterWebWithTransaction(starterDetails, requestBod
     const assignedAt = new Date();
     const action = async (trx) => {
         const updatedStarter = await updateRecordById(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED", assigned_at: assignedAt }, trx);
-        const updatedMotor = existingMotor ? await updateRecordById(motors, existingMotor.id, { created_by: requestBody.user_id, assigned_at: assignedAt }, trx) : null;
+        const updatedMotor = existingMotor ? await updateRecordById(motors, existingMotor.id, { user_id: requestBody.user_id, assigned_at: assignedAt }, trx) : null;
         return { updatedStarter, updatedMotor };
     };
     return await db.transaction(action);

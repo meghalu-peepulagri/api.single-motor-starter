@@ -1,7 +1,9 @@
-import { MOTOR_ADDED, MOTOR_ALREADY_ASSIGNED, MOTOR_ASSIGN_VALIDATION_CRITERIA, MOTOR_ASSIGNED_TO_DEVICE, MOTOR_DELETED, MOTOR_DETACHED_FROM_DEVICE, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_ASSIGNED_TO_DEVICE, MOTOR_NOT_FOUND, MOTOR_REPLACE_VALIDATION_CRITERIA, MOTOR_REPLACED, MOTOR_REPLACED_DEVICE, MOTOR_SAME_DEVICE, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA, STARTER_BOX_NOT_FOUND, STARTER_NOT_DEPLOYED } from "../constants/app-constants.js";
+import { and, eq, ne } from "drizzle-orm";
+import { MOTOR_ADDED, MOTOR_ALREADY_ASSIGNED, MOTOR_ASSIGN_VALIDATION_CRITERIA, MOTOR_ASSIGNED_TO_DEVICE, MOTOR_DELETED, MOTOR_DETACHED_FROM_DEVICE, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_ASSIGNED_TO_DEVICE, MOTOR_NOT_FOUND, MOTOR_REPLACE_VALIDATION_CRITERIA, MOTOR_REPLACED, MOTOR_REPLACED_DEVICE, MOTOR_SAME_DEVICE, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_USER_ASSIGNED, MOTOR_VALIDATION_CRITERIA, STARTER_BOX_NOT_FOUND, STARTER_NOT_DEPLOYED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
+import { users } from "../database/schemas/users.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
@@ -38,19 +40,15 @@ export class MotorHandlers {
                 const { motorReference, motorIndex } = await resolveMotorSlot(starter, validMotorReq.motor_reference);
                 starterAssignment = { starter_id: starter.id, motor_reference: motorReference, motor_index: motorIndex };
             }
-            const isAdmin = userPayload.user_type === "ADMIN" || userPayload.user_type === "SUPER_ADMIN";
-            let createdBy;
-            if (isAdmin) {
-                createdBy = validMotorReq.user_id ?? null;
-            }
-            else {
-                createdBy = userPayload.id;
-            }
+            // created_by = who performed this action (never changes after creation)
+            // user_id    = which customer owns this motor (follows device ownership)
+            const userId = validMotorReq.user_id ?? null;
             const preparedMotorPayload = prepareNewMotorPayload({
                 name: validMotorReq.name,
                 hp: validMotorReq.hp,
                 locationId: validMotorReq.location_id,
-                createdBy,
+                createdBy: userPayload.id,
+                userId,
                 starterAssignment,
             });
             await db.transaction(async (trx) => {
@@ -205,21 +203,25 @@ export class MotorHandlers {
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
-            if (motor.starter_id)
-                throw new ConflictException(MOTOR_ALREADY_ASSIGNED);
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"]);
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             if (starter.device_status !== "DEPLOYED" && starter.device_status !== "ASSIGNED")
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
-            await checkDeviceMotorCapacity(starter);
-            const { motorReference, motorIndex } = await resolveMotorSlot(starter, validatedReqData.motor_reference);
+            // When reassigning from the same device, exclude this motor from capacity/slot counts
+            const isSameDevice = motor.starter_id === starter.id;
+            const excludeMotorId = isSameDevice ? motor.id : undefined;
+            await checkDeviceMotorCapacity(starter, excludeMotorId);
+            const { motorReference, motorIndex } = await resolveMotorSlot(starter, validatedReqData.motor_reference, excludeMotorId);
+            // If the new device belongs to a different user, the motor follows that user
+            const ownerChanged = starter.user_id != null && starter.user_id !== motor.user_id;
             await db.transaction(async (trx) => {
                 await updateRecordById(motors, motorId, {
                     starter_id: starter.id,
                     assigned_at: new Date(),
                     motor_reference: motorReference,
                     motor_index: motorIndex,
+                    ...(ownerChanged && { user_id: starter.user_id }),
                 }, trx);
                 await ActivityService.logActivity({
                     performedBy: userPayload.id,
@@ -227,7 +229,17 @@ export class MotorHandlers {
                     entityType: "MOTOR",
                     entityId: motorId,
                     deviceId: starter.id,
-                    newData: { starter_id: starter.id, motor_reference: motorReference, motor_index: motorIndex }
+                    oldData: {
+                        starter_id: motor.starter_id,
+                        motor_reference: motor.motor_reference,
+                        user_id: motor.user_id,
+                    },
+                    newData: {
+                        starter_id: starter.id,
+                        motor_reference: motorReference,
+                        motor_index: motorIndex,
+                        ...(ownerChanged && { user_id: starter.user_id }),
+                    },
                 }, trx);
             });
             return sendResponse(c, 200, MOTOR_ASSIGNED_TO_DEVICE);
@@ -338,6 +350,50 @@ export class MotorHandlers {
             console.error("Error at replace motor device:", error);
             handleJsonParseError(error);
             parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
+            throw error;
+        }
+    };
+    assignUserToMotorHandler = async (c) => {
+        try {
+            const userPayload = c.get("user_payload");
+            const motorId = +c.req.param("id");
+            paramsValidateException.validateId(motorId, "motor id");
+            const { user_id } = await c.req.json();
+            if (!user_id || typeof user_id !== "number")
+                throw new BadRequestException("user_id is required and must be a number");
+            const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+            if (!motor)
+                throw new NotFoundException(MOTOR_NOT_FOUND);
+            const user = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [user_id, "ARCHIVED"]);
+            if (!user)
+                throw new NotFoundException(USER_NOT_FOUND);
+            await db.transaction(async (trx) => {
+                if (motor.starter_id) {
+                    // Update ALL motors on this device (handles 2-motor devices)
+                    await trx.update(motors)
+                        .set({ user_id })
+                        .where(and(eq(motors.starter_id, motor.starter_id), ne(motors.status, "ARCHIVED")));
+                    await updateRecordById(starterBoxes, motor.starter_id, { user_id }, trx);
+                }
+                else {
+                    await updateRecordById(motors, motorId, { user_id }, trx);
+                }
+                await ActivityService.logActivity({
+                    performedBy: userPayload.id,
+                    action: "MOTOR_USER_ASSIGNED",
+                    entityType: "MOTOR",
+                    entityId: motorId,
+                    deviceId: motor.starter_id ?? undefined,
+                    oldData: { user_id: motor.user_id },
+                    newData: { user_id },
+                }, trx);
+            });
+            return sendResponse(c, 200, MOTOR_USER_ASSIGNED);
+        }
+        catch (error) {
+            console.error("Error at assign user to motor:", error);
+            handleJsonParseError(error);
             handleForeignKeyViolationError(error);
             throw error;
         }

@@ -16,9 +16,22 @@ export async function getMotorWithStarterDetails(motorId) {
             state: true,
             mode: true,
             created_by: true,
+            user_id: true,
             alias_name: true,
         },
         with: {
+            user: {
+                columns: {
+                    id: true,
+                    full_name: true,
+                },
+            },
+            created_by_user: {
+                columns: {
+                    id: true,
+                    full_name: true,
+                },
+            },
             location: {
                 where: ne(locations.status, 'ARCHIVED'),
                 columns: {

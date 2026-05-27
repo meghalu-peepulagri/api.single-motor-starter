@@ -44,6 +44,13 @@ export async function liveDataHandler(parsedMessage, topic) {
         const formatted = validateLiveDataFormat(parsedMessage, topic);
         if (!formatted)
             return null;
+        const groupKey = Object.keys(formatted.groups)[0];
+        const rawGroupData = parsedMessage?.D?.[groupKey];
+        const isMultiStarter = device.motor_support_type === "MULTIPLE_MOTORS" || device.starter_type === "MULTI_STARTER";
+        if (isMultiStarter && isMultiMotorPayload(rawGroupData)) {
+            await handleMultiStarterLiveData(parsedMessage, formatted, device);
+            return;
+        }
         const validated = validateLiveDataContent(formatted);
         if (!validated)
             return null;

@@ -57,7 +57,7 @@ export function prepareLiveDataPayload(validatedData, starterData, motor) {
         payload_errors: validatedData.errors,
         starter_id: starterData.id || null,
         gateway_id: starterData.gateway_id || null,
-        user_id: starterData.created_by || null,
+        user_id: starterData.user_id || null,
         motor_id: resolvedMotor.id || null,
         motor_reference: resolvedMotor.motor_reference ?? null,
         // Schedule

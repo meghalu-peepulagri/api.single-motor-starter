@@ -33,7 +33,8 @@ export const motors = pgTable("motors", {
   assigned_at: timestamp("assigned_at"),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, (table: any) => [
-  index("motor_user_id_idx").on(table.created_by),
+  index("motor_created_by_idx").on(table.created_by),
+  index("motor_user_id_idx").on(table.user_id),
   index("motor_idx").on(table.id),
   index("motor_alias_name_idx").on(table.alias_name),
   index("motor_test_run_status_idx").on(table.test_run_status),
@@ -45,9 +46,16 @@ export type MotorsTable = typeof motors;
 
 export const motorRelations = relations(motors, ({ one, many }) => ({
 
+  user: one(users, {
+    fields: [motors.user_id],
+    references: [users.id],
+    relationName: "motorUser",
+  }),
+
   created_by_user: one(users, {
     fields: [motors.created_by],
-    references: [users.id]
+    references: [users.id],
+    relationName: "motorCreatedBy",
   }),
 
   starter: one(starterBoxes, {

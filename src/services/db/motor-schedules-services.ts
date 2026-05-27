@@ -550,18 +550,24 @@ export async function updateActualScheduleFields(
   },
   trx: DbTransaction
 ) {
+  // Drizzle ORM serializes null enum values as "" which PostgreSQL rejects.
+  // Conditionally include actual_type only when a valid value is present.
+  const setPayload: Record<string, any> = {
+    actual_start_time: actualData.actual_start_time,
+    actual_end_time: actualData.actual_end_time,
+    actual_run_time: actualData.actual_run_time,
+    missed_minutes: actualData.missed_minutes ?? 0,
+    failure_at: actualData.failure_at ?? null,
+    failure_reason: actualData.failure_reason ?? null,
+    updated_at: new Date(),
+  };
+  if (actualData.actual_type != null) {
+    setPayload.actual_type = actualData.actual_type;
+  }
+
   await trx
     .update(motorSchedules)
-    .set({
-      actual_start_time: actualData.actual_start_time,
-      actual_end_time: actualData.actual_end_time,
-      actual_run_time: actualData.actual_run_time,
-      actual_type: actualData.actual_type,
-      missed_minutes: actualData.missed_minutes ?? 0,
-      failure_at: actualData.failure_at ?? null,
-      failure_reason: actualData.failure_reason ?? null,
-      updated_at: new Date(),
-    })
+    .set(setPayload)
     .where(
       and(
         eq(motorSchedules.motor_id, motorId),

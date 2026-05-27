@@ -390,18 +390,23 @@ export async function findEvaluatableSchedules() {
 }
 // =================== ACTUAL SCHEDULE FIELDS ===================
 export async function updateActualScheduleFields(motorId, starterId, scheduleId, actualData, trx) {
-    await trx
-        .update(motorSchedules)
-        .set({
+    // Drizzle ORM serializes null enum values as "" which PostgreSQL rejects.
+    // Conditionally include actual_type only when a valid value is present.
+    const setPayload = {
         actual_start_time: actualData.actual_start_time,
         actual_end_time: actualData.actual_end_time,
         actual_run_time: actualData.actual_run_time,
-        actual_type: actualData.actual_type,
         missed_minutes: actualData.missed_minutes ?? 0,
         failure_at: actualData.failure_at ?? null,
         failure_reason: actualData.failure_reason ?? null,
         updated_at: new Date(),
-    })
+    };
+    if (actualData.actual_type != null) {
+        setPayload.actual_type = actualData.actual_type;
+    }
+    await trx
+        .update(motorSchedules)
+        .set(setPayload)
         .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), eq(motorSchedules.schedule_id, scheduleId), sql `${motorSchedules.status} != 'ARCHIVED'`, sql `${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`));
 }
 export async function bulkCreateMotorSchedules(rawPayload, userId) {
