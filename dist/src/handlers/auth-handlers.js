@@ -22,6 +22,7 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import { checkPhoneUniqueness, checkPhoneUniquenessVerify } from "../services/db/user-services.js";
+import { getSubUserPermissions } from "../services/db/sub-user-services.js";
 import { SmsService } from "../services/sms/sms-service.js";
 const paramsValidateException = new ParamsValidateException();
 const otpService = new OtpService();
@@ -143,7 +144,12 @@ export class AuthHandlers {
             const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
             const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
             const { password, ...userDetails } = updatedUser;
-            const data = { user_details: userDetails, access_token, refresh_token };
+            let responseUserDetails = userDetails;
+            if (userDetails.user_type === "SUB_USER") {
+                const permissions = await getSubUserPermissions(user.id);
+                responseUserDetails = { ...userDetails, permissions };
+            }
+            const data = { user_details: responseUserDetails, access_token, refresh_token };
             if (validReqData.fcm_token) {
                 const fcmToken = validReqData.fcm_token;
                 const existingToken = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user.id]);

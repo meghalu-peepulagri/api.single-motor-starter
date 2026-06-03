@@ -8,6 +8,7 @@ interface AppBindings {
   Variables: Variables & {
     user_payload: UserPayload;
     sub_user_payload: UserPayload | undefined;
+    performer_id: number;
   };
 }
 

@@ -35,7 +35,7 @@ export class MotorHandlers {
             await db.transaction(async (trx) => {
                 const motor = await saveSingleRecord(motors, preparedMotorPayload, trx);
                 if (motor) {
-                    await ActivityService.writeMotorAddedLog(userPayload.id, motor.id, {
+                    await ActivityService.writeMotorAddedLog(c.get("performer_id"), motor.id, {
                         name: motor.alias_name,
                         hp: motor.hp,
                         location_id: motor.location_id
@@ -74,7 +74,7 @@ export class MotorHandlers {
                 if (validMotorReq.mode !== undefined)
                     updatePayload.mode = validMotorReq.mode;
                 const updatedMotor = await updateRecordById(motors, motorId, updatePayload, trx);
-                await ActivityService.writeMotorUpdatedLog(userPayload.id, motorId, { name: motor.alias_name, hp: motor.hp, state: motor.state, mode: motor.mode }, { name: updatedMotor.alias_name, hp: updatedMotor.hp, state: updatedMotor.state, mode: updatedMotor.mode }, trx, motor.starter_id || undefined);
+                await ActivityService.writeMotorUpdatedLog(c.get("performer_id"), motorId, { name: motor.alias_name, hp: motor.hp, state: motor.state, mode: motor.mode }, { name: updatedMotor.alias_name, hp: updatedMotor.hp, state: updatedMotor.state, mode: updatedMotor.mode }, trx, motor.starter_id || undefined);
                 const starterId = motor.starter_id || 0;
                 const hasStateChanged = updatedMotor.state !== undefined && updatedMotor.state !== motor.state;
                 const hasModeChanged = updatedMotor.mode !== undefined && updatedMotor.mode !== motor.mode;
@@ -136,7 +136,7 @@ export class MotorHandlers {
                 if (motor.starter_id) {
                     await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null }, trx);
                 }
-                await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx, motor.starter_id || undefined);
+                await ActivityService.writeMotorDeletedLog(c.get("performer_id"), motor.id, trx, motor.starter_id || undefined);
             });
             return sendResponse(c, 200, MOTOR_DELETED);
         }
@@ -185,7 +185,7 @@ export class MotorHandlers {
                 throw new NotFoundException(MOTOR_NOT_FOUND);
             await db.transaction(async (trx) => {
                 await updateRecordById(motors, motor.id, { test_run_status: validMotorReq.test_run_status, test_run_completed_at: new Date() }, trx);
-                await ActivityService.writeMotorTestRunStatusUpdatedLog(userPayload.id, motor.id, motor.test_run_status, validMotorReq.test_run_status, trx, motor.starter_id || undefined);
+                await ActivityService.writeMotorTestRunStatusUpdatedLog(c.get("performer_id"), motor.id, motor.test_run_status, validMotorReq.test_run_status, trx, motor.starter_id || undefined);
             });
             return sendResponse(c, 200, MOTOR_TEST_RUN_STATUS_UPDATED);
         }

@@ -131,8 +131,8 @@ export class StarterHandlers {
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
                 const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
-                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
-                    user_id: userPayload.id,
+                await ActivityService.writeStarterAssignedLog(c.get("performer_id"), starterBox.id, {
+                    user_id: c.get("performer_id"),
                     location_id: updatedStarter.location_id,
                     motor_name: updatedMotor.alias_name
                 }, trx);
@@ -236,7 +236,7 @@ export class StarterHandlers {
                 throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
             await db.transaction(async (trx) => {
                 const { updatedMotor, updatedStarter } = await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id);
-                await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx);
+                await ActivityService.writeLocationReplacedLog(c.get("performer_id"), starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx);
             });
             return sendResponse(c, 201, STARTER_REPLACED_SUCCESSFULLY);
         }
@@ -323,7 +323,7 @@ export class StarterHandlers {
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
                 const { updatedStarter } = await assignStarterWebWithTransaction(starterBox, validatedReqData);
-                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, { user_id: updatedStarter.user_id }, trx);
+                await ActivityService.writeStarterAssignedLog(c.get("performer_id"), starterBox.id, { user_id: updatedStarter.user_id }, trx);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
         }
@@ -361,8 +361,8 @@ export class StarterHandlers {
             await db.transaction(async (trx) => {
                 await updateRecordByIdWithTrx(starterBoxes, starterBox.id, updateData, trx);
                 await ActivityService.logActivity({
-                    userId: userPayload.id,
-                    performedBy: userPayload.id,
+                    userId: c.get("performer_id"),
+                    performedBy: c.get("performer_id"),
                     action: "DEPLOY_STATUS_UPDATE",
                     entityType: "STARTER",
                     entityId: starterBox.id,
@@ -414,7 +414,7 @@ export class StarterHandlers {
             await db.transaction(async (trx) => {
                 const updatedStarter = await updateRecordById(starterBoxes, starter.id, { location_id: validatedReqData.location_id, user_id: userPayload.id }, trx);
                 await ActivityService.logActivity({
-                    performedBy: userPayload.id,
+                    performedBy: c.get("performer_id"),
                     action: "LOCATION_ASSIGNED",
                     entityType: "STARTER",
                     entityId: starter.id,

@@ -41,7 +41,7 @@ export class SubUserHandlers {
             const { password, ...result } = created;
             await ActivityService.logActivity({
                 userId: created.id,
-                performedBy: user.id,
+                performedBy: c.get("performer_id"),
                 action: "SUB_USER_CREATED",
                 entityType: "USER",
                 entityId: created.id,
@@ -63,7 +63,7 @@ export class SubUserHandlers {
                 throw new NotFoundException(SUB_USER_NOT_FOUND);
             await ActivityService.logActivity({
                 userId: subId,
-                performedBy: user.id,
+                performedBy: c.get("performer_id"),
                 action: "SUB_USER_DELETED",
                 entityType: "USER",
                 entityId: subId,
@@ -98,7 +98,7 @@ export class SubUserHandlers {
                 throw new NotFoundException(SUB_USER_NOT_FOUND);
             await ActivityService.logActivity({
                 userId: subId,
-                performedBy: user.id,
+                performedBy: c.get("performer_id"),
                 action: "SUB_USER_PERMISSIONS_SET",
                 entityType: "USER",
                 entityId: subId,
@@ -123,7 +123,7 @@ export class SubUserHandlers {
                 throw new NotFoundException(SUB_USER_NOT_FOUND);
             await ActivityService.logActivity({
                 userId: subId,
-                performedBy: user.id,
+                performedBy: c.get("performer_id"),
                 action: "SUB_USER_PERMISSIONS_REMOVED",
                 entityType: "USER",
                 entityId: subId,

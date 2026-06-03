@@ -13,9 +13,11 @@ async function resolvePayloads(c) {
         const { password: _p, ...parentDetails } = parent;
         c.set("sub_user_payload", userDetails);
         c.set("user_payload", parentDetails);
+        c.set("performer_id", userDetails.id);
     }
     else {
         c.set("user_payload", userDetails);
+        c.set("performer_id", userDetails.id);
     }
 }
 const isAuthorized = createMiddleware(async (c, next) => {

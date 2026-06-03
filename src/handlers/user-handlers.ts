@@ -12,6 +12,7 @@ import { checkInternalPhoneUniqueness, userFilters } from "../helpers/user-helpe
 import { ActivityService } from "../services/db/activity-service.js";
 import { deleteRecordById, getRecordsConditionally, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
 import { checkPhoneUniqueness, deleteUserWithCascade, getUserDetailsWithLocations, paginatedUsersList } from "../services/db/user-services.js";
+import { getSubUserPermissions } from "../services/db/sub-user-services.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
@@ -57,6 +58,11 @@ export class UserHandlers {
           user = userPayload;
         }
       } else {
+        const subUser = c.get("sub_user_payload");
+        if (subUser) {
+          const permissions = await getSubUserPermissions(subUser.id);
+          return sendResponse(c, 200, USER_DETAILS_FETCHED, { ...subUser, permissions });
+        }
         user = userPayload;
       }
 
@@ -115,7 +121,7 @@ export class UserHandlers {
 
       await db.transaction(async (trx) => {
         const updatedUser = await updateRecordById<UsersTable>(users, userId, validUserReq, trx);
-        await ActivityService.writeUserUpdatedLog(userId, userPayload.id, verifiedUser, updatedUser, trx);
+        await ActivityService.writeUserUpdatedLog(userId, c.get("performer_id"), verifiedUser, updatedUser, trx);
       })
 
       return sendResponse(c, 201, USER_UPDATED);
@@ -191,7 +197,7 @@ export class UserHandlers {
         }
       }
 
-      await deleteUserWithCascade(userId, userPayload.id, isSelf, {
+      await deleteUserWithCascade(userId, c.get("performer_id"), isSelf, {
         full_name: targetUser.full_name ?? null,
         phone: targetUser.phone,
         email: targetUser.email ?? null,

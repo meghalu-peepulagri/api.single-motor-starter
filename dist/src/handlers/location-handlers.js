@@ -25,7 +25,7 @@ export class LocationHandlers {
             const newLocation = { ...validLocationReq, user_id: validLocationReq.user_id ? validLocationReq.user_id : userPayload.id, created_by: userPayload.id };
             await db.transaction(async (trx) => {
                 const location = await saveSingleRecord(locations, newLocation, trx);
-                await ActivityService.writeLocationAddedLog(userPayload.id, location.id, { name: location.name }, trx);
+                await ActivityService.writeLocationAddedLog(c.get("performer_id"), location.id, { name: location.name }, trx);
             });
             return sendResponse(c, 201, LOCATION_ADDED);
         }
@@ -80,7 +80,7 @@ export class LocationHandlers {
                 throw new NotFoundException(LOCATION_NOT_FOUND);
             await db.transaction(async (trx) => {
                 const updatedLocation = await updateRecordById(locations, locationId, validLocationReq, trx);
-                await ActivityService.writeLocationRenamedLog((c.get("user_payload")).id, locationId, { name: foundedLocation.name }, { name: updatedLocation.name }, trx);
+                await ActivityService.writeLocationRenamedLog(c.get("performer_id"), locationId, { name: foundedLocation.name }, { name: updatedLocation.name }, trx);
             });
             return sendResponse(c, 200, LOCATION_RENAMED);
         }
@@ -106,7 +106,7 @@ export class LocationHandlers {
             }
             await db.transaction(async (trx) => {
                 await updateRecordById(locations, locationId, { status: "ARCHIVED" }, trx);
-                await ActivityService.writeLocationDeletedLog((c.get("user_payload")).id, locationId, trx);
+                await ActivityService.writeLocationDeletedLog(c.get("performer_id"), locationId, trx);
             });
             return sendResponse(c, 200, LOCATION_DELETED);
         }
