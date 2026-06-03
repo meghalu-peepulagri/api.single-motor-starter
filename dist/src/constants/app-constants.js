@@ -416,6 +416,9 @@ export const DEFAULT_SETTINGS_LIMITS_NOT_FOUND = "Default settings limits not fo
 export const UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA = "Update default settings limits details provided do not meet the required validation criteria";
 export const ACTIVITY_LOGS_FETCHED = "Activity logs fetched successfully";
 // Sub-users
+export const CREATE_SUB_USER_VALIDATION_CRITERIA = "Sub-user details provided do not meet the required validation criteria";
+export const SET_SUB_USER_PERMISSIONS_VALIDATION_CRITERIA = "Permissions provided do not meet the required validation criteria";
+export const REMOVE_SUB_USER_PERMISSIONS_VALIDATION_CRITERIA = "Permissions to remove do not meet the required validation criteria";
 export const SUB_USERS_FETCHED = "Sub-users fetched successfully";
 export const SUB_USER_CREATED = "Sub-user created successfully";
 export const SUB_USER_DELETED = "Sub-user deleted successfully";

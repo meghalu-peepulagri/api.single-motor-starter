@@ -1,12 +1,10 @@
-import * as v from "valibot";
 import { sendResponse } from "../utils/send-response.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import BadRequestException from "../exceptions/bad-request-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { handleAppError } from "../utils/on-error.js";
-import { SUB_USERS_FETCHED, SUB_USER_CREATED, SUB_USER_DELETED, SUB_USER_NOT_FOUND, SUB_USER_PERMISSIONS_FETCHED, SUB_USER_PERMISSIONS_UPDATED, SUB_USER_PERMISSIONS_REMOVED, } from "../constants/app-constants.js";
+import { SUB_USERS_FETCHED, SUB_USER_CREATED, SUB_USER_DELETED, SUB_USER_NOT_FOUND, SUB_USER_PERMISSIONS_FETCHED, SUB_USER_PERMISSIONS_UPDATED, SUB_USER_PERMISSIONS_REMOVED, CREATE_SUB_USER_VALIDATION_CRITERIA, SET_SUB_USER_PERMISSIONS_VALIDATION_CRITERIA, REMOVE_SUB_USER_PERMISSIONS_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
 import { createSubUser, getSubUsers, softDeleteSubUser, getSubUserPermissions, setSubUserPermissions, removeSubUserPermissions, } from "../services/db/sub-user-services.js";
-import { createSubUserSchema, updatePermissionsSchema, removePermissionsSchema, } from "../validations/schema/sub-user-validations.js";
+import { validatedRequest } from "../validations/validate-request.js";
 import { ActivityService } from "../services/db/activity-service.js";
 const paramsValidateException = new ParamsValidateException();
 export class SubUserHandlers {
@@ -27,7 +25,7 @@ export class SubUserHandlers {
             const user = c.get("user_payload");
             const body = await c.req.json();
             paramsValidateException.emptyBodyValidation(body);
-            const validated = v.parse(createSubUserSchema, body);
+            const validated = await validatedRequest("create-sub-user", body, CREATE_SUB_USER_VALIDATION_CRITERIA);
             const created = await createSubUser(user.id, validated);
             const { password, ...result } = created;
             await ActivityService.logActivity({
@@ -41,8 +39,6 @@ export class SubUserHandlers {
             return sendResponse(c, 201, SUB_USER_CREATED, result);
         }
         catch (error) {
-            if (error instanceof v.ValiError)
-                throw new BadRequestException(error.message);
             handleAppError(error, "create sub-user");
         }
     };
@@ -85,7 +81,7 @@ export class SubUserHandlers {
             const subId = Number(c.req.param("id"));
             paramsValidateException.validateId(subId, "sub-user id");
             const body = await c.req.json();
-            const validated = v.parse(updatePermissionsSchema, body);
+            const validated = await validatedRequest("set-sub-user-permissions", body, SET_SUB_USER_PERMISSIONS_VALIDATION_CRITERIA);
             const oldPermissions = await getSubUserPermissions(subId, user.id);
             const updated = await setSubUserPermissions(subId, user.id, validated.permissions);
             if (!updated)
@@ -102,8 +98,6 @@ export class SubUserHandlers {
             return sendResponse(c, 200, SUB_USER_PERMISSIONS_UPDATED);
         }
         catch (error) {
-            if (error instanceof v.ValiError)
-                throw new BadRequestException(error.message);
             handleAppError(error, "set sub-user permissions");
         }
     };
@@ -113,8 +107,8 @@ export class SubUserHandlers {
             const subId = Number(c.req.param("id"));
             paramsValidateException.validateId(subId, "sub-user id");
             const body = await c.req.json();
-            const { permissions } = v.parse(removePermissionsSchema, body);
-            const result = await removeSubUserPermissions(subId, user.id, permissions);
+            const validated = await validatedRequest("remove-sub-user-permissions", body, REMOVE_SUB_USER_PERMISSIONS_VALIDATION_CRITERIA);
+            const result = await removeSubUserPermissions(subId, user.id, validated.permissions);
             if (!result)
                 throw new NotFoundException(SUB_USER_NOT_FOUND);
             await ActivityService.logActivity({
@@ -129,8 +123,6 @@ export class SubUserHandlers {
             return sendResponse(c, 200, SUB_USER_PERMISSIONS_REMOVED);
         }
         catch (error) {
-            if (error instanceof v.ValiError)
-                throw new BadRequestException(error.message);
             handleAppError(error, "remove sub-user permissions");
         }
     };
