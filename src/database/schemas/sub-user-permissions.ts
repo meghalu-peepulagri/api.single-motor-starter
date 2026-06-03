@@ -1,22 +1,43 @@
-import { sql } from "drizzle-orm";
-import { integer, jsonb, pgTable, serial, timestamp, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { integer, jsonb, pgTable, serial, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { starterBoxes } from "./starter-boxes.js";
 import { motors } from "./motors.js";
 
 export const subUserPermissions = pgTable("sub_user_permissions", {
-  id: serial("id").primaryKey(),
+  id:          serial("id").primaryKey(),
   sub_user_id: integer("sub_user_id").notNull().references(() => users.id),
-  parent_id: integer("parent_id").notNull().references(() => users.id,),
+  parent_id:   integer("parent_id").notNull().references(() => users.id),
   permissions: jsonb("permissions").$type<string[]>().default(sql`'[]'::jsonb`),
-  starter_id: integer("starter_id").references(() => starterBoxes.id),
-  motor_id: integer("motor_id").references(() => motors.id),
-  created_at: timestamp("created_at").notNull().defaultNow(),
-  updated_at: timestamp("updated_at").notNull().defaultNow(),
+  starter_id:  integer("starter_id").references(() => starterBoxes.id),
+  motor_id:    integer("motor_id").references(() => motors.id),
+  created_at:  timestamp("created_at").notNull().defaultNow(),
+  updated_at:  timestamp("updated_at").notNull().defaultNow(),
 }, table => [
   uniqueIndex("uniq_sub_user_perm").on(table.sub_user_id, table.parent_id),
 ]);
 
-export type SubUserPermissions = typeof subUserPermissions.$inferSelect;
-export type NewSubUserPermissions = typeof subUserPermissions.$inferInsert;
+export type SubUserPermissions      = typeof subUserPermissions.$inferSelect;
+export type NewSubUserPermissions   = typeof subUserPermissions.$inferInsert;
 export type SubUserPermissionsTable = typeof subUserPermissions;
+
+export const subUserPermissionsRelations = relations(subUserPermissions, ({ one }) => ({
+  subUser: one(users, {
+    fields:     [subUserPermissions.sub_user_id],
+    references: [users.id],
+    relationName: "subUserPermissions",
+  }),
+  parent: one(users, {
+    fields:     [subUserPermissions.parent_id],
+    references: [users.id],
+    relationName: "parentUserPermissions",
+  }),
+  starter: one(starterBoxes, {
+    fields:     [subUserPermissions.starter_id],
+    references: [starterBoxes.id],
+  }),
+  motor: one(motors, {
+    fields:     [subUserPermissions.motor_id],
+    references: [motors.id],
+  }),
+}));

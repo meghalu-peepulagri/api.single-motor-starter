@@ -3,6 +3,10 @@ import { boolean, index, integer, jsonb, pgTable, serial, timestamp, uniqueIndex
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
 import { userActivityLogs } from "./user-activity-logs.js";
 import { fields } from "./fields.js";
+import { locations } from "./locations.js";
+import { gateways } from "./gateways.js";
+import { starterBoxes } from "./starter-boxes.js";
+import { subUserPermissions } from "./sub-user-permissions.js";
 export const users = pgTable("users", {
     id: serial("id").primaryKey().notNull(),
     full_name: varchar("full_name").notNull(),
@@ -37,9 +41,6 @@ export const users = pgTable("users", {
     uniqueIndex("unique_alt_phone_5_idx").on(table.alternate_phone_5).where(sql `${table.status} != 'ARCHIVED'`),
     uniqueIndex("valid_user").on(table.email, table.phone).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
-import { locations } from "./locations.js";
-import { gateways } from "./gateways.js";
-import { starterBoxes } from "./starter-boxes.js";
 export const userRelations = relations(users, ({ many }) => ({
     ownedLocations: many(locations, { relationName: "ownedLocations" }),
     createdLocations: many(locations, { relationName: "createdLocations" }),
@@ -48,4 +49,6 @@ export const userRelations = relations(users, ({ many }) => ({
     gateways: many(gateways),
     locations: many(locations),
     starterBoxes: many(starterBoxes),
+    subUsers: many(subUserPermissions, { relationName: "subUserPermissions" }),
+    parentPermissions: many(subUserPermissions, { relationName: "parentUserPermissions" }),
 }));

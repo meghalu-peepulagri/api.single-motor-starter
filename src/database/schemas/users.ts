@@ -3,6 +3,11 @@ import { boolean, index, integer, jsonb, pgTable, serial, timestamp, uniqueIndex
 import { statusEnum, userTypeEnum } from "../../constants/enum-types.js";
 import { userActivityLogs } from "./user-activity-logs.js";
 import { fields } from "./fields.js";
+import { locations } from "./locations.js";
+import { gateways } from "./gateways.js";
+import { starterBoxes } from "./starter-boxes.js";
+import { subUserPermissions } from "./sub-user-permissions.js";
+
 
 export const users = pgTable("users", {
     id: serial("id").primaryKey().notNull(),
@@ -48,10 +53,6 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type UsersTable = typeof users;
 
-import { locations } from "./locations.js";
-import { gateways } from "./gateways.js";
-import { starterBoxes } from "./starter-boxes.js";
-
 export const userRelations = relations(users, ({ many }) => ({
     ownedLocations: many(locations, { relationName: "ownedLocations" }),
     createdLocations: many(locations, { relationName: "createdLocations" }),
@@ -60,4 +61,6 @@ export const userRelations = relations(users, ({ many }) => ({
     gateways: many(gateways),
     locations: many(locations),
     starterBoxes: many(starterBoxes),
+    subUsers: many(subUserPermissions, { relationName: "subUserPermissions" }),
+    parentPermissions: many(subUserPermissions, { relationName: "parentUserPermissions" }),
 }));

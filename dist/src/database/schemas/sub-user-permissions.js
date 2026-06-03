@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { integer, jsonb, pgTable, serial, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { starterBoxes } from "./starter-boxes.js";
@@ -15,3 +15,23 @@ export const subUserPermissions = pgTable("sub_user_permissions", {
 }, table => [
     uniqueIndex("uniq_sub_user_perm").on(table.sub_user_id, table.parent_id),
 ]);
+export const subUserPermissionsRelations = relations(subUserPermissions, ({ one }) => ({
+    subUser: one(users, {
+        fields: [subUserPermissions.sub_user_id],
+        references: [users.id],
+        relationName: "subUserPermissions",
+    }),
+    parent: one(users, {
+        fields: [subUserPermissions.parent_id],
+        references: [users.id],
+        relationName: "parentUserPermissions",
+    }),
+    starter: one(starterBoxes, {
+        fields: [subUserPermissions.starter_id],
+        references: [starterBoxes.id],
+    }),
+    motor: one(motors, {
+        fields: [subUserPermissions.motor_id],
+        references: [motors.id],
+    }),
+}));
