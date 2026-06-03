@@ -1,5 +1,5 @@
 import argon2 from "argon2";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { users } from "../../database/schemas/users.js";
 import { subUserPermissions } from "../../database/schemas/sub-user-permissions.js";
@@ -40,7 +40,19 @@ export async function updateSubUser(subUserId, data) {
     return await updateRecordByMultipleColumnValues(users, ["id", "user_type"], ["=", "="], [subUserId, "SUB_USER"], data);
 }
 export async function getSubUsers(parentId) {
-    return await getMultipleRecordsByMultipleColumnValues(users, ["parent_id", "user_type", "status"], ["=", "=", "!="], [parentId, "SUB_USER", "ARCHIVED"], SUB_USER_COLUMNS);
+    const rows = await db
+        .select({
+        id: users.id,
+        full_name: users.full_name,
+        phone: users.phone,
+        email: users.email,
+        status: users.status,
+        permissions: subUserPermissions.permissions,
+    })
+        .from(users)
+        .leftJoin(subUserPermissions, eq(subUserPermissions.sub_user_id, users.id))
+        .where(and(eq(users.parent_id, parentId), eq(users.user_type, "SUB_USER"), ne(users.status, "ARCHIVED")));
+    return rows.map(r => ({ ...r, permissions: r.permissions ?? [] }));
 }
 export async function softDeleteSubUser(subUserId) {
     return await db.transaction(async (trx) => {
