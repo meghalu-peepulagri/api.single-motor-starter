@@ -8,6 +8,7 @@ import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { users, type UsersTable } from "../../database/schemas/users.js";
+import { subUserPermissions } from "../../database/schemas/sub-user-permissions.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import type { OrderByQueryData, WhereQueryDataWithOr } from "../../types/db-types.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditionsWithOr } from "../../utils/db-utils.js";
@@ -291,6 +292,21 @@ export async function deleteUserWithCascade(
     await trx.update(locations)
       .set({ status: "ARCHIVED", updated_at: now })
       .where(and(eq(locations.user_id, userId), ne(locations.status, "ARCHIVED")));
+
+    // Archive all sub-users belonging to this user and delete their permissions
+    const subUsers = await trx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.parent_id, userId), ne(users.status, "ARCHIVED")));
+
+    if (subUsers.length > 0) {
+      const subUserIds = subUsers.map(s => s.id);
+      await trx.update(users)
+        .set({ status: "ARCHIVED", updated_at: now })
+        .where(inArray(users.id, subUserIds));
+      await trx.delete(subUserPermissions)
+        .where(inArray(subUserPermissions.sub_user_id, subUserIds));
+    }
 
     // Archive the user
     await trx.update(users)
