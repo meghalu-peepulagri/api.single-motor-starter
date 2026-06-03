@@ -22,10 +22,11 @@ import type { UserActivityLog, UserActivityLogsTable } from "../database/schemas
 import type { User, UsersTable } from "../database/schemas/users.js";
 import type { DeviceTemperature, DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import type { StarterDispatch, StarterDispatchTable } from "../database/schemas/starter-dispatch.js";
+import type { SubUserPermissions, SubUserPermissionsTable } from "../database/schemas/sub-user-permissions.js";
 
 export type DBTable = UsersTable | LocationsTable | UserActivityLogsTable | OtpTable | DeviceTokensTable | FieldsTable | MotorsTable | StarterBoxTable | GatewayTable | StarterBoxParametersTable |
   MotorScheduleTable | AlertsFaultsTable | DeviceRunTimeTable | MotorRunTimeTable | StarterDefaultSettingsTable | StarterSettingsTable | StarterSettingsLimitsTable | StarterDefaultSettingsLimitsTable
-  | StarterBoxParametersTable | DeviceTemperatureTable | StarterDispatchTable | MotorStatusHistoryTable | PowerStatusHistoryTable | DeviceStatusHistoryTable;
+  | StarterBoxParametersTable | DeviceTemperatureTable | StarterDispatchTable | MotorStatusHistoryTable | PowerStatusHistoryTable | DeviceStatusHistoryTable | SubUserPermissionsTable;
 
 export type DBRecord<T extends DBTable> =
   T extends UsersTable ? User :
@@ -51,6 +52,7 @@ export type DBRecord<T extends DBTable> =
   T extends DeviceTemperatureTable ? DeviceTemperature :
   T extends PowerStatusHistoryTable ? PowerStatusHistory :
   T extends StarterDispatchTable ? StarterDispatch :
+  T extends SubUserPermissionsTable ? SubUserPermissions :
   never;
 
 export type DBNewRecord<T extends DBTable> = PgInsertValue<T>;

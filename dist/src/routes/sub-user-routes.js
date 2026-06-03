@@ -1,0 +1,16 @@
+import factory from "../factory.js";
+import { SubUserHandlers } from "../handlers/sub-user-handlers.js";
+import { isAuthorized } from "../middlewares/isAuthorized.js";
+import { isUserOrAdmin } from "../middlewares/guards/guardUser.js";
+const handlers = new SubUserHandlers();
+const subUserRoutes = factory.createApp();
+subUserRoutes.use("*", isAuthorized);
+subUserRoutes.use("*", isUserOrAdmin);
+subUserRoutes.get("/", handlers.listSubUsersHandler);
+subUserRoutes.post("/", handlers.createSubUserHandler);
+subUserRoutes.delete("/:id", handlers.deleteSubUserHandler);
+subUserRoutes.get("/:id/permissions", handlers.getPermissionsHandler);
+subUserRoutes.put("/:id/permissions", handlers.setPermissionsHandler);
+subUserRoutes.post("/:id/permissions", handlers.assignPermissionsHandler);
+subUserRoutes.delete("/:id/permissions", handlers.removePermissionsHandler);
+export default subUserRoutes;

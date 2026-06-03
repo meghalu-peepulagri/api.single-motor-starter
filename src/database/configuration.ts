@@ -27,6 +27,7 @@ import * as starterSettingsLimitsSchema from "./schemas/starter-settings-limits.
 import * as starterSettingsSchema from "./schemas/starter-settings.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
+import * as subUserPermissionsSchema from "./schemas/sub-user-permissions.js";
 
 const dbClient = new Pool({
   // host: env.DB_HOST,
@@ -66,6 +67,7 @@ const db = drizzle(dbClient, {
     ...DefaultSettingsLimitsSchema,
     ...benchedStarterParametersSchema,
     ...starterDispatchSchema,
+    ...subUserPermissionsSchema,
   },
 });
 

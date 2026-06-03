@@ -404,6 +404,15 @@ export const DEFAULT_SETTINGS_LIMITS_UPDATED = "Default settings limits updated 
 export const DEFAULT_SETTINGS_LIMITS_NOT_FOUND = "Default settings limits not found";
 export const UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA = "Update default settings limits details provided do not meet the required validation criteria";
 export const ACTIVITY_LOGS_FETCHED = "Activity logs fetched successfully";
+// Sub-users
+export const SUB_USERS_FETCHED = "Sub-users fetched successfully";
+export const SUB_USER_CREATED = "Sub-user created successfully";
+export const SUB_USER_DELETED = "Sub-user deleted successfully";
+export const SUB_USER_NOT_FOUND = "Sub-user not found";
+export const SUB_USER_PERMISSIONS_FETCHED = "Permissions fetched successfully";
+export const SUB_USER_PERMISSIONS_UPDATED = "Permissions updated successfully";
+export const SUB_USER_PERMISSIONS_ASSIGNED = "Permissions assigned successfully";
+export const SUB_USER_PERMISSIONS_REMOVED = "Permissions removed successfully";
 export const SETTINGS_FIELD_NAMES = {
     /* ================= Device Configuration ================= */
     allflt_en: "All faults enable",
