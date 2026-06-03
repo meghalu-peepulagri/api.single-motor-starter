@@ -11,7 +11,7 @@ import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
 import { vAddStarterDispatch } from "./schema/starter-dispatch-validations.js";
 import { vAddGateway, vAssignGatewayToUser, vRenameGateway, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
-import { createSubUserSchema, updatePermissionsSchema, removePermissionsSchema } from "./schema/sub-user-validations.js";
+import { createSubUserSchema, updateSubUserSchema, updatePermissionsSchema, removePermissionsSchema } from "./schema/sub-user-validations.js";
 import UnprocessableEntityException from "../exceptions/unprocessable-entity-exception.js";
 import { ConsoleLogWriter } from "drizzle-orm";
 const schemaMap = {
@@ -45,6 +45,7 @@ const schemaMap = {
     "update-gateway-number": vUpdateGatewayNumber,
     "update-installed-location": vUpdateInstalledLocation,
     "create-sub-user": createSubUserSchema,
+    "update-sub-user": updateSubUserSchema,
     "set-sub-user-permissions": updatePermissionsSchema,
     "remove-sub-user-permissions": removePermissionsSchema,
 };

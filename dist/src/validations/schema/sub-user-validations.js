@@ -10,6 +10,11 @@ export const createSubUserSchema = v.object({
     password: passwordValidator,
     signature_id: v.optional(v.string()),
 });
+export const updateSubUserSchema = v.object({
+    full_name: v.optional(nameValidator),
+    phone: v.optional(phoneValidator),
+    email: emailValidator,
+});
 export const updatePermissionsSchema = v.object({
     permissions: v.array(v.picklist(PERMISSION_KEYS)),
 });

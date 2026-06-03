@@ -13,8 +13,10 @@ import {
   SUB_USER_PERMISSIONS_FETCHED,
   SUB_USER_PERMISSIONS_UPDATED,
   SUB_USER_PERMISSIONS_REMOVED,
+  SUB_USER_UPDATED,
   MOBILE_NUMBER_ALREADY_EXIST,
   CREATE_SUB_USER_VALIDATION_CRITERIA,
+  UPDATE_SUB_USER_VALIDATION_CRITERIA,
   SET_SUB_USER_PERMISSIONS_VALIDATION_CRITERIA,
   REMOVE_SUB_USER_PERMISSIONS_VALIDATION_CRITERIA,
 } from "../constants/app-constants.js";
@@ -26,8 +28,9 @@ import {
   setSubUserPermissions,
   removeSubUserPermissions,
   isPhoneTaken,
+  updateSubUser,
 } from "../services/db/sub-user-services.js";
-import type { CreateSubUserInput, UpdatePermissionsInput, RemovePermissionsInput } from "../validations/schema/sub-user-validations.js";
+import type { CreateSubUserInput, UpdateSubUserInput, UpdatePermissionsInput, RemovePermissionsInput } from "../validations/schema/sub-user-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { ActivityService } from "../services/db/activity-service.js";
 
@@ -75,9 +78,32 @@ export class SubUserHandlers {
     }
   };
 
+  updateSubUserHandler = async (c: Context) => {
+    try {
+      const subId = Number(c.req.param("id"));
+      paramsValidateException.validateId(subId, "sub-user id");
+      const body = await c.req.json();
+      paramsValidateException.emptyBodyValidation(body);
+      const validated = await validatedRequest<UpdateSubUserInput>("update-sub-user", body, UPDATE_SUB_USER_VALIDATION_CRITERIA);
+      if (validated.phone && await isPhoneTaken(validated.phone, subId)) throw new ConflictException(MOBILE_NUMBER_ALREADY_EXIST);
+      const updated = await updateSubUser(subId, validated);
+      if (!updated) throw new NotFoundException(SUB_USER_NOT_FOUND);
+      await ActivityService.logActivity({
+        userId:      subId,
+        performedBy: c.get("performer_id"),
+        action:      "SUB_USER_UPDATED",
+        entityType:  "USER",
+        entityId:    subId,
+        newData:     validated as Record<string, unknown>,
+      });
+      return sendResponse(c, 200, SUB_USER_UPDATED);
+    } catch (error: any) {
+      handleAppError(error, "update sub-user");
+    }
+  };
+
   deleteSubUserHandler = async (c: Context) => {
     try {
-      const user = c.get("user_payload");
       const subId = Number(c.req.param("id"));
       paramsValidateException.validateId(subId, "sub-user id");
       const deleted = await softDeleteSubUser(subId);
@@ -133,7 +159,6 @@ export class SubUserHandlers {
 
   removePermissionsHandler = async (c: Context) => {
     try {
-      const user = c.get("user_payload");
       const subId = Number(c.req.param("id"));
       paramsValidateException.validateId(subId, "sub-user id");
       const body = await c.req.json();

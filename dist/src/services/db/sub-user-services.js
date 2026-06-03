@@ -5,8 +5,16 @@ import { users } from "../../database/schemas/users.js";
 import { subUserPermissions } from "../../database/schemas/sub-user-permissions.js";
 import { getMultipleRecordsByMultipleColumnValues, getSingleRecordByMultipleColumnValues, getSingleRecordByAColumnValue, saveSingleRecord, updateRecordByMultipleColumnValues, } from "./base-db-services.js";
 const SUB_USER_COLUMNS = ["id", "full_name", "phone", "email", "status"];
-export async function isPhoneTaken(phone) {
-    const row = await getSingleRecordByMultipleColumnValues(users, ["phone", "status"], ["=", "!="], [phone, "ARCHIVED"]);
+export async function isPhoneTaken(phone, excludeId) {
+    const columns = ["phone", "status"];
+    const relations = ["=", "!="];
+    const values = [phone, "ARCHIVED"];
+    if (excludeId) {
+        columns.push("id");
+        relations.push("!=");
+        values.push(excludeId);
+    }
+    const row = await getSingleRecordByMultipleColumnValues(users, columns, relations, values);
     return !!row;
 }
 export async function createSubUser(parentId, createdBy, data) {
@@ -27,6 +35,9 @@ export async function createSubUser(parentId, createdBy, data) {
         }, trx);
         return newUser;
     });
+}
+export async function updateSubUser(subUserId, data) {
+    return await updateRecordByMultipleColumnValues(users, ["id", "user_type"], ["=", "="], [subUserId, "SUB_USER"], data);
 }
 export async function getSubUsers(parentId) {
     return await getMultipleRecordsByMultipleColumnValues(users, ["parent_id", "user_type", "status"], ["=", "=", "!="], [parentId, "SUB_USER", "ARCHIVED"], SUB_USER_COLUMNS);

@@ -10,17 +10,16 @@ import {
   saveSingleRecord,
   updateRecordByMultipleColumnValues,
 } from "./base-db-services.js";
-import type { CreateSubUserInput } from "../../validations/schema/sub-user-validations.js";
+import type { CreateSubUserInput, UpdateSubUserInput } from "../../validations/schema/sub-user-validations.js";
 
 const SUB_USER_COLUMNS = ["id", "full_name", "phone", "email", "status"] as const;
 
-export async function isPhoneTaken(phone: string): Promise<boolean> {
-  const row = await getSingleRecordByMultipleColumnValues(
-    users,
-    ["phone", "status"],
-    ["=", "!="],
-    [phone, "ARCHIVED"],
-  );
+export async function isPhoneTaken(phone: string, excludeId?: number): Promise<boolean> {
+  const columns: any[] = ["phone", "status"];
+  const relations: any[] = ["=", "!="];
+  const values: any[] = [phone, "ARCHIVED"];
+  if (excludeId) { columns.push("id"); relations.push("!="); values.push(excludeId); }
+  const row = await getSingleRecordByMultipleColumnValues(users, columns, relations, values);
   return !!row;
 }
 
@@ -45,6 +44,16 @@ export async function createSubUser(parentId: number, createdBy: number, data: C
 
     return newUser;
   });
+}
+
+export async function updateSubUser(subUserId: number, data: UpdateSubUserInput) {
+  return await updateRecordByMultipleColumnValues(
+    users,
+    ["id", "user_type"],
+    ["=", "="],
+    [subUserId, "SUB_USER"],
+    data,
+  );
 }
 
 export async function getSubUsers(parentId: number) {

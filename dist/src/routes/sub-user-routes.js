@@ -8,6 +8,7 @@ subUserRoutes.use("*", isAuthorized);
 subUserRoutes.use("*", isUserOrAdmin);
 subUserRoutes.get("/", handlers.listSubUsersHandler);
 subUserRoutes.post("/", handlers.createSubUserHandler);
+subUserRoutes.patch("/:id", handlers.updateSubUserHandler);
 subUserRoutes.delete("/:id", handlers.deleteSubUserHandler);
 subUserRoutes.get("/:id/permissions", handlers.getPermissionsHandler);
 subUserRoutes.put("/:id/permissions", handlers.setPermissionsHandler);
