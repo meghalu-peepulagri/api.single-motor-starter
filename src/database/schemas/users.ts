@@ -22,6 +22,7 @@ export const users = pgTable("users", {
     address: varchar("address"),
     status: statusEnum().default("ACTIVE"),
 
+    parent_id: integer("parent_id").references((): AnyPgColumn => users.id).default(sql`NULL`),
     created_by: integer("created_by").references((): AnyPgColumn => users.id).default(sql`NULL`),
     referred_by: integer("referred_by").references((): AnyPgColumn => users.id).default(sql`NULL`),
     notifications_enabled: jsonb("notifications_enabled").$type<string[]>().default(sql`'[]'::jsonb`),
