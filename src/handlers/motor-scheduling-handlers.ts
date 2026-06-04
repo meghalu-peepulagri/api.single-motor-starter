@@ -165,7 +165,7 @@ export class MotorScheduleHandler {
   editMotorScheduleHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const scheduleId = +c.req.param("id");
+      const scheduleId = +c.req.param("id")!;
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const reqData = await c.req.json();
