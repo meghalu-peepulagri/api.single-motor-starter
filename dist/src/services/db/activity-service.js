@@ -279,6 +279,22 @@ export class ActivityService {
         await this.saveActivityLogs([log], trx);
     }
     /**
+     * Logs a device power ON/OFF event from MQTT live data
+     */
+    static async writeDevicePowerLog(userId, starterId, oldPower, newPower, trx) {
+        const action = newPower === 1 ? "DEVICE_POWER_ON" : "DEVICE_POWER_OFF";
+        const log = prepareActionLog({
+            userId,
+            action,
+            entityType: "STARTER",
+            entityId: starterId,
+            deviceId: starterId,
+            oldData: { power: oldPower },
+            newData: { power: newPower },
+        });
+        await this.saveActivityLogs([log], trx);
+    }
+    /**
      * Logs a device allocation event (Allocated / Deallocated / Reallocated)
      */
     static async writeDeviceAllocationLog(userId, starterId, allocationAction, oldData, newData, message, trx) {

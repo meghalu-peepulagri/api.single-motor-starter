@@ -252,7 +252,9 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
           starter_id, motor_id, location_id: locationId, previous_power_state: power,
           new_power_state: power_present, motor_state, mode_description, time_stamp
         }, trx);
-
+        if (trackPowerChange) {
+          await ActivityService.writeDevicePowerLog((created_by ?? device_created_by) as number, starter_id, power, power_present as number, trx);
+        }
       }
 
       let effectivePrevState = prevState;
@@ -624,6 +626,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
           starter_id, motor_id, location_id: locationId, previous_power_state: power,
           new_power_state: power_present, motor_state, mode_description, time_stamp
         }, trx);
+        await ActivityService.writeDevicePowerLog((created_by ?? device_created_by) as number, starter_id, power, power_present as number, trx);
       }
     }
 
@@ -784,6 +787,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
           starter_id, motor_id, location_id: locationId, previous_power_state: power,
           new_power_state: power_present, motor_state, mode_description, time_stamp
         }, trx);
+        await ActivityService.writeDevicePowerLog((created_by ?? device_created_by) as number, starter_id, power, power_present as number, trx);
       }
     }
 
@@ -918,6 +922,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
           starter_id, motor_id, location_id: locationId, previous_power_state: power,
           new_power_state: power_present, motor_state, mode_description, time_stamp
         }, trx);
+        await ActivityService.writeDevicePowerLog((created_by ?? device_created_by) as number, starter_id, power, power_present as number, trx);
       }
     }
 

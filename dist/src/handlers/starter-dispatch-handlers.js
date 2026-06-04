@@ -8,6 +8,7 @@ import { applyOptionalDispatchFields, ensureUniqueSimNoForUpdate, formatExpiring
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getAllDispatches, getExpiringDispatches, getExpiringDispatchesCount, getStarterDispatchByStarterId } from "../services/db/starter-dispatch-services.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -53,6 +54,12 @@ export class StarterDispatchHandlers {
                 operations.push(updateRecordById(starterBoxes, existedStarter.id, starterBoxUpdate));
             }
             await Promise.all(operations);
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "DISPATCH_CREATED",
+                entityType: "DISPATCH",
+                newData: { sim_no: preparedPayload.sim_no, starter_id: preparedPayload.starter_id },
+            });
             return sendResponse(c, 201, STARTER_DISPATCH_ADDED_SUCCESSFULLY);
         }
         catch (error) {
@@ -82,6 +89,14 @@ export class StarterDispatchHandlers {
                 updateRecordById(starterDispatch, dispatchId, dispatchUpdate),
                 ...(existedStarter ? [updateRecordById(starterBoxes, existedStarter.id, starterBoxUpdate)] : []),
             ]);
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "DISPATCH_UPDATED",
+                entityType: "DISPATCH",
+                entityId: dispatchId,
+                oldData: { sim_no: existedDispatch.sim_no, starter_id: existedDispatch.starter_id },
+                newData: { sim_no: validDispatchReq.sim_no, starter_id: nextStarterId },
+            });
             return sendResponse(c, 200, STARTER_DISPATCH_UPDATED_SUCCESSFULLY);
         }
         catch (error) {

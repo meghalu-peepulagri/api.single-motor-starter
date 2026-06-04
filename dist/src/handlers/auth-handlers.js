@@ -92,6 +92,12 @@ export class AuthHandlers {
                 throw new UnauthorizedException(INVALID_CREDENTIALS);
             const { access_token, refresh_token } = await genJWTTokensForUser(loginUser.id);
             const { password, ...userWithoutPassword } = loginUser;
+            await ActivityService.logActivity({
+                performedBy: loginUser.id,
+                action: "LOGIN",
+                entityType: "AUTH",
+                entityId: loginUser.id,
+            });
             const response = { user_details: userWithoutPassword, access_token, refresh_token };
             return sendResponse(c, CREATED, LOGIN_DONE, response);
         }
@@ -144,12 +150,13 @@ export class AuthHandlers {
             const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
             const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
             const { password, ...userDetails } = updatedUser;
-            let responseUserDetails = userDetails;
-            if (userDetails.user_type === "SUB_USER") {
-                const permissions = await getSubUserPermissions(user.id);
-                responseUserDetails = { ...userDetails, permissions };
-            }
-            const data = { user_details: responseUserDetails, access_token, refresh_token };
+            await ActivityService.logActivity({
+                performedBy: user.id,
+                action: "LOGIN",
+                entityType: "AUTH",
+                entityId: user.id,
+            });
+            const data = { user_details: userDetails, access_token, refresh_token };
             if (validReqData.fcm_token) {
                 const fcmToken = validReqData.fcm_token;
                 const existingToken = await getSingleRecordByMultipleColumnValues(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, user.id]);

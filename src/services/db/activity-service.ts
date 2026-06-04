@@ -18,7 +18,7 @@ export class ActivityService {
     userId?: number;
     performedBy: number;
     action: string;
-    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
+    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY' | 'SCHEDULE' | 'DISPATCH' | 'FIELD';
     entityId?: number;
     deviceId?: number;
     oldData?: Record<string, unknown> | null;
@@ -67,7 +67,7 @@ export class ActivityService {
     userId?: number;
     performedBy: number;
     action: string;
-    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
+    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY' | 'SCHEDULE' | 'DISPATCH' | 'FIELD';
     entityId?: number;
     oldData?: Record<string, unknown>;
     newData?: Record<string, unknown>;
@@ -371,6 +371,29 @@ export class ActivityService {
   }
 
 
+
+  /**
+   * Logs a device power ON/OFF event from MQTT live data
+   */
+  static async writeDevicePowerLog(
+    userId: number,
+    starterId: number,
+    oldPower: number | null,
+    newPower: number,
+    trx?: any
+  ) {
+    const action = newPower === 1 ? "DEVICE_POWER_ON" : "DEVICE_POWER_OFF";
+    const log = prepareActionLog({
+      userId,
+      action,
+      entityType: "STARTER",
+      entityId: starterId,
+      deviceId: starterId,
+      oldData: { power: oldPower },
+      newData: { power: newPower },
+    });
+    await this.saveActivityLogs([log], trx);
+  }
 
   /**
    * Logs a device allocation event (Allocated / Deallocated / Reallocated)

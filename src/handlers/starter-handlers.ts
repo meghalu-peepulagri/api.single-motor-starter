@@ -50,6 +50,13 @@ export class StarterHandlers {
 
       const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload, existedGateway?.id);
       const { id, ...restStarterData } = starter as StarterBox;
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "DEVICE_ADDED",
+        entityType: "STARTER",
+        entityId: id,
+        newData: { pcb_number: validStarterBoxReq.pcb_number, name: validStarterBoxReq.name },
+      });
       return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY, { id });
     } catch (error: any) {
       console.error("Error at add starter box :", error);
@@ -244,6 +251,13 @@ export class StarterHandlers {
         if (motor) {
           await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
         }
+
+        await ActivityService.logActivity({
+          performedBy: userPayload.id,
+          action: isUser ? "STARTER_REMOVED" : "DEVICE_DELETED",
+          entityType: "STARTER",
+          entityId: starterId,
+          }, trx);
       });
 
       return sendResponse(c, 200, isUser ? STARTER_REMOVED_SUCCESS : STARTER_BOX_DELETED_SUCCESSFULLY);
@@ -641,6 +655,7 @@ export class StarterHandlers {
 
   updateSettingsSyncStatusHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const starterId = +c.req.param("id")!;
       const body = await c.req.json();
       const syncStatus = body.synced_settings_status;
@@ -653,6 +668,14 @@ export class StarterHandlers {
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { synced_settings_status: syncStatus });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SETTINGS_SYNC_STATUS_OVERRIDE",
+        entityType: "STARTER",
+        entityId: starterId,
+        oldData: { synced_settings_status: starter.synced_settings_status },
+        newData: { synced_settings_status: syncStatus },
+      });
       return sendResponse(c, 201, SETTINGS_SYNC_STATUS_UPDATED);
 
     } catch (error: any) {
@@ -697,6 +720,7 @@ export class StarterHandlers {
 
   deviceResetHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const starterId = +c.req.param("id")!;
       paramsValidateException.validateId(starterId, "Device id");
       const body = await c.req.json();
@@ -709,6 +733,13 @@ export class StarterHandlers {
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_reset_status: deviceResetStatus });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "DEVICE_RESET_TRIGGERED",
+        entityType: "STARTER",
+        entityId: starterId,
+        newData: { device_reset_status: deviceResetStatus },
+      });
       return sendResponse(c, 200, DEVICE_RESET_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at device reset handler :", error);
@@ -718,6 +749,7 @@ export class StarterHandlers {
 
   updateInstalledLocationHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const starterId = +c.req.param("id")!;
       paramsValidateException.validateId(starterId, "Device id");
 
@@ -728,6 +760,14 @@ export class StarterHandlers {
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { device_installed_location });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "DEVICE_INSTALLED_LOCATION_UPDATED",
+        entityType: "STARTER",
+        entityId: starterId,
+        oldData: { device_installed_location: starter.device_installed_location },
+        newData: { device_installed_location },
+      });
       return sendResponse(c, 200, "Device installed location updated successfully");
     } catch (error: any) {
       console.error("Error at update installed location handler :", error);
@@ -811,6 +851,7 @@ export class StarterHandlers {
 
   faultClearedHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const starterId = +c.req.param("starter_id")!;
       const motorId = +c.req.param("motor_id")!;
       paramsValidateException.validateId(starterId, "Device id");
@@ -833,6 +874,13 @@ export class StarterHandlers {
       if (!faultRecord) throw new NotFoundException(NO_ACTIVE_FAULT_FOUND);
 
       await updateRecordById<StarterBoxParametersTable>(starterBoxParameters, faultRecord.id, { fault_cleared: true });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "FAULT_MANUALLY_CLEARED",
+        entityType: "STARTER",
+        entityId: starterId,
+        newData: { motor_id: motorId, fault_record_id: faultRecord.id },
+      });
       return sendResponse(c, 200, FAULT_CLEARED_SUCCESSFULLY);
     } catch (error: any) {
       console.error("Error at fault cleared handler :", error);

@@ -53,7 +53,6 @@ export class StarterDefaultSettingsHandlers {
             }
             await db.transaction(async (trx) => {
                 await updateRecordById(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
-                // Add activity log if needed (currently not in service, but let's be consistent)
                 await ActivityService.logActivity({
                     performedBy: c.get("performer_id"),
                     action: "DEFAULT_SETTINGS_UPDATED",
@@ -96,35 +95,10 @@ export class StarterDefaultSettingsHandlers {
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             }
             const validatedBody = await validatedRequest("update-default-settings", body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
-            // const cleanedBody = removeEmptyObjectsDeep(validatedBody);
-            // if (!Object.keys(cleanedBody).length) {
-            //   throw new BadRequestException("No valid settings provided");
-            // }
-            // const oldSettings = (await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(starterSettings,
-            //   ["starter_id", "is_new_configuration_saved", "acknowledgement"],
-            //   ["=", "=", "="],
-            //   [starterId, 1, "TRUE"]
-            // )) || {};
-            // const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
-            // if (!Object.keys(delta).length) {
-            //   return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
-            // }
-            // const devicePayload = prepareStarterSettingsData({ T: 4, S: randomSequenceNumber(), D: delta });
-            // if (devicePayload?.D) {
-            //   setImmediate(async () => {
-            //     try {
-            //       await publishMultipleTimesInBackground(devicePayload, starter);
-            //     } catch (error) {
-            //       // TODO: Remove catch only for logging
-            //       logger.error("Background publish failed:", error);
-            //       console.error("Background publish failed:", error);
-            //     }
-            //   });
-            // }
+            const oldSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement"], ["=", "="], [starter.id, "TRUE"]) ?? {};
             await db.transaction(async (trx) => {
                 await saveSingleRecord(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
-                // Handle activity logging for settings update
-                // await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, { ...oldSettings, ...cleanedBody }, trx);
+                await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, validatedBody, trx);
             });
             return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
         }
@@ -149,13 +123,34 @@ export class StarterDefaultSettingsHandlers {
     };
     updateStarterSettingsLimitsHandler = async (c) => {
         try {
+            const userPayload = c.get("user_payload");
             const settingId = +c.req.param("id");
             const body = await c.req.json();
             const { id, starter_id, created_at, updated_at, ...rest } = body;
             const foundedSettingId = await getRecordById(starterSettingsLimits, settingId);
             if (!foundedSettingId)
                 throw new BadRequestException(SETTINGS_LIMITS_NOT_FOUND);
-            await updateRecordById(starterSettingsLimits, foundedSettingId.id, rest);
+            const changedOldData = {};
+            const changedNewData = {};
+            for (const key of Object.keys(rest)) {
+                const oldValue = foundedSettingId[key];
+                const newValue = rest[key];
+                if (newValue !== undefined && String(newValue) !== String(oldValue)) {
+                    changedOldData[key] = oldValue;
+                    changedNewData[key] = newValue;
+                }
+            }
+            await db.transaction(async (trx) => {
+                await updateRecordById(starterSettingsLimits, foundedSettingId.id, rest, trx);
+                await ActivityService.logActivity({
+                    performedBy: userPayload.id,
+                    action: "DEVICE_SETTINGS_LIMITS_UPDATED",
+                    entityType: "SETTING",
+                    entityId: foundedSettingId.id,
+                    oldData: changedOldData,
+                    newData: changedNewData,
+                }, trx);
+            });
             return sendResponse(c, 200, SETTINGS_LIMITS_UPDATED);
         }
         catch (error) {
@@ -260,10 +255,8 @@ export class StarterDefaultSettingsHandlers {
                     changedNewData[key] = newValue;
                 }
             }
-            // Update in transaction with activity log
             await db.transaction(async (trx) => {
                 await updateRecordById(StarterDefaultSettingsLimits, defaultSettingLimitsId, validatedBody, trx);
-                // Log activity
                 await ActivityService.logActivity({
                     performedBy: c.get("performer_id"),
                     action: "DEFAULT_SETTINGS_LIMITS_UPDATED",
@@ -283,11 +276,19 @@ export class StarterDefaultSettingsHandlers {
     };
     updateLatestSettingAckByStarterHandler = async (c) => {
         try {
+            const userPayload = c.get("user_payload");
             const starterId = +c.req.param("starter_id");
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id"]);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             await db.update(starterSettings).set({ acknowledgement: "TRUE", updated_at: sql `CURRENT_TIMESTAMP` }).where(sql `${starterSettings.id} = (SELECT ${starterSettings.id} FROM ${starterSettings} WHERE ${starterSettings.starter_id} = ${starterId} AND ${starterSettings.acknowledgement} = 'FALSE' ORDER BY ${starterSettings.created_at} DESC LIMIT 1)`);
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "SETTINGS_ACK_UPDATED",
+                entityType: "SETTING",
+                entityId: starterData.id,
+                newData: { acknowledgement: "TRUE", starter_id: starterData.id },
+            });
             return sendResponse(c, 200, "Settings updated successfully");
         }
         catch (error) {

@@ -92,6 +92,7 @@ import {
   stopScheduleById,
 } from "../services/db/motor-schedules-services.js";
 import type { ScheduleForEvaluation } from "../types/app-types.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { handleAppError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type {
@@ -113,20 +114,12 @@ export class MotorScheduleHandler {
 
       const created = await bulkCreateMotorSchedules(reqData, userPayload.id);
       const isBulk = Array.isArray(reqData) && reqData.length > 1;
-
-      if (Array.isArray(created) && created.length > 0) {
-        const logs = created.map((s: MotorSchedule) =>
-          insertScheduleLog({
-            schedule_id: s.id,
-            event_type: "CREATED",
-            actor_type: "user",
-            actor_id: userPayload.id,
-            new_status: "PENDING",
-          }).catch(() => null),
-        );
-        await Promise.all(logs);
-      }
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: isBulk ? "SCHEDULES_BULK_CREATED" : "SCHEDULE_CREATED",
+        entityType: "SCHEDULE",
+        newData: { count: isBulk ? reqData.length : 1 },
+      });
       return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED);
     } catch (error: any) {
       handleAppError(error, "create Motor Schedule");
@@ -171,7 +164,8 @@ export class MotorScheduleHandler {
   // =================== EDIT SCHEDULE ===================
   editMotorScheduleHandler = async (c: Context) => {
     try {
-      const scheduleId = +c.req.param("id")!;
+      const userPayload = c.get("user_payload");
+      const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const reqData = await c.req.json();
@@ -180,7 +174,7 @@ export class MotorScheduleHandler {
         "update-motor-schedule", normalizedReqData, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
       );
 
-      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "motor_id"]) as Pick<MotorSchedule, "id" | "motor_id"> | null;
+      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "motor_id", "schedule_status"]) as Pick<MotorSchedule, "id" | "motor_id" | "schedule_status"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       validateScheduleTypeRules(data);
@@ -192,6 +186,14 @@ export class MotorScheduleHandler {
       checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate, schedule_end_date: data.schedule_end_date || scheduleStartDate }, existingSchedules);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { ...buildScheduleData(data, scheduleStartDate), edited_at: new Date() });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_UPDATED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+        oldData: { schedule_status: existed.schedule_status },
+        newData: buildScheduleData(data, scheduleStartDate) as Record<string, unknown>,
+      });
       return sendResponse(c, 200, SCHEDULE_UPDATED);
     } catch (error: any) {
       handleAppError(error, "edit motor Schedule");
@@ -222,7 +224,13 @@ export class MotorScheduleHandler {
       } else {
         insertScheduleLog({ schedule_id: scheduleId, event_type: "STATUS_CHANGED", actor_type: "user", actor_id: userPayload.id, old_status: existed.schedule_status, new_status: "DELETED" }).catch(() => null);
       }
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_DELETED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+        oldData: { schedule_status: existed.schedule_status },
+      });
       return sendResponse(c, 200, SCHEDULE_DELETED);
     } catch (error: any) {
       handleAppError(error, "delete motor Schedule");
@@ -249,6 +257,12 @@ export class MotorScheduleHandler {
           insertScheduleOperation({ schedule_id: scheduleId, operation: "STOP", sent_at: new Date() }).catch(() => null),
           insertScheduleLog({ schedule_id: scheduleId, event_type: "STOP_SENT", actor_type: "user", actor_id: userPayload.id, old_status: existed.schedule_status, new_status: "STOPPED" }).catch(() => null),
         ]);
+        await ActivityService.logActivity({
+          performedBy: userPayload.id,
+          action: "SCHEDULE_STOPPED",
+          entityType: "SCHEDULE",
+          entityId: scheduleId,
+        });
         return sendResponse(c, 200, SCHEDULE_STOPPED);
       }
 
@@ -260,6 +274,12 @@ export class MotorScheduleHandler {
         insertScheduleOperation({ schedule_id: scheduleId, operation: "RESTART", sent_at: new Date() }).catch(() => null),
         insertScheduleLog({ schedule_id: scheduleId, event_type: "RESTART_SENT", actor_type: "user", actor_id: userPayload.id, old_status: "STOPPED", new_status: "SCHEDULED" }).catch(() => null),
       ]);
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_RESTARTED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+      });
       return sendResponse(c, 200, SCHEDULE_RESTARTED);
     } catch (error: any) {
       handleAppError(error, "update schedule status");
@@ -269,6 +289,7 @@ export class MotorScheduleHandler {
   // =================== STOP ALL SCHEDULES ===================
   stopAllMotorSchedulesHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const motorId = +c.req.param("motor_id")!;
       paramsValidateException.validateId(motorId, "motor id");
 
@@ -280,7 +301,13 @@ export class MotorScheduleHandler {
 
       const ids = active.map(s => s.id);
       await cancelSchedulesByIds(ids);
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "ALL_SCHEDULES_STOPPED",
+        entityType: "SCHEDULE",
+        entityId: motorId,
+        newData: { cancelled_count: ids.length },
+      });
       return sendResponse(c, 200, ALL_SCHEDULES_STOPPED, { cancelled_count: ids.length });
     } catch (error: any) {
       handleAppError(error, "stop all motor Schedules");
@@ -290,6 +317,7 @@ export class MotorScheduleHandler {
   // =================== ADD REPEAT DAYS ===================
   addRepeatDaysHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const scheduleId = +c.req.param("id")!;
       paramsValidateException.validateId(scheduleId, "schedule id");
 
@@ -304,6 +332,14 @@ export class MotorScheduleHandler {
       checkMotorScheduleConflict({ start_time: existed.start_time, end_time: existed.end_time, repeat: 1, days_of_week: mergedDays }, conflicts);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { days_of_week: mergedDays, bit_wise_days: data.bit_wise_days ?? 0 });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_REPEAT_DAYS_ADDED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+        oldData: { days_of_week: existed.days_of_week },
+        newData: { days_of_week: mergedDays },
+      });
       return sendResponse(c, 200, REPEAT_DAYS_ADDED, { days_of_week: mergedDays });
     } catch (error: any) {
       handleAppError(error, "add repeat days");
@@ -313,6 +349,7 @@ export class MotorScheduleHandler {
   // =================== UPDATE ACKNOWLEDGEMENT (single) ===================
   updateAcknowledgementHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const scheduleId = +c.req.param("id")!;
       paramsValidateException.validateId(scheduleId, "schedule id");
 
@@ -325,7 +362,12 @@ export class MotorScheduleHandler {
         updateOperationAck(scheduleId, "CREATE", 1).catch(() => null),
         insertScheduleLog({ schedule_id: scheduleId, event_type: "DEVICE_ACK_CREATE", actor_type: "device", old_status: existed.schedule_status, new_status: "SCHEDULED" }).catch(() => null),
       ]);
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_ACKNOWLEDGED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+      });
       return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
     } catch (error: any) {
       handleAppError(error, "update acknowledgement");
@@ -335,6 +377,7 @@ export class MotorScheduleHandler {
   // =================== BULK UPDATE ACKNOWLEDGEMENT ===================
   bulkUpdateAcknowledgementHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const data = await c.req.json();
       const scheduleIds: number[] = data.schedule_ids;
       const slotUpdates: { id: number; schedule_id: number }[] | undefined = data.slot_updates;
@@ -363,7 +406,12 @@ export class MotorScheduleHandler {
           insertScheduleLog({ schedule_id: id, event_type: "DEVICE_ACK_CREATE", actor_type: "device", new_status: "SCHEDULED" }).catch(() => null),
         ])
       );
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_ACKNOWLEDGED",
+        entityType: "SCHEDULE",
+        newData: { schedule_ids: scheduleIds, count: scheduleIds.length },
+      });
       return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
     } catch (error: any) {
       handleAppError(error, "bulk update acknowledgement");
@@ -392,10 +440,17 @@ export class MotorScheduleHandler {
   // =================== BULK STOP SCHEDULES ===================
   bulkStopSchedulesHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const { ids }: { ids: number[] } = await c.req.json();
       if (!ids || !Array.isArray(ids) || ids.length === 0) throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
 
       await cancelSchedulesByIds(ids);
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_STOPPED",
+        entityType: "SCHEDULE",
+        newData: { ids, count: ids.length },
+      });
       return sendResponse(c, 200, BULK_SCHEDULES_STOPPED, { stopped_count: ids.length });
     } catch (error: any) {
       handleAppError(error, "bulk stop schedules");
@@ -406,6 +461,7 @@ export class MotorScheduleHandler {
   // =================== BULK RESTART SCHEDULES ===================
   bulkRestartSchedulesHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const { ids }: { ids: number[] } = await c.req.json();
       if (!ids || !Array.isArray(ids) || ids.length === 0) throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
 
@@ -420,6 +476,12 @@ export class MotorScheduleHandler {
       }
 
       await restartSchedulesByIds(ids);
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_RESTARTED",
+        entityType: "SCHEDULE",
+        newData: { ids, count: ids.length },
+      });
       return sendResponse(c, 200, BULK_SCHEDULES_RESTARTED, { restarted_count: ids.length });
     } catch (error: any) {
       handleAppError(error, "bulk restart schedules");
@@ -437,7 +499,12 @@ export class MotorScheduleHandler {
       await db.update(motorSchedules)
         .set({ schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false, updated_at: new Date() })
         .where(inArray(motorSchedules.id, ids));
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_DELETED",
+        entityType: "SCHEDULE",
+        newData: { ids, count: ids.length },
+      });
       return sendResponse(c, 200, BULK_SCHEDULES_DELETED, { deleted_count: ids.length });
     } catch (error: any) {
       handleAppError(error, "bulk delete schedules");
