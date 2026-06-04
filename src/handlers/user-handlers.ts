@@ -157,6 +157,12 @@ export class UserHandlers {
         throw new NotFoundException(USER_NOT_FOUND);
 
       await deleteRecordById<DeviceTokensTable>(deviceTokens, tokenData.id);
+      await ActivityService.logActivity({
+        performedBy: id,
+        action: "LOGGED_OUT",
+        entityType: "AUTH",
+        entityId: id,
+      });
       return sendResponse(c, 200, LOGGED_OUT);
     }
     catch (err: any) {

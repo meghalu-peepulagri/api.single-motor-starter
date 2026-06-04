@@ -6,6 +6,7 @@ import { checkDuplicateMotorTitles } from "../helpers/motor-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { addFieldWithMotorTransaction, paginatedFieldsList, updateFieldWithMotorTransaction } from "../services/db/field-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -21,6 +22,12 @@ export class FieldHandlers {
             if (identifiedDuplicates.length)
                 throw new BadRequestException(SIMILAR_MOTOR_TITLE_NOT_ALLOWED);
             await addFieldWithMotorTransaction(validFieldReq, userPayload);
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "FIELD_CREATED",
+                entityType: "FIELD",
+                newData: { name: validFieldReq.field_name },
+            });
             return sendResponse(c, 201, FIELD_ADDED);
         }
         catch (error) {
@@ -55,6 +62,13 @@ export class FieldHandlers {
             paramsValidateException.emptyBodyValidation(fieldPayload);
             const validFieldReq = await validatedRequest("add-field", fieldPayload, FIELD_VALIDATION_CRITERIA);
             await updateFieldWithMotorTransaction(validFieldReq, fieldId, userPayload);
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "FIELD_UPDATED",
+                entityType: "FIELD",
+                entityId: fieldId,
+                newData: { name: validFieldReq.field_name },
+            });
             return sendResponse(c, 200, FIELD_UPDATED);
         }
         catch (error) {

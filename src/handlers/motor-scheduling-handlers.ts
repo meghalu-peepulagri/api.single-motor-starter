@@ -73,6 +73,7 @@ import {
   stopScheduleById
 } from "../services/db/motor-schedules-services.js";
 import type { ScheduleForEvaluation } from "../types/app-types.js";
+import { ActivityService } from "../services/db/activity-service.js";
 import { handleAppError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type {
@@ -94,6 +95,12 @@ export class MotorScheduleHandler {
       await bulkCreateMotorSchedules(reqData, userPayload.id);
 
       const isBulk = Array.isArray(reqData) && reqData.length > 1;
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: isBulk ? "SCHEDULES_BULK_CREATED" : "SCHEDULE_CREATED",
+        entityType: "SCHEDULE",
+        newData: { count: isBulk ? reqData.length : 1 },
+      });
       return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED);
     } catch (error: any) {
       handleAppError(error, "create Motor Schedule");
@@ -134,6 +141,7 @@ export class MotorScheduleHandler {
   // =================== EDIT SCHEDULE ===================
   editMotorScheduleHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
@@ -156,6 +164,14 @@ export class MotorScheduleHandler {
       checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate, schedule_end_date: data.schedule_end_date || scheduleStartDate }, existingSchedules);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, buildScheduleData(data, scheduleStartDate));
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_UPDATED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+        oldData: { schedule_status: existed.schedule_status },
+        newData: buildScheduleData(data, scheduleStartDate) as Record<string, unknown>,
+      });
       return sendResponse(c, 200, SCHEDULE_UPDATED);
     } catch (error: any) {
       handleAppError(error, "edit motor Schedule");
@@ -177,6 +193,13 @@ export class MotorScheduleHandler {
       await updateRecordById<MotorScheduleTable>(motorSchedules, existed.id, {
         schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false,
       });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_DELETED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+        oldData: { schedule_status: existed.schedule_status },
+      });
       return sendResponse(c, 200, SCHEDULE_DELETED);
     } catch (error: any) {
       handleAppError(error, "delete motor Schedule");
@@ -186,6 +209,7 @@ export class MotorScheduleHandler {
   // =================== UPDATE SCHEDULE STATUS ===================
     updateScheduleStatusHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
@@ -200,10 +224,22 @@ export class MotorScheduleHandler {
         const active = await findActiveScheduleById(scheduleId);
         if (!active) throw new BadRequestException(NO_ACTIVE_SCHEDULE);
         await stopScheduleById(scheduleId);
+        await ActivityService.logActivity({
+          performedBy: userPayload.id,
+          action: "SCHEDULE_STOPPED",
+          entityType: "SCHEDULE",
+          entityId: scheduleId,
+        });
         return sendResponse(c, 200, SCHEDULE_STOPPED);
       }
 
       await restartScheduleById(scheduleId);
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_RESTARTED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+      });
       return sendResponse(c, 200, SCHEDULE_RESTARTED);
     } catch (error: any) {
       handleAppError(error, "update schedule status");
@@ -213,6 +249,7 @@ export class MotorScheduleHandler {
   // =================== STOP ALL SCHEDULES ===================
   stopAllMotorSchedulesHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const motorId = +c.req.param("motor_id");
       paramsValidateException.validateId(motorId, "motor id");
 
@@ -224,7 +261,13 @@ export class MotorScheduleHandler {
 
       const ids = active.map(s => s.id);
       await cancelSchedulesByIds(ids);
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "ALL_SCHEDULES_STOPPED",
+        entityType: "SCHEDULE",
+        entityId: motorId,
+        newData: { cancelled_count: ids.length },
+      });
       return sendResponse(c, 200, ALL_SCHEDULES_STOPPED, { cancelled_count: ids.length });
     } catch (error: any) {
       handleAppError(error, "stop all motor Schedules");
@@ -234,6 +277,7 @@ export class MotorScheduleHandler {
   // =================== ADD REPEAT DAYS ===================
   addRepeatDaysHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
@@ -248,6 +292,14 @@ export class MotorScheduleHandler {
       checkMotorScheduleConflict({ start_time: existed.start_time, end_time: existed.end_time, repeat: 1, days_of_week: mergedDays }, conflicts);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { days_of_week: mergedDays, bit_wise_days: data.bit_wise_days ?? 0 });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_REPEAT_DAYS_ADDED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+        oldData: { days_of_week: existed.days_of_week },
+        newData: { days_of_week: mergedDays },
+      });
       return sendResponse(c, 200, REPEAT_DAYS_ADDED, { days_of_week: mergedDays });
     } catch (error: any) {
       handleAppError(error, "add repeat days");
@@ -256,6 +308,7 @@ export class MotorScheduleHandler {
 
   updateAcknowledgementHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const scheduleId = +c.req.param("id");
       paramsValidateException.validateId(scheduleId, "schedule id");
 
@@ -263,6 +316,12 @@ export class MotorScheduleHandler {
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" });
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULE_ACKNOWLEDGED",
+        entityType: "SCHEDULE",
+        entityId: scheduleId,
+      });
       return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
     } catch (error: any) {
       handleAppError(error, "update acknowledgement");
@@ -271,6 +330,7 @@ export class MotorScheduleHandler {
 
   bulkUpdateAcknowledgementHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const data = await c.req.json();
       const scheduleIds: number[] = data.schedule_ids;
 
@@ -281,7 +341,12 @@ export class MotorScheduleHandler {
       await db.update(motorSchedules)
         .set({ acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" })
         .where(inArray(motorSchedules.id, scheduleIds));
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_ACKNOWLEDGED",
+        entityType: "SCHEDULE",
+        newData: { schedule_ids: scheduleIds, count: scheduleIds.length },
+      });
       return sendResponse(c, 200, ACKNOWLEDGEMENT_UPDATED);
     } catch (error: any) {
       handleAppError(error, "bulk update acknowledgement");
@@ -310,10 +375,17 @@ export class MotorScheduleHandler {
   // =================== BULK STOP SCHEDULES ===================
   bulkStopSchedulesHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const { ids }: { ids: number[] } = await c.req.json();
       if (!ids || !Array.isArray(ids) || ids.length === 0) throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
 
       await cancelSchedulesByIds(ids);
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_STOPPED",
+        entityType: "SCHEDULE",
+        newData: { ids, count: ids.length },
+      });
       return sendResponse(c, 200, BULK_SCHEDULES_STOPPED, { stopped_count: ids.length });
     } catch (error: any) {
       handleAppError(error, "bulk stop schedules");
@@ -324,10 +396,17 @@ export class MotorScheduleHandler {
   // =================== BULK RESTART SCHEDULES ===================
   bulkRestartSchedulesHandler = async (c: Context) => {
     try {
+      const userPayload = c.get("user_payload");
       const { ids }: { ids: number[] } = await c.req.json();
       if (!ids || !Array.isArray(ids) || ids.length === 0) throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
 
       await restartSchedulesByIds(ids);
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_RESTARTED",
+        entityType: "SCHEDULE",
+        newData: { ids, count: ids.length },
+      });
       return sendResponse(c, 200, BULK_SCHEDULES_RESTARTED, { restarted_count: ids.length });
     } catch (error: any) {
       handleAppError(error, "bulk restart schedules");
@@ -345,7 +424,12 @@ export class MotorScheduleHandler {
       await db.update(motorSchedules)
         .set({ schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false, updated_at: new Date() })
         .where(inArray(motorSchedules.id, ids));
-
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_DELETED",
+        entityType: "SCHEDULE",
+        newData: { ids, count: ids.length },
+      });
       return sendResponse(c, 200, BULK_SCHEDULES_DELETED, { deleted_count: ids.length });
     } catch (error: any) {
       handleAppError(error, "bulk delete schedules"); 

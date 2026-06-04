@@ -146,6 +146,9 @@ export async function updateStates(insertedData, previousData) {
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
                 }, trx);
+                if (trackPowerChange) {
+                    await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
+                }
             }
             let effectivePrevState = prevState;
             let effectivePrevMode = prevMode;
@@ -410,6 +413,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
                 }, trx);
+                await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
             }
         }
         let effectivePrevState = prevState;
@@ -539,6 +543,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
                 }, trx);
+                await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
             }
         }
         const currentMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
@@ -641,6 +646,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
                 }, trx);
+                await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
             }
         }
         const currentMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
