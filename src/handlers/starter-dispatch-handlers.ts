@@ -91,7 +91,7 @@ export class StarterDispatchHandlers {
   updateStarterDispatchHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const dispatchId = +c.req.param("id");
+      const dispatchId = +c.req.param("id")!;
       paramsValidateException.validateId(dispatchId, "Dispatch id");
 
       const dispatchPayload = await c.req.json();
@@ -180,7 +180,7 @@ export class StarterDispatchHandlers {
 
   getStarterDispatchByStarterIdHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starterId");
+      const starterId = +c.req.param("starterId")!;
       paramsValidateException.validateId(starterId, "Starter id");
 
       const dispatchRecords = await getStarterDispatchByStarterId(starterId);

@@ -81,7 +81,7 @@ export class LocationHandlers {
 
   renameLocationHandler = async (c: Context) => {
     try {
-      const locationId = +c.req.param("id");
+      const locationId = +c.req.param("id")!;
       const reqData = await c.req.json();
       paramsValidateException.emptyBodyValidation(reqData);
       paramsValidateException.validateId(locationId, "location id");
@@ -107,7 +107,7 @@ export class LocationHandlers {
 
   deleteLocationHandler = async (c: Context) => {
     try {
-      const locationId = +c.req.param("id");
+      const locationId = +c.req.param("id")!;
       paramsValidateException.validateId(locationId, "location id");
       const foundedLocation = await getSingleRecordByMultipleColumnValues<LocationsTable>(locations, ["id", "status"], ["=", "!="], [locationId, "ARCHIVED"]);
       if (!foundedLocation) throw new NotFoundException(LOCATION_NOT_FOUND);
