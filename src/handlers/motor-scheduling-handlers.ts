@@ -147,7 +147,7 @@ export class MotorScheduleHandler {
   // =================== GET SINGLE SCHEDULE ===================
   getMotorScheduleByIdHandler = async (c: Context) => {
     try {
-      const scheduleId = +c.req.param("id");
+      const scheduleId = +c.req.param("id")!;
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId);

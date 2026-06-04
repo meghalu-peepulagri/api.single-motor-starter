@@ -163,7 +163,7 @@ export class UserHandlers {
     deleteUserHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const userId = +(c.req.param("id") ?? "");
+            const userId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(userId, "user id");
             const targetUser = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [userId, "ARCHIVED"], ["id", "user_type", "full_name", "phone", "email"]);
             if (!targetUser)
