@@ -32,7 +32,7 @@ export class StarterDefaultSettingsHandlers {
     updateStarterDefaultSettingsHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const defaultSettingId = +c.req.param("id");
+            const defaultSettingId = +(c.req.param("id") ?? 0);
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validatedBody = await validatedRequest("update-default-settings", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA);
@@ -73,7 +73,7 @@ export class StarterDefaultSettingsHandlers {
     };
     getAcknowledgedStarterSettingsHandler = async (c) => {
         try {
-            const starterId = +c.req.param("starter_id");
+            const starterId = +(c.req.param("starter_id") ?? 0);
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
@@ -88,7 +88,7 @@ export class StarterDefaultSettingsHandlers {
     insertStarterSettingHandler = async (c) => {
         try {
             const user = c.get("user_payload");
-            const starterId = Number(c.req.param("starter_id"));
+            const starterId = Number(c.req.param("starter_id") ?? 0);
             const body = await c.req.json();
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starter) {
@@ -109,7 +109,7 @@ export class StarterDefaultSettingsHandlers {
     };
     getStarterSettingsLimitsHandler = async (c) => {
         try {
-            const starterId = +c.req.param("starter_id");
+            const starterId = +(c.req.param("starter_id") ?? 0);
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
@@ -124,7 +124,7 @@ export class StarterDefaultSettingsHandlers {
     updateStarterSettingsLimitsHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const settingId = +c.req.param("id");
+            const settingId = +(c.req.param("id") ?? 0);
             const body = await c.req.json();
             const { id, starter_id, created_at, updated_at, ...rest } = body;
             const foundedSettingId = await getRecordById(starterSettingsLimits, settingId);
@@ -160,7 +160,7 @@ export class StarterDefaultSettingsHandlers {
     };
     getStarterAckHistoryHandler = async (c) => {
         try {
-            const starterId = +c.req.param("starter_id");
+            const starterId = +(c.req.param("starter_id") ?? 0);
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
@@ -179,7 +179,7 @@ export class StarterDefaultSettingsHandlers {
     };
     getStarterSettingDetailsMobileHandler = async (c) => {
         try {
-            const starterId = +c.req.param("starter_id");
+            const starterId = +(c.req.param("starter_id") ?? 0);
             const query = c.req.query();
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starterData)
@@ -201,7 +201,7 @@ export class StarterDefaultSettingsHandlers {
     };
     getStarterSettingsLimitsMobileHandler = async (c) => {
         try {
-            const starterId = +c.req.param("starter_id");
+            const starterId = +(c.req.param("starter_id") ?? 0);
             const query = c.req.query();
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starterData)
@@ -236,7 +236,7 @@ export class StarterDefaultSettingsHandlers {
     updateStarterDefaultSettingsLimitsHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const defaultSettingLimitsId = +c.req.param("id");
+            const defaultSettingLimitsId = +(c.req.param("id") ?? 0);
             const reqBody = await c.req.json();
             const validatedBody = await validatedRequest("update-default-settings-limits", reqBody, UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA);
             const defaultSettingLimitsData = await getRecordById(StarterDefaultSettingsLimits, defaultSettingLimitsId);
@@ -277,7 +277,7 @@ export class StarterDefaultSettingsHandlers {
     updateLatestSettingAckByStarterHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const starterId = +c.req.param("starter_id");
+            const starterId = +(c.req.param("starter_id") ?? 0);
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id"]);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
