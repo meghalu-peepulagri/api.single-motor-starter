@@ -484,11 +484,12 @@ export function prepareSettingsUpdateLogs(data: {
   starterId: number;
   oldData: any;
   newData: any;
+  pcbNumber?: string | null;
 }): NewUserActivityLog[] {
   const logs: NewUserActivityLog[] = [];
+  const pcbSuffix = data.pcbNumber ? ` — device '${data.pcbNumber}'` : "";
 
   Object.keys(data.newData).forEach((field) => {
-    // Only track if the field exists in SETTINGS_FIELD_NAMES and has changed
     if (
       SETTINGS_FIELD_NAMES[field as keyof typeof SETTINGS_FIELD_NAMES] &&
       data.newData[field] !== undefined &&
@@ -504,7 +505,7 @@ export function prepareSettingsUpdateLogs(data: {
         oldData: { [field]: data.oldData[field] },
         newData: { [field]: data.newData[field] },
         deviceId: data.starterId,
-        message: `Setting '${fieldLabel}' changed from '${data.oldData[field]}' to '${data.newData[field]}'`,
+        message: `Setting '${fieldLabel}' changed from '${data.oldData[field]}' to '${data.newData[field]}'${pcbSuffix}`,
       }));
     }
   });

@@ -257,6 +257,7 @@ export class StarterHandlers {
           action: isUser ? "STARTER_REMOVED" : "DEVICE_DELETED",
           entityType: "STARTER",
           entityId: starterId,
+          newData: { pcb_number: starter.pcb_number },
           }, trx);
       });
 
@@ -738,7 +739,7 @@ export class StarterHandlers {
         action: "DEVICE_RESET_TRIGGERED",
         entityType: "STARTER",
         entityId: starterId,
-        newData: { device_reset_status: deviceResetStatus },
+        newData: { device_reset_status: deviceResetStatus, pcb_number: starter.pcb_number },
       });
       return sendResponse(c, 200, DEVICE_RESET_SUCCESSFULLY);
     } catch (error: any) {
@@ -879,7 +880,7 @@ export class StarterHandlers {
         action: "FAULT_MANUALLY_CLEARED",
         entityType: "STARTER",
         entityId: starterId,
-        newData: { motor_id: motorId, fault_record_id: faultRecord.id },
+        newData: { motor_id: motorId, fault_record_id: faultRecord.id, motor_name: motor.alias_name ?? motor.name },
       });
       return sendResponse(c, 200, FAULT_CLEARED_SUCCESSFULLY);
     } catch (error: any) {

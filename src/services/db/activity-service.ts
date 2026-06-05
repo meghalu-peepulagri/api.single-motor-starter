@@ -70,6 +70,7 @@ export class ActivityService {
     entityId?: number;
     oldData?: Record<string, unknown>;
     newData?: Record<string, unknown>;
+    message?: string;
   }, trx?: Transaction) {
     const log = this.prepareActivityLog(data);
     await this.saveActivityLogs([log], trx);
@@ -312,13 +313,15 @@ export class ActivityService {
     starterId: number,
     oldData: Record<string, unknown>,
     newData: Record<string, unknown>,
-    trx?: Transaction
+    trx?: Transaction,
+    pcbNumber?: string | null
   ) {
     const logs = prepareSettingsUpdateLogs({
       userId,
       starterId,
       oldData,
-      newData
+      newData,
+      pcbNumber
     });
 
     if (logs.length > 0) {
