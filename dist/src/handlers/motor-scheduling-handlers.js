@@ -433,7 +433,7 @@ export class MotorScheduleHandler {
     // =================== PER-DAY BITMASK UPDATE ===================
     updateDayBitmaskHandler = async (c) => {
         try {
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const { action, day } = await c.req.json();
             if (!["stop", "restart", "delete"].includes(action))
@@ -507,7 +507,7 @@ export class MotorScheduleHandler {
     // =================== SINGLE SCHEDULE HISTORY (timeline) ===================
     getScheduleHistoryByIdHandler = async (c) => {
         try {
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const schedule = await getRecordById(motorSchedules, scheduleId);
             if (!schedule)
@@ -521,7 +521,7 @@ export class MotorScheduleHandler {
     // =================== SCHEDULE LOGS ===================
     getScheduleLogsHandler = async (c) => {
         try {
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const query = c.req.query();
             const page = +(query.page) || 1;
@@ -539,7 +539,7 @@ export class MotorScheduleHandler {
     // =================== SCHEDULE LIVE DATA ===================
     getScheduleLiveDataHandler = async (c) => {
         try {
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const schedule = await getRecordById(motorSchedules, scheduleId, ["id"]);
             if (!schedule)
@@ -556,7 +556,7 @@ export class MotorScheduleHandler {
     // =================== SCHEDULE OPERATIONS ===================
     getScheduleOperationsHandler = async (c) => {
         try {
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const schedule = await getRecordById(motorSchedules, scheduleId, ["id"]);
             if (!schedule)
