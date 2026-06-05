@@ -226,12 +226,13 @@ export class ActivityService {
     /**
      * Logs starter settings update events
      */
-    static async writeStarterSettingsUpdatedLog(userId, starterId, oldData, newData, trx) {
+    static async writeStarterSettingsUpdatedLog(userId, starterId, oldData, newData, trx, pcbNumber) {
         const logs = prepareSettingsUpdateLogs({
             userId,
             starterId,
             oldData,
-            newData
+            newData,
+            pcbNumber
         });
         if (logs.length > 0) {
             await this.saveActivityLogs(logs, trx);

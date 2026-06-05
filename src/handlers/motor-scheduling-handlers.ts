@@ -84,6 +84,27 @@ import { validatedRequest } from "../validations/validate-request.js";
 
 const paramsValidateException = new ParamsValidateException();
 
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function formatHHMM(hhmm: string | null | undefined): string {
+  if (!hhmm || hhmm.length < 4) return '—';
+  return `${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)}`;
+}
+
+function formatYYMMDD(yymmdd: number | null | undefined): string {
+  if (!yymmdd) return '—';
+  const s = String(yymmdd).padStart(6, '0');
+  const year = 2000 + parseInt(s.slice(0, 2), 10);
+  const month = parseInt(s.slice(2, 4), 10) - 1;
+  const day = parseInt(s.slice(4, 6), 10);
+  return `${String(day).padStart(2,'0')}-${MONTHS[month]}-${year}`;
+}
+
+function formatScheduleDateTime(yymmdd: number | null | undefined, hhmm: string | null | undefined): string | null {
+  if (!yymmdd || !hhmm) return null;
+  return `${formatYYMMDD(yymmdd)} ${formatHHMM(hhmm)}`;
+}
+
 export class MotorScheduleHandler {
 
   // =================== CREATE SCHEDULE ===================
@@ -95,11 +116,23 @@ export class MotorScheduleHandler {
       await bulkCreateMotorSchedules(reqData, userPayload.id);
 
       const isBulk = Array.isArray(reqData) && reqData.length > 1;
+      const logNewData: Record<string, unknown> = { count: isBulk ? reqData.length : 1 };
+      if (!isBulk) {
+        const singleData = Array.isArray(reqData) ? reqData[0] : reqData;
+        if (singleData?.starter_id) {
+          const starterForLog = await getRecordById(starterBoxes, singleData.starter_id, ["pcb_number"]) as { pcb_number: string | null } | null;
+          if (starterForLog?.pcb_number) logNewData.pcb_number = starterForLog.pcb_number;
+        }
+        const startDt = formatScheduleDateTime(singleData?.schedule_start_date, singleData?.start_time);
+        const endDt = formatScheduleDateTime(singleData?.schedule_end_date ?? singleData?.schedule_start_date, singleData?.end_time);
+        if (startDt) logNewData.start_datetime = startDt;
+        if (endDt) logNewData.end_datetime = endDt;
+      }
       await ActivityService.logActivity({
         performedBy: userPayload.id,
         action: isBulk ? "SCHEDULES_BULK_CREATED" : "SCHEDULE_CREATED",
         entityType: "SCHEDULE",
-        newData: { count: isBulk ? reqData.length : 1 },
+        newData: logNewData,
       });
       return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED);
     } catch (error: any) {
@@ -151,7 +184,9 @@ export class MotorScheduleHandler {
         "update-motor-schedule", normalizedReqData, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA,
       );
 
-      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "motor_id", "schedule_status"]) as Pick<MotorSchedule, "id" | "motor_id" | "schedule_status"> | null;
+      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, [
+        "id", "motor_id", "schedule_status", "start_time", "end_time", "schedule_start_date", "schedule_end_date", "starter_id"
+      ]) as Pick<MotorSchedule, "id" | "motor_id" | "schedule_status" | "start_time" | "end_time" | "schedule_start_date" | "schedule_end_date" | "starter_id"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
       if (existed.schedule_status === "RUNNING") throw new BadRequestException(CANNOT_EDIT_RUNNING_SCHEDULE);
 
@@ -164,13 +199,29 @@ export class MotorScheduleHandler {
       checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate, schedule_end_date: data.schedule_end_date || scheduleStartDate }, existingSchedules);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, buildScheduleData(data, scheduleStartDate));
+
+      let pcbForEditLog: string | null = null;
+      if (existed.starter_id) {
+        const starterForLog = await getRecordById(starterBoxes, existed.starter_id, ["pcb_number"]) as { pcb_number: string | null } | null;
+        pcbForEditLog = starterForLog?.pcb_number ?? null;
+      }
+      const changedParts: string[] = [];
+      if (data.start_time !== existed.start_time) changedParts.push(`Start time: ${formatHHMM(existed.start_time)} → ${formatHHMM(data.start_time)}`);
+      if (data.end_time !== existed.end_time) changedParts.push(`End time: ${formatHHMM(existed.end_time)} → ${formatHHMM(data.end_time)}`);
+      if (scheduleStartDate !== existed.schedule_start_date) changedParts.push(`Start date: ${formatYYMMDD(existed.schedule_start_date)} → ${formatYYMMDD(scheduleStartDate)}`);
+      if (data.schedule_end_date && data.schedule_end_date !== existed.schedule_end_date) changedParts.push(`End date: ${formatYYMMDD(existed.schedule_end_date)} → ${formatYYMMDD(data.schedule_end_date)}`);
+      const editLogNewData: Record<string, unknown> = {
+        ...buildScheduleData(data, scheduleStartDate) as Record<string, unknown>,
+        ...(pcbForEditLog && { pcb_number: pcbForEditLog }),
+        ...(changedParts.length > 0 && { changes: changedParts.join(', ') }),
+      };
       await ActivityService.logActivity({
         performedBy: userPayload.id,
         action: "SCHEDULE_UPDATED",
         entityType: "SCHEDULE",
         entityId: scheduleId,
         oldData: { schedule_status: existed.schedule_status },
-        newData: buildScheduleData(data, scheduleStartDate) as Record<string, unknown>,
+        newData: editLogNewData,
       });
       return sendResponse(c, 200, SCHEDULE_UPDATED);
     } catch (error: any) {
@@ -185,10 +236,19 @@ export class MotorScheduleHandler {
       const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
-      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "schedule_status"]) as Pick<MotorSchedule, "id" | "schedule_status"> | null;
+      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, [
+        "id", "schedule_status", "start_time", "end_time", "schedule_start_date", "starter_id"
+      ]) as Pick<MotorSchedule, "id" | "schedule_status" | "start_time" | "end_time" | "schedule_start_date" | "starter_id"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       if (existed.schedule_status === "RUNNING") await stopScheduleById(scheduleId);
+
+      let pcbForDeleteLog: string | null = null;
+      if (existed.starter_id) {
+        const starterForLog = await getRecordById(starterBoxes, existed.starter_id, ["pcb_number"]) as { pcb_number: string | null } | null;
+        pcbForDeleteLog = starterForLog?.pcb_number ?? null;
+      }
+      const deleteStartDt = formatScheduleDateTime(existed.schedule_start_date, existed.start_time);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, existed.id, {
         schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false,
@@ -198,7 +258,11 @@ export class MotorScheduleHandler {
         action: "SCHEDULE_DELETED",
         entityType: "SCHEDULE",
         entityId: scheduleId,
-        oldData: { schedule_status: existed.schedule_status },
+        oldData: {
+          schedule_status: existed.schedule_status,
+          ...(pcbForDeleteLog && { pcb_number: pcbForDeleteLog }),
+          ...(deleteStartDt && { start_datetime: deleteStartDt }),
+        },
       });
       return sendResponse(c, 200, SCHEDULE_DELETED);
     } catch (error: any) {
@@ -217,8 +281,20 @@ export class MotorScheduleHandler {
       if (cmd === undefined || cmd === null) throw new BadRequestException(SCHEDULE_CMD_REQUIRED);
       if (cmd !== 1 && cmd !== 2) throw new BadRequestException(INVALID_SCHEDULE_CMD);
 
-      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "schedule_status"]);
+      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, [
+        "id", "schedule_status", "start_time", "end_time", "schedule_start_date", "starter_id"
+      ]) as Pick<MotorSchedule, "id" | "schedule_status" | "start_time" | "end_time" | "schedule_start_date" | "starter_id"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      let pcbForStatusLog: string | null = null;
+      if (existed.starter_id) {
+        const starterForLog = await getRecordById(starterBoxes, existed.starter_id, ["pcb_number"]) as { pcb_number: string | null } | null;
+        pcbForStatusLog = starterForLog?.pcb_number ?? null;
+      }
+      const statusLogOldData: Record<string, unknown> = {
+        ...(pcbForStatusLog && { pcb_number: pcbForStatusLog }),
+        ...(formatScheduleDateTime(existed.schedule_start_date, existed.start_time) && { start_datetime: formatScheduleDateTime(existed.schedule_start_date, existed.start_time) }),
+      };
 
       if (cmd === 1) {
         const active = await findActiveScheduleById(scheduleId);
@@ -229,6 +305,7 @@ export class MotorScheduleHandler {
           action: "SCHEDULE_STOPPED",
           entityType: "SCHEDULE",
           entityId: scheduleId,
+          oldData: statusLogOldData,
         });
         return sendResponse(c, 200, SCHEDULE_STOPPED);
       }
@@ -239,6 +316,7 @@ export class MotorScheduleHandler {
         action: "SCHEDULE_RESTARTED",
         entityType: "SCHEDULE",
         entityId: scheduleId,
+        oldData: statusLogOldData,
       });
       return sendResponse(c, 200, SCHEDULE_RESTARTED);
     } catch (error: any) {

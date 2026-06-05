@@ -7,14 +7,22 @@ export function buildActivityMessage(action, oldData, newData, entityId) {
         case "LOGIN": return "User logged in";
         case "LOGGED_OUT": return "User logged out";
         // Device
-        case "DEVICE_ADDED":
-            return name ? `Device '${name}' added` : "Device added";
-        case "DEVICE_DELETED":
-            return name ? `Device '${name}' deleted` : "Device deleted";
-        case "STARTER_REMOVED":
-            return name ? `Starter '${name}' removed from account` : "Starter removed from account";
-        case "DEVICE_RESET_TRIGGERED":
-            return entityId ? `Device #${entityId} reset triggered` : "Device reset triggered";
+        case "DEVICE_ADDED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            return pcb ? `Device '${pcb}' added` : (name ? `Device '${name}' added` : "Device added");
+        }
+        case "DEVICE_DELETED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            return pcb ? `Device '${pcb}' deleted` : "Device deleted";
+        }
+        case "STARTER_REMOVED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            return pcb ? `Starter '${pcb}' removed from account` : "Starter removed from account";
+        }
+        case "DEVICE_RESET_TRIGGERED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            return pcb ? `Device '${pcb}' reset triggered` : (entityId ? `Device #${entityId} reset triggered` : "Device reset triggered");
+        }
         case "DEPLOY_STATUS_UPDATE": {
             const o = oldData?.status;
             const n = newData?.status;
@@ -44,8 +52,8 @@ export function buildActivityMessage(action, oldData, newData, entityId) {
             return o && n ? `Settings sync status changed from '${o}' to '${n}'` : "Settings sync status overridden";
         }
         case "FAULT_MANUALLY_CLEARED": {
-            const motorId = newData?.motor_id;
-            return motorId ? `Fault manually cleared for motor #${motorId}` : "Fault manually cleared";
+            const motorName = (newData?.motor_name ?? oldData?.motor_name);
+            return motorName ? `Fault manually cleared for motor '${motorName}'` : "Fault manually cleared";
         }
         case "DEVICE_POWER_ON": return "Device powered ON";
         case "DEVICE_POWER_OFF": return "Device powered OFF";
@@ -83,17 +91,53 @@ export function buildActivityMessage(action, oldData, newData, entityId) {
             return simNo ? `Device dispatch updated — SIM ${simNo}` : "Device dispatch updated";
         }
         // Schedule
-        case "SCHEDULE_CREATED": return "Schedule created";
+        case "SCHEDULE_CREATED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            const start = (newData?.start_datetime ?? oldData?.start_datetime);
+            const end = (newData?.end_datetime ?? oldData?.end_datetime);
+            if (pcb && start && end)
+                return `Schedule created — device '${pcb}' | Start: ${start} | End: ${end}`;
+            if (pcb && start)
+                return `Schedule created — device '${pcb}' | Start: ${start}`;
+            if (pcb)
+                return `Schedule created — device '${pcb}'`;
+            return "Schedule created";
+        }
         case "SCHEDULES_BULK_CREATED":
             return count ? `${count} schedules created` : "Multiple schedules created";
-        case "SCHEDULE_UPDATED":
-            return entityId ? `Schedule #${entityId} updated` : "Schedule updated";
-        case "SCHEDULE_DELETED":
+        case "SCHEDULE_UPDATED": {
+            const changes = (newData?.changes ?? oldData?.changes);
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            const base = pcb ? `Schedule updated — device '${pcb}'` : "Schedule updated";
+            return changes ? `${base} — ${changes}` : base;
+        }
+        case "SCHEDULE_DELETED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            const start = (newData?.start_datetime ?? oldData?.start_datetime);
+            if (pcb && start)
+                return `Schedule deleted — device '${pcb}' | Start: ${start}`;
+            if (pcb)
+                return `Schedule deleted — device '${pcb}'`;
             return entityId ? `Schedule #${entityId} deleted` : "Schedule deleted";
-        case "SCHEDULE_STOPPED":
+        }
+        case "SCHEDULE_STOPPED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            const start = (newData?.start_datetime ?? oldData?.start_datetime);
+            if (pcb && start)
+                return `Schedule stopped — device '${pcb}' | Start: ${start}`;
+            if (pcb)
+                return `Schedule stopped — device '${pcb}'`;
             return entityId ? `Schedule #${entityId} stopped` : "Schedule stopped";
-        case "SCHEDULE_RESTARTED":
+        }
+        case "SCHEDULE_RESTARTED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            const start = (newData?.start_datetime ?? oldData?.start_datetime);
+            if (pcb && start)
+                return `Schedule restarted — device '${pcb}' | Start: ${start}`;
+            if (pcb)
+                return `Schedule restarted — device '${pcb}'`;
             return entityId ? `Schedule #${entityId} restarted` : "Schedule restarted";
+        }
         case "ALL_SCHEDULES_STOPPED": return "All schedules stopped";
         case "SCHEDULE_REPEAT_DAYS_ADDED": {
             const days = newData?.days_of_week;

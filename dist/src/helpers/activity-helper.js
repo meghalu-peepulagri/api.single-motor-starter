@@ -347,8 +347,8 @@ export function prepareUserDeletedLog(data) {
  */
 export function prepareSettingsUpdateLogs(data) {
     const logs = [];
+    const pcbSuffix = data.pcbNumber ? ` — device '${data.pcbNumber}'` : "";
     Object.keys(data.newData).forEach((field) => {
-        // Only track if the field exists in SETTINGS_FIELD_NAMES and has changed
         if (SETTINGS_FIELD_NAMES[field] &&
             data.newData[field] !== undefined &&
             data.newData[field] !== null &&
@@ -362,7 +362,7 @@ export function prepareSettingsUpdateLogs(data) {
                 oldData: { [field]: data.oldData[field] },
                 newData: { [field]: data.newData[field] },
                 deviceId: data.starterId,
-                message: `Setting '${fieldLabel}' changed from '${data.oldData[field]}' to '${data.newData[field]}'`,
+                message: `Setting '${fieldLabel}' changed from '${data.oldData[field]}' to '${data.newData[field]}'${pcbSuffix}`,
             }));
         }
     });
