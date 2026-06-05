@@ -1,14 +1,12 @@
 import { userActivityLogs } from "../../database/schemas/user-activity-logs.js";
 import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserDeletedLog, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
+import { buildActivityMessage } from "../../constants/activity-messages.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
 /**
  * Service to handle Database Level Activity Logs (Audit Trail)
  */
 export class ActivityService {
-    /**
-     * Prepares an activity log object without saving it
-     */
     static prepareActivityLog(data) {
         return {
             user_id: data.userId ?? data.performedBy ?? null,
@@ -20,7 +18,7 @@ export class ActivityService {
             device_id: data.deviceId || null,
             old_data: data.oldData ? JSON.stringify(data.oldData) : null,
             new_data: data.newData ? JSON.stringify(data.newData) : null,
-            message: data.message || null,
+            message: data.message || buildActivityMessage(data.action, data.oldData, data.newData, data.entityId ?? null),
         };
     }
     /**
@@ -248,7 +246,8 @@ export class ActivityService {
             action: "LOCATION_ADDED",
             entityType: "LOCATION",
             entityId: locationId,
-            newData: data
+            newData: data,
+            message: `Location '${data.name}' added`
         });
         await this.saveActivityLogs([log], trx);
     }
@@ -262,19 +261,21 @@ export class ActivityService {
             entityType: "LOCATION",
             entityId: locationId,
             oldData,
-            newData
+            newData,
+            message: `Location renamed from '${oldData.name}' to '${newData.name}'`
         });
         await this.saveActivityLogs([log], trx);
     }
     /**
      * Logs a location deletion event
      */
-    static async writeLocationDeletedLog(userId, locationId, trx) {
+    static async writeLocationDeletedLog(userId, locationId, locationName, trx) {
         const log = prepareDeletionLog({
             userId,
             entityType: "LOCATION",
             entityId: locationId,
-            action: "LOCATION_DELETED"
+            action: "LOCATION_DELETED",
+            entityName: locationName
         });
         await this.saveActivityLogs([log], trx);
     }
