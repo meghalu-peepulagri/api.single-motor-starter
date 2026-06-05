@@ -1,6 +1,7 @@
 import { inArray } from "drizzle-orm";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
+import { assignDeviceScheduleIds } from "../services/db/motor-schedules-services.js";
 import { logger } from "../utils/logger.js";
 import { findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
 import { buildDeviceSyncPayloads } from "./motor-schedule-payload-helper.js";
@@ -96,6 +97,9 @@ export async function pushPendingSchedulesForStarter(starter, motorId) {
                             updated_at: new Date(),
                         })
                             .where(inArray(motorSchedules.id, idsToUpdate));
+                        // Assign device_schedule_id to confirmed records in slot order
+                        const toAssign = stillPending.filter(r => idsToUpdate.includes(r.id));
+                        await assignDeviceScheduleIds(starter.id, toAssign).catch(err => logger.warn(`[schedule-sync] assignDeviceScheduleIds failed for starter=${starter.id}: ${err?.message}`));
                         logger.info(`[schedule-sync] starter=${starter.id} updated ${idsToUpdate.length}/${stillPending.length} schedule(s) to SCHEDULED`);
                     }
                 }

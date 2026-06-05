@@ -44,6 +44,7 @@ export const starterBoxes = pgTable("starter_boxes", {
     installation_photo_key: varchar("installation_photo_key"),
     device_installed_location: varchar("device_installed_location"),
     warranty_expiry_date: varchar("warranty_expiry_date"),
+    last_device_schedule_id: integer("last_device_schedule_id").notNull().default(0),
     last_signal_received_at: timestamp("last_signal_received_at"),
     last_power_on_at: timestamp("last_power_on_at"),
     last_power_off_at: timestamp("last_power_off_at"),

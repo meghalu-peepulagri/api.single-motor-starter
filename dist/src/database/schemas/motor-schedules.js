@@ -71,6 +71,8 @@ export const motorSchedules = pgTable("motor_schedules", {
     device_failure_at: timestamp("device_failure_at"),
     device_failure_reason: varchar("device_failure_reason"),
     device_last_seen_at: timestamp("device_last_seen_at"),
+    // Device-assigned slot ID — set at ACK time, never recycled
+    device_schedule_id: integer("device_schedule_id"),
     // Ownership & soft-delete
     created_by: integer("created_by").references(() => users.id),
     deleted_by: integer("deleted_by").references(() => users.id),

@@ -2,6 +2,7 @@ import { inArray } from "drizzle-orm";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import type { StarterBox } from "../database/schemas/starter-boxes.js";
+import { assignDeviceScheduleIds } from "../services/db/motor-schedules-services.js";
 
 type StarterForPublish = Pick<StarterBox, "id" | "mac_address" | "pcb_number" | "device_allocation">;
 import { logger } from "../utils/logger.js";
@@ -111,6 +112,13 @@ export async function pushPendingSchedulesForStarter(
                 updated_at: new Date(),
               })
               .where(inArray(motorSchedules.id, idsToUpdate));
+
+            // Assign device_schedule_id to confirmed records in slot order
+            const toAssign = stillPending.filter(r => idsToUpdate.includes(r.id));
+            await assignDeviceScheduleIds(starter.id, toAssign).catch(err =>
+              logger.warn(`[schedule-sync] assignDeviceScheduleIds failed for starter=${starter.id}: ${err?.message}`)
+            );
+
             logger.info(`[schedule-sync] starter=${starter.id} updated ${idsToUpdate.length}/${stillPending.length} schedule(s) to SCHEDULED`);
           }
         } else {

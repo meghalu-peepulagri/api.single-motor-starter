@@ -408,6 +408,8 @@ export function formatMotorScheduleResponse(record: any, queryDate?: number): an
     runtime_minutes: rest.runtime_minutes,
     failure_reason_description: getFailureReason(rest.failure_reason),
     failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
+    device_schedule_id: rest.device_schedule_id ?? null,
+    synced: rest.acknowledgement === 1,
   };
 }
 

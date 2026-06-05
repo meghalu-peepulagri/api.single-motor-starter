@@ -365,6 +365,8 @@ export function formatMotorScheduleResponse(record, queryDate) {
         runtime_minutes: rest.runtime_minutes,
         failure_reason_description: getFailureReason(rest.failure_reason),
         failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
+        device_schedule_id: rest.device_schedule_id ?? null,
+        synced: rest.acknowledgement === 1,
     };
 }
 export function formatMotorScheduleListResponse(result, queryDate) {

@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte, ne, notInArray, SQL, sql, getTableColumns, desc } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, ne, notInArray, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
@@ -756,6 +756,48 @@ export async function bulkCreateMotorSchedules(
   }));
 
   return await saveRecords(motorSchedules, finalPayload as any);
+}
+
+// =================== DEVICE SCHEDULE ID ASSIGNMENT ===================
+
+/**
+ * Assign device_schedule_id to a batch of schedules for one starter.
+ * Sorted by schedule_id ascending so device slot order is preserved.
+ * Uses FOR UPDATE lock so concurrent heartbeats never double-assign.
+ * Already-assigned rows (device_schedule_id IS NOT NULL) are skipped.
+ */
+export async function assignDeviceScheduleIds(
+  starterId: number,
+  records: { id: number; schedule_id: number }[],
+): Promise<void> {
+  if (records.length === 0) return;
+
+  const sorted = [...records].sort((a, b) => a.schedule_id - b.schedule_id);
+
+  await db.transaction(async (trx) => {
+    const row = await trx
+      .select({ last_device_schedule_id: starterBoxes.last_device_schedule_id })
+      .from(starterBoxes)
+      .where(eq(starterBoxes.id, starterId))
+      .limit(1);
+
+    const last = row[0]?.last_device_schedule_id ?? 0;
+
+    for (let i = 0; i < sorted.length; i++) {
+      await trx
+        .update(motorSchedules)
+        .set({ device_schedule_id: last + i + 1 })
+        .where(and(
+          eq(motorSchedules.id, sorted[i].id),
+          isNull(motorSchedules.device_schedule_id),
+        ));
+    }
+
+    await trx
+      .update(starterBoxes)
+      .set({ last_device_schedule_id: last + sorted.length })
+      .where(eq(starterBoxes.id, starterId));
+  });
 }
 
 // =================== PER-DAY BITMASK UPDATE ===================

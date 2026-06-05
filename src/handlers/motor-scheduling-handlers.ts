@@ -73,6 +73,7 @@ import {
   findScheduleLiveData,
 } from "../services/db/motor-schedule-live-data-services.js";
 import {
+  assignDeviceScheduleIds,
   batchUpdateScheduleStatuses,
   bulkCreateMotorSchedules,
   cancelSchedulesByIds,
@@ -428,10 +429,14 @@ export class MotorScheduleHandler {
       const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
-      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "schedule_status"]) as Pick<MotorSchedule, "id" | "schedule_status"> | null;
+      const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "schedule_status", "schedule_id", "starter_id"]) as Pick<MotorSchedule, "id" | "schedule_status" | "schedule_id" | "starter_id"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" });
+
+      if (existed.starter_id) {
+        await assignDeviceScheduleIds(existed.starter_id, [{ id: existed.id, schedule_id: existed.schedule_id }]);
+      }
 
       await Promise.all([
         updateOperationAck(scheduleId, "CREATE", 1).catch(() => null),
@@ -455,24 +460,31 @@ export class MotorScheduleHandler {
       const userPayload = c.get("user_payload");
       const data = await c.req.json();
       const scheduleIds: number[] = data.schedule_ids;
-      const slotUpdates: { id: number; schedule_id: number }[] | undefined = data.slot_updates;
 
       if (!scheduleIds || !Array.isArray(scheduleIds) || scheduleIds.length === 0) {
-        throw new BadRequestException("Array of schedule ids required");
+        throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
       }
+
+      // Fetch schedule_id (slot) and starter_id so we can assign device_schedule_id
+      const rows = await db.query.motorSchedules.findMany({
+        where: inArray(motorSchedules.id, scheduleIds),
+        columns: { id: true, schedule_id: true, starter_id: true },
+      });
 
       await db.update(motorSchedules)
         .set({ acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" })
         .where(inArray(motorSchedules.id, scheduleIds));
 
-      if (slotUpdates && Array.isArray(slotUpdates) && slotUpdates.length > 0) {
-        await Promise.all(
-          slotUpdates.map(({ id, schedule_id }) =>
-            db.update(motorSchedules)
-              .set({ schedule_id })
-              .where(inArray(motorSchedules.id, [id]))
-          )
-        );
+      // Assign device_schedule_id grouped by starter
+      const byStarter = new Map<number, { id: number; schedule_id: number }[]>();
+      for (const row of rows) {
+        if (!row.starter_id) continue;
+        const list = byStarter.get(row.starter_id) ?? [];
+        list.push({ id: row.id, schedule_id: row.schedule_id });
+        byStarter.set(row.starter_id, list);
+      }
+      for (const [starterId, records] of byStarter) {
+        await assignDeviceScheduleIds(starterId, records);
       }
 
       await Promise.all(
@@ -700,10 +712,15 @@ export class MotorScheduleHandler {
         }
 
         totalDevices++;
-        for (const { payload, dbIds } of chunks) {
+        for (const { payload, dbIds, scheduleIds } of chunks) {
           totalChunks++;
           if (await publishMultipleTimesInBackground(payload, starter)) {
             await db.update(motorSchedules).set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() }).where(inArray(motorSchedules.id, dbIds));
+
+            // Assign device_schedule_id — zip parallel dbIds/scheduleIds arrays
+            const toAssign = dbIds.map((id, i) => ({ id, schedule_id: scheduleIds[i] }));
+            await assignDeviceScheduleIds(starter_id, toAssign).catch(() => null);
+
             await Promise.all(
               dbIds.flatMap(id => [
                 insertScheduleOperation({ schedule_id: id, operation: "CREATE", sent_at: new Date() }).catch(() => null),

@@ -3,6 +3,23 @@ import { controlMode, getAlertDescription, getFailureReason, getFaultDescription
 import { parseTimestamp } from "./dns-helpers.js";
 import { normalizeTime } from "./motor-schedule-payload-helper.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+function toHHMM(value) {
+    if (value == null)
+        return null;
+    const n = Number(value);
+    if (isNaN(n))
+        return null;
+    if (n > 2359) {
+        const ms = n > 9_999_999_999 ? n : n * 1000;
+        const istMs = ms + IST_OFFSET_MS;
+        const d = new Date(istMs);
+        const hh = String(d.getUTCHours()).padStart(2, '0');
+        const mm = String(d.getUTCMinutes()).padStart(2, '0');
+        return `${hh}${mm}`;
+    }
+    return normalizeTime(n) ?? null;
+}
 export function prepareLiveDataPayload(validatedData, starterData) {
     if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
         logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
@@ -12,9 +29,9 @@ export function prepareLiveDataPayload(validatedData, starterData) {
     ;
     const data = validatedData.data;
     const sch = data.sch && typeof data.sch === "object" && Object.keys(data.sch).length > 0 ? data.sch : null;
-    const schStartTime = sch ? (normalizeTime(sch.st) ?? null) : null;
+    const schStartTime = sch ? toHHMM(sch.st) : null;
     const schRuntime = sch ? (sch.rt ?? null) : null;
-    const schEndTime = sch?.et ? (normalizeTime(sch.et) ?? null) : null;
+    const schEndTime = sch ? toHHMM(sch.et) : null;
     const llvSource = data.llv || data.ll_v || [];
     const llv = cleanThreeNumberArray(llvSource);
     const amp = cleanThreeNumberArray(data.amp || []);
