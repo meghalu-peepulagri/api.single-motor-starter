@@ -147,7 +147,7 @@ export class MotorScheduleHandler {
   // =================== GET SINGLE SCHEDULE ===================
   getMotorScheduleByIdHandler = async (c: Context) => {
     try {
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId);
@@ -165,7 +165,7 @@ export class MotorScheduleHandler {
   editMotorScheduleHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const reqData = await c.req.json();
@@ -204,7 +204,7 @@ export class MotorScheduleHandler {
   deleteMotorScheduleHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const existed = await getRecordById<MotorScheduleTable>(
@@ -241,7 +241,7 @@ export class MotorScheduleHandler {
   updateScheduleStatusHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const { cmd } = await c.req.json();
@@ -290,7 +290,7 @@ export class MotorScheduleHandler {
   stopAllMotorSchedulesHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const motorId = +c.req.param("motor_id")!;
+      const motorId = +(c.req.param("motor_id") ?? 0);
       paramsValidateException.validateId(motorId, "motor id");
 
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"], ["id"]);
@@ -318,7 +318,7 @@ export class MotorScheduleHandler {
   addRepeatDaysHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const reqData = await c.req.json();
@@ -350,7 +350,7 @@ export class MotorScheduleHandler {
   updateAcknowledgementHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id", "schedule_status"]) as Pick<MotorSchedule, "id" | "schedule_status"> | null;

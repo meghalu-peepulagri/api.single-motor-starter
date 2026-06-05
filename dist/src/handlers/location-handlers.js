@@ -70,7 +70,7 @@ export class LocationHandlers {
     };
     renameLocationHandler = async (c) => {
         try {
-            const locationId = +c.req.param("id");
+            const locationId = +(c.req.param("id") ?? 0);
             const reqData = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqData);
             paramsValidateException.validateId(locationId, "location id");
@@ -95,7 +95,7 @@ export class LocationHandlers {
     };
     deleteLocationHandler = async (c) => {
         try {
-            const locationId = +c.req.param("id");
+            const locationId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(locationId, "location id");
             const foundedLocation = await getSingleRecordByMultipleColumnValues(locations, ["id", "status"], ["=", "!="], [locationId, "ARCHIVED"]);
             if (!foundedLocation)

@@ -56,7 +56,7 @@ export class MotorHandlers {
     updateMotorHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const motorId = +c.req.param("id");
+            const motorId = +(c.req.param("id") ?? 0);
             const motorPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(motorPayload);
             const validMotorReq = await validatedRequest("update-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
@@ -103,7 +103,7 @@ export class MotorHandlers {
     };
     getSingleMotorHandler = async (c) => {
         try {
-            const motorId = +c.req.param("id");
+            const motorId = +(c.req.param("id") ?? 0);
             const query = c.req.query();
             paramsValidateException.validateId(motorId, "motor id");
             const defaultColumns = ["id", "name", "hp", "status", "state", "mode"];
@@ -125,7 +125,7 @@ export class MotorHandlers {
     };
     deleteMotorHandler = async (c) => {
         try {
-            const motorId = +c.req.param("id");
+            const motorId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(motorId, "motor id");
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
             if (!motor)
@@ -175,7 +175,7 @@ export class MotorHandlers {
     updateMotorTestRunStatusHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const motorId = +c.req.param("id");
+            const motorId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(motorId, "motor id");
             const motorPayload = await c.req.json();
             paramsValidateException.emptyBodyValidation(motorPayload);

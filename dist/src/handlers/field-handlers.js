@@ -56,7 +56,7 @@ export class FieldHandlers {
     updateFieldHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const fieldId = +c.req.param("id");
+            const fieldId = +(c.req.param("id") ?? 0);
             const fieldPayload = await c.req.json();
             paramsValidateException.validateId(fieldId, "field id");
             paramsValidateException.emptyBodyValidation(fieldPayload);

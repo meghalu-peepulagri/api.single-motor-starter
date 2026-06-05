@@ -103,7 +103,7 @@ export class UserHandlers {
   updateUserDetailsHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const userId = +c.req.param("id")!;
+      const userId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(userId, "user id");
       const reqBody = await c.req.json();
       paramsValidateException.emptyBodyValidation(reqBody);
@@ -137,7 +137,7 @@ export class UserHandlers {
 
   userDetailsWithLocationsHandler = async (c: Context) => {
     try {
-      const userId = +c.req.param("id")!;
+      const userId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(userId, "user id");
       const query = c.req.query();
       const paginationParams = getPaginationOffParams(query);
@@ -154,7 +154,7 @@ export class UserHandlers {
 
   userLogOutHandler = async (c: Context) => {
     try {
-      const id = +c.req.param("id")!;
+      const id = +(c.req.param("id") ?? 0);
       const reqData = await c.req.json();
       const tokenData = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [reqData.fcm_token, id], ["id"]);
 

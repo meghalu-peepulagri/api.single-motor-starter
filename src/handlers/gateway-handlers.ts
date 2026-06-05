@@ -153,7 +153,7 @@ export class GatewayHandlers {
 
   getGatewayDetailsHandler = async (c: Context) => {
     try {
-      const gatewayId = +c.req.param("id")!;
+      const gatewayId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(gatewayId, "gateway id");
 
       const gateway = await getGatewayDetails(gatewayId);
@@ -169,7 +169,7 @@ export class GatewayHandlers {
   deleteGatewayHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const gatewayId = +c.req.param("id")!;
+      const gatewayId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(gatewayId, "gateway id");
 
       const foundGateway = await getGatewayForOwnerAction(gatewayId, userPayload.id, ["id", "name", "label", "status", "user_id"]);
@@ -198,7 +198,7 @@ export class GatewayHandlers {
   updateGatewayLabelHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const gatewayId = +c.req.param("id")!;
+      const gatewayId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(gatewayId, "gateway id");
 
       const reqBody = await c.req.json();
@@ -237,7 +237,7 @@ export class GatewayHandlers {
   renameGatewayHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const gatewayId = +c.req.param("id")!;
+      const gatewayId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(gatewayId, "gateway id");
 
       const reqBody = await c.req.json();
@@ -276,7 +276,7 @@ export class GatewayHandlers {
   updateGatewayNumberHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const gatewayId = +c.req.param("id")!;
+      const gatewayId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(gatewayId, "gateway id");
 
       const reqBody = await c.req.json();

@@ -60,7 +60,7 @@ export class MotorScheduleHandler {
     // =================== GET SINGLE SCHEDULE ===================
     getMotorScheduleByIdHandler = async (c) => {
         try {
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const schedule = await getRecordById(motorSchedules, scheduleId);
             if (!schedule)
@@ -76,7 +76,7 @@ export class MotorScheduleHandler {
     editMotorScheduleHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const reqData = await c.req.json();
             const normalizedReqData = normalizeMotorSchedulePayload(reqData);
@@ -107,7 +107,7 @@ export class MotorScheduleHandler {
     deleteMotorScheduleHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const existed = await getRecordById(motorSchedules, scheduleId, ["id", "schedule_status", "acknowledgement"]);
             if (!existed)
@@ -141,7 +141,7 @@ export class MotorScheduleHandler {
     updateScheduleStatusHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const { cmd } = await c.req.json();
             if (cmd === undefined || cmd === null)
@@ -188,7 +188,7 @@ export class MotorScheduleHandler {
     stopAllMotorSchedulesHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const motorId = +c.req.param("motor_id");
+            const motorId = +(c.req.param("motor_id") ?? 0);
             paramsValidateException.validateId(motorId, "motor id");
             const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"], ["id"]);
             if (!motor)
@@ -215,7 +215,7 @@ export class MotorScheduleHandler {
     addRepeatDaysHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const reqData = await c.req.json();
             const data = await validatedRequest("add-repeat-days", normalizeRepeatDaysPayload(reqData), ADD_REPEAT_DAYS_VALIDATION_CRITERIA);
@@ -244,7 +244,7 @@ export class MotorScheduleHandler {
     updateAcknowledgementHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const scheduleId = +c.req.param("id");
+            const scheduleId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(scheduleId, "schedule id");
             const existed = await getRecordById(motorSchedules, scheduleId, ["id", "schedule_status"]);
             if (!existed)
