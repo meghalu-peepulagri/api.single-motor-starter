@@ -208,7 +208,8 @@ export function prepareDeletionLog(data) {
         entityType: data.entityType,
         entityId: data.entityId,
         deviceId: data.deviceId,
-        oldData: data.entityName ? { name: data.entityName } : null
+        oldData: data.entityName ? { name: data.entityName } : null,
+        message: data.entityName ? `${data.entityType} '${data.entityName}' deleted` : `${data.entityType} deleted`
     });
 }
 /**
@@ -301,6 +302,7 @@ export function prepareUserUpdateLogs(data) {
     const fieldsToTrack = ["full_name", "phone", "email"];
     fieldsToTrack.forEach((field) => {
         if (data.newData[field] !== undefined && String(data.newData[field]) !== String(data.oldData[field])) {
+            const label = field.replace(/_/g, " ");
             logs.push(ActivityService.prepareActivityLog({
                 userId: data.userId,
                 performedBy: data.performedBy,
@@ -309,6 +311,7 @@ export function prepareUserUpdateLogs(data) {
                 entityId: data.userId,
                 oldData: { [field]: data.oldData[field] },
                 newData: { [field]: data.newData[field] },
+                message: `User ${label} updated from '${data.oldData[field]}' to '${data.newData[field]}'`,
             }));
         }
     });
@@ -350,6 +353,7 @@ export function prepareSettingsUpdateLogs(data) {
             data.newData[field] !== undefined &&
             data.newData[field] !== null &&
             String(data.newData[field]) !== String(data.oldData[field])) {
+            const fieldLabel = SETTINGS_FIELD_NAMES[field];
             logs.push(ActivityService.prepareActivityLog({
                 performedBy: data.userId,
                 action: `SETTING_${field.toUpperCase()}_UPDATED`,
@@ -357,7 +361,8 @@ export function prepareSettingsUpdateLogs(data) {
                 entityId: data.starterId,
                 oldData: { [field]: data.oldData[field] },
                 newData: { [field]: data.newData[field] },
-                deviceId: data.starterId
+                deviceId: data.starterId,
+                message: `Setting '${fieldLabel}' changed from '${data.oldData[field]}' to '${data.newData[field]}'`,
             }));
         }
     });

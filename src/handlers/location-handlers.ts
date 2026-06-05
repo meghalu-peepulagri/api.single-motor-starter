@@ -119,7 +119,7 @@ export class LocationHandlers {
 
       await db.transaction(async (trx) => {
         await updateRecordById<LocationsTable>(locations, locationId, { status: "ARCHIVED" }, trx);
-        await ActivityService.writeLocationDeletedLog(c.get("performer_id"), locationId, trx);
+        await ActivityService.writeLocationDeletedLog(c.get("performer_id"), locationId, foundedLocation.name, trx);
       })
       return sendResponse(c, 200, LOCATION_DELETED);
     } catch (error: any) {
