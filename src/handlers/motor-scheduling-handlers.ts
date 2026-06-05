@@ -561,7 +561,7 @@ export class MotorScheduleHandler {
   // =================== PER-DAY BITMASK UPDATE ===================
   updateDayBitmaskHandler = async (c: Context) => {
     try {
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const { action, day } = await c.req.json();
@@ -647,7 +647,7 @@ export class MotorScheduleHandler {
   // =================== SINGLE SCHEDULE HISTORY (timeline) ===================
   getScheduleHistoryByIdHandler = async (c: Context) => {
     try {
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId);
@@ -662,7 +662,7 @@ export class MotorScheduleHandler {
   // =================== SCHEDULE LOGS ===================
   getScheduleLogsHandler = async (c: Context) => {
     try {
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const query = c.req.query();
@@ -682,7 +682,7 @@ export class MotorScheduleHandler {
   // =================== SCHEDULE LIVE DATA ===================
   getScheduleLiveDataHandler = async (c: Context) => {
     try {
-      const scheduleId = +c.req.param("id")!;
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id"]);
@@ -700,7 +700,7 @@ export class MotorScheduleHandler {
   // =================== SCHEDULE OPERATIONS ===================
   getScheduleOperationsHandler = async (c: Context) => {
     try {
-      const scheduleId = +c.req.param("id");
+      const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, ["id"]);
