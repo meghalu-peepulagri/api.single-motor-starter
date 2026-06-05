@@ -26,7 +26,7 @@ export class ActivityService {
     message?: string;
   }): NewUserActivityLog {
     return {
-      user_id: data.userId || null,
+      user_id: data.userId ?? data.performedBy ?? null,
       performed_by: data.performedBy,
       field_name: null,
       action: data.action,
