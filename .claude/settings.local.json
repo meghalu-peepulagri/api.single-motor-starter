@@ -5,7 +5,12 @@
       "Bash(Get-ChildItem -Path \"D:\\\\orotron\\\\Single-motor-Starter\\\\peepulagri-api.single-motor-starter\\\\src\" -Recurse -Include \"*schedule*\")",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(where pandoc *)",
-      "Bash(pandoc --version)"
+      "Bash(pandoc --version)",
+      "Read(//d/orotron/idhara/admin-app.singlestarter.com/src/**)"
+    ],
+    "additionalDirectories": [
+      "d:\\orotron\\idhara\\admin-app.singlestarter.com\\src\\lib\\interfaces",
+      "d:\\orotron\\idhara\\admin-app.singlestarter.com\\src\\components\\schedule"
     ]
   }
 }
