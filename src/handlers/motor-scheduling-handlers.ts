@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import {
   ACKNOWLEDGEMENT_UPDATED,
@@ -74,6 +74,7 @@ import {
 } from "../services/db/motor-schedule-live-data-services.js";
 import {
   assignDeviceScheduleIds,
+  syncLastDeviceScheduleId,
   batchUpdateScheduleStatuses,
   bulkCreateMotorSchedules,
   cancelSchedulesByIds,
@@ -101,29 +102,10 @@ import type {
   ValidatedMotorSchedule,
 } from "../validations/schema/motor-schedule-validators.js";
 import { validatedRequest } from "../validations/validate-request.js";
+import { formatHHMM, formatYYMMDD, formatScheduleDateTime } from "../helpers/motor-schedule-helpers.js";
 
 const paramsValidateException = new ParamsValidateException();
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-function formatHHMM(hhmm: string | null | undefined): string {
-  if (!hhmm || hhmm.length < 4) return '—';
-  return `${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)}`;
-}
-
-function formatYYMMDD(yymmdd: number | null | undefined): string {
-  if (!yymmdd) return '—';
-  const s = String(yymmdd).padStart(6, '0');
-  const year = 2000 + parseInt(s.slice(0, 2), 10);
-  const month = parseInt(s.slice(2, 4), 10) - 1;
-  const day = parseInt(s.slice(4, 6), 10);
-  return `${String(day).padStart(2,'0')}-${MONTHS[month]}-${year}`;
-}
-
-function formatScheduleDateTime(yymmdd: number | null | undefined, hhmm: string | null | undefined): string | null {
-  if (!yymmdd || !hhmm) return null;
-  return `${formatYYMMDD(yymmdd)} ${formatHHMM(hhmm)}`;
-}
 
 export class MotorScheduleHandler {
 
@@ -273,6 +255,10 @@ export class MotorScheduleHandler {
       await updateRecordById<MotorScheduleTable>(motorSchedules, existed.id, {
         schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false,
       });
+
+      if (existed.starter_id) {
+        syncLastDeviceScheduleId(existed.starter_id).catch(() => null);
+      }
 
       if (existed.acknowledgement === 1) {
         await Promise.all([
@@ -460,12 +446,14 @@ export class MotorScheduleHandler {
       const userPayload = c.get("user_payload");
       const data = await c.req.json();
       const scheduleIds: number[] = data.schedule_ids;
+      // slot_map: record.id (string key) → device_schedule_id assigned by frontend
+      const slotMap: Record<string, number> | undefined = data.slot_map;
 
       if (!scheduleIds || !Array.isArray(scheduleIds) || scheduleIds.length === 0) {
         throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
       }
 
-      // Fetch schedule_id (slot) and starter_id so we can assign device_schedule_id
+      // Fetch starter_id so we can update last_device_schedule_id
       const rows = await db.query.motorSchedules.findMany({
         where: inArray(motorSchedules.id, scheduleIds),
         columns: { id: true, schedule_id: true, starter_id: true },
@@ -475,16 +463,45 @@ export class MotorScheduleHandler {
         .set({ acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" })
         .where(inArray(motorSchedules.id, scheduleIds));
 
-      // Assign device_schedule_id grouped by starter
-      const byStarter = new Map<number, { id: number; schedule_id: number }[]>();
-      for (const row of rows) {
-        if (!row.starter_id) continue;
-        const list = byStarter.get(row.starter_id) ?? [];
-        list.push({ id: row.id, schedule_id: row.schedule_id });
-        byStarter.set(row.starter_id, list);
-      }
-      for (const [starterId, records] of byStarter) {
-        await assignDeviceScheduleIds(starterId, records);
+      if (slotMap && Object.keys(slotMap).length > 0) {
+        // Frontend provided exact device slot IDs — use them directly.
+        await Promise.all(
+          scheduleIds.map(id => {
+            const deviceId = slotMap[String(id)];
+            if (deviceId == null) return Promise.resolve();
+            return db.update(motorSchedules)
+              .set({ device_schedule_id: deviceId })
+              .where(eq(motorSchedules.id, id));
+          })
+        );
+        // Update last_device_schedule_id to max slot used, grouped by starter.
+        const byStarter = new Map<number, number[]>();
+        for (const row of rows) {
+          if (!row.starter_id) continue;
+          const deviceId = slotMap[String(row.id)];
+          if (deviceId == null) continue;
+          const list = byStarter.get(row.starter_id) ?? [];
+          list.push(deviceId);
+          byStarter.set(row.starter_id, list);
+        }
+        for (const [starterId, deviceIds] of byStarter) {
+          const maxId = Math.max(...deviceIds);
+          await db.update(starterBoxes)
+            .set({ last_device_schedule_id: sql`GREATEST(last_device_schedule_id, ${maxId})` })
+            .where(eq(starterBoxes.id, starterId));
+        }
+      } else {
+        // Fallback: assign device_schedule_id via last+1 increment (legacy / no slot_map provided).
+        const byStarter = new Map<number, { id: number; schedule_id: number }[]>();
+        for (const row of rows) {
+          if (!row.starter_id) continue;
+          const list = byStarter.get(row.starter_id) ?? [];
+          list.push({ id: row.id, schedule_id: row.schedule_id });
+          byStarter.set(row.starter_id, list);
+        }
+        for (const [starterId, records] of byStarter) {
+          await assignDeviceScheduleIds(starterId, records);
+        }
       }
 
       await Promise.all(
@@ -583,9 +600,20 @@ export class MotorScheduleHandler {
       const { ids }: { ids: number[] } = await c.req.json();
       if (!ids || !Array.isArray(ids) || ids.length === 0) throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
 
+      const toDelete = await db.query.motorSchedules.findMany({
+        where: inArray(motorSchedules.id, ids),
+        columns: { starter_id: true },
+      });
+
       await db.update(motorSchedules)
         .set({ schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false, updated_at: new Date() })
         .where(inArray(motorSchedules.id, ids));
+
+      const starterIds = [...new Set(toDelete.map(r => r.starter_id).filter((id): id is number => id != null))];
+      for (const sid of starterIds) {
+        syncLastDeviceScheduleId(sid).catch(() => null);
+      }
+
       await ActivityService.logActivity({
         performedBy: userPayload.id,
         action: "SCHEDULES_BULK_DELETED",
@@ -625,11 +653,11 @@ export class MotorScheduleHandler {
       }
 
       await batchUpdateScheduleStatuses([
-        { status: "SCHEDULED",          ids: groups.SCHEDULED },
-        { status: "RUNNING",            ids: groups.RUNNING,            last_started_at: now },
-        { status: "COMPLETED",          ids: groups.COMPLETED,          last_stopped_at: now, completed_at: now },
-        { status: "PARTIAL",            ids: groups.PARTIAL,            last_stopped_at: now },
-        { status: "MISSED",             ids: groups.MISSED,             last_stopped_at: now },
+        { status: "SCHEDULED", ids: groups.SCHEDULED },
+        { status: "RUNNING", ids: groups.RUNNING, last_started_at: now },
+        { status: "COMPLETED", ids: groups.COMPLETED, last_stopped_at: now, completed_at: now },
+        { status: "PARTIAL", ids: groups.PARTIAL, last_stopped_at: now },
+        { status: "MISSED", ids: groups.MISSED, last_stopped_at: now },
         { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
       ]);
 

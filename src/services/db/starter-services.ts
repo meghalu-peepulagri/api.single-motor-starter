@@ -447,6 +447,7 @@ export async function starterConnectedMotors(starterId: number) {
       installation_photo_key: true,
       device_installed_location: true,
       warranty_expiry_date: true,
+      last_device_schedule_id: true,
     },
     with: {
       gateway: {

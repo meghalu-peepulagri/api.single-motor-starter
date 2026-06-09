@@ -6,7 +6,9 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(where pandoc *)",
       "Bash(pandoc --version)",
-      "Read(//d/orotron/idhara/admin-app.singlestarter.com/src/**)"
+      "Read(//d/orotron/idhara/admin-app.singlestarter.com/src/**)",
+      "Bash(dir /s /b \"d:\\\\orotron\\\\idhara\\\\admin-app.singlestarter.com\\\\src\\\\*Publish*\")",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "d:\\orotron\\idhara\\admin-app.singlestarter.com\\src\\lib\\interfaces",
