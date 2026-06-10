@@ -419,16 +419,39 @@ export async function findSchedulesByFilters(
 // =================== PENDING SCHEDULES FOR DEVICE SYNC ===================
 
 /**
- * Fetch unacknowledged, active schedules where schedule_start_date is within
- * today and next 2 days (3 days total: today, tomorrow, day after).
- * Only schedules with ack=0 and a valid start date.
+ * Returns MAX(schedule_end_date) per starter_id for acknowledged schedules
+ * whose end date is >= todayNum. Used to determine whether the device still
+ * has active schedules so the next batch is withheld until they expire.
+ */
+export async function findMaxAckedEndDatePerStarter(todayNum: number): Promise<Map<number, number>> {
+  const rows = await db
+    .select({
+      starter_id: motorSchedules.starter_id,
+      max_end_date: sql<number>`MAX(${motorSchedules.schedule_end_date})`,
+    })
+    .from(motorSchedules)
+    .where(and(
+      eq(motorSchedules.acknowledgement, 1),
+      gte(motorSchedules.schedule_end_date, todayNum),
+      ne(motorSchedules.status, "ARCHIVED"),
+      notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]),
+    ))
+    .groupBy(motorSchedules.starter_id);
+
+  return new Map(
+    rows
+      .filter((r): r is { starter_id: number; max_end_date: number } => r.starter_id != null)
+      .map(r => [r.starter_id, r.max_end_date]),
+  );
+}
+
+/**
+ * Fetch unacknowledged, active schedules where schedule_start_date >= today.
+ * Upper bound (today+2) is applied per-starter in the caller based on the
+ * last acknowledged end date, so we only return the floor here.
  */
 export async function findPendingSchedulesForSync() {
-  const today = new Date();
-  const twoDaysLater = new Date(today);
-  twoDaysLater.setDate(today.getDate() + 2);
-  const todayNum = dateToYYMMDD(today);
-  const lastDayNum = dateToYYMMDD(twoDaysLater);
+  const todayNum = dateToYYMMDD(new Date());
 
   return await db.query.motorSchedules.findMany({
     where: and(
@@ -437,7 +460,6 @@ export async function findPendingSchedulesForSync() {
       ne(motorSchedules.status, "ARCHIVED"),
       inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]),
       gte(motorSchedules.schedule_start_date, todayNum),
-      lte(motorSchedules.schedule_start_date, lastDayNum),
     ),
     columns: {
       id: true,
@@ -469,11 +491,7 @@ export async function findPendingSchedulesForSync() {
  * cron version does.
  */
 export async function findPendingSchedulesForStarter(starterId: number, motorId?: number) {
-  const today = new Date();
-  const twoDaysLater = new Date(today);
-  twoDaysLater.setDate(today.getDate() + 2);
-  const todayNum = dateToYYMMDD(today);
-  const lastDayNum = dateToYYMMDD(twoDaysLater);
+  const todayNum = dateToYYMMDD(new Date());
 
   const conditions = [
     eq(motorSchedules.starter_id, starterId),
@@ -481,7 +499,6 @@ export async function findPendingSchedulesForStarter(starterId: number, motorId?
     ne(motorSchedules.status, "ARCHIVED"),
     inArray(motorSchedules.schedule_status, ["PENDING"]),
     gte(motorSchedules.schedule_start_date, todayNum),
-    lte(motorSchedules.schedule_start_date, lastDayNum),
   ];
   if (motorId != null) {
     conditions.push(eq(motorSchedules.motor_id, motorId));

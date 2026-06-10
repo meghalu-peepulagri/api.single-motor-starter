@@ -6,8 +6,8 @@ import { assignDeviceScheduleIds } from "../services/db/motor-schedules-services
 
 type StarterForPublish = Pick<StarterBox, "id" | "mac_address" | "pcb_number" | "device_allocation">;
 import { logger } from "../utils/logger.js";
-import { findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
-import { buildDeviceSyncPayloads } from "./motor-schedule-payload-helper.js";
+import { findMaxAckedEndDatePerStarter, findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
+import { buildDeviceSyncPayloads, dateToYYMMDD, todayAsYYMMDD } from "./motor-schedule-payload-helper.js";
 import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { publishingMap, schedulePartialAckMap } from "./ack-tracker-hepler.js";
 
@@ -48,8 +48,23 @@ export async function pushPendingSchedulesForStarter(
   let acked = 0;
 
   try {
-    const records = await findPendingSchedulesForStarter(starter.id, motorId);
-    if (!records || records.length === 0) return { chunks: 0, acked: 0 };
+    // Anchor check: if the device still has acknowledged schedules whose end date
+    // is today or later, withhold the next batch until those dates have passed.
+    const today = todayAsYYMMDD();
+    const anchorMap = await findMaxAckedEndDatePerStarter(today);
+    const maxEndDate = anchorMap.get(starter.id);
+    if (maxEndDate != null && today <= maxEndDate) {
+      logger.info(`[schedule-sync] starter=${starter.id} has schedules active until ${maxEndDate}, skipping next batch`);
+      return { chunks: 0, acked: 0 };
+    }
+
+    const twoDaysLater = new Date();
+    twoDaysLater.setDate(twoDaysLater.getDate() + 2);
+    const windowEnd = dateToYYMMDD(twoDaysLater);
+
+    const allRecords = await findPendingSchedulesForStarter(starter.id, motorId);
+    const records = allRecords?.filter(r => r.schedule_start_date != null && r.schedule_start_date <= windowEnd) ?? [];
+    if (records.length === 0) return { chunks: 0, acked: 0 };
 
     // Derive the publish key (MAC or PCB) the same way publishMultipleTimesInBackground does,
     // so we can look up partial ACK results in schedulePartialAckMap after publish.

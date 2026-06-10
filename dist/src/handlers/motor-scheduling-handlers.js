@@ -9,14 +9,15 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { checkMotorScheduleConflict, validateScheduleTypeRules, } from "../helpers/motor-helper.js";
 import { buildMotorScheduleFilters, buildScheduleHistoryFilters } from "../helpers/motor-schedule-filter-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
-import { buildDeviceSyncPayloads, buildScheduleData, buildScheduleTimeline, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, todayAsYYMMDD, } from "../helpers/motor-schedule-payload-helper.js";
+import { buildDeviceSyncPayloads, buildScheduleData, buildScheduleTimeline, dateToYYMMDD, formatMotorScheduleListResponse, formatMotorScheduleResponse, normalizeMotorSchedulePayload, normalizeRepeatDaysPayload, todayAsYYMMDD, } from "../helpers/motor-schedule-payload-helper.js";
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
+import { schedulePartialAckMap } from "../helpers/ack-tracker-hepler.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, updateRecordById, } from "../services/db/base-db-services.js";
 import { findOperationsByScheduleId, insertScheduleOperation, updateOperationAck, } from "../services/db/motor-schedule-operations-services.js";
 import { findScheduleLogsByScheduleId, insertScheduleLog, } from "../services/db/motor-schedule-logs-services.js";
 import { findScheduleLiveData, } from "../services/db/motor-schedule-live-data-services.js";
-import { assignDeviceScheduleIds, syncLastDeviceScheduleId, batchUpdateScheduleStatuses, bulkCreateMotorSchedules, cancelSchedulesByIds, deleteDayFromSchedule, evaluateAndUpdateSchedulesOnRead, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findPendingSchedulesForSync, findScheduleHistoryByMotorAndStarter, findSchedulesByFilters, restartDayInSchedule, restartScheduleById, restartSchedulesByIds, stopDayInSchedule, stopScheduleById, } from "../services/db/motor-schedules-services.js";
+import { assignDeviceScheduleIds, syncLastDeviceScheduleId, batchUpdateScheduleStatuses, bulkCreateMotorSchedules, cancelSchedulesByIds, deleteDayFromSchedule, evaluateAndUpdateSchedulesOnRead, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findMaxAckedEndDatePerStarter, findPendingSchedulesForSync, findScheduleHistoryByMotorAndStarter, findSchedulesByFilters, restartDayInSchedule, restartScheduleById, restartSchedulesByIds, stopDayInSchedule, stopScheduleById, } from "../services/db/motor-schedules-services.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { handleAppError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
@@ -590,8 +591,34 @@ export class MotorScheduleHandler {
     // =================== PENDING FOR SYNC ===================
     getPendingSchedulesForSyncHandler = async (c) => {
         try {
-            const records = await findPendingSchedulesForSync();
-            if (!records || records.length === 0)
+            const today = todayAsYYMMDD();
+            const allRecords = await findPendingSchedulesForSync();
+            if (!allRecords || allRecords.length === 0)
+                return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
+            // Per-starter anchor check: only send next batch after the device's last
+            // acknowledged end date has passed. While today <= max_acked_end_date the
+            // device still has active schedules; withhold the next batch until they expire.
+            const anchorMap = await findMaxAckedEndDatePerStarter(today);
+            const starterGroups = new Map();
+            for (const r of allRecords) {
+                if (!r.starter_id)
+                    continue;
+                const list = starterGroups.get(r.starter_id) ?? [];
+                list.push(r);
+                starterGroups.set(r.starter_id, list);
+            }
+            const records = [];
+            for (const [starterId, stRecords] of starterGroups) {
+                const maxEndDate = anchorMap.get(starterId);
+                if (maxEndDate != null && today <= maxEndDate)
+                    continue; // device still has schedules
+                // Apply today → today+2 window for this starter
+                const twoDaysLater = new Date();
+                twoDaysLater.setDate(twoDaysLater.getDate() + 2);
+                const windowEnd = dateToYYMMDD(twoDaysLater);
+                records.push(...stRecords.filter(r => r.schedule_start_date != null && r.schedule_start_date <= windowEnd));
+            }
+            if (records.length === 0)
                 return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
             const grouped = buildDeviceSyncPayloads(records);
             const starters = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, grouped.map(g => g.starter_id)));
@@ -607,17 +634,41 @@ export class MotorScheduleHandler {
                     continue;
                 }
                 totalDevices++;
+                const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
                 for (const { payload, dbIds, scheduleIds } of chunks) {
                     totalChunks++;
                     if (await publishMultipleTimesInBackground(payload, starter)) {
-                        await db.update(motorSchedules).set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() }).where(inArray(motorSchedules.id, dbIds));
-                        // Assign device_schedule_id — zip parallel dbIds/scheduleIds arrays
-                        const toAssign = dbIds.map((id, i) => ({ id, schedule_id: scheduleIds[i] }));
-                        await assignDeviceScheduleIds(starter_id, toAssign).catch(() => null);
-                        await Promise.all(dbIds.flatMap(id => [
+                        // Read partial ACK bitmask — device may have confirmed only a subset of schedule_ids.
+                        const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
+                        if (publishKey)
+                            schedulePartialAckMap.delete(publishKey);
+                        // Build (dbId, schedule_id) pairs then filter to confirmed slots only.
+                        const allPairs = dbIds.map((id, i) => ({ id, schedule_id: scheduleIds[i] }));
+                        const confirmedPairs = partialIds && partialIds.length > 0
+                            ? (() => {
+                                const confirmedSet = new Set(partialIds);
+                                const matched = allPairs.filter(p => confirmedSet.has(p.schedule_id));
+                                const unmatched = scheduleIds.filter(sid => !confirmedSet.has(sid));
+                                if (unmatched.length > 0) {
+                                    console.warn(`[schedule-sync] starter=${starter_id} partial ACK: confirmed=[${partialIds.join(",")}] unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
+                                }
+                                return matched;
+                            })()
+                            : allPairs;
+                        if (confirmedPairs.length === 0)
+                            continue;
+                        const confirmedDbIds = confirmedPairs.map(p => p.id);
+                        await db.update(motorSchedules).set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() }).where(inArray(motorSchedules.id, confirmedDbIds));
+                        await assignDeviceScheduleIds(starter_id, confirmedPairs).catch(() => null);
+                        await Promise.all(confirmedDbIds.flatMap(id => [
                             insertScheduleOperation({ schedule_id: id, operation: "CREATE", sent_at: new Date() }).catch(() => null),
                             insertScheduleLog({ schedule_id: id, event_type: "SENT_TO_DEVICE", actor_type: "system", new_status: "SCHEDULED" }).catch(() => null),
                         ]));
+                    }
+                    else {
+                        // Publish failed — clear any stale partial ACK entry that may have arrived.
+                        if (publishKey)
+                            schedulePartialAckMap.delete(publishKey);
                     }
                 }
             }
