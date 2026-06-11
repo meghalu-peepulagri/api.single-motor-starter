@@ -27,6 +27,8 @@ motorScheduleRoute.post("/sync/status", motorScheduleHandler.syncScheduleStatuse
 motorScheduleRoute.post("/stop-all/:motor_id", isAuthorized, motorScheduleHandler.stopAllMotorSchedulesHandler);
 // Update schedule status: cmd 1 = Stop, cmd 2 = Restart
 motorScheduleRoute.post("/update-status/:id", isAuthorized, motorScheduleHandler.updateScheduleStatusHandler);
+// Force-push stuck PENDING schedules to device (bypasses anchor check and date window)
+motorScheduleRoute.post("/republish", isAuthorized, motorScheduleHandler.republishSchedulesHandler);
 // Create a single or bulk schedules
 motorScheduleRoute.post("/", isAuthorized, motorScheduleHandler.createMotorScheduleHandler);
 // Bulk stop schedules by ids

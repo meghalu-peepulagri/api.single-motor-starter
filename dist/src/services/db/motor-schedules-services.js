@@ -328,7 +328,7 @@ export async function findMaxAckedEndDatePerStarter(todayNum) {
 export async function findPendingSchedulesForSync() {
     const todayNum = dateToYYMMDD(new Date());
     return await db.query.motorSchedules.findMany({
-        where: and(eq(motorSchedules.acknowledgement, 0), eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]), gte(motorSchedules.schedule_start_date, todayNum)),
+        where: and(eq(motorSchedules.acknowledgement, 0), eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, ["PENDING"]), gte(motorSchedules.schedule_start_date, todayNum)),
         columns: {
             id: true,
             starter_id: true,
@@ -365,6 +365,45 @@ export async function findPendingSchedulesForStarter(starterId, motorId) {
         ne(motorSchedules.status, "ARCHIVED"),
         inArray(motorSchedules.schedule_status, ["PENDING"]),
         gte(motorSchedules.schedule_start_date, todayNum),
+    ];
+    if (motorId != null) {
+        conditions.push(eq(motorSchedules.motor_id, motorId));
+    }
+    return await db.query.motorSchedules.findMany({
+        where: and(...conditions),
+        columns: {
+            id: true,
+            starter_id: true,
+            schedule_id: true,
+            schedule_type: true,
+            schedule_start_date: true,
+            schedule_end_date: true,
+            start_time: true,
+            end_time: true,
+            runtime_minutes: true,
+            cycle_on_minutes: true,
+            cycle_off_minutes: true,
+            repeat: true,
+            days_of_week: true,
+            bit_wise_days: true,
+            power_loss_recovery: true,
+            power_loss_recovery_time: true,
+            enabled: true,
+        },
+        orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
+    });
+}
+/**
+ * Fetch all unacknowledged PENDING schedules for ONE starter (and optionally one motor).
+ * No date-window filter — used by the republish endpoint to force-push any stuck PENDING
+ * records regardless of how far in the future their start date is.
+ */
+export async function findPendingSchedulesForRepublish(starterId, motorId) {
+    const conditions = [
+        eq(motorSchedules.starter_id, starterId),
+        eq(motorSchedules.acknowledgement, 0),
+        ne(motorSchedules.status, "ARCHIVED"),
+        inArray(motorSchedules.schedule_status, ["PENDING"]),
     ];
     if (motorId != null) {
         conditions.push(eq(motorSchedules.motor_id, motorId));

@@ -87,6 +87,7 @@ import {
   findConflictingSchedules,
   findEvaluatableSchedules,
   findMaxAckedEndDatePerStarter,
+  findPendingSchedulesForRepublish,
   findPendingSchedulesForSync,
   findScheduleHistoryByMotorAndStarter,
   findSchedulesByFilters,
@@ -99,6 +100,7 @@ import {
 import type { ScheduleForEvaluation } from "../types/app-types.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { handleAppError } from "../utils/on-error.js";
+import { logger } from "../utils/logger.js";
 import { sendResponse } from "../utils/send-response.js";
 import type {
   ValidatedAddRepeatDays,
@@ -776,13 +778,26 @@ export class MotorScheduleHandler {
         const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
         for (const { payload, dbIds, scheduleIds } of chunks) {
           totalChunks++;
+
+          // Re-verify these records are still PENDING before publishing.
+          // A concurrent heartbeat or prior sync call may have already delivered them.
+          const stillPending = await db.query.motorSchedules.findMany({
+            where: (ms, { and: a, inArray: inArr, eq: e }) =>
+              a(inArr(ms.id, dbIds), e(ms.acknowledgement, 0)),
+            columns: { id: true, schedule_id: true },
+          });
+          if (stillPending.length === 0) continue;
+          const stillPendingIds = new Set(stillPending.map(r => r.id));
+          const verifiedDbIds = dbIds.filter(id => stillPendingIds.has(id));
+          const verifiedScheduleIds = scheduleIds.filter((_, i) => stillPendingIds.has(dbIds[i]));
+
           if (await publishMultipleTimesInBackground(payload, starter)) {
             // Read partial ACK bitmask — device may have confirmed only a subset of schedule_ids.
             const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
             if (publishKey) schedulePartialAckMap.delete(publishKey);
 
-            // Build (dbId, schedule_id) pairs then filter to confirmed slots only.
-            const allPairs = dbIds.map((id, i) => ({ id, schedule_id: scheduleIds[i] }));
+            // Build (dbId, schedule_id) pairs from verified-still-PENDING records only.
+            const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i] }));
             const confirmedPairs = partialIds && partialIds.length > 0
               ? (() => {
                   const confirmedSet = new Set(partialIds);
@@ -823,6 +838,101 @@ export class MotorScheduleHandler {
       return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, { devices: totalDevices, total_chunks: totalChunks, skipped_offline: skippedOffline });
     } catch (error: any) {
       handleAppError(error, "get pending schedules for sync");
+    }
+  };
+
+  // =================== REPUBLISH STUCK PENDING SCHEDULES ===================
+  republishSchedulesHandler = async (c: Context) => {
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      const starterId = Number(body?.starter_id);
+      const motorId = body?.motor_id != null ? Number(body.motor_id) : undefined;
+
+      if (!starterId || isNaN(starterId)) throw new BadRequestException("starter_id is required");
+
+      const starter = await db.query.starterBoxes.findFirst({
+        where: (s, { eq: e }) => e(s.id, starterId),
+      });
+      if (!starter) throw new BadRequestException("Starter not found");
+
+      const isOnline = starter.signal_quality != null && starter.signal_quality >= 1 && starter.signal_quality <= 30;
+      if (!isOnline) {
+        return sendResponse(c, 200, "Device is offline — schedules remain PENDING and will be delivered on next heartbeat", { published: 0, failed: 0, pending: 0 });
+      }
+
+      const records = await findPendingSchedulesForRepublish(starterId, motorId);
+      if (!records || records.length === 0) {
+        return sendResponse(c, 200, "No PENDING schedules found for this starter", { published: 0, failed: 0, pending: 0 });
+      }
+
+      const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
+      const grouped = buildDeviceSyncPayloads(records);
+
+      let published = 0, failed = 0;
+
+      for (const { chunks } of grouped) {
+        for (const { payload, dbIds, scheduleIds } of chunks) {
+          // Re-verify still PENDING before publishing
+          const stillPending = await db.query.motorSchedules.findMany({
+            where: (ms, { and: a, inArray: inArr, eq: e }) =>
+              a(inArr(ms.id, dbIds), e(ms.acknowledgement, 0)),
+            columns: { id: true, schedule_id: true },
+          });
+          if (stillPending.length === 0) continue;
+          const stillPendingIds = new Set(stillPending.map(r => r.id));
+          const verifiedDbIds = dbIds.filter(id => stillPendingIds.has(id));
+          const verifiedScheduleIds = scheduleIds.filter((_, i) => stillPendingIds.has(dbIds[i]));
+
+          const ok = await publishMultipleTimesInBackground(payload, starter);
+          if (ok) {
+            published++;
+            const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
+            if (publishKey) schedulePartialAckMap.delete(publishKey);
+
+            const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i] }));
+            const confirmedPairs = partialIds && partialIds.length > 0
+              ? (() => {
+                  const confirmedSet = new Set(partialIds);
+                  const matched = allPairs.filter(p => confirmedSet.has(p.schedule_id));
+                  const unmatched = verifiedScheduleIds.filter(sid => !confirmedSet.has(sid));
+                  if (unmatched.length > 0) {
+                    logger.warn(`[republish] starter=${starterId} partial ACK: confirmed=[${partialIds.join(",")}] unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
+                  }
+                  return matched;
+                })()
+              : allPairs;
+
+            if (confirmedPairs.length === 0) continue;
+            const confirmedDbIds = confirmedPairs.map(p => p.id);
+
+            await db.update(motorSchedules)
+              .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+              .where(inArray(motorSchedules.id, confirmedDbIds));
+
+            await Promise.all(confirmedPairs.map(p =>
+              db.update(motorSchedules)
+                .set({ device_schedule_id: p.schedule_id })
+                .where(and(eq(motorSchedules.id, p.id), isNull(motorSchedules.device_schedule_id)))
+                .catch(() => null)
+            ));
+
+            await Promise.all(
+              confirmedDbIds.flatMap(id => [
+                insertScheduleOperation({ schedule_id: id, operation: "CREATE", sent_at: new Date() }).catch(() => null),
+                insertScheduleLog({ schedule_id: id, event_type: "SENT_TO_DEVICE", actor_type: "system", new_status: "SCHEDULED" }).catch(() => null),
+              ])
+            );
+          } else {
+            failed++;
+            if (publishKey) schedulePartialAckMap.delete(publishKey);
+            logger.warn(`[republish] starter=${starterId} chunk publish failed — stays PENDING for heartbeat retry`);
+          }
+        }
+      }
+
+      return sendResponse(c, 200, "Republish complete", { published, failed, pending: failed });
+    } catch (error: any) {
+      handleAppError(error, "republish schedules");
     }
   };
 
