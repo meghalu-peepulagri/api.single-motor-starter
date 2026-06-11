@@ -560,7 +560,7 @@ export async function bulkCreateMotorSchedules(rawPayload, userId) {
  * Uses FOR UPDATE lock so concurrent heartbeats never double-assign.
  * Already-assigned rows (device_schedule_id IS NOT NULL) are skipped.
  */
-const MAX_DEVICE_CAPACITY = 32;
+const MAX_DEVICE_CAPACITY = 64;
 export async function assignDeviceScheduleIds(starterId, records) {
     if (records.length === 0)
         return;
@@ -575,7 +575,7 @@ export async function assignDeviceScheduleIds(starterId, records) {
         const takenIds = new Set(takenRows
             .map(r => r.device_schedule_id)
             .filter((id) => id != null));
-        // Same logic as frontend allocateUniqueIds — pick smallest free slots from 1..32
+        // Same logic as frontend allocateUniqueIds — pick smallest free slots from 1..64
         const allocate = (count) => {
             const ids = [];
             let candidate = 1;

@@ -1471,8 +1471,8 @@ function scheduleCreationAckResolver(message: any, topic: string) {
       let acknowledgedSlots: number[] | null = null;
       if (message.D !== null && typeof message.D === "object" && typeof message.D.ids === "number" && message.D.ids > 0) {
         acknowledgedSlots = [];
-        for (let bit = 0; bit < 32; bit++) {
-          if (message.D.ids & (1 << bit)) acknowledgedSlots.push(bit + 1);
+        for (let bit = 0; bit < 64; bit++) {
+          if (Number(BigInt(message.D.ids) & (1n << BigInt(bit)))) acknowledgedSlots.push(bit + 1);
         }
         logger.info(`[schedule-ack] late ACK bitmask=${message.D.ids} → slots=[${acknowledgedSlots.join(",")}]`);
       }
@@ -1534,8 +1534,8 @@ function scheduleCreationAckResolver(message: any, topic: string) {
     const rawIds = message.D.ids;
     if (typeof rawIds === "number" && rawIds > 0) {
       const acknowledgedIds: number[] = [];
-      for (let bit = 0; bit < 32; bit++) {
-        if (rawIds & (1 << bit)) {
+      for (let bit = 0; bit < 64; bit++) {
+        if (Number(BigInt(rawIds) & (1n << BigInt(bit)))) {
           acknowledgedIds.push(bit + 1);
         }
       }
