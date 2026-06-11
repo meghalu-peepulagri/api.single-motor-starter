@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
@@ -1244,11 +1244,22 @@ function scheduleCreationAckResolver(message, topic) {
                 .then(async (starter) => {
                 if (!starter?.id)
                     return;
+                // Match records by device_schedule_id (new records) OR by schedule_id when
+                // device_schedule_id is null (old records that used schedule_id as the slot).
+                // Set device_schedule_id = COALESCE(device_schedule_id, schedule_id) so null
+                // records get their slot assigned from the schedule_id column (which equals the
+                // slot that was sent to the device for those records).
                 await db
                     .update(motorSchedules)
-                    .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
-                    .where(and(eq(motorSchedules.starter_id, starter.id), eq(motorSchedules.acknowledgement, 0), inArray(motorSchedules.schedule_status, ["PENDING"]), inArray(motorSchedules.schedule_id, slots)));
-                logger.info(`[schedule-ack] late ACK: marked PENDING schedules as SCHEDULED for starter=${starter.id} slots=[${slots.join(",")}]`);
+                    .set({
+                    schedule_status: "SCHEDULED",
+                    acknowledgement: 1,
+                    acknowledged_at: new Date(),
+                    updated_at: new Date(),
+                    device_schedule_id: sql `COALESCE(${motorSchedules.device_schedule_id}, ${motorSchedules.schedule_id})`,
+                })
+                    .where(and(eq(motorSchedules.starter_id, starter.id), eq(motorSchedules.acknowledgement, 0), inArray(motorSchedules.schedule_status, ["PENDING"]), or(inArray(motorSchedules.device_schedule_id, slots), and(isNull(motorSchedules.device_schedule_id), inArray(motorSchedules.schedule_id, slots)))));
+                logger.info(`[schedule-ack] late ACK: marked PENDING→SCHEDULED for starter=${starter.id} slots=[${slots.join(",")}]`);
             })
                 .catch((err) => logger.error(`[schedule-ack] late ACK DB update failed for ${macFromTopic}: ${err?.message}`));
         }

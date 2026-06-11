@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, BULK_SCHEDULE_IDS_REQUIRED, BULK_SCHEDULES_DELETED, BULK_SCHEDULES_RESTARTED, BULK_SCHEDULES_STOPPED, INVALID_SCHEDULE_CMD, MOTOR_NOT_FOUND, MULTIPLE_SCHEDULES_CREATED, NO_ACTIVE_SCHEDULE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_HISTORY_FETCHED, SCHEDULE_LIVE_DATA_FETCHED, SCHEDULE_LIVE_DATA_NOT_FOUND, SCHEDULE_LOGS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_OPERATIONS_FETCHED, SCHEDULE_RESTARTED, SCHEDULED_LIST_FETCHED, SCHEDULE_STATUS_SYNC_COMPLETED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
@@ -316,9 +316,12 @@ export class MotorScheduleHandler {
             if (!existed)
                 throw new BadRequestException(SCHEDULE_NOT_FOUND);
             await updateRecordById(motorSchedules, scheduleId, { acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" });
-            if (existed.starter_id) {
-                await assignDeviceScheduleIds(existed.starter_id, [{ id: existed.id, schedule_id: existed.schedule_id }]);
-            }
+            // Set device_schedule_id = schedule_id when null (schedule_id holds the device slot for
+            // records where device_schedule_id was never explicitly assigned).
+            await db.update(motorSchedules)
+                .set({ device_schedule_id: sql `COALESCE(${motorSchedules.device_schedule_id}, ${motorSchedules.schedule_id})` })
+                .where(and(eq(motorSchedules.id, existed.id), isNull(motorSchedules.device_schedule_id)))
+                .catch(() => null);
             await Promise.all([
                 updateOperationAck(scheduleId, "CREATE", 1).catch(() => null),
                 insertScheduleLog({ schedule_id: scheduleId, event_type: "DEVICE_ACK_CREATE", actor_type: "device", old_status: existed.schedule_status, new_status: "SCHEDULED" }).catch(() => null),
@@ -659,7 +662,12 @@ export class MotorScheduleHandler {
                             continue;
                         const confirmedDbIds = confirmedPairs.map(p => p.id);
                         await db.update(motorSchedules).set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() }).where(inArray(motorSchedules.id, confirmedDbIds));
-                        await assignDeviceScheduleIds(starter_id, confirmedPairs).catch(() => null);
+                        // Set device_schedule_id directly from the confirmed slot IDs (scheduleIds[i] is the
+                        // device slot that was sent). Only update rows where device_schedule_id is not yet set.
+                        await Promise.all(confirmedPairs.map(p => db.update(motorSchedules)
+                            .set({ device_schedule_id: p.schedule_id })
+                            .where(and(eq(motorSchedules.id, p.id), isNull(motorSchedules.device_schedule_id)))
+                            .catch(() => null)));
                         await Promise.all(confirmedDbIds.flatMap(id => [
                             insertScheduleOperation({ schedule_id: id, operation: "CREATE", sent_at: new Date() }).catch(() => null),
                             insertScheduleLog({ schedule_id: id, event_type: "SENT_TO_DEVICE", actor_type: "system", new_status: "SCHEDULED" }).catch(() => null),

@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import {
   ACKNOWLEDGEMENT_UPDATED,
@@ -423,9 +423,12 @@ export class MotorScheduleHandler {
 
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { acknowledgement: 1, acknowledged_at: new Date(), schedule_status: "SCHEDULED" });
 
-      if (existed.starter_id) {
-        await assignDeviceScheduleIds(existed.starter_id, [{ id: existed.id, schedule_id: existed.schedule_id }]);
-      }
+      // Set device_schedule_id = schedule_id when null (schedule_id holds the device slot for
+      // records where device_schedule_id was never explicitly assigned).
+      await db.update(motorSchedules)
+        .set({ device_schedule_id: sql`COALESCE(${motorSchedules.device_schedule_id}, ${motorSchedules.schedule_id})` })
+        .where(and(eq(motorSchedules.id, existed.id), isNull(motorSchedules.device_schedule_id)))
+        .catch(() => null);
 
       await Promise.all([
         updateOperationAck(scheduleId, "CREATE", 1).catch(() => null),
@@ -796,7 +799,14 @@ export class MotorScheduleHandler {
             const confirmedDbIds = confirmedPairs.map(p => p.id);
 
             await db.update(motorSchedules).set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() }).where(inArray(motorSchedules.id, confirmedDbIds));
-            await assignDeviceScheduleIds(starter_id, confirmedPairs).catch(() => null);
+            // Set device_schedule_id directly from the confirmed slot IDs (scheduleIds[i] is the
+            // device slot that was sent). Only update rows where device_schedule_id is not yet set.
+            await Promise.all(confirmedPairs.map(p =>
+              db.update(motorSchedules)
+                .set({ device_schedule_id: p.schedule_id })
+                .where(and(eq(motorSchedules.id, p.id), isNull(motorSchedules.device_schedule_id)))
+                .catch(() => null)
+            ));
 
             await Promise.all(
               confirmedDbIds.flatMap(id => [
