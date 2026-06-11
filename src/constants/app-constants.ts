@@ -23,7 +23,7 @@ export const NAME_429 = "Too many requests";
 export const NAME_408 = "Request Timeout";
 export const NAME_500 = "Internal Server Error";
 
-export const SERVICE_UP = "Service is up and running";
+export const SERVICE_UP = "Service is up and running success";
 
 // Unique constraint messages
 export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
