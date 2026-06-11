@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lte, ne, notInArray, SQL, sql, getTableColumns, desc } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, lte, ne, notInArray, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
@@ -333,6 +333,7 @@ export async function findPendingSchedulesForSync() {
             id: true,
             starter_id: true,
             schedule_id: true,
+            device_schedule_id: true,
             schedule_type: true,
             schedule_start_date: true,
             schedule_end_date: true,
@@ -375,6 +376,7 @@ export async function findPendingSchedulesForStarter(starterId, motorId) {
             id: true,
             starter_id: true,
             schedule_id: true,
+            device_schedule_id: true,
             schedule_type: true,
             schedule_start_date: true,
             schedule_end_date: true,
@@ -414,6 +416,7 @@ export async function findPendingSchedulesForRepublish(starterId, motorId) {
             id: true,
             starter_id: true,
             schedule_id: true,
+            device_schedule_id: true,
             schedule_type: true,
             schedule_start_date: true,
             schedule_end_date: true,
@@ -431,6 +434,37 @@ export async function findPendingSchedulesForRepublish(starterId, motorId) {
         },
         orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
     });
+}
+// =================== EXPIRED SCHEDULE CLEANUP ===================
+/**
+ * Finds all schedules for a starter whose end date has passed and marks them DELETED.
+ * Returns the freed device_schedule_ids so the caller can reuse those slots.
+ * Called before every publish so the device never holds stale past-date schedules.
+ */
+export async function findAndDeleteExpiredSchedules(starterId, motorId) {
+    const todayNum = dateToYYMMDD(new Date());
+    const conditions = [
+        eq(motorSchedules.starter_id, starterId),
+        lt(motorSchedules.schedule_end_date, todayNum),
+        ne(motorSchedules.status, "ARCHIVED"),
+        notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]),
+    ];
+    if (motorId != null) {
+        conditions.push(eq(motorSchedules.motor_id, motorId));
+    }
+    const expired = await db.query.motorSchedules.findMany({
+        where: and(...conditions),
+        columns: { id: true, device_schedule_id: true },
+    });
+    if (expired.length === 0)
+        return [];
+    await db
+        .update(motorSchedules)
+        .set({ schedule_status: "DELETED", updated_at: new Date() })
+        .where(inArray(motorSchedules.id, expired.map(r => r.id)));
+    return expired
+        .map(r => r.device_schedule_id)
+        .filter((id) => id != null);
 }
 // =================== BATCH STATUS UPDATE FOR SYNC ===================
 /**

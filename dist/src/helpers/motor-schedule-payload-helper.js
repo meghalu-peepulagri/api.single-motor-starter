@@ -458,9 +458,10 @@ function toCompactSchedule(record) {
     const ed = record.schedule_end_date ?? record.schedule_start_date;
     const stRaw = parseInt(record.start_time, 10);
     const etRaw = parseInt(record.end_time, 10);
-    // TIME_BASED format: {id, sd, ed, st, et, st_ep, ed_ep, en, pwr_rec}
+    // Use device_schedule_id as the slot ID sent to firmware when available (set by frontend
+    // at creation time). Fall back to schedule_id for records that pre-date this field.
     const item = {
-        id: record.schedule_id,
+        id: record.device_schedule_id ?? record.schedule_id,
         sd,
         ed,
         st: stRaw,

@@ -86,6 +86,7 @@ import {
   findAllActiveSchedulesForMotor,
   findConflictingSchedules,
   findEvaluatableSchedules,
+  findAndDeleteExpiredSchedules,
   findMaxAckedEndDatePerStarter,
   findPendingSchedulesForRepublish,
   findPendingSchedulesForSync,
@@ -757,6 +758,24 @@ export class MotorScheduleHandler {
       }
 
       if (records.length === 0) return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
+
+      // Delete expired schedules per starter and assign sequential device_schedule_ids from 1.
+      const starterIds = [...new Set(records.map(r => r.starter_id).filter((id): id is number => id != null))];
+      for (const starterId of starterIds) {
+        const freed = await findAndDeleteExpiredSchedules(starterId);
+        if (freed.length > 0) {
+          logger.info(`[sync/pending] starter=${starterId} cleared ${freed.length} expired schedule(s)`);
+        }
+        const starterRecords = records.filter(r => r.starter_id === starterId);
+        await Promise.all(starterRecords.map((r, i) => {
+          (r as any).device_schedule_id = i + 1;
+          return db.update(motorSchedules)
+            .set({ device_schedule_id: i + 1 })
+            .where(eq(motorSchedules.id, r.id))
+            .catch(() => null);
+        }));
+        logger.info(`[sync/pending] starter=${starterId} assigned device_schedule_ids=[${starterRecords.map((_, i) => i + 1).join(",")}]`);
+      }
 
       const grouped = buildDeviceSyncPayloads(records);
       const starters = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, grouped.map(g => g.starter_id)));

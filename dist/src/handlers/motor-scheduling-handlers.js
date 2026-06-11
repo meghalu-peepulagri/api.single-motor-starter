@@ -17,7 +17,7 @@ import { getRecordById, getSingleRecordByMultipleColumnValues, updateRecordById,
 import { findOperationsByScheduleId, insertScheduleOperation, updateOperationAck, } from "../services/db/motor-schedule-operations-services.js";
 import { findScheduleLogsByScheduleId, insertScheduleLog, } from "../services/db/motor-schedule-logs-services.js";
 import { findScheduleLiveData, } from "../services/db/motor-schedule-live-data-services.js";
-import { assignDeviceScheduleIds, syncLastDeviceScheduleId, batchUpdateScheduleStatuses, bulkCreateMotorSchedules, cancelSchedulesByIds, deleteDayFromSchedule, evaluateAndUpdateSchedulesOnRead, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findMaxAckedEndDatePerStarter, findPendingSchedulesForRepublish, findPendingSchedulesForSync, findScheduleHistoryByMotorAndStarter, findSchedulesByFilters, restartDayInSchedule, restartScheduleById, restartSchedulesByIds, stopDayInSchedule, stopScheduleById, } from "../services/db/motor-schedules-services.js";
+import { assignDeviceScheduleIds, syncLastDeviceScheduleId, batchUpdateScheduleStatuses, bulkCreateMotorSchedules, cancelSchedulesByIds, deleteDayFromSchedule, evaluateAndUpdateSchedulesOnRead, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findAndDeleteExpiredSchedules, findMaxAckedEndDatePerStarter, findPendingSchedulesForRepublish, findPendingSchedulesForSync, findScheduleHistoryByMotorAndStarter, findSchedulesByFilters, restartDayInSchedule, restartScheduleById, restartSchedulesByIds, stopDayInSchedule, stopScheduleById, } from "../services/db/motor-schedules-services.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { handleAppError } from "../utils/on-error.js";
 import { logger } from "../utils/logger.js";
@@ -624,6 +624,23 @@ export class MotorScheduleHandler {
             }
             if (records.length === 0)
                 return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
+            // Delete expired schedules per starter and assign sequential device_schedule_ids from 1.
+            const starterIds = [...new Set(records.map(r => r.starter_id).filter((id) => id != null))];
+            for (const starterId of starterIds) {
+                const freed = await findAndDeleteExpiredSchedules(starterId);
+                if (freed.length > 0) {
+                    logger.info(`[sync/pending] starter=${starterId} cleared ${freed.length} expired schedule(s)`);
+                }
+                const starterRecords = records.filter(r => r.starter_id === starterId);
+                await Promise.all(starterRecords.map((r, i) => {
+                    r.device_schedule_id = i + 1;
+                    return db.update(motorSchedules)
+                        .set({ device_schedule_id: i + 1 })
+                        .where(eq(motorSchedules.id, r.id))
+                        .catch(() => null);
+                }));
+                logger.info(`[sync/pending] starter=${starterId} assigned device_schedule_ids=[${starterRecords.map((_, i) => i + 1).join(",")}]`);
+            }
             const grouped = buildDeviceSyncPayloads(records);
             const starters = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, grouped.map(g => g.starter_id)));
             const starterMap = new Map(starters.map(s => [s.id, s]));
