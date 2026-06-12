@@ -1453,68 +1453,7 @@ function scheduleCreationAckResolver(message: any, topic: string) {
 
   const pendingAck = pendingAckMap.get(macFromTopic);
   if (!pendingAck) {
-    // ACK arrived after the in-memory timeout was cleaned up (server restart or slow device).
-    // Parse D and, on success, update the DB directly so the schedule doesn't stay stuck as PENDING.
-    let dValue: number;
-    if (typeof message.D === "number") {
-      dValue = message.D;
-    } else if (message.D !== null && typeof message.D === "object" && typeof message.D.ack === "number") {
-      dValue = message.D.ack;
-    } else {
-      dValue = -1;
-    }
-    const lateSuccess = dValue === 1 || dValue === 4;
-    logger.warn(`[schedule-ack] late ACK for ${macFromTopic} D=${dValue} success=${lateSuccess} — no pending map entry (timeout or restart)`);
-    if (lateSuccess) {
-      // Decode bitmask from D.ids to know exactly which schedule_id slots the device confirmed.
-      // Without this filter, every PENDING row for the starter would be blindly marked SCHEDULED.
-      let acknowledgedSlots: number[] | null = null;
-      if (message.D !== null && typeof message.D === "object" && typeof message.D.ids === "number" && message.D.ids > 0) {
-        acknowledgedSlots = [];
-        for (let bit = 1; bit <= 64; bit++) {
-          if (Number(BigInt(message.D.ids) & (1n << BigInt(bit)))) acknowledgedSlots.push(bit);
-        }
-        logger.info(`[schedule-ack] late ACK bitmask=${message.D.ids} → slots=[${acknowledgedSlots.join(",")}]`);
-      }
-
-      if (!acknowledgedSlots) {
-        // No bitmask — we cannot know which slots were confirmed. Leave rows as PENDING so the
-        // next heartbeat sync re-publishes and gets a proper per-slot ACK.
-        logger.warn(`[schedule-ack] late ACK for ${macFromTopic}: no bitmask in D, leaving PENDING rows unchanged for next heartbeat sync`);
-        return;
-      }
-
-      const slots = acknowledgedSlots;
-      getStarterByMacWithMotor(macFromTopic)
-        .then(async (starter) => {
-          if (!starter?.id) return;
-          // Match records by device_schedule_id (new records) OR by schedule_id when
-          // device_schedule_id is null (old records that used schedule_id as the slot).
-          // Set device_schedule_id = COALESCE(device_schedule_id, schedule_id) so null
-          // records get their slot assigned from the schedule_id column (which equals the
-          // slot that was sent to the device for those records).
-          await db
-            .update(motorSchedules)
-            .set({
-              schedule_status: "SCHEDULED",
-              acknowledgement: 1,
-              acknowledged_at: new Date(),
-              updated_at: new Date(),
-              device_schedule_id: sql`COALESCE(${motorSchedules.device_schedule_id}, ${motorSchedules.schedule_id})`,
-            })
-            .where(and(
-              eq(motorSchedules.starter_id, starter.id),
-              eq(motorSchedules.acknowledgement, 0),
-              inArray(motorSchedules.schedule_status, ["PENDING"]),
-              or(
-                inArray(motorSchedules.device_schedule_id, slots),
-                and(isNull(motorSchedules.device_schedule_id), inArray(motorSchedules.schedule_id, slots)),
-              ),
-            ));
-          logger.info(`[schedule-ack] late ACK: marked PENDING→SCHEDULED for starter=${starter.id} slots=[${slots.join(",")}]`);
-        })
-        .catch((err) => logger.error(`[schedule-ack] late ACK DB update failed for ${macFromTopic}: ${err?.message}`));
-    }
+    logger.warn(`[schedule-ack] late ACK for ${macFromTopic} — no pending map entry, ignoring. Will re-sync on next heartbeat.`);
     return;
   }
 
