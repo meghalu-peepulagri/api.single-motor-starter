@@ -784,8 +784,41 @@ export async function findScheduleHistoryByMotorAndStarter(filters, pageParams) 
 }
 // =================== ON-READ STATUS EVALUATION ===================
 const EVALUATABLE_STATUSES_ON_READ = ["PENDING", "SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"];
+function evaluateTodayScheduleStatus(s, now) {
+    const { actual_start_time, actual_end_time, actual_run_time, start_time, end_time, runtime_minutes, acknowledgement, schedule_status } = s;
+    // Terminal statuses — never overwrite
+    if (["COMPLETED", "FAILED", "MISSED", "DELETED", "ARCHIVED"].includes(schedule_status))
+        return null;
+    if (!actual_start_time && !actual_end_time) {
+        // Device never reported start — check if window has passed
+        const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+        const currentMins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+        const stMins = Math.floor(Number(start_time) / 100) * 60 + (Number(start_time) % 100);
+        const etMins = Math.floor(Number(end_time) / 100) * 60 + (Number(end_time) % 100);
+        const windowPassed = stMins < etMins ? currentMins >= etMins : (currentMins >= etMins && currentMins < stMins);
+        if (!windowPassed)
+            return null;
+        if (acknowledgement === 0)
+            return { id: s.id, newStatus: "FAILED" };
+        return { id: s.id, newStatus: "MISSED" };
+    }
+    if (actual_start_time && !actual_end_time) {
+        return { id: s.id, newStatus: "RUNNING" };
+    }
+    if (actual_start_time && actual_end_time) {
+        const stMins = Math.floor(Number(start_time) / 100) * 60 + (Number(start_time) % 100);
+        const etMins = Math.floor(Number(end_time) / 100) * 60 + (Number(end_time) % 100);
+        const planned = runtime_minutes ?? (etMins > stMins ? etMins - stMins : (1440 - stMins) + etMins);
+        const actual = actual_run_time ?? 0;
+        if (actual >= planned)
+            return { id: s.id, newStatus: "COMPLETED" };
+        return { id: s.id, newStatus: "PARTIAL" };
+    }
+    return null;
+}
 export async function evaluateAndUpdateSchedulesOnRead(records) {
     const now = new Date();
+    const todayNum = todayAsYYMMDD();
     const toEvaluate = records.filter(r => EVALUATABLE_STATUSES_ON_READ.includes(r.schedule_status));
     if (toEvaluate.length === 0)
         return;
@@ -799,7 +832,10 @@ export async function evaluateAndUpdateSchedulesOnRead(records) {
         WAITING_NEXT_CYCLE: [],
     };
     for (const s of toEvaluate) {
-        const res = evaluateScheduleStatus(s, now);
+        const isToday = s.schedule_start_date === todayNum;
+        const res = isToday
+            ? evaluateTodayScheduleStatus(s, now)
+            : evaluateScheduleStatus(s, now);
         if (!res)
             continue;
         const key = res.newStatus;
