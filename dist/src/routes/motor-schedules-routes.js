@@ -29,6 +29,8 @@ motorScheduleRoute.post("/stop-all/:motor_id", isAuthorized, motorScheduleHandle
 motorScheduleRoute.post("/update-status/:id", isAuthorized, motorScheduleHandler.updateScheduleStatusHandler);
 // Force-push stuck PENDING schedules to device (bypasses anchor check and date window)
 motorScheduleRoute.post("/republish", isAuthorized, motorScheduleHandler.republishSchedulesHandler);
+// Republish one or more PENDING schedules — triggered by mobile app user { starter_id, ids[] }
+motorScheduleRoute.post("/bulk/republish", isAuthorized, motorScheduleHandler.bulkRepublishSchedulesHandler);
 // Create a single or bulk schedules
 motorScheduleRoute.post("/", isAuthorized, motorScheduleHandler.createMotorScheduleHandler);
 // Bulk stop schedules by ids

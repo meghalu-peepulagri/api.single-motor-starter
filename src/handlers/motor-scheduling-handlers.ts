@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import {
   ACKNOWLEDGEMENT_UPDATED,
@@ -17,12 +17,16 @@ import {
   SCHEDULE_CMD_REQUIRED,
   SCHEDULE_DELETED,
   SCHEDULE_DETAILS_FETCHED,
+  SCHEDULE_DEVICE_OFFLINE,
   SCHEDULE_HISTORY_FETCHED,
   SCHEDULE_LIVE_DATA_FETCHED,
   SCHEDULE_LIVE_DATA_NOT_FOUND,
   SCHEDULE_LOGS_FETCHED,
   SCHEDULE_NOT_FOUND,
   SCHEDULE_OPERATIONS_FETCHED,
+  SCHEDULE_REPUBLISH_FAILED,
+  SCHEDULE_REPUBLISH_NOT_ALLOWED,
+  SCHEDULE_REPUBLISHED,
   SCHEDULE_RESTARTED,
   SCHEDULED_LIST_FETCHED,
   SCHEDULE_STATUS_SYNC_COMPLETED,
@@ -1045,6 +1049,56 @@ export class MotorScheduleHandler {
       return sendResponse(c, 200, SCHEDULE_OPERATIONS_FETCHED, operations);
     } catch (error: any) {
       handleAppError(error, "get schedule operations");
+    }
+  };
+
+  // =================== BULK REPUBLISH SCHEDULES ===================
+  // Body: { starter_id: number, ids?: number[] }
+  // - If ids provided: reset FAILED records in that list back to PENDING, then sync
+  // - If ids omitted: sync all pending for the starter (same as heartbeat trigger)
+  bulkRepublishSchedulesHandler = async (c: Context) => {
+    try {
+      const userPayload = c.get("user_payload");
+      const body = await c.req.json();
+      const starterId = Number(body?.starter_id);
+      const ids: number[] | undefined = Array.isArray(body?.ids) && body.ids.length > 0 ? body.ids.map(Number) : undefined;
+
+      if (!starterId || isNaN(starterId)) throw new BadRequestException("starter_id is required");
+
+      const starter = await db.query.starterBoxes.findFirst({
+        where: (s, { eq: e }) => e(s.id, starterId),
+      });
+      if (!starter) throw new BadRequestException("Starter not found");
+
+      const isOnline = starter.signal_quality != null && starter.signal_quality >= 1 && starter.signal_quality <= 30;
+      if (!isOnline) {
+        return sendResponse(c, 200, SCHEDULE_DEVICE_OFFLINE, { chunks: 0, acked: 0 });
+      }
+
+      // Reset FAILED/PENDING records in the given id list so the sync picks them up fresh.
+      if (ids && ids.length > 0) {
+        await db.update(motorSchedules)
+          .set({ schedule_status: "PENDING", acknowledgement: 0, updated_at: new Date() })
+          .where(and(
+            inArray(motorSchedules.id, ids),
+            eq(motorSchedules.starter_id, starterId),
+            inArray(motorSchedules.schedule_status, ["FAILED", "PENDING"]),
+            ne(motorSchedules.status, "ARCHIVED"),
+          ));
+      }
+
+      const result = await pushPendingSchedulesForStarter(starter as any);
+
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SCHEDULES_BULK_RESENT",
+        entityType: "SCHEDULE",
+        newData: { starter_id: starterId, ids: ids ?? "all", ...result },
+      });
+
+      return sendResponse(c, 200, SCHEDULE_REPUBLISHED, result);
+    } catch (error: any) {
+      handleAppError(error, "bulk republish schedules");
     }
   };
 }

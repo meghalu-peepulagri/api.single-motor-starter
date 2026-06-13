@@ -44,7 +44,7 @@ All triggers funnel into a single shared function:
 │  Trigger 2 — MQTT Heartbeat (device comes online)              │
 │  Trigger 3 — Cron at 22:00 IST (pre-load next-day schedules)  │
 │  Trigger 4 — Cron at 00:15 IST (advance window after midnight) │
-│  Trigger 5 — POST /schedules/republish (manual retry)          │
+│  Trigger 5 — POST /motor-schedules/bulk/republish (manual)     │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -371,6 +371,42 @@ Rule: cross-midnight schedules MUST be stored with end_date = start_date + 1
 
 ---
 
+## Trigger 5 — Manual Republish
+
+```
+POST /{v}/motor-schedules/bulk/republish
+Body: { "starter_id": 5, "ids": [1, 2, 3] }   (ids is optional)
+
+         │
+         ▼
+  Validate starter_id
+         │
+         ├── starter offline → 200 DEVICE_OFFLINE (no-op, heartbeat will retry)
+         │
+         ▼
+  ids provided?
+    YES → UPDATE motor_schedules
+          SET schedule_status = 'PENDING', acknowledgement = 0
+          WHERE id IN (ids)
+            AND starter_id = X
+            AND schedule_status IN ('FAILED', 'PENDING')   ← resets both; skips STOPPED/DELETED
+            AND status != 'ARCHIVED'
+         │
+         ▼
+  pushPendingSchedulesForStarter(starter)
+  → same full flow as Trigger 1/2/3/4
+  → picks up reset FAILED + any already-PENDING records
+  → returns { chunks, acked }
+```
+
+Cases handled:
+- Stuck PENDING (never delivered): reset ack=0 + status=PENDING → picked up by sync
+- FAILED (3 retries exhausted): reset to PENDING → picked up by sync
+- No ids: sync all current PENDING for starter (same as heartbeat)
+- Device offline: returns immediately; heartbeat delivers when online
+
+---
+
 ## Device Slot Diagram (15 slots)
 
 ```
@@ -406,6 +442,7 @@ When slot 1 expires (today > 260612):
 | `motor-schedules-services.ts` `findPendingSchedulesForStarter` | Late-start tolerance: OR (start_date = yesterday AND end_date >= today) | ✅ Done |
 | `routes/cron-routes.ts` | New public POST endpoints for Upstash crons | ✅ Done |
 | `routes/index-routes.ts` | Register `/crons` route | ✅ Done |
+| `motor-scheduling-handlers.ts` `bulkRepublishSchedulesHandler` | Reset FAILED → PENDING for given ids, then call `pushPendingSchedulesForStarter` | ✅ Done |
 | `bulkCreateMotorSchedules` | Enforce `schedule_end_date = start_date + 1` when `end_time < start_time` | ⬜ Pending |
 
 ---
