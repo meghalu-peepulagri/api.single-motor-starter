@@ -57,6 +57,7 @@ import {
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { schedulePartialAckMap } from "../helpers/ack-tracker-hepler.js";
+import { pushPendingSchedulesForStarter } from "../helpers/schedule-sync-helper.js";
 import {
   getRecordById,
   getSingleRecordByMultipleColumnValues,
@@ -112,6 +113,25 @@ import { formatHHMM, formatYYMMDD, formatScheduleDateTime } from "../helpers/mot
 
 const paramsValidateException = new ParamsValidateException();
 
+async function triggerSyncForCreatedSchedules(records: any[]) {
+  const today = todayAsYYMMDD();
+  const windowEnd = dateToYYMMDD(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
+  const arr = Array.isArray(records) ? records : [records];
+
+  const starterIds = [...new Set(
+    arr
+      .filter(r => r.starter_id && r.schedule_start_date >= today && r.schedule_start_date <= windowEnd)
+      .map(r => r.starter_id as number),
+  )];
+  if (starterIds.length === 0) return;
+
+  const starters = await db.query.starterBoxes.findMany({
+    where: (s, { inArray: inArr, ne: n }) => inArr(s.id, starterIds),
+    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true },
+  });
+
+  await Promise.allSettled(starters.map(s => pushPendingSchedulesForStarter(s as any)));
+}
 
 export class MotorScheduleHandler {
 
@@ -122,6 +142,10 @@ export class MotorScheduleHandler {
       const reqData = await c.req.json();
 
       const created = await bulkCreateMotorSchedules(reqData, userPayload.id);
+
+      // Fire background sync for any newly created schedules that fall in the 3-day window
+      setImmediate(() => { triggerSyncForCreatedSchedules(created).catch(() => null); });
+
       const isBulk = Array.isArray(reqData) && reqData.length > 1;
       const logNewData: Record<string, unknown> = { count: isBulk ? reqData.length : 1 };
       if (!isBulk) {

@@ -13,6 +13,7 @@ import { buildDeviceSyncPayloads, buildScheduleData, buildScheduleTimeline, date
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { schedulePartialAckMap } from "../helpers/ack-tracker-hepler.js";
+import { pushPendingSchedulesForStarter } from "../helpers/schedule-sync-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, updateRecordById, } from "../services/db/base-db-services.js";
 import { findOperationsByScheduleId, insertScheduleOperation, updateOperationAck, } from "../services/db/motor-schedule-operations-services.js";
 import { findScheduleLogsByScheduleId, insertScheduleLog, } from "../services/db/motor-schedule-logs-services.js";
@@ -25,6 +26,21 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { formatHHMM, formatYYMMDD, formatScheduleDateTime } from "../helpers/motor-schedule-helpers.js";
 const paramsValidateException = new ParamsValidateException();
+async function triggerSyncForCreatedSchedules(records) {
+    const today = todayAsYYMMDD();
+    const windowEnd = dateToYYMMDD(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
+    const arr = Array.isArray(records) ? records : [records];
+    const starterIds = [...new Set(arr
+            .filter(r => r.starter_id && r.schedule_start_date >= today && r.schedule_start_date <= windowEnd)
+            .map(r => r.starter_id))];
+    if (starterIds.length === 0)
+        return;
+    const starters = await db.query.starterBoxes.findMany({
+        where: (s, { inArray: inArr, ne: n }) => inArr(s.id, starterIds),
+        columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true },
+    });
+    await Promise.allSettled(starters.map(s => pushPendingSchedulesForStarter(s)));
+}
 export class MotorScheduleHandler {
     // =================== CREATE SCHEDULE ===================
     createMotorScheduleHandler = async (c) => {
@@ -32,6 +48,8 @@ export class MotorScheduleHandler {
             const userPayload = c.get("user_payload");
             const reqData = await c.req.json();
             const created = await bulkCreateMotorSchedules(reqData, userPayload.id);
+            // Fire background sync for any newly created schedules that fall in the 3-day window
+            setImmediate(() => { triggerSyncForCreatedSchedules(created).catch(() => null); });
             const isBulk = Array.isArray(reqData) && reqData.length > 1;
             const logNewData = { count: isBulk ? reqData.length : 1 };
             if (!isBulk) {

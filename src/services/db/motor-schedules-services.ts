@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lt, lte, ne, notInArray, SQL, sql, getTableColumns, desc } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, lte, ne, notInArray, or, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
@@ -493,20 +493,31 @@ export async function findPendingSchedulesForSync() {
  */
 export async function findPendingSchedulesForStarter(starterId: number, motorId?: number) {
   const todayNum = dateToYYMMDD(new Date());
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayNum = dateToYYMMDD(yesterdayDate);
 
-  const conditions = [
+  const baseConditions = [
     eq(motorSchedules.starter_id, starterId),
     eq(motorSchedules.acknowledgement, 0),
     ne(motorSchedules.status, "ARCHIVED"),
     inArray(motorSchedules.schedule_status, ["PENDING"]),
-    gte(motorSchedules.schedule_start_date, todayNum),
+    // Normal 3-day window OR yesterday's cross-midnight schedules still within execution window
+    // (start_date = yesterday but end_date = today → schedule crosses midnight, may still be running)
+    or(
+      gte(motorSchedules.schedule_start_date, todayNum),
+      and(
+        eq(motorSchedules.schedule_start_date, yesterdayNum),
+        gte(motorSchedules.schedule_end_date, todayNum),
+      ),
+    ),
   ];
   if (motorId != null) {
-    conditions.push(eq(motorSchedules.motor_id, motorId));
+    baseConditions.push(eq(motorSchedules.motor_id, motorId));
   }
 
   return await db.query.motorSchedules.findMany({
-    where: and(...conditions),
+    where: and(...baseConditions),
     columns: {
       id: true,
       starter_id: true,
@@ -867,7 +878,7 @@ export async function bulkCreateMotorSchedules(
  * Uses FOR UPDATE lock so concurrent heartbeats never double-assign.
  * Already-assigned rows (device_schedule_id IS NOT NULL) are skipped.
  */
-const MAX_DEVICE_CAPACITY = 64;
+const MAX_DEVICE_CAPACITY = 15;
 
 export async function assignDeviceScheduleIds(
   starterId: number,

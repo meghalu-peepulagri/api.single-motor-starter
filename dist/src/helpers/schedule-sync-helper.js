@@ -1,8 +1,9 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, ne, notInArray } from "drizzle-orm";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
+import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { logger } from "../utils/logger.js";
-import { findAndDeleteExpiredSchedules, findMaxAckedEndDatePerStarter, findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
+import { findAndDeleteExpiredSchedules, findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
 import { buildDeviceSyncPayloads, dateToYYMMDD, todayAsYYMMDD } from "./motor-schedule-payload-helper.js";
 import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { publishingMap, schedulePartialAckMap } from "./ack-tracker-hepler.js";
@@ -15,11 +16,12 @@ async function waitForPublishLock(starterId, maxWaitMs = 30000, intervalMs = 500
     }
     return true;
 }
+const MAX_DEVICE_SLOTS = 15;
 /**
  * Push all unacknowledged PENDING schedules for ONE starter via MQTT.
- * Before publishing:
- *   1. Expired schedules (end_date < today) are marked DELETED — frees their slots.
- *   2. PENDING records are assigned sequential device_schedule_ids starting from 1.
+ * Slots 1–15 are assigned only to records that don't already have one.
+ * Slots occupied by ack=1 (already on device) records are never reused,
+ * so currently running/scheduled schedules are never overwritten.
  */
 export async function pushPendingSchedulesForStarter(starter, motorId) {
     if (publishingMap.get(starter.id)) {
@@ -29,13 +31,6 @@ export async function pushPendingSchedulesForStarter(starter, motorId) {
     let chunksSent = 0;
     let acked = 0;
     try {
-        const today = todayAsYYMMDD();
-        const anchorMap = await findMaxAckedEndDatePerStarter(today);
-        const maxEndDate = anchorMap.get(starter.id);
-        if (maxEndDate != null && today <= maxEndDate) {
-            logger.info(`[schedule-sync] starter=${starter.id} has schedules active until ${maxEndDate}, skipping next batch`);
-            return { chunks: 0, acked: 0 };
-        }
         // Step 1 — Delete expired schedules (end_date < today), freeing their device slots.
         const freedSlots = await findAndDeleteExpiredSchedules(starter.id, motorId);
         if (freedSlots.length > 0) {
@@ -49,17 +44,49 @@ export async function pushPendingSchedulesForStarter(starter, motorId) {
         const records = allRecords?.filter(r => r.schedule_start_date != null && r.schedule_start_date <= windowEnd) ?? [];
         if (records.length === 0)
             return { chunks: 0, acked: 0 };
-        // Step 3 — Assign sequential device_schedule_ids starting from 1 and persist to DB.
-        await Promise.all(records.map((r, i) => {
-            r.device_schedule_id = i + 1;
-            return db.update(motorSchedules)
-                .set({ device_schedule_id: i + 1 })
-                .where(eq(motorSchedules.id, r.id))
+        // Step 3 — Assign free slots (1–15) to records that don't have one yet.
+        // Slots already held by OTHER active (ack=1) records are off-limits so we
+        // never overwrite a schedule that's currently running on the device.
+        const incomingDbIds = records.map(r => r.id);
+        const takenRows = await db
+            .select({ device_schedule_id: motorSchedules.device_schedule_id })
+            .from(motorSchedules)
+            .where(and(eq(motorSchedules.starter_id, starter.id), ne(motorSchedules.status, "ARCHIVED"), notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]), notInArray(motorSchedules.id, incomingDbIds)));
+        const takenSlots = new Set(takenRows.map(r => r.device_schedule_id).filter((id) => id != null));
+        // Pre-claim slots already assigned to incoming records (from a prior failed attempt).
+        for (const r of records) {
+            if (r.device_schedule_id != null)
+                takenSlots.add(r.device_schedule_id);
+        }
+        // Assign free slots to unassigned records.
+        for (const r of records) {
+            if (r.device_schedule_id != null)
+                continue;
+            let assigned = null;
+            for (let slot = 1; slot <= MAX_DEVICE_SLOTS; slot++) {
+                if (!takenSlots.has(slot)) {
+                    takenSlots.add(slot);
+                    assigned = slot;
+                    break;
+                }
+            }
+            if (assigned == null) {
+                logger.warn(`[schedule-sync] starter=${starter.id} no free slots — schedule id=${r.id} skipped`);
+                continue;
+            }
+            r.device_schedule_id = assigned;
+            await db.update(motorSchedules)
+                .set({ device_schedule_id: assigned })
+                .where(and(eq(motorSchedules.id, r.id), isNull(motorSchedules.device_schedule_id)))
                 .catch(() => null);
-        }));
-        logger.info(`[schedule-sync] starter=${starter.id} assigned device_schedule_ids=[${records.map((_, i) => i + 1).join(",")}]`);
+        }
+        // Drop records that couldn't get a slot.
+        const assignedRecords = records.filter(r => r.device_schedule_id != null);
+        if (assignedRecords.length === 0)
+            return { chunks: 0, acked: 0 };
+        logger.info(`[schedule-sync] starter=${starter.id} slots=[${assignedRecords.map(r => r.device_schedule_id).join(",")}]`);
         const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
-        const grouped = buildDeviceSyncPayloads(records);
+        const grouped = buildDeviceSyncPayloads(assignedRecords);
         for (const { chunks } of grouped) {
             for (const { payload, dbIds, scheduleIds } of chunks) {
                 chunksSent++;
@@ -119,4 +146,32 @@ export async function pushPendingSchedulesForStarter(starter, motorId) {
         logger.error(`[schedule-sync] failed for starter=${starter.id}: ${err?.message}`);
     }
     return { chunks: chunksSent, acked };
+}
+/**
+ * Query all starters that have PENDING schedules within the 3-day window
+ * and push them. Called by the 22:00 and 00:15 cron endpoints.
+ */
+export async function runScheduleSync(label = "cron") {
+    const today = todayAsYYMMDD();
+    const twoDaysLater = new Date();
+    twoDaysLater.setDate(twoDaysLater.getDate() + 2);
+    const windowEnd = dateToYYMMDD(twoDaysLater);
+    const rows = await db
+        .selectDistinct({ starter_id: motorSchedules.starter_id })
+        .from(motorSchedules)
+        .where(and(eq(motorSchedules.acknowledgement, 0), eq(motorSchedules.schedule_status, "PENDING"), ne(motorSchedules.status, "ARCHIVED"), gte(motorSchedules.schedule_start_date, today), lte(motorSchedules.schedule_start_date, windowEnd)));
+    const starterIds = rows.map(r => r.starter_id).filter((id) => id != null);
+    if (starterIds.length === 0) {
+        logger.info(`[${label}] no starters with pending schedules in window`);
+        return { starters: 0, skipped: 0 };
+    }
+    const starters = await db.query.starterBoxes.findMany({
+        where: (s, { and: a, inArray: inArr, ne: n }) => a(inArr(s.id, starterIds), n(s.status, "ARCHIVED")),
+        columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true, signal_quality: true },
+    });
+    const online = starters.filter(s => s.signal_quality != null && s.signal_quality >= 1 && s.signal_quality <= 30);
+    const skipped = starters.length - online.length;
+    logger.info(`[${label}] starters=${starters.length} online=${online.length} skipped_offline=${skipped}`);
+    await Promise.allSettled(online.map(s => pushPendingSchedulesForStarter(s).catch(err => logger.error(`[${label}] starter=${s.id} failed: ${err?.message}`))));
+    return { starters: online.length, skipped };
 }
