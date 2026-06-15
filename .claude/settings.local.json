@@ -8,7 +8,8 @@
       "Bash(pandoc --version)",
       "Read(//d/orotron/idhara/admin-app.singlestarter.com/src/**)",
       "Bash(dir /s /b \"d:\\\\orotron\\\\idhara\\\\admin-app.singlestarter.com\\\\src\\\\*Publish*\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(npm run *)"
     ],
     "additionalDirectories": [
       "d:\\orotron\\idhara\\admin-app.singlestarter.com\\src\\lib\\interfaces",

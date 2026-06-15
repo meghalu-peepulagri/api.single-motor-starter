@@ -481,11 +481,8 @@ function toCompactSchedule(record) {
     const stMins = Math.floor(stRaw / 100) * 60 + (stRaw % 100);
     const etMins = Math.floor(etRaw / 100) * 60 + (etRaw % 100);
     const edForEpoch = etMins <= stMins ? nextDayYYMMDD(ed) : ed;
-    // Use device_schedule_id as the slot ID sent to firmware when available (set by frontend
-    // at creation time). Fall back to schedule_id for records that pre-date this field.
     const item = {
-        id: record.device_schedule_id ?? record.schedule_id,
-        cid: record.device_schedule_id ?? record.schedule_id,
+        cid: record.device_schedule_id,
         sd,
         ed,
         st: stRaw,
@@ -547,7 +544,7 @@ export function buildDeviceSyncPayloads(records, firstSyncStarterIds = new Set()
         // Split into chunks of MAX_ITEMS_PER_CHUNK
         const chunks = [];
         for (let i = 0; i < compactItems.length; i += MAX_ITEMS_PER_CHUNK) {
-            const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK);
+            const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK).map((item, idx) => ({ id: idx + 1, ...item }));
             const recordSlice = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK);
             const dbIds = recordSlice.map((r) => r.id);
             // scheduleIds must match the `id` field sent in the payload (device_schedule_id slot 1-15),
