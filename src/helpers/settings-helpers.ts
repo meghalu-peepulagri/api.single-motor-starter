@@ -567,7 +567,7 @@ export const publishMultipleTimesInBackground = async (
   publishingMap.set(starterDetails.id, true);
 
   const totalAttempts = 3;
-  const ackWaitTimesInSeconds = [10, 10, 3];
+  const ackWaitTimesInSeconds = [10, 10, 10];
 
   // Use the SAME identifier that publishData uses for publishing
   const publishedKey = starterDetails.device_allocation === "false" ? starterDetails.mac_address : starterDetails.pcb_number;
@@ -587,6 +587,7 @@ export const publishMultipleTimesInBackground = async (
       );
 
       // Publish Data
+      console.log(`[publish:ATTEMPT_${i + 1}] starter=${starterDetails.id} key=${publishedKey} seq=${devicePayload.S} payload=${JSON.stringify(devicePayload)}`);
       publishData(devicePayload, starterDetails);
 
       logger.info(
@@ -602,12 +603,14 @@ export const publishMultipleTimesInBackground = async (
 
       if (ackReceived) {
         const ackTime = new Date().toISOString();
+        console.log(`[publish:ACK_OK] starter=${starterDetails.id} key=${publishedKey} seq=${devicePayload.S} attempt=${i + 1}`);
         logger.info(
           `[${ackTime}] ACK received on attempt ${i + 1} for starter ${starterDetails.id}, key: ${publishedKey}, sequence: ${devicePayload.S}`
         );
         return true; // Stop retries, ACK matched
       }
 
+      console.log(`[publish:ACK_TIMEOUT] starter=${starterDetails.id} key=${publishedKey} seq=${devicePayload.S} attempt=${i + 1} waited=${ackWaitTimesInSeconds[i]}s`);
       logger.warn(
         `[${new Date().toISOString()}] No ACK received on attempt ${i + 1} for starter ${starterDetails.id}, key: ${publishedKey}, sequence: ${devicePayload.S}, retrying...`
       );

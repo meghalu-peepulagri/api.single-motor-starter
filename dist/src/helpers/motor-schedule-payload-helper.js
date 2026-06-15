@@ -495,7 +495,7 @@ function toCompactSchedule(record) {
  * Each chunk is a single payload object:
  * { T: "SCHEDULE CREATION", S: seq, D: { idx, last, sch_cnt, plr, m1: [...] } }
  */
-export function buildDeviceSyncPayloads(records) {
+export function buildDeviceSyncPayloads(records, firstSyncStarterIds = new Set()) {
     // Group schedules by starter_id
     const grouped = new Map();
     for (const record of records) {
@@ -526,15 +526,17 @@ export function buildDeviceSyncPayloads(records) {
             const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK);
             const recordSlice = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK);
             const dbIds = recordSlice.map((r) => r.id);
-            const scheduleIds = recordSlice.map((r) => r.schedule_id);
-            const chunkIdx = chunks.length + 1;
+            // scheduleIds must match the `id` field sent in the payload (device_schedule_id slot 1-15),
+            // because the device's partial ACK bitmask references those same slot IDs.
+            const scheduleIds = recordSlice.map((r) => r.device_schedule_id ?? r.schedule_id);
+            const idx = firstSyncStarterIds.has(starterId) ? 1 : 2;
             const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
             chunks.push({
                 payload: {
                     T: 3,
                     S: randomSequenceNumber(),
                     D: {
-                        idx: chunkIdx,
+                        idx,
                         last: isLast,
                         sch_cnt: totalCount,
                         plr,

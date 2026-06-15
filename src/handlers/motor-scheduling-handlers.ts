@@ -805,7 +805,19 @@ export class MotorScheduleHandler {
         logger.info(`[sync/pending] starter=${starterId} assigned device_schedule_ids=[${starterRecords.map((_, i) => i + 1).join(",")}]`);
       }
 
-      const grouped = buildDeviceSyncPayloads(records);
+      const ackedRows = starterIds.length > 0
+        ? await db.selectDistinct({ starter_id: motorSchedules.starter_id })
+            .from(motorSchedules)
+            .where(and(
+              inArray(motorSchedules.starter_id, starterIds),
+              eq(motorSchedules.acknowledgement, 1),
+              ne(motorSchedules.status, "ARCHIVED"),
+            ))
+        : []
+      const ackedStarterSet = new Set(ackedRows.map(r => r.starter_id).filter((id): id is number => id != null))
+      const firstSyncStarterIds = new Set(starterIds.filter(id => !ackedStarterSet.has(id)))
+
+      const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
       const starters = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, grouped.map(g => g.starter_id)));
       const starterMap = new Map(starters.map(s => [s.id, s]));
 
@@ -913,7 +925,16 @@ export class MotorScheduleHandler {
       }
 
       const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
-      const grouped = buildDeviceSyncPayloads(records);
+      const ackedRow = await db.query.motorSchedules.findFirst({
+        where: (ms, { and: a, eq: e, ne: n }) => a(
+          e(ms.starter_id, starterId),
+          e(ms.acknowledgement, 1),
+          n(ms.status, "ARCHIVED"),
+        ),
+        columns: { id: true },
+      })
+      const firstSyncStarterIds = ackedRow ? new Set<number>() : new Set([starterId])
+      const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
 
       let published = 0, failed = 0;
 
@@ -1087,7 +1108,7 @@ export class MotorScheduleHandler {
           ));
       }
 
-      const result = await pushPendingSchedulesForStarter(starter as any);
+      const result = await pushPendingSchedulesForStarter(starter as any, undefined, ids);
 
       await ActivityService.logActivity({
         performedBy: userPayload.id,

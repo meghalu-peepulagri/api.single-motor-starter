@@ -139,7 +139,21 @@ export async function syncQuery(batchSize) {
                  MAX(created_at) OVER (PARTITION BY starter_id, motor_id) - INTERVAL '1 hours' AS cutoff_time
           FROM starter_parameters
       )
-      INSERT INTO benched_starter_parameters
+      INSERT INTO benched_starter_parameters (
+             id, payload_version, packet_number,
+             line_voltage_r, line_voltage_s, line_voltage_b, avg_voltage,
+             current_r, current_s, current_b, avg_current,
+             power_present,
+             motor_mode, mode_description, motor_state, motor_description,
+             alert, alert_description, fault, fault_description,
+             last_on_code, last_on_description, last_off_code, last_off_description,
+             time_stamp,
+             starter_id, motor_id, gateway_id, user_id,
+             payload_valid, payload_errors, group_id, temperature,
+             schedule_id, schedule_start_time, schedule_end_time, schedule_runtime_minutes,
+             schedule_type, schedule_missed_minutes, schedule_failure_at, schedule_failure_reason,
+             created_at, updated_at
+      )
       SELECT id, payload_version, packet_number,
              line_voltage_r, line_voltage_s, line_voltage_b, avg_voltage,
              current_r, current_s, current_b, avg_current,

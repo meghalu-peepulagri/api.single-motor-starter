@@ -30,6 +30,7 @@ const MAX_DEVICE_SLOTS = 15;
 export async function pushPendingSchedulesForStarter(
   starter: StarterForPublish,
   motorId?: number,
+  filterIds?: number[],
 ): Promise<{ chunks: number; acked: number }> {
   if (publishingMap.get(starter.id)) {
     logger.info(`[schedule-sync] publish already in progress for starter=${starter.id}, skipping`);
@@ -52,7 +53,9 @@ export async function pushPendingSchedulesForStarter(
     const windowEnd = dateToYYMMDD(twoDaysLater);
 
     const allRecords = await findPendingSchedulesForStarter(starter.id, motorId);
-    const records = allRecords?.filter(r => r.schedule_start_date != null && r.schedule_start_date <= windowEnd) ?? [];
+    const records = (allRecords ?? [])
+      .filter(r => r.schedule_start_date != null && r.schedule_start_date <= windowEnd)
+      .filter(r => filterIds == null || filterIds.includes(r.id));
     if (records.length === 0) return { chunks: 0, acked: 0 };
 
     // Step 3 — Assign free slots (1–15) to records that don't have one yet.
@@ -61,7 +64,7 @@ export async function pushPendingSchedulesForStarter(
     const incomingDbIds = records.map(r => r.id);
 
     const takenRows = await db
-      .select({ device_schedule_id: motorSchedules.device_schedule_id })
+      .select({ device_schedule_id: motorSchedules.device_schedule_id, acknowledgement: motorSchedules.acknowledgement })
       .from(motorSchedules)
       .where(and(
         eq(motorSchedules.starter_id, starter.id),
@@ -105,7 +108,9 @@ export async function pushPendingSchedulesForStarter(
 
     const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
 
-    const grouped = buildDeviceSyncPayloads(assignedRecords);
+    const isFirstSync = !takenRows.some(r => r.acknowledgement === 1)
+    const firstSyncStarterIds = isFirstSync ? new Set([starter.id]) : new Set<number>()
+    const grouped = buildDeviceSyncPayloads(assignedRecords, firstSyncStarterIds);
     for (const { chunks } of grouped) {
       for (const { payload, dbIds, scheduleIds } of chunks) {
         chunksSent++;
@@ -118,7 +123,7 @@ export async function pushPendingSchedulesForStarter(
 
         const stillPending = await db.query.motorSchedules.findMany({
           where: (ms, { and, inArray: inArr, eq: e }) => and(inArr(ms.id, dbIds), e(ms.acknowledgement, 0)),
-          columns: { id: true, schedule_id: true },
+          columns: { id: true, schedule_id: true, device_schedule_id: true },
         });
 
         if (stillPending.length === 0) {
@@ -126,25 +131,35 @@ export async function pushPendingSchedulesForStarter(
           continue;
         }
 
+        console.log(`[schedule-sync:SEND] starter=${starter.id} key=${publishKey} dbIds=[${dbIds.join(",")}] scheduleIds(slot)=[${scheduleIds.join(",")}] payload=${JSON.stringify(payload)}`);
+
         const ok = await publishMultipleTimesInBackground(payload, starter as StarterBox);
+
+        console.log(`[schedule-sync:ACK_RESULT] starter=${starter.id} ok=${ok} schedulePartialAckMap_key=${publishKey} partialAckRaw=${JSON.stringify(publishKey ? schedulePartialAckMap.get(publishKey) : null)}`);
+
         if (ok) {
           acked++;
 
           const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
           if (publishKey) schedulePartialAckMap.delete(publishKey);
 
+          console.log(`[schedule-sync:PARTIAL_IDS] starter=${starter.id} partialIds=${JSON.stringify(partialIds)} stillPending=${JSON.stringify(stillPending)}`);
+
           let idsToUpdate: number[];
           if (partialIds && partialIds.length > 0) {
             const confirmedSet = new Set(partialIds);
+            // device_schedule_id is the slot (1–15) sent in payload `id` field — matches the bitmask
             idsToUpdate = stillPending
-              .filter((r) => confirmedSet.has(r.schedule_id))
+              .filter((r) => confirmedSet.has(r.device_schedule_id ?? r.schedule_id))
               .map((r) => r.id);
             const unmatched = scheduleIds.filter((sid) => !confirmedSet.has(sid));
+            console.log(`[schedule-sync:PARTIAL_MATCH] confirmedSet=[${[...confirmedSet].join(",")}] stillPending_slots=[${stillPending.map(r => r.device_schedule_id ?? r.schedule_id).join(",")}] idsToUpdate=[${idsToUpdate.join(",")}] unmatched=[${unmatched.join(",")}]`);
             if (unmatched.length > 0) {
               logger.warn(`[schedule-sync] starter=${starter.id} partial ACK: confirmed=[${partialIds.join(",")}] unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
             }
           } else {
             idsToUpdate = stillPending.map((r) => r.id);
+            console.log(`[schedule-sync:FULL_ACK] no partialIds → updating all idsToUpdate=[${idsToUpdate.join(",")}]`);
           }
 
           if (idsToUpdate.length > 0) {
@@ -152,7 +167,10 @@ export async function pushPendingSchedulesForStarter(
               .update(motorSchedules)
               .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
               .where(inArray(motorSchedules.id, idsToUpdate));
+            console.log(`[schedule-sync:DB_UPDATE] starter=${starter.id} set SCHEDULED for ids=[${idsToUpdate.join(",")}]`);
             logger.info(`[schedule-sync] starter=${starter.id} updated ${idsToUpdate.length}/${stillPending.length} schedule(s) to SCHEDULED`);
+          } else {
+            console.log(`[schedule-sync:DB_UPDATE] starter=${starter.id} idsToUpdate empty — NO DB update performed`);
           }
         } else {
           logger.warn(`[schedule-sync] starter=${starter.id} publish failed or no ACK, will retry next heartbeat`);

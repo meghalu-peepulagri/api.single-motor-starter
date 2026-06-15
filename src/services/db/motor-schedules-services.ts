@@ -1097,6 +1097,10 @@ function evaluateTodayScheduleStatus(s: any, now: Date): { id: number; newStatus
     const etMins = Math.floor(Number(end_time) / 100) * 60 + (Number(end_time) % 100);
     const windowPassed = stMins < etMins ? currentMins >= etMins : (currentMins >= etMins && currentMins < stMins);
     if (!windowPassed) return null;
+    // Wrap-around window (e.g., 22:00→01:00): on the schedule_start_date the window
+    // hasn't opened yet — any time in the gap (01:01–21:59) is BEFORE tonight's start,
+    // not after it. Never resolve MISSED here; the window opens at stMins tonight.
+    if (stMins > etMins) return null;
     if (acknowledgement === 0) return { id: s.id, newStatus: "FAILED" };
     return { id: s.id, newStatus: "MISSED" };
   }

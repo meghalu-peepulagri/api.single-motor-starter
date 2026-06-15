@@ -131,6 +131,12 @@ export function evaluateScheduleStatus(
     // No actual_start_time
     if (!isTodayValidForSchedule(schedule, currentDateNum, currentDayOfWeek)) return null;
 
+    // For wrap-around windows (e.g., 22:00→01:00), the gap between end and start
+    // (e.g., 01:01–21:59) looks like "window passed" by hasPassedEndTime, but when
+    // the schedule hasn't started yet we're simply before tonight's window — not missed.
+    const isWrapAround = startMinutes > endMinutes;
+    if (isWrapAround && windowPassed) return null;
+
     if (windowPassed) {
       // Device never ACKed and the window has passed → FAILED
       if (schedule.acknowledgement === 0) return { id: schedule.id, newStatus: "FAILED" };

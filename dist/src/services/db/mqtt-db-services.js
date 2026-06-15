@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
@@ -127,7 +127,7 @@ export async function selectTopicAck(topicType, payload, topic) {
             await deviceInfoAckHandler(payload, topic);
             break;
         case "SCHEDULING_ACK":
-            scheduleCreationAckResolver(payload, topic);
+            await scheduleCreationAckResolver(payload, topic);
             break;
         default:
             return null;
@@ -1201,13 +1201,72 @@ export async function deviceInfoAckHandler(message, topic) {
         console.error("Error at device info ack handler:", error);
     }
 }
-function scheduleCreationAckResolver(message, topic) {
+async function handleLateScheduleAck(macOrPcb, message) {
+    try {
+        let dValue;
+        if (typeof message.D === "number") {
+            dValue = message.D;
+        }
+        else if (message.D !== null && typeof message.D === "object" && typeof message.D.ack === "number") {
+            dValue = message.D.ack;
+        }
+        else {
+            dValue = -1;
+        }
+        const ackSuccess = dValue === 1 || dValue === 4;
+        if (!ackSuccess) {
+            console.log(`[schedule-ack:LATE] mac=${macOrPcb} dValue=${dValue} not success — skipping recovery`);
+            return;
+        }
+        const starter = await db.query.starterBoxes.findFirst({
+            where: (s, { or: o, eq: e }) => o(e(s.mac_address, macOrPcb), e(s.pcb_number, macOrPcb)),
+            columns: { id: true },
+        });
+        if (!starter) {
+            console.log(`[schedule-ack:LATE] mac=${macOrPcb} — starter not found`);
+            return;
+        }
+        // Partial ACK bitmask: slot IDs confirmed by device
+        let confirmedSlots = null;
+        if (typeof message.D === "object" && message.D !== null && typeof message.D.ids === "number" && message.D.ids > 0) {
+            confirmedSlots = new Set();
+            for (let bit = 0; bit < 16; bit++) {
+                if (Number(BigInt(message.D.ids) & (1n << BigInt(bit))))
+                    confirmedSlots.add(bit + 1);
+            }
+            console.log(`[schedule-ack:LATE] mac=${macOrPcb} partial bitmask=${message.D.ids} → slots=[${[...confirmedSlots].join(",")}]`);
+        }
+        // Find PENDING records that were already dispatched (have device_schedule_id assigned)
+        const pending = await db.query.motorSchedules.findMany({
+            where: (ms, { and: a, eq: e, ne: n }) => a(e(ms.starter_id, starter.id), e(ms.acknowledgement, 0), e(ms.schedule_status, "PENDING"), n(ms.status, "ARCHIVED"), isNotNull(ms.device_schedule_id)),
+            columns: { id: true, device_schedule_id: true },
+        });
+        const toUpdate = confirmedSlots
+            ? pending.filter(r => r.device_schedule_id != null && confirmedSlots.has(r.device_schedule_id))
+            : pending;
+        if (toUpdate.length === 0) {
+            console.log(`[schedule-ack:LATE] mac=${macOrPcb} starter=${starter.id} — no matching PENDING records to recover`);
+            return;
+        }
+        const ids = toUpdate.map(r => r.id);
+        await db.update(motorSchedules)
+            .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+            .where(inArray(motorSchedules.id, ids));
+        console.log(`[schedule-ack:LATE_RECOVERED] mac=${macOrPcb} starter=${starter.id} set SCHEDULED for ${toUpdate.length} record(s) ids=[${ids.join(",")}]`);
+        logger.info(`[schedule-ack] late ACK recovered for ${macOrPcb}: updated ${toUpdate.length} record(s) to SCHEDULED`);
+    }
+    catch (err) {
+        logger.error(`[schedule-ack] late ACK recovery failed for ${macOrPcb}: ${err?.message}`);
+    }
+}
+async function scheduleCreationAckResolver(message, topic) {
     const macFromTopic = topic.split("/")[1];
     if (!macFromTopic)
         return;
     const pendingAck = pendingAckMap.get(macFromTopic);
     if (!pendingAck) {
-        logger.warn(`[schedule-ack] late ACK for ${macFromTopic} — no pending map entry, ignoring. Will re-sync on next heartbeat.`);
+        console.log(`[schedule-ack:LATE] mac=${macFromTopic} no pending map entry — attempting direct DB recovery. message=${JSON.stringify(message)}`);
+        await handleLateScheduleAck(macFromTopic, message);
         return;
     }
     if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
@@ -1219,6 +1278,7 @@ function scheduleCreationAckResolver(message, topic) {
         pendingAckMap.delete(macFromTopic);
         return;
     }
+    console.log(`[schedule-ack:RAW] mac=${macFromTopic} full_message=${JSON.stringify(message)}`);
     // D may be a plain number or an object like { ids: <id>, ack: <value> }
     let dValue;
     if (typeof message.D === "number") {
@@ -1232,23 +1292,31 @@ function scheduleCreationAckResolver(message, topic) {
     }
     // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
     const ackSuccess = dValue === 1 || dValue === 4;
+    console.log(`[schedule-ack:PARSED] mac=${macFromTopic} S=${message.S} D_type=${typeof message.D} dValue=${dValue} ackSuccess=${ackSuccess}`);
     // Partial ACK: ids is a bitmask from the device.
-    // Bit N (0-indexed) set → schedule_id (N+1) was saved.
+    // schedule_id n → bit (n-1) → value 2^(n-1).
     // e.g. ids=4 (binary 100) → bit 2 → schedule_id 3 confirmed.
     if (ackSuccess && message.D !== null && typeof message.D === "object") {
         const rawIds = message.D.ids;
         if (typeof rawIds === "number" && rawIds > 0) {
             const acknowledgedIds = [];
-            for (let bit = 1; bit <= 64; bit++) {
+            for (let bit = 0; bit < 16; bit++) {
                 if (Number(BigInt(rawIds) & (1n << BigInt(bit)))) {
-                    acknowledgedIds.push(bit);
+                    acknowledgedIds.push(bit + 1);
                 }
             }
             if (acknowledgedIds.length > 0) {
                 schedulePartialAckMap.set(macFromTopic, acknowledgedIds);
+                console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} bitmask=${rawIds} (0b${rawIds.toString(2)}) → slot_ids=[${acknowledgedIds.join(",")}]`);
                 logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: bitmask=${rawIds} (0b${rawIds.toString(2)}) → ids=[${acknowledgedIds.join(",")}]`);
             }
         }
+        else {
+            console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} D is object but ids=${rawIds} (not a positive number) → treated as full ACK`);
+        }
+    }
+    else if (ackSuccess) {
+        console.log(`[schedule-ack:FULL] mac=${macFromTopic} D is plain number=${dValue} → full ACK, no bitmask`);
     }
     logger.info(`[schedule-ack] ${macFromTopic} D=${dValue} success=${ackSuccess}`);
     pendingAck.resolve(ackSuccess);

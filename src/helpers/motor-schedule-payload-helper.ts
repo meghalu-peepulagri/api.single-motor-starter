@@ -188,6 +188,19 @@ function toISTDate(date: Date) {
   };
 }
 
+/** Increment a YYMMDD integer by one calendar day (handles month/year boundaries). */
+export function nextDayYYMMDD(yymmdd: number): number {
+  const dateStr = String(yymmdd).padStart(6, "0");
+  const yy = parseInt(dateStr.slice(0, 2), 10);
+  const mo = parseInt(dateStr.slice(2, 4), 10) - 1;
+  const dd = parseInt(dateStr.slice(4, 6), 10);
+  const next = new Date(Date.UTC(2000 + yy, mo, dd + 1));
+  const nyy = next.getUTCFullYear() - 2000;
+  const nmm = next.getUTCMonth() + 1;
+  const ndd = next.getUTCDate();
+  return nyy * 10000 + nmm * 100 + ndd;
+}
+
 /** Convert current IST date to numeric YYMMDD */
 export function todayAsYYMMDD(): number {
   const { yy, mm, dd } = toISTDate(new Date());
@@ -361,7 +374,13 @@ export function buildScheduleData(data: {
   power_loss_recovery_time?: number;
 }, scheduleStartDate: number) {
   const scheduleType: ScheduleType = (data.schedule_type as ScheduleType) || "TIME_BASED";
-  const endDateForDateTime = data.schedule_end_date ?? scheduleStartDate;
+  const baseEndDate = data.schedule_end_date ?? scheduleStartDate;
+  // For wrap-around windows (end_time < start_time, e.g. 22:00→01:00), the window
+  // closes on the day after baseEndDate. Increment so end_date_time is always after
+  // start_date_time.
+  const startMins = parseInt(data.start_time.slice(0, 2), 10) * 60 + parseInt(data.start_time.slice(2, 4), 10);
+  const endMins = parseInt(data.end_time.slice(0, 2), 10) * 60 + parseInt(data.end_time.slice(2, 4), 10);
+  const endDateForDateTime = endMins <= startMins ? nextDayYYMMDD(baseEndDate) : baseEndDate;
   return {
     motor_id: data.motor_id,
     starter_id: data.starter_id || null,
@@ -507,16 +526,23 @@ function toCompactSchedule(record: any): Record<string, any> | null {
   const stRaw = parseInt(record.start_time, 10);
   const etRaw = parseInt(record.end_time, 10);
 
+  // For wrap-around windows (et < st, e.g. 2200→0100), the window closes on the
+  // day after `ed`. Use next day so ed_ep is always after st_ep.
+  const stMins = Math.floor(stRaw / 100) * 60 + (stRaw % 100);
+  const etMins = Math.floor(etRaw / 100) * 60 + (etRaw % 100);
+  const edForEpoch = etMins <= stMins ? nextDayYYMMDD(ed) : ed;
+
   // Use device_schedule_id as the slot ID sent to firmware when available (set by frontend
   // at creation time). Fall back to schedule_id for records that pre-date this field.
   const item: Record<string, any> = {
     id: record.device_schedule_id ?? record.schedule_id,
+    cid: record.schedule_id,
     sd,
     ed,
     st: stRaw,
     et: etRaw,
     st_ep: yymmddHhmmToEpochSeconds(sd, stRaw),
-    ed_ep: yymmddHhmmToEpochSeconds(ed, etRaw),
+    ed_ep: yymmddHhmmToEpochSeconds(edForEpoch, etRaw),
     en: record.enabled ? 1 : 0,
     pwr_rec: record.power_loss_recovery ? 1 : 0,
   };
@@ -547,7 +573,7 @@ function toCompactSchedule(record: any): Record<string, any> | null {
  * Each chunk is a single payload object:
  * { T: "SCHEDULE CREATION", S: seq, D: { idx, last, sch_cnt, plr, m1: [...] } }
  */
-export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] {
+export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set<number> = new Set()): { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] {
   // Group schedules by starter_id
   const grouped = new Map<number, any[]>();
   for (const record of records) {
@@ -581,8 +607,10 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
       const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK);
       const recordSlice = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK);
       const dbIds = recordSlice.map((r: any) => r.id);
-      const scheduleIds = recordSlice.map((r: any) => r.schedule_id);
-      const chunkIdx = chunks.length + 1;
+      // scheduleIds must match the `id` field sent in the payload (device_schedule_id slot 1-15),
+      // because the device's partial ACK bitmask references those same slot IDs.
+      const scheduleIds = recordSlice.map((r: any) => r.device_schedule_id ?? r.schedule_id);
+      const idx = firstSyncStarterIds.has(starterId) ? 1 : 2;
       const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
 
       chunks.push({
@@ -590,7 +618,7 @@ export function buildDeviceSyncPayloads(records: any[]): { starter_id: number; c
           T: 3,
           S: randomSequenceNumber(),
           D: {
-            idx: chunkIdx,
+            idx,
             last: isLast,
             sch_cnt: totalCount,
             plr,
