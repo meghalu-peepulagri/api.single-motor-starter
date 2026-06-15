@@ -183,6 +183,18 @@ function toISTDate(date) {
         dd: istTime.getUTCDate(),
     };
 }
+/** Increment a YYMMDD integer by one calendar day (handles month/year boundaries). */
+export function nextDayYYMMDD(yymmdd) {
+    const dateStr = String(yymmdd).padStart(6, "0");
+    const yy = parseInt(dateStr.slice(0, 2), 10);
+    const mo = parseInt(dateStr.slice(2, 4), 10) - 1;
+    const dd = parseInt(dateStr.slice(4, 6), 10);
+    const next = new Date(Date.UTC(2000 + yy, mo, dd + 1));
+    const nyy = next.getUTCFullYear() - 2000;
+    const nmm = next.getUTCMonth() + 1;
+    const ndd = next.getUTCDate();
+    return nyy * 10000 + nmm * 100 + ndd;
+}
 /** Convert current IST date to numeric YYMMDD */
 export function todayAsYYMMDD() {
     const { yy, mm, dd } = toISTDate(new Date());
@@ -321,7 +333,13 @@ export function normalizeRepeatDaysPayload(payload) {
  */
 export function buildScheduleData(data, scheduleStartDate) {
     const scheduleType = data.schedule_type || "TIME_BASED";
-    const endDateForDateTime = data.schedule_end_date ?? scheduleStartDate;
+    const baseEndDate = data.schedule_end_date ?? scheduleStartDate;
+    // For wrap-around windows (end_time < start_time, e.g. 22:00→01:00), the window
+    // closes on the day after baseEndDate. Increment so end_date_time is always after
+    // start_date_time.
+    const startMins = parseInt(data.start_time.slice(0, 2), 10) * 60 + parseInt(data.start_time.slice(2, 4), 10);
+    const endMins = parseInt(data.end_time.slice(0, 2), 10) * 60 + parseInt(data.end_time.slice(2, 4), 10);
+    const endDateForDateTime = endMins <= startMins ? nextDayYYMMDD(baseEndDate) : baseEndDate;
     return {
         motor_id: data.motor_id,
         starter_id: data.starter_id || null,
@@ -458,16 +476,22 @@ function toCompactSchedule(record) {
     const ed = record.schedule_end_date ?? record.schedule_start_date;
     const stRaw = parseInt(record.start_time, 10);
     const etRaw = parseInt(record.end_time, 10);
+    // For wrap-around windows (et < st, e.g. 2200→0100), the window closes on the
+    // day after `ed`. Use next day so ed_ep is always after st_ep.
+    const stMins = Math.floor(stRaw / 100) * 60 + (stRaw % 100);
+    const etMins = Math.floor(etRaw / 100) * 60 + (etRaw % 100);
+    const edForEpoch = etMins <= stMins ? nextDayYYMMDD(ed) : ed;
     // Use device_schedule_id as the slot ID sent to firmware when available (set by frontend
     // at creation time). Fall back to schedule_id for records that pre-date this field.
     const item = {
         id: record.device_schedule_id ?? record.schedule_id,
+        cid: record.device_schedule_id ?? record.schedule_id,
         sd,
         ed,
         st: stRaw,
         et: etRaw,
         st_ep: yymmddHhmmToEpochSeconds(sd, stRaw),
-        ed_ep: yymmddHhmmToEpochSeconds(ed, etRaw),
+        ed_ep: yymmddHhmmToEpochSeconds(edForEpoch, etRaw),
         en: record.enabled ? 1 : 0,
         pwr_rec: record.power_loss_recovery ? 1 : 0,
     };

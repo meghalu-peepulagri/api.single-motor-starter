@@ -536,7 +536,7 @@ function toCompactSchedule(record: any): Record<string, any> | null {
   // at creation time). Fall back to schedule_id for records that pre-date this field.
   const item: Record<string, any> = {
     id: record.device_schedule_id ?? record.schedule_id,
-    cid: record.schedule_id,
+    cid: record.device_schedule_id ?? record.schedule_id,
     sd,
     ed,
     st: stRaw,

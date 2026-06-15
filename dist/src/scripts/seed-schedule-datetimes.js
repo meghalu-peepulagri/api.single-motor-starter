@@ -1,10 +1,10 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { isNull, or, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import fs from "fs";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
-import { yymmddHhmmToUTCDate } from "../helpers/motor-schedule-payload-helper.js";
+import { nextDayYYMMDD, yymmddHhmmToUTCDate } from "../helpers/motor-schedule-payload-helper.js";
 const pool = new Pool({
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT),
@@ -18,8 +18,15 @@ const pool = new Pool({
 });
 const db = drizzle(pool, { schema: { motorSchedules } });
 const BATCH_SIZE = 100;
+function computeEndDate(row) {
+    const baseEndDate = row.schedule_end_date ?? row.schedule_start_date;
+    const startMins = parseInt(row.start_time.slice(0, 2), 10) * 60 + parseInt(row.start_time.slice(2, 4), 10);
+    const endMins = parseInt(row.end_time.slice(0, 2), 10) * 60 + parseInt(row.end_time.slice(2, 4), 10);
+    // Wrap-around window: end time is on the next calendar day after baseEndDate
+    return endMins <= startMins ? nextDayYYMMDD(baseEndDate) : baseEndDate;
+}
 async function run() {
-    console.log("Fetching schedules with missing start_date_time or end_date_time...");
+    console.log("Recomputing start_date_time and end_date_time for all schedules...");
     const rows = await db
         .select({
         id: motorSchedules.id,
@@ -28,9 +35,8 @@ async function run() {
         start_time: motorSchedules.start_time,
         end_time: motorSchedules.end_time,
     })
-        .from(motorSchedules)
-        .where(or(isNull(motorSchedules.start_date_time), isNull(motorSchedules.end_date_time)));
-    console.log(`Found ${rows.length} schedules to backfill.`);
+        .from(motorSchedules);
+    console.log(`Found ${rows.length} schedules to process.`);
     if (rows.length === 0) {
         console.log("Nothing to do.");
         await pool.end();
@@ -46,7 +52,7 @@ async function run() {
                 skipped++;
                 continue;
             }
-            const endDate = row.schedule_end_date ?? row.schedule_start_date;
+            const endDate = computeEndDate(row);
             const startDateTime = yymmddHhmmToUTCDate(row.schedule_start_date, row.start_time);
             const endDateTime = yymmddHhmmToUTCDate(endDate, row.end_time);
             await db

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lte, ne, notInArray } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
@@ -16,12 +16,10 @@ async function waitForPublishLock(starterId, maxWaitMs = 30000, intervalMs = 500
     }
     return true;
 }
-const MAX_DEVICE_SLOTS = 15;
 /**
  * Push all unacknowledged PENDING schedules for ONE starter via MQTT.
- * Slots 1–15 are assigned only to records that don't already have one.
- * Slots occupied by ack=1 (already on device) records are never reused,
- * so currently running/scheduled schedules are never overwritten.
+ * device_schedule_id is assigned only to records that don't already have one,
+ * using an ever-increasing counter (last_device_schedule_id on starter_boxes).
  */
 export async function pushPendingSchedulesForStarter(starter, motorId, filterIds) {
     if (publishingMap.get(starter.id)) {
@@ -46,43 +44,31 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
             .filter(r => filterIds == null || filterIds.includes(r.id));
         if (records.length === 0)
             return { chunks: 0, acked: 0 };
-        // Step 3 — Assign free slots (1–15) to records that don't have one yet.
-        // Slots already held by OTHER active (ack=1) records are off-limits so we
-        // never overwrite a schedule that's currently running on the device.
-        const incomingDbIds = records.map(r => r.id);
-        const takenRows = await db
-            .select({ device_schedule_id: motorSchedules.device_schedule_id, acknowledgement: motorSchedules.acknowledgement })
-            .from(motorSchedules)
-            .where(and(eq(motorSchedules.starter_id, starter.id), ne(motorSchedules.status, "ARCHIVED"), notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]), notInArray(motorSchedules.id, incomingDbIds)));
-        const takenSlots = new Set(takenRows.map(r => r.device_schedule_id).filter((id) => id != null));
-        // Pre-claim slots already assigned to incoming records (from a prior failed attempt).
-        for (const r of records) {
-            if (r.device_schedule_id != null)
-                takenSlots.add(r.device_schedule_id);
-        }
-        // Assign free slots to unassigned records.
-        for (const r of records) {
-            if (r.device_schedule_id != null)
-                continue;
-            let assigned = null;
-            for (let slot = 1; slot <= MAX_DEVICE_SLOTS; slot++) {
-                if (!takenSlots.has(slot)) {
-                    takenSlots.add(slot);
-                    assigned = slot;
-                    break;
+        // Step 3 — Assign device_schedule_id to records that don't have one yet,
+        // using an ever-increasing counter per starter (never reuses freed IDs).
+        const unassigned = records.filter(r => r.device_schedule_id == null);
+        if (unassigned.length > 0) {
+            await db.transaction(async (trx) => {
+                const [starterRow] = await trx
+                    .select({ last: starterBoxes.last_device_schedule_id })
+                    .from(starterBoxes)
+                    .where(eq(starterBoxes.id, starter.id))
+                    .for("update");
+                let counter = starterRow?.last ?? 0;
+                for (const r of unassigned) {
+                    counter++;
+                    r.device_schedule_id = counter;
+                    await trx
+                        .update(motorSchedules)
+                        .set({ device_schedule_id: counter })
+                        .where(and(eq(motorSchedules.id, r.id), isNull(motorSchedules.device_schedule_id)));
                 }
-            }
-            if (assigned == null) {
-                logger.warn(`[schedule-sync] starter=${starter.id} no free slots — schedule id=${r.id} skipped`);
-                continue;
-            }
-            r.device_schedule_id = assigned;
-            await db.update(motorSchedules)
-                .set({ device_schedule_id: assigned })
-                .where(and(eq(motorSchedules.id, r.id), isNull(motorSchedules.device_schedule_id)))
-                .catch(() => null);
+                await trx
+                    .update(starterBoxes)
+                    .set({ last_device_schedule_id: counter })
+                    .where(eq(starterBoxes.id, starter.id));
+            }).catch(err => logger.warn(`[schedule-sync] device_schedule_id assignment failed: ${err?.message}`));
         }
-        // Drop records that couldn't get a slot.
         const assignedRecords = records.filter(r => r.device_schedule_id != null);
         if (assignedRecords.length === 0)
             return { chunks: 0, acked: 0 };

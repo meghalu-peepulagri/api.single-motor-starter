@@ -625,11 +625,23 @@ export async function bulkCreateMotorSchedules(rawPayload, userId) {
     const finalPayload = expandedList.map((item) => ({
         ...buildScheduleData(item, item.schedule_start_date),
         schedule_id: item.schedule_id,
+        device_schedule_id: item.device_schedule_id ?? null,
         created_by: userId,
         enabled: item.enabled ?? true,
         schedule_status: item.schedule_status ?? "PENDING",
     }));
-    return await saveRecords(motorSchedules, finalPayload);
+    const result = await saveRecords(motorSchedules, finalPayload);
+    // Update last_device_schedule_id on the starter so the counter never goes backwards.
+    // This ensures subsequent creates start from the correct offset even if ACK never arrives.
+    const starterId = finalPayload[0]?.starter_id;
+    const maxDeviceId = Math.max(0, ...finalPayload.map((p) => p.device_schedule_id ?? 0).filter(Boolean));
+    if (starterId && maxDeviceId > 0) {
+        await db.update(starterBoxes)
+            .set({ last_device_schedule_id: sql `GREATEST(last_device_schedule_id, ${maxDeviceId})` })
+            .where(eq(starterBoxes.id, starterId))
+            .catch(() => null);
+    }
+    return result;
 }
 // =================== DEVICE SCHEDULE ID ASSIGNMENT ===================
 /**
@@ -643,47 +655,32 @@ export async function assignDeviceScheduleIds(starterId, records) {
     if (records.length === 0)
         return;
     const sorted = [...records].sort((a, b) => a.schedule_id - b.schedule_id);
-    const incomingDbIds = new Set(sorted.map(r => r.id));
     await db.transaction(async (trx) => {
-        // Collect taken device slots for this starter — exclude free statuses and incoming records
-        const takenRows = await trx
-            .select({ device_schedule_id: motorSchedules.device_schedule_id })
+        // Only assign to rows that don't already have a device_schedule_id.
+        const nullRows = await trx
+            .select({ id: motorSchedules.id })
             .from(motorSchedules)
-            .where(and(eq(motorSchedules.starter_id, starterId), ne(motorSchedules.status, "ARCHIVED"), notInArray(motorSchedules.schedule_status, ["FAILED", "DELETED"]), notInArray(motorSchedules.id, [...incomingDbIds])));
-        const takenIds = new Set(takenRows
-            .map(r => r.device_schedule_id)
-            .filter((id) => id != null));
-        // Same logic as frontend allocateUniqueIds — pick smallest free slots from 1..64
-        const allocate = (count) => {
-            const ids = [];
-            let candidate = 1;
-            while (ids.length < count && candidate <= MAX_DEVICE_CAPACITY) {
-                if (!takenIds.has(candidate)) {
-                    ids.push(candidate);
-                    takenIds.add(candidate);
-                }
-                candidate++;
-            }
-            return ids;
-        };
-        const allocatedIds = allocate(sorted.length);
-        for (let i = 0; i < sorted.length; i++) {
-            if (allocatedIds[i] == null)
-                break;
+            .where(and(inArray(motorSchedules.id, sorted.map(r => r.id)), isNull(motorSchedules.device_schedule_id)));
+        if (nullRows.length === 0)
+            return;
+        const toAssign = sorted.filter(r => nullRows.some(n => n.id === r.id));
+        // Lock the starter row and read the current counter.
+        const [starterRow] = await trx
+            .select({ last: starterBoxes.last_device_schedule_id })
+            .from(starterBoxes)
+            .where(eq(starterBoxes.id, starterId))
+            .for("update");
+        let counter = starterRow?.last ?? 0;
+        for (const r of toAssign) {
+            counter++;
             await trx
                 .update(motorSchedules)
-                .set({ device_schedule_id: allocatedIds[i] })
-                .where(and(eq(motorSchedules.id, sorted[i].id), isNull(motorSchedules.device_schedule_id)));
+                .set({ device_schedule_id: counter })
+                .where(and(eq(motorSchedules.id, r.id), isNull(motorSchedules.device_schedule_id)));
         }
-        // Update last_device_schedule_id to the current max across all active slots
-        const maxRow = await trx
-            .select({ maxId: sql `COALESCE(MAX(${motorSchedules.device_schedule_id}), 0)` })
-            .from(motorSchedules)
-            .where(and(eq(motorSchedules.starter_id, starterId), ne(motorSchedules.status, "ARCHIVED"), notInArray(motorSchedules.schedule_status, ["FAILED", "DELETED"])));
-        const newMax = maxRow[0]?.maxId ?? 0;
         await trx
             .update(starterBoxes)
-            .set({ last_device_schedule_id: newMax })
+            .set({ last_device_schedule_id: counter })
             .where(eq(starterBoxes.id, starterId));
     });
 }
@@ -802,6 +799,11 @@ function evaluateTodayScheduleStatus(s, now) {
         const etMins = Math.floor(Number(end_time) / 100) * 60 + (Number(end_time) % 100);
         const windowPassed = stMins < etMins ? currentMins >= etMins : (currentMins >= etMins && currentMins < stMins);
         if (!windowPassed)
+            return null;
+        // Wrap-around window (e.g., 22:00→01:00): on the schedule_start_date the window
+        // hasn't opened yet — any time in the gap (01:01–21:59) is BEFORE tonight's start,
+        // not after it. Never resolve MISSED here; the window opens at stMins tonight.
+        if (stMins > etMins)
             return null;
         if (acknowledgement === 0)
             return { id: s.id, newStatus: "FAILED" };
