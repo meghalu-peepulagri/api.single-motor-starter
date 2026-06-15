@@ -506,3 +506,11 @@ export function prepareSettingsUpdateLogs(data: {
 
   return logs;
 }
+
+export function activityDeviceLabel(pcb: string | null | undefined, starterNum: string): string {
+  return pcb ? `device pcb "${pcb}"` : `device "${starterNum}"`;
+}
+
+export function activityMotorLabel(alias: string | null | undefined): string {
+  return alias ? `Motor '${alias}'` : "Motor";
+}

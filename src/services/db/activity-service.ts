@@ -72,6 +72,7 @@ export class ActivityService {
     deviceId?: number;
     oldData?: Record<string, unknown>;
     newData?: Record<string, unknown>;
+    message?: string;
   }, trx?: Transaction) {
     const log = this.prepareActivityLog(data);
     await this.saveActivityLogs([log], trx);
@@ -80,14 +81,14 @@ export class ActivityService {
   /**
    * Logs a motor addition event
    */
-  static async writeMotorAddedLog(userId: number, motorId: number, data: { name: string | null; hp: number | string; location_id: number | null }, trx?: any) {
+  static async writeMotorAddedLog(userId: number, motorId: number, data: { name: string | null; hp: number | string; location_id: number | null }, trx?: any, message?: string) {
     const log = prepareActionLog({
       userId,
       action: "MOTOR_ADDED",
       entityType: "MOTOR",
       entityId: motorId,
-      deviceId: data.location_id ? undefined : undefined, // Caller needs to provide deviceId if known, or we need to look it up. For now leaving undefined to avoid breaking signature
-      newData: data
+      newData: data,
+      message,
     });
     await this.saveActivityLogs([log], trx);
   }
@@ -189,14 +190,15 @@ export class ActivityService {
   /**
    * Logs a starter assignment event
    */
-  static async writeStarterAssignedLog(userId: number, starterId: number, data: { user_id: number; location_id?: number | null; motor_name?: string }, trx?: Transaction) {
+  static async writeStarterAssignedLog(userId: number, starterId: number, data: { user_id: number; location_id?: number | null; motor_name?: string }, trx?: Transaction, message?: string) {
     const log = prepareActionLog({
       userId,
       action: "STARTER_ASSIGNED",
       entityType: "STARTER",
       entityId: starterId,
       deviceId: starterId,
-      newData: data
+      newData: data,
+      message,
     });
     await this.saveActivityLogs([log], trx);
   }
@@ -263,7 +265,7 @@ export class ActivityService {
   /**
    * Logs a location replacement event
    */
-  static async writeLocationReplacedLog(userId: number, starterId: number, oldData: { location_id: number | null }, newData: { location_id: number; motor_id: number }, trx?: Transaction) {
+  static async writeLocationReplacedLog(userId: number, starterId: number, oldData: { location_id: number | null }, newData: { location_id: number; motor_id: number }, trx?: Transaction, message?: string) {
     const log = prepareActionLog({
       userId,
       action: "LOCATION_REPLACED",
@@ -271,7 +273,8 @@ export class ActivityService {
       entityId: starterId,
       deviceId: starterId,
       oldData,
-      newData
+      newData,
+      message,
     });
     await this.saveActivityLogs([log], trx);
   }

@@ -10,6 +10,7 @@ import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
 import UnauthorizedException from "../exceptions/unauthorized-exception.js";
+import { activityDeviceLabel as deviceLabel } from "../helpers/activity-helper.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
@@ -23,6 +24,7 @@ import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithT
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
+import { locations } from "../database/schemas/locations.js";
 import { starterDispatch } from "../database/schemas/starter-dispatch.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
@@ -133,11 +135,15 @@ export class StarterHandlers {
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
                 const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
+                const dLabel = deviceLabel(starterBox.pcb_number, starterBox.starter_number);
+                const assignMsg = updatedMotor.alias_name
+                    ? `${dLabel} assigned with motor '${updatedMotor.alias_name}'`
+                    : `${dLabel} assigned`;
                 await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
                     user_id: userPayload.id,
                     location_id: updatedStarter.location_id,
                     motor_name: updatedMotor.alias_name
-                }, trx);
+                }, trx, assignMsg);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY, { starter_id: starterBox.id });
         }
@@ -236,9 +242,19 @@ export class StarterHandlers {
             }
             if (foundMotorName)
                 throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
+            const [oldLocation, newLocation] = await Promise.all([
+                starter.location_id
+                    ? getSingleRecordByMultipleColumnValues(locations, ["id"], ["="], [starter.location_id], ["id", "name"])
+                    : Promise.resolve(null),
+                getSingleRecordByMultipleColumnValues(locations, ["id"], ["="], [validatedStarterReq.location_id], ["id", "name"]),
+            ]);
             await db.transaction(async (trx) => {
                 const { updatedMotor, updatedStarter } = await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id);
-                await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx);
+                const dLabel = deviceLabel(starter.pcb_number, starter.starter_number);
+                const oldLocName = oldLocation?.name ?? `location ${starter.location_id}`;
+                const newLocName = newLocation?.name ?? `location ${validatedStarterReq.location_id}`;
+                const replaceMsg = `${dLabel} location replaced from '${oldLocName}' to '${newLocName}'`;
+                await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx, replaceMsg);
             });
             return sendResponse(c, 201, STARTER_REPLACED_SUCCESSFULLY);
         }
@@ -332,9 +348,13 @@ export class StarterHandlers {
                 throw new BadRequestException(USER_NOT_FOUND);
             if (starterBox.device_status !== "DEPLOYED")
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
+            const assignedUser = await getSingleRecordByMultipleColumnValues(users, ["id", "status"], ["=", "!="], [validatedReqData.user_id, "ARCHIVED"], ["id", "full_name"]);
             await db.transaction(async (trx) => {
                 const { updatedStarter } = await assignStarterWebWithTransaction(starterBox, validatedReqData);
-                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, { user_id: updatedStarter.user_id }, trx);
+                const dLabel = deviceLabel(starterBox.pcb_number, starterBox.starter_number);
+                const userStr = assignedUser?.full_name ? `'${assignedUser.full_name}'` : `user`;
+                const webAssignMsg = `${dLabel} assigned to user ${userStr}`;
+                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, { user_id: updatedStarter.user_id }, trx, webAssignMsg);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
         }

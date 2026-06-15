@@ -1267,6 +1267,9 @@ export async function moveChildrenWithTransaction(
     const fromAfter = fromBefore - movedCount;
     const toAfter = toBefore + movedCount;
 
+    const fromLabel = fromMaster.pcb_number ? `device pcb "${fromMaster.pcb_number}"` : `device "${fromMaster.starter_number}"`;
+    const toLabel = toMaster.pcb_number ? `device pcb "${toMaster.pcb_number}"` : `device "${toMaster.starter_number}"`;
+
     await ActivityService.logActivity({
       performedBy: userId,
       action: "CHILDREN_MOVED",
@@ -1282,6 +1285,7 @@ export async function moveChildrenWithTransaction(
         from_children_after: fromAfter,
         to_children_after: toAfter,
       },
+      message: `${movedCount} child device(s) moved from ${fromLabel} to ${toLabel}`,
     }, trx);
 
     return {
@@ -1341,6 +1345,9 @@ export async function replaceMasterDeviceWithTransaction(
       starterBoxes, oldMaster.id, { status: "ARCHIVED" }, trx,
     );
 
+    const oldMasterLabel = oldMaster.pcb_number ? `device pcb "${oldMaster.pcb_number}"` : `device "${oldMaster.starter_number}"`;
+    const newMasterLabel = newDevice.pcb_number ? `device pcb "${newDevice.pcb_number}"` : `device "${newDevice.starter_number}"`;
+
     await ActivityService.logActivity({
       performedBy: userId,
       action: "MASTER_REPLACED",
@@ -1356,6 +1363,7 @@ export async function replaceMasterDeviceWithTransaction(
         new_master_starter_number: newDevice.starter_number,
         children_transferred: movedChildren.length,
       },
+      message: `Master ${oldMasterLabel} replaced by ${newMasterLabel} (${movedChildren.length} child(ren) transferred)`,
     }, trx);
 
     return {

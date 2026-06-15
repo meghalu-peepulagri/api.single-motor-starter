@@ -363,3 +363,9 @@ export function prepareSettingsUpdateLogs(data) {
     });
     return logs;
 }
+export function activityDeviceLabel(pcb, starterNum) {
+    return pcb ? `device pcb "${pcb}"` : `device "${starterNum}"`;
+}
+export function activityMotorLabel(alias) {
+    return alias ? `Motor '${alias}'` : "Motor";
+}
