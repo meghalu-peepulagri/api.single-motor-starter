@@ -75,7 +75,6 @@ export class MqttService {
             const parsedMessage = message;
             switch (true) {
                 case /^peepul\/[^/]+\/status$/.test(topic):
-                case /^peepul\/[^/]+\/[^/]+\/status$/.test(topic):
                     const topicType = findTopicACKByType(parsedMessage);
                     await selectTopicAck(topicType, message, topic);
                     break;
