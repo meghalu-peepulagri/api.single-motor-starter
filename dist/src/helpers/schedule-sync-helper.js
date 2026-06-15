@@ -74,7 +74,11 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
             return { chunks: 0, acked: 0 };
         logger.info(`[schedule-sync] starter=${starter.id} slots=[${assignedRecords.map(r => r.device_schedule_id).join(",")}]`);
         const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
-        const isFirstSync = !takenRows.some(r => r.acknowledgement === 1);
+        const ackedRow = await db.query.motorSchedules.findFirst({
+            where: (ms, { and: a, eq: e, ne: n }) => a(e(ms.starter_id, starter.id), e(ms.acknowledgement, 1), n(ms.status, "ARCHIVED")),
+            columns: { id: true },
+        });
+        const isFirstSync = !ackedRow;
         const firstSyncStarterIds = isFirstSync ? new Set([starter.id]) : new Set();
         const grouped = buildDeviceSyncPayloads(assignedRecords, firstSyncStarterIds);
         for (const { chunks } of grouped) {
