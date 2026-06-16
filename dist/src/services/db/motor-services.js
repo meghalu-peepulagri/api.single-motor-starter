@@ -88,8 +88,12 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
                     network_type: true,
                     starter_number: true,
                     device_allocation: true,
+                    user_id: true,
                 },
                 with: {
+                    user: {
+                        columns: { id: true, full_name: true },
+                    },
                     starterParameters: {
                         where: isNotNull(starterBoxParameters.time_stamp),
                         orderBy: [desc(starterBoxParameters.time_stamp)],

@@ -251,6 +251,9 @@ export class MotorHandlers {
       // If the new device belongs to a different user, the motor follows that user
       const ownerChanged = starter.user_id != null && starter.user_id !== motor.user_id;
 
+      // If the device has no user yet but the motor does, the device inherits the motor's user
+      const deviceShouldInheritUser = starter.user_id == null && motor.user_id != null;
+
       // Fetch old device label for move message (before transaction)
       const isMove = motor.starter_id != null && motor.starter_id !== starter.id;
       let oldDeviceLabel = "";
@@ -277,6 +280,13 @@ export class MotorHandlers {
           motor_index: motorIndex,
           ...(ownerChanged && { user_id: starter.user_id }),
         }, trx);
+
+        if (deviceShouldInheritUser) {
+          await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, {
+            user_id: motor.user_id,
+          }, trx);
+        }
+
         await ActivityService.logActivity({
           performedBy: userPayload.id,
           action: "MOTOR_ASSIGNED",
@@ -287,12 +297,14 @@ export class MotorHandlers {
             starter_id: motor.starter_id,
             motor_reference: motor.motor_reference,
             user_id: motor.user_id,
+            device_user_id: starter.user_id,
           },
           newData: {
             starter_id: starter.id,
             motor_reference: motorReference,
             motor_index: motorIndex,
             ...(ownerChanged && { user_id: starter.user_id }),
+            ...(deviceShouldInheritUser && { device_user_id: motor.user_id }),
           },
           message: assignMessage,
         }, trx);

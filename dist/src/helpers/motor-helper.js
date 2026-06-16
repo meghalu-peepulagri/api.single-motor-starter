@@ -47,6 +47,21 @@ export function motorFilters(query, user) {
         whereQueryData.relations.push("=");
         whereQueryData.values.push(query.location_id);
     }
+    if (query.unassigned === "true") {
+        whereQueryData.columns.push("starter_id");
+        whereQueryData.relations.push("IS NULL");
+        whereQueryData.values.push(null);
+        // created_by is set on every motor (whoever created it, admin or user)
+        // and is never null, so it's not a valid "free" signal — only check
+        // user_id (the assigned owner). Regular users already get
+        // user_id = user.id above, which combined with starter_id IS NULL
+        // gives their own free motors.
+        if (user.user_type === "ADMIN" || user.user_type === "SUPER_ADMIN") {
+            whereQueryData.columns.push("user_id");
+            whereQueryData.relations.push("IS NULL");
+            whereQueryData.values.push(null);
+        }
+    }
     return whereQueryData;
 }
 export function buildAnalyticsFilter(parameter) {
