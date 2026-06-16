@@ -90,6 +90,7 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
       state: true,
       alias_name: true,
       test_run_status: true,
+      motor_reference: true,
     },
 
     with: {

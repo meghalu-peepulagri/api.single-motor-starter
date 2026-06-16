@@ -66,6 +66,20 @@ export function motorFilters(query: any, user: any) {
     whereQueryData.values.push(query.location_id);
   }
 
+  if (query.unassigned === "true") {
+    whereQueryData.columns.push("starter_id");
+    whereQueryData.relations.push("IS NULL");
+    whereQueryData.values.push(null);
+
+    // Non-admins already get created_by = user.id above; only admins/super
+    // admins need an explicit created_by IS NULL check for "truly free" motors.
+    if (user.user_type === "ADMIN" || user.user_type === "SUPER_ADMIN") {
+      whereQueryData.columns.push("created_by");
+      whereQueryData.relations.push("IS NULL");
+      whereQueryData.values.push(null);
+    }
+  }
+
   return whereQueryData;
 }
 

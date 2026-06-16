@@ -190,7 +190,7 @@ export class MotorHandlers {
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"]);
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
-            if (starter.device_status !== "DEPLOYED")
+            if (starter.device_status !== "DEPLOYED" && starter.device_status !== "ASSIGNED")
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await checkDeviceMotorCapacity(starter);
             const { motorReference, motorIndex } = await resolveMotorSlot(starter, validatedReqData.motor_reference);

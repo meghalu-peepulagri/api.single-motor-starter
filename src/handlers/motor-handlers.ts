@@ -217,7 +217,7 @@ export class MotorHandlers {
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
-      if (starter.device_status !== "DEPLOYED") throw new BadRequestException(STARTER_NOT_DEPLOYED);
+      if (starter.device_status !== "DEPLOYED" && starter.device_status !== "ASSIGNED") throw new BadRequestException(STARTER_NOT_DEPLOYED);
 
       await checkDeviceMotorCapacity(starter);
       const { motorReference, motorIndex } = await resolveMotorSlot(starter, validatedReqData.motor_reference);
@@ -299,7 +299,7 @@ export class MotorHandlers {
       const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
       if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
       if (!motor.starter_id) throw new BadRequestException(MOTOR_NOT_ASSIGNED_TO_DEVICE);
-      
+
       // New device must be different from current
       if (motor.starter_id === validatedReqData.new_starter_id) throw new ConflictException(MOTOR_SAME_DEVICE);
 
