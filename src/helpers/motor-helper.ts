@@ -373,6 +373,57 @@ function hasDateOrDayOverlap(
   return (newStart <= (existEnd ?? existStart)) && ((newEnd ?? newStart) >= existStart);
 }
 
+/** Convert numeric YYMMDD to a day index (days since 2000-01-01) for interval math. */
+function yymmddToDayIndex(yymmdd: number): number {
+  const str = String(yymmdd).padStart(6, "0");
+  const yy = parseInt(str.substring(0, 2), 10);
+  const mm = parseInt(str.substring(2, 4), 10) - 1;
+  const dd = parseInt(str.substring(4, 6), 10);
+  return Math.floor(Date.UTC(2000 + yy, mm, dd) / 86400000);
+}
+
+/**
+ * Absolute [start, end) interval in minutes for a one-time schedule, where minute 0
+ * is midnight of 2000-01-01. This collapses date + time into a single timeline so
+ * overnight windows (e.g. 19:00→02:00) on consecutive days no longer false-trigger.
+ * Returns null when date info is missing.
+ */
+function oneTimeAbsoluteInterval(s: {
+  start_time: string;
+  end_time: string;
+  schedule_start_date?: number | null;
+  schedule_end_date?: number | null;
+}): { start: number; end: number } | null {
+  if (!s.schedule_start_date) return null;
+  const sMin = timeToMinutes(s.start_time);
+  const eMin = timeToMinutes(s.end_time);
+  const startDay = yymmddToDayIndex(s.schedule_start_date);
+  const endDay = s.schedule_end_date != null ? yymmddToDayIndex(s.schedule_end_date) : startDay;
+  const start = startDay * 1440 + sMin;
+  let end = endDay * 1440 + eMin;
+  // Overnight window not reflected in the dates (end on/before start) → roll a day.
+  if (end <= start && eMin <= sMin) end += 1440;
+  return { start, end };
+}
+
+/**
+ * Classify the conflict between two one-time schedules using their absolute
+ * datetime intervals. Returns "exact", "overlap", "gap", or null (no conflict).
+ */
+function oneTimeConflictType(
+  a: { start_time: string; end_time: string; schedule_start_date?: number | null; schedule_end_date?: number | null },
+  b: { start_time: string; end_time: string; schedule_start_date?: number | null; schedule_end_date?: number | null },
+  gapMinutes: number = 5,
+): "exact" | "overlap" | "gap" | null {
+  const ia = oneTimeAbsoluteInterval(a);
+  const ib = oneTimeAbsoluteInterval(b);
+  if (!ia || !ib) return "overlap"; // no date info → assume conflict (preserves prior behavior)
+  if (ia.start === ib.start && ia.end === ib.end) return "exact";
+  if (ia.start < ib.end && ib.start < ia.end) return "overlap";
+  if (ia.start - gapMinutes < ib.end && ib.start < ia.end + gapMinutes) return "gap";
+  return null;
+}
+
 /**
  * Full conflict check against an array of existing schedules.
  * Checks date/day overlap first, then time overlaps and 5-minute gap violations.
@@ -398,6 +449,8 @@ export function checkMotorScheduleConflict(
 ): void {
   if (!existingSchedules || existingSchedules.length === 0) return;
 
+  const isNewRepeat = (newSchedule.repeat ?? 0) === 1;
+
   for (const existing of existingSchedules) {
     // Skip if no date/day overlap
     if (!hasDateOrDayOverlap(newSchedule, existing)) continue;
@@ -413,6 +466,20 @@ export function checkMotorScheduleConflict(
 
     const dateStr = existing.schedule_start_date ? ` on ${formatYYMMDD(existing.schedule_start_date)}` : "";
     const rangeStr = `${formatHHMM(existing.start_time)}–${formatHHMM(existing.end_time)}`;
+
+    // One-time schedules: compare absolute datetime intervals so overnight windows
+    // on consecutive days don't false-trigger an overlap.
+    if (!isNewRepeat) {
+      const conflict = oneTimeConflictType(newSchedule, existing);
+      if (!conflict) continue;
+      if (conflict === "exact") {
+        throw new ConflictException(`${ALREADY_SCHEDULED_EXISTS} (${rangeStr}${dateStr})`, conflictInfo);
+      }
+      if (conflict === "overlap") {
+        throw new ConflictException(`${SCHEDULE_OVERLAP_CONFLICT} (conflicts with ${rangeStr}${dateStr})`, conflictInfo);
+      }
+      throw new ConflictException(`${SCHEDULE_GAP_CONFLICT} (too close to ${rangeStr}${dateStr})`, conflictInfo);
+    }
 
     // Check exact match
     if (newSchedule.start_time === existing.start_time && newSchedule.end_time === existing.end_time) {
@@ -471,6 +538,23 @@ export function checkIntraArrayConflicts(schedules: any[]): void {
         const rangeA = `${formatHHMM(scheduleA.start_time)}–${formatHHMM(scheduleA.end_time)}`;
         const rangeB = `${formatHHMM(scheduleB.start_time)}–${formatHHMM(scheduleB.end_time)}`;
         const dateStr = scheduleA.schedule_start_date ? ` on ${formatYYMMDD(scheduleA.schedule_start_date)}` : "";
+
+        // One-time schedules: use absolute datetime intervals so back-to-back
+        // overnight windows on consecutive days don't false-trigger.
+        if ((scheduleA.repeat ?? 0) !== 1) {
+          const conflict = oneTimeConflictType(scheduleA, scheduleB);
+          if (conflict === "overlap" || conflict === "exact") {
+            throw new ConflictException(
+              `${SCHEDULE_OVERLAP_CONFLICT} between ${rangeA} and ${rangeB}${dateStr}`,
+            );
+          }
+          if (conflict === "gap") {
+            throw new ConflictException(
+              `${SCHEDULE_GAP_CONFLICT} between ${rangeA} and ${rangeB}${dateStr}`,
+            );
+          }
+          continue;
+        }
 
         if (doTimeRangesOverlap(scheduleA.start_time, scheduleA.end_time, scheduleB.start_time, scheduleB.end_time)) {
           throw new ConflictException(

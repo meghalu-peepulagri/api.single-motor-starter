@@ -486,7 +486,9 @@ function toCompactSchedule(record) {
     const item = {
         cid: record.device_schedule_id,
         sd,
-        ed,
+        // For overnight windows the schedule closes on the next calendar day, so the
+        // `ed` field must match the rolled-forward date used for `ed_ep`.
+        ed: edForEpoch,
         st: stRaw,
         et: etRaw,
         st_ep: yymmddHhmmToEpochSeconds(sd, stRaw),

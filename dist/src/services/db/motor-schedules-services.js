@@ -3,8 +3,8 @@ import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
-import { buildScheduleData, dateToYYMMDD, expandDateRangeByDays, normalizeMotorSchedulePayload, todayAsYYMMDD } from "../../helpers/motor-schedule-payload-helper.js";
-import { checkIntraArrayConflicts, checkMotorScheduleConflict, validateScheduleTypeRules, wallClockMinutes } from "../../helpers/motor-helper.js";
+import { buildScheduleData, dateToYYMMDD, expandDateRangeByDays, nextDayYYMMDD, normalizeMotorSchedulePayload, todayAsYYMMDD } from "../../helpers/motor-schedule-payload-helper.js";
+import { checkIntraArrayConflicts, checkMotorScheduleConflict, timeToMinutes, validateScheduleTypeRules, wallClockMinutes } from "../../helpers/motor-helper.js";
 import { validatedRequest } from "../../validations/validate-request.js";
 import { CREATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, MOTOR_NOT_FOUND } from "../../constants/app-constants.js";
 import { getSingleRecordByMultipleColumnValues, saveRecords } from "./base-db-services.js";
@@ -585,7 +585,12 @@ export async function bulkCreateMotorSchedules(rawPayload, userId) {
     const expandedList = [];
     for (const item of preparedList) {
         const hasDays = Array.isArray(item.days_of_week) && item.days_of_week.length > 0;
-        const hasRange = item.schedule_start_date < item.schedule_end_date;
+        // An overnight window (end time on/before start time) whose end date is exactly
+        // the next day is a SINGLE night, not a multi-day range — its end date is the
+        // morning-after, so it must not be split into per-day records.
+        const isOvernightSingleNight = timeToMinutes(item.end_time) <= timeToMinutes(item.start_time)
+            && item.schedule_end_date === nextDayYYMMDD(item.schedule_start_date);
+        const hasRange = item.schedule_start_date < item.schedule_end_date && !isOvernightSingleNight;
         if (hasDays && hasRange) {
             const dates = expandDateRangeByDays(item.schedule_start_date, item.schedule_end_date, item.days_of_week);
             if (dates.length === 0) {
