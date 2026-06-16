@@ -526,11 +526,13 @@ function toCompactSchedule(record: any): Record<string, any> | null {
   const stRaw = parseInt(record.start_time, 10);
   const etRaw = parseInt(record.end_time, 10);
 
-  // For wrap-around windows (et < st, e.g. 2200→0100), the window closes on the
-  // day after `ed`. Use next day so ed_ep is always after st_ep.
+  // For wrap-around windows (et < st, e.g. 2200→0100) the window closes after
+  // midnight. Only roll forward when `ed` defaults to `sd` (same-day window that
+  // spills past midnight); if `ed` is already the explicit closing date, use it
+  // as-is so ed_ep doesn't get double-counted to the day after.
   const stMins = Math.floor(stRaw / 100) * 60 + (stRaw % 100);
   const etMins = Math.floor(etRaw / 100) * 60 + (etRaw % 100);
-  const edForEpoch = etMins <= stMins ? nextDayYYMMDD(ed) : ed;
+  const edForEpoch = etMins <= stMins && ed === sd ? nextDayYYMMDD(ed) : ed;
 
   const item: Record<string, any> = {
     cid: record.device_schedule_id,
