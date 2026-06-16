@@ -24,8 +24,6 @@ import {
   SCHEDULE_LOGS_FETCHED,
   SCHEDULE_NOT_FOUND,
   SCHEDULE_OPERATIONS_FETCHED,
-  SCHEDULE_REPUBLISH_FAILED,
-  SCHEDULE_REPUBLISH_NOT_ALLOWED,
   SCHEDULE_REPUBLISHED,
   SCHEDULE_RESTARTED,
   SCHEDULED_LIST_FETCHED,
@@ -61,7 +59,7 @@ import {
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { schedulePartialAckMap } from "../helpers/ack-tracker-hepler.js";
-import { pushPendingSchedulesForStarter } from "../helpers/schedule-sync-helper.js";
+import { pushPendingSchedulesForStarter, triggerSyncForCreatedSchedules } from "../helpers/schedule-sync-helper.js";
 import {
   getRecordById,
   getSingleRecordByMultipleColumnValues,
@@ -116,26 +114,6 @@ import { validatedRequest } from "../validations/validate-request.js";
 import { formatHHMM, formatYYMMDD, formatScheduleDateTime } from "../helpers/motor-schedule-helpers.js";
 
 const paramsValidateException = new ParamsValidateException();
-
-async function triggerSyncForCreatedSchedules(records: any[]) {
-  const today = todayAsYYMMDD();
-  const windowEnd = dateToYYMMDD(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
-  const arr = Array.isArray(records) ? records : [records];
-
-  const starterIds = [...new Set(
-    arr
-      .filter(r => r.starter_id && r.schedule_start_date >= today && r.schedule_start_date <= windowEnd)
-      .map(r => r.starter_id as number),
-  )];
-  if (starterIds.length === 0) return;
-
-  const starters = await db.query.starterBoxes.findMany({
-    where: (s, { inArray: inArr, ne: n }) => inArr(s.id, starterIds),
-    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true },
-  });
-
-  await Promise.allSettled(starters.map(s => pushPendingSchedulesForStarter(s as any)));
-}
 
 export class MotorScheduleHandler {
 

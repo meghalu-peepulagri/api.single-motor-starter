@@ -179,3 +179,22 @@ export async function runScheduleSync(label = "cron") {
     await Promise.allSettled(online.map(s => pushPendingSchedulesForStarter(s).catch(err => logger.error(`[${label}] starter=${s.id} failed: ${err?.message}`))));
     return { starters: online.length, skipped };
 }
+/**
+ * Background sync trigger for schedules just created via the create endpoint.
+ * Only pushes for starters whose new schedule falls within the next 3-day sync window.
+ */
+export async function triggerSyncForCreatedSchedules(records) {
+    const today = todayAsYYMMDD();
+    const windowEnd = dateToYYMMDD(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
+    const arr = Array.isArray(records) ? records : [records];
+    const starterIds = [...new Set(arr
+            .filter(r => r.starter_id && r.schedule_start_date >= today && r.schedule_start_date <= windowEnd)
+            .map(r => r.starter_id))];
+    if (starterIds.length === 0)
+        return;
+    const starters = await db.query.starterBoxes.findMany({
+        where: (s, { inArray: inArr }) => inArr(s.id, starterIds),
+        columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true },
+    });
+    await Promise.allSettled(starters.map(s => pushPendingSchedulesForStarter(s)));
+}

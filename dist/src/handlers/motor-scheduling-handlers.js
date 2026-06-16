@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
-import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, BULK_SCHEDULE_IDS_REQUIRED, BULK_SCHEDULES_DELETED, BULK_SCHEDULES_RESTARTED, BULK_SCHEDULES_STOPPED, INVALID_SCHEDULE_CMD, MOTOR_NOT_FOUND, MULTIPLE_SCHEDULES_CREATED, NO_ACTIVE_SCHEDULE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_DEVICE_OFFLINE, SCHEDULE_HISTORY_FETCHED, SCHEDULE_LIVE_DATA_FETCHED, SCHEDULE_LIVE_DATA_NOT_FOUND, SCHEDULE_LOGS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_OPERATIONS_FETCHED, SCHEDULE_REPUBLISH_FAILED, SCHEDULE_REPUBLISH_NOT_ALLOWED, SCHEDULE_REPUBLISHED, SCHEDULE_RESTARTED, SCHEDULED_LIST_FETCHED, SCHEDULE_STATUS_SYNC_COMPLETED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
+import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, BULK_SCHEDULE_IDS_REQUIRED, BULK_SCHEDULES_DELETED, BULK_SCHEDULES_RESTARTED, BULK_SCHEDULES_STOPPED, INVALID_SCHEDULE_CMD, MOTOR_NOT_FOUND, MULTIPLE_SCHEDULES_CREATED, NO_ACTIVE_SCHEDULE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_DEVICE_OFFLINE, SCHEDULE_HISTORY_FETCHED, SCHEDULE_LIVE_DATA_FETCHED, SCHEDULE_LIVE_DATA_NOT_FOUND, SCHEDULE_LOGS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_OPERATIONS_FETCHED, SCHEDULE_REPUBLISHED, SCHEDULE_RESTARTED, SCHEDULED_LIST_FETCHED, SCHEDULE_STATUS_SYNC_COMPLETED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
@@ -13,7 +13,7 @@ import { buildDeviceSyncPayloads, buildScheduleData, buildScheduleTimeline, date
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { schedulePartialAckMap } from "../helpers/ack-tracker-hepler.js";
-import { pushPendingSchedulesForStarter } from "../helpers/schedule-sync-helper.js";
+import { pushPendingSchedulesForStarter, triggerSyncForCreatedSchedules } from "../helpers/schedule-sync-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, updateRecordById, } from "../services/db/base-db-services.js";
 import { findOperationsByScheduleId, insertScheduleOperation, updateOperationAck, } from "../services/db/motor-schedule-operations-services.js";
 import { findScheduleLogsByScheduleId, insertScheduleLog, } from "../services/db/motor-schedule-logs-services.js";
@@ -26,21 +26,6 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { formatHHMM, formatYYMMDD, formatScheduleDateTime } from "../helpers/motor-schedule-helpers.js";
 const paramsValidateException = new ParamsValidateException();
-async function triggerSyncForCreatedSchedules(records) {
-    const today = todayAsYYMMDD();
-    const windowEnd = dateToYYMMDD(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
-    const arr = Array.isArray(records) ? records : [records];
-    const starterIds = [...new Set(arr
-            .filter(r => r.starter_id && r.schedule_start_date >= today && r.schedule_start_date <= windowEnd)
-            .map(r => r.starter_id))];
-    if (starterIds.length === 0)
-        return;
-    const starters = await db.query.starterBoxes.findMany({
-        where: (s, { inArray: inArr, ne: n }) => inArr(s.id, starterIds),
-        columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true },
-    });
-    await Promise.allSettled(starters.map(s => pushPendingSchedulesForStarter(s)));
-}
 export class MotorScheduleHandler {
     // =================== CREATE SCHEDULE ===================
     createMotorScheduleHandler = async (c) => {

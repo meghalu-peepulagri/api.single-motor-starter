@@ -11,7 +11,7 @@ import { getSingleRecordByMultipleColumnValues, saveRecords } from "./base-db-se
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { evaluateScheduleStatus } from "../../helpers/schedule-status-evaluator.js";
-const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE", "STOPPED", "RESTARTED"];
+const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE", "STOPPED", "RESTARTED", "PARTIAL", "UNDELIVERED", "MISSED"];
 export async function getNextScheduleIdForMotor(motorId) {
     const reusable = await db
         .select({ scheduleId: motorSchedules.schedule_id })

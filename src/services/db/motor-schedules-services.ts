@@ -34,7 +34,7 @@ import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { evaluateScheduleStatus } from "../../helpers/schedule-status-evaluator.js";
 import type { ScheduleForEvaluation } from "../../types/app-types.js";
 
-const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE", "STOPPED", "RESTARTED"] as const;
+const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE", "STOPPED", "RESTARTED", "PARTIAL", "UNDELIVERED", "MISSED"] as const;
 
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
   const reusable = await db
