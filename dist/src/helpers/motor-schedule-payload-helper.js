@@ -536,7 +536,10 @@ export function buildDeviceSyncPayloads(records, firstSyncStarterIds = new Set()
         const limited = schedules.slice(0, MAX_SCHEDULES_PER_DEVICE);
         const compactPairs = limited
             .map((r) => ({ record: r, compact: toCompactSchedule(r) }))
-            .filter((p) => p.compact !== null);
+            // Drop records that produced no compact item OR have no device slot (cid).
+            // The payload `id` field is the absolute device slot (1–15) and the ACK
+            // bitmask references it, so a null cid would emit a meaningless slot.
+            .filter((p) => p.compact !== null && typeof p.compact.cid === "number" && p.compact.cid > 0);
         const compactItems = compactPairs.map(p => p.compact);
         const validRecords = compactPairs.map(p => p.record);
         // sch_cnt = total valid schedules being sent to this device in this sync call
@@ -548,7 +551,11 @@ export function buildDeviceSyncPayloads(records, firstSyncStarterIds = new Set()
         // Split into chunks of MAX_ITEMS_PER_CHUNK
         const chunks = [];
         for (let i = 0; i < compactItems.length; i += MAX_ITEMS_PER_CHUNK) {
-            const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK).map((item, idx) => ({ id: idx + 1, ...item }));
+            // `id` MUST be the absolute device slot (device_schedule_id), NOT a per-chunk
+            // row index — the firmware stores each schedule in slot `id` (1–15) and the
+            // partial-ACK bitmask references those same slots. Using a local index made
+            // every batch reuse slots 1,2,… overwriting earlier schedules on the device.
+            const slice = compactItems.slice(i, i + MAX_ITEMS_PER_CHUNK).map((item) => ({ id: item.cid, ...item }));
             const recordSlice = validRecords.slice(i, i + MAX_ITEMS_PER_CHUNK);
             const dbIds = recordSlice.map((r) => r.id);
             // scheduleIds must match the `id` field sent in the payload (device_schedule_id slot 1-15),
