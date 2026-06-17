@@ -1457,7 +1457,8 @@ async function handleLateScheduleAck(macOrPcb: string, message: any): Promise<vo
     } else {
       dValue = -1;
     }
-    const ackSuccess = dValue === 1 || dValue === 4;
+    // Success = 1 or 2. ack=4 (flash issue) must NOT recover records to SCHEDULED.
+    const ackSuccess = dValue === 1 || dValue === 2;
     if (!ackSuccess) {
       console.log(`[schedule-ack:LATE] mac=${macOrPcb} dValue=${dValue} not success — skipping recovery`);
       return;
@@ -1548,8 +1549,8 @@ async function scheduleCreationAckResolver(message: any, topic: string) {
     dValue = -1;
   }
 
-  // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
-  const ackSuccess = dValue === 1 || dValue === 4;
+  // Success = 1 or 2. ack=4 is a device flash issue → NOT success, schedule stays PENDING (do NOT mark SCHEDULED).
+  const ackSuccess = dValue === 1 || dValue === 2;
 
   console.log(`[schedule-ack:PARSED] mac=${macFromTopic} S=${message.S} D_type=${typeof message.D} dValue=${dValue} ackSuccess=${ackSuccess}`);
 
