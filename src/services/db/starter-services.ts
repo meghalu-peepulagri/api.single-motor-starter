@@ -490,7 +490,7 @@ export async function starterConnectedMotors(starterId: number) {
         columns: {
           id: true,
           full_name: true,
-          phone_number: true,
+          phone: true,
         },
       },
       dispatch: {
