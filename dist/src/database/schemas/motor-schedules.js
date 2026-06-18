@@ -40,6 +40,7 @@ export const motorSchedules = pgTable("motor_schedules", {
     // Create ACK tracking (legacy single-field; new multi-op tracking in motor_schedule_operations)
     acknowledgement: integer("acknowledgement").default(0),
     acknowledged_at: timestamp("acknowledged_at"),
+    publish_attempts: integer("publish_attempts").default(0).notNull(),
     // Schedule lifecycle timestamps
     last_started_at: timestamp("last_started_at"),
     last_stopped_at: timestamp("last_stopped_at"),

@@ -502,6 +502,7 @@ export async function findPendingSchedulesForStarter(starterId: number, motorId?
   const baseConditions = [
     eq(motorSchedules.starter_id, starterId),
     eq(motorSchedules.acknowledgement, 0),
+    eq(motorSchedules.publish_attempts, 0),
     ne(motorSchedules.status, "ARCHIVED"),
     inArray(motorSchedules.schedule_status, ["PENDING"]),
     // Normal 3-day window OR yesterday's cross-midnight schedules still within execution window

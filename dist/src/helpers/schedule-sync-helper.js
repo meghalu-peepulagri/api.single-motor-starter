@@ -98,6 +98,7 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
                     continue;
                 }
                 console.log(`[schedule-sync:SEND] starter=${starter.id} key=${publishKey} dbIds=[${dbIds.join(",")}] scheduleIds(slot)=[${scheduleIds.join(",")}] payload=${JSON.stringify(payload)}`);
+                await db.update(motorSchedules).set({ publish_attempts: 1 }).where(inArray(motorSchedules.id, dbIds));
                 const ok = await publishMultipleTimesInBackground(payload, starter);
                 console.log(`[schedule-sync:ACK_RESULT] starter=${starter.id} ok=${ok} schedulePartialAckMap_key=${publishKey} partialAckRaw=${JSON.stringify(publishKey ? schedulePartialAckMap.get(publishKey) : null)}`);
                 if (ok) {
