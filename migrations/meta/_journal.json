@@ -470,6 +470,13 @@
       "when": 1780718980622,
       "tag": "0066_supreme_katie_power",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1781767285006,
+      "tag": "0067_sleepy_gorilla_man",
+      "breakpoints": true
     }
   ]
 }
