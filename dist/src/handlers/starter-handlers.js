@@ -689,6 +689,10 @@ export class StarterHandlers {
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validatedReqData.starter_id, "ARCHIVED"]);
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            const newLocation = await getSingleRecordByMultipleColumnValues(locations, ["id"], ["="], [validatedReqData.location_id], ["id", "name"]);
+            const newLocName = newLocation?.name ?? `location ${validatedReqData.location_id}`;
+            const dLabel = deviceLabel(starter.pcb_number, starter.starter_number);
+            const assignLocMessage = `${dLabel} location assigned to '${newLocName}'`;
             await db.transaction(async (trx) => {
                 const updatedStarter = await updateRecordById(starterBoxes, starter.id, { location_id: validatedReqData.location_id, user_id: userPayload.id }, trx);
                 await ActivityService.logActivity({
@@ -696,7 +700,8 @@ export class StarterHandlers {
                     action: "LOCATION_ASSIGNED",
                     entityType: "STARTER",
                     entityId: starter.id,
-                    newData: { location_id: updatedStarter.location_id }
+                    newData: { location_id: updatedStarter.location_id },
+                    message: assignLocMessage,
                 }, trx);
             });
             return sendResponse(c, 201, LOCATION_ASSIGNED);

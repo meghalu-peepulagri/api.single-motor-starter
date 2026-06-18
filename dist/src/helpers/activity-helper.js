@@ -208,7 +208,8 @@ export function prepareDeletionLog(data) {
         entityType: data.entityType,
         entityId: data.entityId,
         deviceId: data.deviceId,
-        oldData: data.entityName ? { name: data.entityName } : null
+        oldData: data.entityName ? { name: data.entityName } : null,
+        message: data.message,
     });
 }
 /**

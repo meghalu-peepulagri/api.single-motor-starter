@@ -153,12 +153,19 @@ export class MotorHandlers {
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
             const userPayload = c.get("user_payload");
+            const mLabel = motorLabel(motor.alias_name);
+            let deleteMessage = `${mLabel} deleted`;
+            if (motor.starter_id) {
+                const delStarter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id"], ["="], [motor.starter_id], ["id", "pcb_number", "starter_number"]);
+                if (delStarter)
+                    deleteMessage += ` from ${deviceLabel(delStarter.pcb_number, delStarter.starter_number)}`;
+            }
             await db.transaction(async (trx) => {
                 await updateRecordById(motors, motor.id, { status: "ARCHIVED" }, trx);
                 if (motor.starter_id) {
                     await updateRecordById(starterBoxes, motor.starter_id, { device_status: "DEPLOYED", user_id: null }, trx);
                 }
-                await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx, motor.starter_id || undefined);
+                await ActivityService.writeMotorDeletedLog(userPayload.id, motor.id, trx, motor.starter_id || undefined, deleteMessage);
             });
             return sendResponse(c, 200, MOTOR_DELETED);
         }
@@ -229,11 +236,15 @@ export class MotorHandlers {
             }
             const newDeviceLabel = deviceLabel(starter.pcb_number, starter.starter_number);
             const mLabel = motorLabel(motor.alias_name);
+            const oldSlotPart = motor.motor_reference ? ` slot ${motor.motor_reference} of ` : " ";
+            const newSlotPart = motorReference ? ` slot ${motorReference} of ` : " ";
             const assignMessage = isSameDevice
                 ? `${mLabel} slot changed from ${motor.motor_reference ?? "-"} to ${motorReference} on ${newDeviceLabel}`
                 : isMove
-                    ? `${mLabel} moved from ${oldDeviceLabel} to ${newDeviceLabel}`
-                    : `${mLabel} assigned to ${newDeviceLabel}`;
+                    ? `${mLabel} moved from${oldSlotPart}${oldDeviceLabel} to${newSlotPart}${newDeviceLabel}`
+                    : motorReference
+                        ? `${mLabel} assigned to slot ${motorReference}`
+                        : `${mLabel} assigned`;
             await db.transaction(async (trx) => {
                 await updateRecordById(motors, motorId, {
                     starter_id: starter.id,
@@ -253,12 +264,11 @@ export class MotorHandlers {
                 if (Object.keys(starterUpdatePayload).length > 0) {
                     await updateRecordById(starterBoxes, starter.id, starterUpdatePayload, trx);
                 }
-                await ActivityService.logActivity({
+                const logPayload = {
                     performedBy: userPayload.id,
                     action: "MOTOR_ASSIGNED",
                     entityType: "MOTOR",
                     entityId: motorId,
-                    deviceId: starter.id,
                     oldData: {
                         starter_id: motor.starter_id,
                         motor_reference: motor.motor_reference,
@@ -273,7 +283,13 @@ export class MotorHandlers {
                         ...(deviceShouldInheritUser && { device_user_id: motor.user_id }),
                     },
                     message: assignMessage,
-                }, trx);
+                };
+                // Log on new device
+                await ActivityService.logActivity({ ...logPayload, deviceId: starter.id }, trx);
+                // For move: also log on old device so its history shows the motor leaving
+                if (isMove && motor.starter_id) {
+                    await ActivityService.logActivity({ ...logPayload, deviceId: motor.starter_id }, trx);
+                }
             });
             return sendResponse(c, 200, MOTOR_ASSIGNED_TO_DEVICE);
         }
@@ -350,9 +366,12 @@ export class MotorHandlers {
                 const newMotor = await saveSingleRecord(motors, newMotorPayload, trx);
                 const oldMLabel = motorLabel(motor.alias_name);
                 const newMLabel = newMotor.alias_name ? `'${newMotor.alias_name}'` : null;
+                const locationPart = motor.motor_reference
+                    ? `slot ${motor.motor_reference} of ${replaceDeviceLabel}`
+                    : replaceDeviceLabel;
                 const replacedMsg = newMLabel
-                    ? `${oldMLabel} replaced by ${newMLabel} on ${replaceDeviceLabel}`
-                    : `${oldMLabel} replaced on ${replaceDeviceLabel}`;
+                    ? `${oldMLabel} replaced by ${newMLabel} on ${locationPart}`
+                    : `${oldMLabel} replaced on ${locationPart}`;
                 // Log 1: old motor replaced (archived)
                 await ActivityService.logActivity({
                     performedBy: userPayload.id,
@@ -453,9 +472,9 @@ export class MotorHandlers {
             if (!motor.starter_id)
                 throw new BadRequestException(MOTOR_NOT_ASSIGNED_TO_DEVICE);
             const previousStarterId = motor.starter_id;
-            const prevStarter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id"], ["="], [previousStarterId], ["id", "pcb_number", "starter_number"]);
-            const detachDeviceLabel = prevStarter ? deviceLabel(prevStarter.pcb_number, prevStarter.starter_number) : `device "${previousStarterId}"`;
-            const detachMessage = `${motorLabel(motor.alias_name)} detached from ${detachDeviceLabel}`;
+            const detachMessage = motor.motor_reference
+                ? `${motorLabel(motor.alias_name)} detached from slot ${motor.motor_reference}`
+                : `${motorLabel(motor.alias_name)} detached`;
             await db.transaction(async (trx) => {
                 await updateRecordById(motors, motorId, {
                     starter_id: null,

@@ -114,13 +114,14 @@ export class ActivityService {
   /**
    * Logs a motor deletion event
    */
-  static async writeMotorDeletedLog(userId: number, motorId: number, trx?: any, deviceId?: number) {
+  static async writeMotorDeletedLog(userId: number, motorId: number, trx?: any, deviceId?: number, message?: string) {
     const log = prepareDeletionLog({
       userId,
       entityType: "MOTOR",
       entityId: motorId,
       deviceId,
-      action: "MOTOR_DELETED"
+      action: "MOTOR_DELETED",
+      message,
     });
     await this.saveActivityLogs([log], trx);
   }

@@ -265,6 +265,7 @@ export function prepareDeletionLog(data: {
   deviceId?: number;
   action: "DEVICE_DELETED" | "MOTOR_DELETED" | "STARTER_REMOVED" | "LOCATION_DELETED";
   entityName?: string;
+  message?: string;
 }): NewUserActivityLog {
   return ActivityService.prepareActivityLog({
     performedBy: data.userId,
@@ -272,7 +273,8 @@ export function prepareDeletionLog(data: {
     entityType: data.entityType,
     entityId: data.entityId,
     deviceId: data.deviceId,
-    oldData: data.entityName ? { name: data.entityName } : null
+    oldData: data.entityName ? { name: data.entityName } : null,
+    message: data.message,
   });
 }
 
