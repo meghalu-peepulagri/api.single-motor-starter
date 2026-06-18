@@ -31,6 +31,7 @@ export class MotorHandlers {
             paramsValidateException.emptyBodyValidation(motorPayload);
             const validMotorReq = await validatedRequest("add-motor", motorPayload, MOTOR_VALIDATION_CRITERIA);
             let starterAssignment = null;
+            let starterLocationId = null;
             if (validMotorReq.starter_id) {
                 const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [validMotorReq.starter_id, "ARCHIVED"]);
                 if (!starter)
@@ -40,6 +41,7 @@ export class MotorHandlers {
                 await checkDeviceMotorCapacity(starter);
                 const { motorReference, motorIndex } = await resolveMotorSlot(starter, validMotorReq.motor_reference);
                 starterAssignment = { starter_id: starter.id, motor_reference: motorReference, motor_index: motorIndex };
+                starterLocationId = starter.location_id ?? null;
             }
             // created_by = who performed this action (never changes after creation)
             // user_id    = which customer owns this motor (follows device ownership)
@@ -47,7 +49,7 @@ export class MotorHandlers {
             const preparedMotorPayload = prepareNewMotorPayload({
                 name: validMotorReq.name,
                 hp: validMotorReq.hp,
-                locationId: validMotorReq.location_id,
+                locationId: validMotorReq.location_id ?? starterLocationId,
                 createdBy: userPayload.id,
                 userId,
                 starterAssignment,
@@ -239,11 +241,15 @@ export class MotorHandlers {
                     motor_reference: motorReference,
                     motor_index: motorIndex,
                     ...(ownerChanged && { user_id: starter.user_id }),
+                    ...(starter.location_id != null && { location_id: starter.location_id }),
                 }, trx);
-                if (deviceShouldInheritUser) {
-                    await updateRecordById(starterBoxes, starter.id, {
-                        user_id: motor.user_id,
-                    }, trx);
+                const starterUpdatePayload = {};
+                if (deviceShouldInheritUser)
+                    starterUpdatePayload.user_id = motor.user_id;
+                if (starter.location_id == null && motor.location_id != null)
+                    starterUpdatePayload.location_id = motor.location_id;
+                if (Object.keys(starterUpdatePayload).length > 0) {
+                    await updateRecordById(starterBoxes, starter.id, starterUpdatePayload, trx);
                 }
                 await ActivityService.logActivity({
                     performedBy: userPayload.id,

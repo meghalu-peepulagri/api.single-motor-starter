@@ -141,6 +141,10 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             parent_starter_id: true,
         },
         with: {
+            location: {
+                where: ne(locations.status, "ARCHIVED"),
+                columns: { id: true, name: true },
+            },
             gateway: {
                 where: ne(gateways.status, "ARCHIVED"),
                 columns: { id: true, name: true, mac_address: true, pcb_number: true },
@@ -165,10 +169,6 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     motor_reference: true,
                 },
                 with: {
-                    location: {
-                        where: ne(locations.status, "ARCHIVED"),
-                        columns: { id: true, name: true },
-                    },
                     starterParameters: {
                         where: isNotNull(starterBoxParameters.time_stamp),
                         orderBy: [desc(starterBoxParameters.time_stamp)],
