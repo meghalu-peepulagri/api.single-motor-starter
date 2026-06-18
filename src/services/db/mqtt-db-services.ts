@@ -1175,13 +1175,13 @@ export async function heartbeatHandler(message: any, topic: string) {
       const motorList = Array.isArray((validMac as any).motors) ? (validMac as any).motors : [];
       setImmediate(() => {
         if (motorList.length === 0) {
-          pushPendingSchedulesForStarter(validMac).catch((err) =>
+          pushPendingSchedulesForStarter(validMac, undefined, undefined, true).catch((err) =>
             logger.error(`heartbeat schedule push failed for starter ${validMac.id}: ${err?.message}`),
           );
           return;
         }
         for (const motor of motorList) {
-          pushPendingSchedulesForStarter(validMac, motor.id).catch((err) =>
+          pushPendingSchedulesForStarter(validMac, motor.id, undefined, true).catch((err) =>
             logger.error(`heartbeat schedule push failed for starter ${validMac.id} motor ${motor.id}: ${err?.message}`),
           );
         }

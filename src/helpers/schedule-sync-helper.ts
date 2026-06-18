@@ -28,6 +28,7 @@ export async function pushPendingSchedulesForStarter(
   starter: StarterForPublish,
   motorId?: number,
   filterIds?: number[],
+  fromHeartbeat = false,
 ): Promise<{ chunks: number; acked: number }> {
   if (publishingMap.get(starter.id)) {
     logger.info(`[schedule-sync] publish already in progress for starter=${starter.id}, skipping`);
@@ -118,7 +119,9 @@ export async function pushPendingSchedulesForStarter(
 
         console.log(`[schedule-sync:SEND] starter=${starter.id} key=${publishKey} dbIds=[${dbIds.join(",")}] scheduleIds(slot)=[${scheduleIds.join(",")}] payload=${JSON.stringify(payload)}`);
 
-        await db.update(motorSchedules).set({ publish_attempts: 1 }).where(inArray(motorSchedules.id, dbIds));
+        if (fromHeartbeat) {
+          await db.update(motorSchedules).set({ publish_attempts: 1 }).where(inArray(motorSchedules.id, dbIds));
+        }
 
         const ok = await publishMultipleTimesInBackground(payload, starter as StarterBox);
 

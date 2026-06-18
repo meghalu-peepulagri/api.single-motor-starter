@@ -976,11 +976,11 @@ export async function heartbeatHandler(message, topic) {
             const motorList = Array.isArray(validMac.motors) ? validMac.motors : [];
             setImmediate(() => {
                 if (motorList.length === 0) {
-                    pushPendingSchedulesForStarter(validMac).catch((err) => logger.error(`heartbeat schedule push failed for starter ${validMac.id}: ${err?.message}`));
+                    pushPendingSchedulesForStarter(validMac, undefined, undefined, true).catch((err) => logger.error(`heartbeat schedule push failed for starter ${validMac.id}: ${err?.message}`));
                     return;
                 }
                 for (const motor of motorList) {
-                    pushPendingSchedulesForStarter(validMac, motor.id).catch((err) => logger.error(`heartbeat schedule push failed for starter ${validMac.id} motor ${motor.id}: ${err?.message}`));
+                    pushPendingSchedulesForStarter(validMac, motor.id, undefined, true).catch((err) => logger.error(`heartbeat schedule push failed for starter ${validMac.id} motor ${motor.id}: ${err?.message}`));
                 }
             });
         }

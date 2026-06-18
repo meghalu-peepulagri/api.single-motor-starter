@@ -21,7 +21,7 @@ async function waitForPublishLock(starterId, maxWaitMs = 30000, intervalMs = 500
  * device_schedule_id is assigned only to records that don't already have one,
  * using an ever-increasing counter (last_device_schedule_id on starter_boxes).
  */
-export async function pushPendingSchedulesForStarter(starter, motorId, filterIds) {
+export async function pushPendingSchedulesForStarter(starter, motorId, filterIds, fromHeartbeat = false) {
     if (publishingMap.get(starter.id)) {
         logger.info(`[schedule-sync] publish already in progress for starter=${starter.id}, skipping`);
         return { chunks: 0, acked: 0 };
@@ -98,7 +98,9 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
                     continue;
                 }
                 console.log(`[schedule-sync:SEND] starter=${starter.id} key=${publishKey} dbIds=[${dbIds.join(",")}] scheduleIds(slot)=[${scheduleIds.join(",")}] payload=${JSON.stringify(payload)}`);
-                await db.update(motorSchedules).set({ publish_attempts: 1 }).where(inArray(motorSchedules.id, dbIds));
+                if (fromHeartbeat) {
+                    await db.update(motorSchedules).set({ publish_attempts: 1 }).where(inArray(motorSchedules.id, dbIds));
+                }
                 const ok = await publishMultipleTimesInBackground(payload, starter);
                 console.log(`[schedule-sync:ACK_RESULT] starter=${starter.id} ok=${ok} schedulePartialAckMap_key=${publishKey} partialAckRaw=${JSON.stringify(publishKey ? schedulePartialAckMap.get(publishKey) : null)}`);
                 if (ok) {
