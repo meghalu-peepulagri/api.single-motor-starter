@@ -287,6 +287,7 @@ export class MotorHandlers {
         const starterUpdatePayload: Record<string, any> = {};
         if (deviceShouldInheritUser) starterUpdatePayload.user_id = motor.user_id;
         if (starter.location_id == null && motor.location_id != null) starterUpdatePayload.location_id = motor.location_id;
+        if (starter.device_status === "DEPLOYED" && motor.user_id != null) starterUpdatePayload.device_status = "ASSIGNED";
         if (Object.keys(starterUpdatePayload).length > 0) {
           await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, starterUpdatePayload, trx);
         }
