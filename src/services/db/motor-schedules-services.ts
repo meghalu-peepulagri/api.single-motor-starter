@@ -1104,7 +1104,24 @@ function evaluateTodayScheduleStatus(s: any, now: Date): { id: number; newStatus
   }
 
   if (actual_start_time && !actual_end_time) {
-    return { id: s.id, newStatus: "RUNNING" };
+    // Device reported a start but never an end time. Stay RUNNING only while the
+    // scheduled window is still open. Once the window has passed, resolve a
+    // terminal status from how long it actually ran — a missing end time must
+    // NOT keep the schedule stuck in RUNNING.
+    const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    const currentMins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+    const stMins = Math.floor(Number(start_time) / 100) * 60 + (Number(start_time) % 100);
+    const etMins = Math.floor(Number(end_time) / 100) * 60 + (Number(end_time) % 100);
+    const windowPassed = stMins < etMins ? currentMins >= etMins : (currentMins >= etMins && currentMins < stMins);
+
+    // Window still open, or a wrap-around window on its start date (hasn't truly
+    // closed) → genuinely running.
+    if (!windowPassed || stMins > etMins) return { id: s.id, newStatus: "RUNNING" };
+
+    const planned = runtime_minutes ?? (etMins - stMins);
+    const actual = actual_run_time ?? 0;
+    if (actual >= planned) return { id: s.id, newStatus: "COMPLETED" };
+    return { id: s.id, newStatus: "PARTIAL" };
   }
 
   if (actual_start_time && actual_end_time) {
