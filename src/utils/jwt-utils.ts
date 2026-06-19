@@ -21,7 +21,7 @@ async function genJWTTokens(payload: JWTPayload) {
   };
   const refresh_token_payload = {
     ...payload,
-    exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 30), // 30 days
+    exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 60), // 60 days
   };
   const access_token = await sign(access_token_payload, jwtConfig.secret);
   const refresh_token = await sign(refresh_token_payload, jwtConfig.secret);
