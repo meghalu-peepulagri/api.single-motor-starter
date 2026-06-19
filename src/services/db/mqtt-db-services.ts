@@ -1025,7 +1025,7 @@ export async function heartbeatHandler(message: any, topic: string) {
     await db.transaction(async (trx) => {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, validMac.id, starterBoxUpdates, trx);
 
-      if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
+      if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
     });
   } catch (error: any) {
     console.error("Error at heartbeat topic handler:", error);
