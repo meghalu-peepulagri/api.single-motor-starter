@@ -100,12 +100,12 @@ export const signalQuality = (code: number) => {
   if (code >= 2 && code <= 9) return "Marginal strength";
   if (code >= 10 && code <= 14) return "OK strength";
   if (code >= 15 && code <= 19) return "Good strength";
-  if (code >= 20 && code <= 30) return "Excellent strength";
+  if (code >= 20 && code <= 40) return "Excellent strength";
   return "Invalid signal code";
 };
 
 export function getValidStrength(value: number) {
-  const isValid = value >= 2 && value <= 30;
+  const isValid = value >= 2 && value <= 40;
 
   return {
     strength: isValid ? value : 0,

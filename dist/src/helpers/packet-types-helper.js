@@ -90,12 +90,12 @@ export const signalQuality = (code) => {
         return "OK strength";
     if (code >= 15 && code <= 19)
         return "Good strength";
-    if (code >= 20 && code <= 30)
+    if (code >= 20 && code <= 40)
         return "Excellent strength";
     return "Invalid signal code";
 };
 export function getValidStrength(value) {
-    const isValid = value >= 2 && value <= 30;
+    const isValid = value >= 2 && value <= 40;
     return {
         strength: isValid ? value : 0,
         status: (isValid ? "ACTIVE" : "INACTIVE"),
