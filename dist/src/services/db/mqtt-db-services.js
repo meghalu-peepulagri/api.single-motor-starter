@@ -962,7 +962,7 @@ export async function heartbeatHandler(message, topic) {
         }
         await db.transaction(async (trx) => {
             await updateRecordByIdWithTrx(starterBoxes, validMac.id, starterBoxUpdates, trx);
-            if (message.D.s_q >= 2 && message.D.s_q <= 30 && validMac.synced_settings_status === "false")
+            if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false")
                 await publishDeviceSettings(validMac);
         });
         // Heartbeat-driven schedule push: whenever the device is online (signal 1–30),
