@@ -458,7 +458,15 @@ export function buildScheduleTimeline(record: any): any {
     const terminalEventMap: Record<string, string> = { MISSED: "MISSED", PARTIAL: "PARTIAL" };
     events.push({ event: terminalEventMap[record.schedule_status] ?? "STOPPED", timestamp: new Date(record.last_stopped_at).toISOString() });
   }
-  if (record.failure_at) events.push({ event: "FAILED", timestamp: new Date(record.failure_at).toISOString() });
+  // FAILED is a status, not just a stale timestamp. The device can report a failure
+  // epoch (failure_at) early in the window and then actually start the motor — in that
+  // case the row recovers (RUNNING/STOPPED/COMPLETED) and is NOT failed. Only surface a
+  // FAILED event when the schedule genuinely ended in the FAILED state, otherwise a
+  // recovered schedule shows a misleading FAILED marker between SCHEDULED and RUNNING.
+  if (record.schedule_status === "FAILED") {
+    const failedTs = record.failure_at ?? record.last_stopped_at ?? record.updated_at;
+    if (failedTs) events.push({ event: "FAILED", timestamp: new Date(failedTs).toISOString() });
+  }
   if (record.deleted_at) events.push({ event: "DELETED", timestamp: new Date(record.deleted_at).toISOString() });
   if (record.edited_at) events.push({ event: "EDITED", timestamp: new Date(record.edited_at).toISOString() });
   if (record.completed_at) events.push({ event: "COMPLETED", timestamp: new Date(record.completed_at).toISOString() });
