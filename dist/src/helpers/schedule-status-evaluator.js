@@ -76,21 +76,17 @@ export function evaluateScheduleStatus(schedule, now) {
         && currentDateNum <= schedule.schedule_end_date;
     // ── PENDING / SCHEDULED ──
     if (schedule.schedule_status === "PENDING" || schedule.schedule_status === "SCHEDULED") {
-        // Devices may pre-fill actual_start_time / actual_end_time with the planned
-        // times before the motor really starts. So a non-null actual_start_time is
-        // NOT sufficient evidence the motor is running — the wall clock must also
-        // be inside today's window.
-        if ((schedule.actual_started_at ?? schedule.actual_start_time) && isTodayActiveDate && windowOpen) {
+        if ((schedule.actual_started_at ?? schedule.actual_start_time) && isTodayActiveDate) {
+            if (windowPassed) {
+                if (hasMoreRepeatRange) {
+                    return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
+                }
+                return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+            }
+            // device reported start today — go RUNNING immediately (before or during window)
             return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
         }
-        if ((schedule.actual_started_at ?? schedule.actual_start_time) && isTodayActiveDate && windowPassed) {
-            if (hasMoreRepeatRange) {
-                return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
-            }
-            return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
-        }
-        // actual_start_time set but we're BEFORE today's window (or it's not today's
-        // date) → stay PENDING/SCHEDULED; do nothing yet.
+        // actual_started_at set but not today's date → stay SCHEDULED
         if ((schedule.actual_started_at ?? schedule.actual_start_time)) {
             return null;
         }
@@ -116,8 +112,9 @@ export function evaluateScheduleStatus(schedule, now) {
     }
     // ── RUNNING ──
     if (schedule.schedule_status === "RUNNING") {
-        // Demote rows that were prematurely flipped to RUNNING before the window opened.
-        if (windowBefore) {
+        // Demote only when device has NOT reported real start — if device already started,
+        // trust the device and keep RUNNING even before the window opens.
+        if (windowBefore && !(schedule.actual_started_at ?? schedule.actual_start_time)) {
             return { id: schedule.id, newStatus: "SCHEDULED" };
         }
         if ((schedule.actual_started_at ?? schedule.actual_start_time)) {
