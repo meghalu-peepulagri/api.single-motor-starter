@@ -118,9 +118,8 @@ export function evaluateScheduleStatus(schedule, now) {
             return { id: schedule.id, newStatus: "SCHEDULED" };
         }
         if ((schedule.actual_started_at ?? schedule.actual_start_time)) {
-            // Window still open → stay RUNNING. Never resolve terminal mid-window,
-            // even if the device has reported an actual_end_time.
-            if (windowOpen)
+            // Wait until window fully passes — never resolve terminal before or during window.
+            if (windowOpen || windowBefore)
                 return null;
             if (hasMoreRepeatRange) {
                 return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
