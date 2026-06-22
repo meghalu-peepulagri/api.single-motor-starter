@@ -777,7 +777,7 @@ export async function updateActualScheduleFields(
       and(
         eq(motorSchedules.motor_id, motorId),
         eq(motorSchedules.starter_id, starterId),
-        eq(motorSchedules.schedule_id, scheduleId),
+        eq(motorSchedules.device_schedule_id, scheduleId),
         eq(motorSchedules.schedule_start_date, today),
         sql`${motorSchedules.status} != 'ARCHIVED'`,
         notInArray(motorSchedules.schedule_status, ["COMPLETED", "FAILED", "MISSED"]),

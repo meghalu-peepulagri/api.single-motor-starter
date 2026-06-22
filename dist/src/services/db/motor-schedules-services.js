@@ -568,7 +568,7 @@ export async function updateActualScheduleFields(motorId, starterId, scheduleId,
         ...(actualData.failure_code ? { failure_code: actualData.failure_code } : {}),
         updated_at: now,
     })
-        .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), eq(motorSchedules.schedule_id, scheduleId), eq(motorSchedules.schedule_start_date, today), sql `${motorSchedules.status} != 'ARCHIVED'`, notInArray(motorSchedules.schedule_status, ["COMPLETED", "FAILED", "MISSED"])));
+        .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), eq(motorSchedules.device_schedule_id, scheduleId), eq(motorSchedules.schedule_start_date, today), sql `${motorSchedules.status} != 'ARCHIVED'`, notInArray(motorSchedules.schedule_status, ["COMPLETED", "FAILED", "MISSED"])));
 }
 export async function bulkCreateMotorSchedules(rawPayload, userId) {
     // 1. Normalize and Validate the entire batch
