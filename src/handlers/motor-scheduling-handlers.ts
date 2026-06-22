@@ -165,7 +165,13 @@ export class MotorScheduleHandler {
 
       const toEvaluate = filterEvaluatable(result.records);
       if (toEvaluate.length > 0) {
-        setImmediate(() => runScheduleEvaluator(toEvaluate).catch(() => null));
+        const transitions = await runScheduleEvaluator(toEvaluate).catch(() => []);
+        if (transitions.length > 0) {
+          const statusMap = new Map(transitions.map(t => [t.schedule_id, t.to]));
+          result.records = result.records.map(r =>
+            statusMap.has(r.id) ? { ...r, schedule_status: statusMap.get(r.id) as any } : r
+          );
+        }
       }
 
       return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result, filters.schedule_start_date));
@@ -180,12 +186,15 @@ export class MotorScheduleHandler {
       const scheduleId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(scheduleId, "schedule id");
 
-      const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId);
+      let schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId);
       if (!schedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       const toEvaluate = filterEvaluatable([schedule]);
       if (toEvaluate.length > 0) {
-        setImmediate(() => runScheduleEvaluator(toEvaluate).catch(() => null));
+        const transitions = await runScheduleEvaluator(toEvaluate).catch(() => []);
+        if (transitions.length > 0) {
+          schedule = { ...schedule, schedule_status: transitions[0].to as any };
+        }
       }
 
       return sendResponse(c, 200, SCHEDULE_DETAILS_FETCHED, formatMotorScheduleResponse(schedule));
