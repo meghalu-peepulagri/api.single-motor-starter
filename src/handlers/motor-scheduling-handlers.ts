@@ -668,7 +668,12 @@ export class MotorScheduleHandler {
               }
             }
 
-            return db.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id));
+            return db.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id))
+              .catch((err: any) => {
+                const code = err?.cause?.code ?? err?.code;
+                if (code === "23505") return null; // unique index conflict — another active row holds this slot, skip
+                throw err;
+              });
           })
         );
 

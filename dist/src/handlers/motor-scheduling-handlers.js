@@ -548,7 +548,13 @@ export class MotorScheduleHandler {
                                 setData.completed_at = stoppedAt;
                         }
                     }
-                    return db.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id));
+                    return db.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id))
+                        .catch((err) => {
+                        const code = err?.cause?.code ?? err?.code;
+                        if (code === "23505")
+                            return null; // unique index conflict — another active row holds this slot, skip
+                        throw err;
+                    });
                 }));
                 await Promise.all(transitions.map(t => insertScheduleLog({ schedule_id: t.schedule_id, event_type: "STATUS_CHANGED", actor_type: "system", old_status: t.from, new_status: t.to }).catch(() => null)));
             }
