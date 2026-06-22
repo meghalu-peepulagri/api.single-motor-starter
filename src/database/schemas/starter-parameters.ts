@@ -67,6 +67,7 @@ export const starterBoxParameters = pgTable("starter_parameters", {
   schedule_missed_minutes: integer("schedule_missed_minutes"), // mm
   schedule_failure_at: timestamp("schedule_failure_at"), // fe
   schedule_failure_reason: varchar("schedule_failure_reason"), // fr
+  schedule_failure_code: integer("schedule_failure_code"), // fr raw code
 
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),

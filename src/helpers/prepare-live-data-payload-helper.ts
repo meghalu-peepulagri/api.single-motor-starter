@@ -23,6 +23,14 @@ function toHHMM(value: unknown): string | null {
   return normalizeTime(n) ?? null;
 }
 
+function toEpochDate(value: unknown): Date | null {
+  if (value == null) return null;
+  const n = Number(value);
+  if (isNaN(n) || n <= 2359) return null;
+  const ms = n > 9_999_999_999 ? n : n * 1000;
+  return new Date(ms);
+}
+
 export function prepareLiveDataPayload(validatedData: any, starterData: any) {
 
   if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
@@ -97,9 +105,12 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
     active_schedule_start_time: schStartTime,
     active_schedule_runtime_minutes: schRuntime,
     active_schedule_end_time: schEndTime,
+    active_schedule_started_at: sch ? toEpochDate(sch.st) : null,
+    active_schedule_ended_at: sch ? toEpochDate(sch.et) : null,
     active_schedule_missed_minutes: sch?.mm ?? 0,
     active_schedule_failure_at: sch?.fe ? new Date(String(sch.fe).length === 13 ? Number(sch.fe) : Number(sch.fe) * 1000) : null,
     active_schedule_failure_reason: getFailureReason(cleanScalar(sch?.fr)),
+    active_failure_code: cleanScalar(sch?.fr) || 0,
   };
 }
 
@@ -145,5 +156,6 @@ export function prepareStarterParametersRecord(insertedData: preparedLiveData): 
     schedule_missed_minutes: insertedData.active_schedule_missed_minutes,
     schedule_failure_at: insertedData.active_schedule_failure_at,
     schedule_failure_reason: insertedData.active_schedule_failure_reason,
+    schedule_failure_code: insertedData.active_failure_code || null,
   };
 }

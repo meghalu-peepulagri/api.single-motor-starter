@@ -14,6 +14,7 @@ export async function upsertScheduleLiveData(data) {
         device_run_time: data.device_run_time ?? null,
         device_missed_minutes: data.device_missed_minutes ?? 0,
         failure_reason: data.failure_reason ?? null,
+        failure_code: data.failure_code ?? null,
         received_at: now,
         updated_at: now,
     })
@@ -25,6 +26,7 @@ export async function upsertScheduleLiveData(data) {
             device_run_time: data.device_run_time ?? null,
             device_missed_minutes: data.device_missed_minutes ?? 0,
             failure_reason: data.failure_reason ?? null,
+            failure_code: data.failure_code ?? null,
             updated_at: now,
         },
     })

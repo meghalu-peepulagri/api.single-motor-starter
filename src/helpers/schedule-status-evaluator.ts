@@ -74,7 +74,7 @@ function resolveTerminalStatus(
   const planned = plannedDurationMinutes(schedule, startMinutes, endMinutes);
   const actual = schedule.actual_run_time ?? 0;
 
-  if (!schedule.actual_start_time) {
+  if (!(schedule.actual_started_at ?? (schedule.actual_started_at ?? schedule.actual_start_time))) {
     return { id: schedule.id, newStatus: "MISSED", last_stopped_at: now };
   }
   if (actual >= planned) {
@@ -111,11 +111,11 @@ export function evaluateScheduleStatus(
     // times before the motor really starts. So a non-null actual_start_time is
     // NOT sufficient evidence the motor is running — the wall clock must also
     // be inside today's window.
-    if (schedule.actual_start_time && isTodayActiveDate && windowOpen) {
+    if ((schedule.actual_started_at ?? schedule.actual_start_time) && isTodayActiveDate && windowOpen) {
       return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
     }
 
-    if (schedule.actual_start_time && isTodayActiveDate && windowPassed) {
+    if ((schedule.actual_started_at ?? schedule.actual_start_time) && isTodayActiveDate && windowPassed) {
       if (hasMoreRepeatRange) {
         return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
       }
@@ -124,7 +124,7 @@ export function evaluateScheduleStatus(
 
     // actual_start_time set but we're BEFORE today's window (or it's not today's
     // date) → stay PENDING/SCHEDULED; do nothing yet.
-    if (schedule.actual_start_time) {
+    if ((schedule.actual_started_at ?? schedule.actual_start_time)) {
       return null;
     }
 
@@ -157,7 +157,7 @@ export function evaluateScheduleStatus(
       return { id: schedule.id, newStatus: "SCHEDULED" };
     }
 
-    if (schedule.actual_start_time) {
+    if ((schedule.actual_started_at ?? schedule.actual_start_time)) {
       // Window still open → stay RUNNING. Never resolve terminal mid-window,
       // even if the device has reported an actual_end_time.
       if (windowOpen) return null;
@@ -179,7 +179,7 @@ export function evaluateScheduleStatus(
   if (schedule.schedule_status === "PARTIAL") {
     // Self-heal rows that were prematurely flipped to PARTIAL while the window
     // is still open. As soon as the list endpoint is hit, they bounce back to RUNNING.
-    if (schedule.actual_start_time && windowOpen) {
+    if ((schedule.actual_started_at ?? schedule.actual_start_time) && windowOpen) {
       return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
     }
 
@@ -199,7 +199,7 @@ export function evaluateScheduleStatus(
       return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
     }
 
-    if (schedule.actual_start_time && windowOpen) {
+    if ((schedule.actual_started_at ?? schedule.actual_start_time) && windowOpen) {
       return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
     }
     return null;

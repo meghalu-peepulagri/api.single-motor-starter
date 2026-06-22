@@ -80,11 +80,9 @@ import {
 import {
   assignDeviceScheduleIds,
   syncLastDeviceScheduleId,
-  batchUpdateScheduleStatuses,
   bulkCreateMotorSchedules,
   cancelSchedulesByIds,
   deleteDayFromSchedule,
-  evaluateAndUpdateSchedulesOnRead,
   findActiveScheduleById,
   findAllActiveSchedulesForMotor,
   findConflictingSchedules,
@@ -163,8 +161,6 @@ export class MotorScheduleHandler {
       const filters = buildMotorScheduleFilters(query);
       const result = await findSchedulesByFilters(filters, page, limit);
 
-      await evaluateAndUpdateSchedulesOnRead(result.records);
-
       return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result, filters.schedule_start_date));
     } catch (error: any) {
       handleAppError(error, "motor Schedule List");
@@ -179,8 +175,6 @@ export class MotorScheduleHandler {
 
       const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId);
       if (!schedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
-
-      await evaluateAndUpdateSchedulesOnRead([schedule]);
 
       return sendResponse(c, 200, SCHEDULE_DETAILS_FETCHED, formatMotorScheduleResponse(schedule));
     } catch (error: any) {
@@ -649,40 +643,47 @@ export class MotorScheduleHandler {
       const schedules = await findEvaluatableSchedules();
       if (!schedules || schedules.length === 0) return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, { evaluated: 0, updated: 0, transitions: [] });
 
-      const transitions: any[] = [];
-      const groups = {
-        SCHEDULED: [] as number[],
-        RUNNING: [] as number[],
-        COMPLETED: [] as number[],
-        PARTIAL: [] as number[],
-        MISSED: [] as number[],
-        WAITING_NEXT_CYCLE: [] as number[],
-      };
+      const transitions: { schedule_id: number; from: string; to: string; schedule: any }[] = [];
 
       for (const s of schedules) {
         const res = evaluateScheduleStatus(s as ScheduleForEvaluation, now);
         if (!res) continue;
-        const key = res.newStatus as keyof typeof groups;
-        if (groups[key]) groups[key].push(res.id);
-        transitions.push({ schedule_id: res.id, from: s.schedule_status, to: res.newStatus });
+        if (res.newStatus === s.schedule_status) continue;
+        transitions.push({ schedule_id: res.id, from: s.schedule_status, to: res.newStatus, schedule: s });
       }
 
-      await batchUpdateScheduleStatuses([
-        { status: "SCHEDULED", ids: groups.SCHEDULED },
-        { status: "RUNNING", ids: groups.RUNNING, last_started_at: now },
-        { status: "COMPLETED", ids: groups.COMPLETED, last_stopped_at: now, completed_at: now },
-        { status: "PARTIAL", ids: groups.PARTIAL, last_stopped_at: now },
-        { status: "MISSED", ids: groups.MISSED, last_stopped_at: now },
-        { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
-      ]);
+      if (transitions.length > 0) {
+        await Promise.all(
+          transitions.map(t => {
+            const s = t.schedule;
+            const setData: Record<string, any> = { schedule_status: t.to, updated_at: now };
 
-      await Promise.all(
-        transitions.map(t =>
-          insertScheduleLog({ schedule_id: t.schedule_id, event_type: "STATUS_CHANGED", actor_type: "system", old_status: t.from, new_status: t.to }).catch(() => null)
-        )
-      );
+            if (t.to === "RUNNING") {
+              if (s.actual_started_at) setData.last_started_at = s.actual_started_at;
+            } else if (["COMPLETED", "PARTIAL", "MISSED", "FAILED", "WAITING_NEXT_CYCLE"].includes(t.to)) {
+              const stoppedAt = s.actual_ended_at ?? s.end_date_time;
+              if (stoppedAt) {
+                setData.last_stopped_at = stoppedAt;
+                if (t.to === "COMPLETED") setData.completed_at = stoppedAt;
+              }
+            }
 
-      return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, { evaluated: schedules.length, updated: transitions.length, transitions });
+            return db.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id));
+          })
+        );
+
+        await Promise.all(
+          transitions.map(t =>
+            insertScheduleLog({ schedule_id: t.schedule_id, event_type: "STATUS_CHANGED", actor_type: "system", old_status: t.from, new_status: t.to }).catch(() => null)
+          )
+        );
+      }
+
+      return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
+        evaluated: schedules.length,
+        updated: transitions.length,
+        transitions: transitions.map(t => ({ schedule_id: t.schedule_id, from: t.from, to: t.to })),
+      });
     } catch (error: any) {
       handleAppError(error, "sync schedule statuses");
     }

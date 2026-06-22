@@ -181,7 +181,7 @@ export async function syncQuery(batchSize: number) {
              starter_id, motor_id, gateway_id, user_id,
              payload_valid, payload_errors, group_id, temperature,
              schedule_id, schedule_start_time, schedule_end_time, schedule_runtime_minutes,
-             schedule_type, schedule_missed_minutes, schedule_failure_at, schedule_failure_reason,
+             schedule_type, schedule_missed_minutes, schedule_failure_at, schedule_failure_reason, schedule_failure_code,
              created_at, updated_at
       )
       SELECT id, payload_version, packet_number,
@@ -195,7 +195,7 @@ export async function syncQuery(batchSize: number) {
              starter_id, motor_id, gateway_id, user_id,
              payload_valid, payload_errors, group_id, temperature,
              schedule_id, schedule_start_time, schedule_end_time, schedule_runtime_minutes,
-             schedule_type, schedule_missed_minutes, schedule_failure_at, schedule_failure_reason,
+             schedule_type, schedule_missed_minutes, schedule_failure_at, schedule_failure_reason, schedule_failure_code,
              created_at, updated_at
       FROM records_to_move
       WHERE created_at < cutoff_time

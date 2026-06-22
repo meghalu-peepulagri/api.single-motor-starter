@@ -195,6 +195,7 @@ async function handleScheduleLiveData(insertedData: preparedLiveData, motorId: n
     device_run_time: insertedData.active_schedule_runtime_minutes ?? null,
     device_missed_minutes: insertedData.active_schedule_missed_minutes ?? 0,
     failure_reason: insertedData.active_schedule_failure_reason ?? null,
+    failure_code: insertedData.active_failure_code || 0,
     received_at: new Date().toISOString(),
   };
 
@@ -482,11 +483,14 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
         await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
           actual_start_time: insertedData.active_schedule_start_time,
           actual_end_time: insertedData.active_schedule_end_time,
+          actual_started_at: insertedData.active_schedule_started_at,
+          actual_ended_at: insertedData.active_schedule_ended_at,
           actual_run_time: insertedData.active_schedule_runtime_minutes,
           actual_type: insertedData.active_schedule_type,
           missed_minutes: insertedData.active_schedule_missed_minutes,
           failure_at: insertedData.active_schedule_failure_at,
           failure_reason: insertedData.active_schedule_failure_reason,
+          failure_code: insertedData.active_failure_code || 0,
         }, trx);
       }
 
@@ -714,11 +718,14 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
       await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
         actual_start_time: insertedData.active_schedule_start_time,
         actual_end_time: insertedData.active_schedule_end_time,
+        actual_started_at: insertedData.active_schedule_started_at,
+        actual_ended_at: insertedData.active_schedule_ended_at,
         actual_run_time: insertedData.active_schedule_runtime_minutes,
         actual_type: insertedData.active_schedule_type,
         missed_minutes: insertedData.active_schedule_missed_minutes,
         failure_at: insertedData.active_schedule_failure_at,
         failure_reason: insertedData.active_schedule_failure_reason,
+        failure_code: insertedData.active_failure_code || 0,
       }, trx);
     }
 
@@ -859,11 +866,14 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
       await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
         actual_start_time: insertedData.active_schedule_start_time,
         actual_end_time: insertedData.active_schedule_end_time,
+        actual_started_at: insertedData.active_schedule_started_at,
+        actual_ended_at: insertedData.active_schedule_ended_at,
         actual_run_time: insertedData.active_schedule_runtime_minutes,
         actual_type: insertedData.active_schedule_type,
         missed_minutes: insertedData.active_schedule_missed_minutes,
         failure_at: insertedData.active_schedule_failure_at,
         failure_reason: insertedData.active_schedule_failure_reason,
+        failure_code: insertedData.active_failure_code || 0,
       }, trx);
     }
 
@@ -994,11 +1004,14 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
       await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
         actual_start_time: insertedData.active_schedule_start_time,
         actual_end_time: insertedData.active_schedule_end_time,
+        actual_started_at: insertedData.active_schedule_started_at,
+        actual_ended_at: insertedData.active_schedule_ended_at,
         actual_run_time: insertedData.active_schedule_runtime_minutes,
         actual_type: insertedData.active_schedule_type,
         missed_minutes: insertedData.active_schedule_missed_minutes,
         failure_at: insertedData.active_schedule_failure_at,
         failure_reason: insertedData.active_schedule_failure_reason,
+        failure_code: insertedData.active_failure_code || 0,
       }, trx);
     }
 

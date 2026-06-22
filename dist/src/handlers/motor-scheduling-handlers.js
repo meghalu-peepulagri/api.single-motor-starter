@@ -18,7 +18,7 @@ import { getRecordById, getSingleRecordByMultipleColumnValues, updateRecordById,
 import { findOperationsByScheduleId, insertScheduleOperation, updateOperationAck, } from "../services/db/motor-schedule-operations-services.js";
 import { findScheduleLogsByScheduleId, insertScheduleLog, } from "../services/db/motor-schedule-logs-services.js";
 import { findScheduleLiveData, } from "../services/db/motor-schedule-live-data-services.js";
-import { assignDeviceScheduleIds, syncLastDeviceScheduleId, batchUpdateScheduleStatuses, bulkCreateMotorSchedules, cancelSchedulesByIds, deleteDayFromSchedule, evaluateAndUpdateSchedulesOnRead, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findAndDeleteExpiredSchedules, findMaxAckedEndDatePerStarter, findPendingSchedulesForRepublish, findPendingSchedulesForSync, findScheduleHistoryByMotorAndStarter, findSchedulesByFilters, restartDayInSchedule, restartScheduleById, restartSchedulesByIds, stopDayInSchedule, stopScheduleById, } from "../services/db/motor-schedules-services.js";
+import { assignDeviceScheduleIds, syncLastDeviceScheduleId, bulkCreateMotorSchedules, cancelSchedulesByIds, deleteDayFromSchedule, findActiveScheduleById, findAllActiveSchedulesForMotor, findConflictingSchedules, findEvaluatableSchedules, findAndDeleteExpiredSchedules, findMaxAckedEndDatePerStarter, findPendingSchedulesForRepublish, findPendingSchedulesForSync, findScheduleHistoryByMotorAndStarter, findSchedulesByFilters, restartDayInSchedule, restartScheduleById, restartSchedulesByIds, stopDayInSchedule, stopScheduleById, } from "../services/db/motor-schedules-services.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { handleAppError } from "../utils/on-error.js";
 import { logger } from "../utils/logger.js";
@@ -71,7 +71,6 @@ export class MotorScheduleHandler {
             const limit = +(query.limit) || 10;
             const filters = buildMotorScheduleFilters(query);
             const result = await findSchedulesByFilters(filters, page, limit);
-            await evaluateAndUpdateSchedulesOnRead(result.records);
             return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result, filters.schedule_start_date));
         }
         catch (error) {
@@ -86,7 +85,6 @@ export class MotorScheduleHandler {
             const schedule = await getRecordById(motorSchedules, scheduleId);
             if (!schedule)
                 throw new BadRequestException(SCHEDULE_NOT_FOUND);
-            await evaluateAndUpdateSchedulesOnRead([schedule]);
             return sendResponse(c, 200, SCHEDULE_DETAILS_FETCHED, formatMotorScheduleResponse(schedule));
         }
         catch (error) {
@@ -526,33 +524,39 @@ export class MotorScheduleHandler {
             if (!schedules || schedules.length === 0)
                 return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, { evaluated: 0, updated: 0, transitions: [] });
             const transitions = [];
-            const groups = {
-                SCHEDULED: [],
-                RUNNING: [],
-                COMPLETED: [],
-                PARTIAL: [],
-                MISSED: [],
-                WAITING_NEXT_CYCLE: [],
-            };
             for (const s of schedules) {
                 const res = evaluateScheduleStatus(s, now);
                 if (!res)
                     continue;
-                const key = res.newStatus;
-                if (groups[key])
-                    groups[key].push(res.id);
-                transitions.push({ schedule_id: res.id, from: s.schedule_status, to: res.newStatus });
+                if (res.newStatus === s.schedule_status)
+                    continue;
+                transitions.push({ schedule_id: res.id, from: s.schedule_status, to: res.newStatus, schedule: s });
             }
-            await batchUpdateScheduleStatuses([
-                { status: "SCHEDULED", ids: groups.SCHEDULED },
-                { status: "RUNNING", ids: groups.RUNNING, last_started_at: now },
-                { status: "COMPLETED", ids: groups.COMPLETED, last_stopped_at: now, completed_at: now },
-                { status: "PARTIAL", ids: groups.PARTIAL, last_stopped_at: now },
-                { status: "MISSED", ids: groups.MISSED, last_stopped_at: now },
-                { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
-            ]);
-            await Promise.all(transitions.map(t => insertScheduleLog({ schedule_id: t.schedule_id, event_type: "STATUS_CHANGED", actor_type: "system", old_status: t.from, new_status: t.to }).catch(() => null)));
-            return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, { evaluated: schedules.length, updated: transitions.length, transitions });
+            if (transitions.length > 0) {
+                await Promise.all(transitions.map(t => {
+                    const s = t.schedule;
+                    const setData = { schedule_status: t.to, updated_at: now };
+                    if (t.to === "RUNNING") {
+                        if (s.actual_started_at)
+                            setData.last_started_at = s.actual_started_at;
+                    }
+                    else if (["COMPLETED", "PARTIAL", "MISSED", "FAILED", "WAITING_NEXT_CYCLE"].includes(t.to)) {
+                        const stoppedAt = s.actual_ended_at ?? s.end_date_time;
+                        if (stoppedAt) {
+                            setData.last_stopped_at = stoppedAt;
+                            if (t.to === "COMPLETED")
+                                setData.completed_at = stoppedAt;
+                        }
+                    }
+                    return db.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id));
+                }));
+                await Promise.all(transitions.map(t => insertScheduleLog({ schedule_id: t.schedule_id, event_type: "STATUS_CHANGED", actor_type: "system", old_status: t.from, new_status: t.to }).catch(() => null)));
+            }
+            return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
+                evaluated: schedules.length,
+                updated: transitions.length,
+                transitions: transitions.map(t => ({ schedule_id: t.schedule_id, from: t.from, to: t.to })),
+            });
         }
         catch (error) {
             handleAppError(error, "sync schedule statuses");

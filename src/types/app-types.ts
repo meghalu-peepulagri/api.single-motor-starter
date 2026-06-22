@@ -242,6 +242,8 @@ export interface ScheduleForEvaluation {
   acknowledgement?: number | null;     // 0 = not acknowledged by device, 1 = acknowledged
   actual_start_time?: string | null;
   actual_end_time?: string | null;
+  actual_started_at?: Date | null;
+  actual_ended_at?: Date | null;
   actual_run_time?: number | null;
 }
 
@@ -289,12 +291,15 @@ export type preparedLiveData = {
   // Schedule fields from device payload
   active_schedule_id: number | null;
   active_schedule_type: "TIME_BASED" | "CYCLIC" | null;
-  active_schedule_start_time: string | null;      // HHMM — actual start time device is using
-  active_schedule_runtime_minutes: number | null; // minutes
-  active_schedule_end_time: string | null;        // HHMM — computed (start + runtime)
+  active_schedule_start_time: string | null;
+  active_schedule_end_time: string | null;
+  active_schedule_started_at: Date | null;
+  active_schedule_ended_at: Date | null;
+  active_schedule_runtime_minutes: number | null;
   active_schedule_missed_minutes: number | null;
   active_schedule_failure_at: Date | null;
   active_schedule_failure_reason: string | null;
+  active_failure_code: number;
 };
 
 export type previousPreparedLiveData = {

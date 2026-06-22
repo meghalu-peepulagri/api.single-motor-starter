@@ -477,6 +477,34 @@
       "when": 1781767285006,
       "tag": "0067_sleepy_gorilla_man",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1782107286932,
+      "tag": "0068_panoramic_northstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1782110552866,
+      "tag": "0069_tiresome_mach_iv",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1782110783426,
+      "tag": "0070_bumpy_paper_doll",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1782111095188,
+      "tag": "0071_military_mentallo",
+      "breakpoints": true
     }
   ]
 }

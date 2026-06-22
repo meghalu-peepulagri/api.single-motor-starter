@@ -14,6 +14,7 @@ export const motorScheduleLiveData = pgTable("motor_schedule_live_data", {
   device_run_time: integer("device_run_time"),
   device_missed_minutes: integer("device_missed_minutes").default(0),
   failure_reason: varchar("failure_reason"),
+  failure_code: integer("failure_code"),
   received_at: timestamp("received_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow(),
 });

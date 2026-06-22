@@ -57,11 +57,14 @@ export const motorSchedules = pgTable("motor_schedules", {
     // Server-tracked actual execution (from device reports, last known value)
     actual_start_time: varchar("actual_start_time"),
     actual_end_time: varchar("actual_end_time"),
+    actual_started_at: timestamp("actual_started_at"),
+    actual_ended_at: timestamp("actual_ended_at"),
     actual_run_time: integer("actual_run_time"),
     actual_type: scheduleTypeEnum("actual_type"),
     missed_minutes: integer("missed_minutes").default(0),
     failure_at: timestamp("failure_at"),
     failure_reason: varchar("failure_reason"),
+    failure_code: integer("failure_code"),
     // Device live data snapshot — overwritten every 2-min report; full history in motor_schedule_live_data + S3
     start_date_time: timestamp("start_date_time"),
     end_date_time: timestamp("end_date_time"),

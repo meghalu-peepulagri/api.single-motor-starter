@@ -507,8 +507,13 @@ export async function batchUpdateScheduleStatuses(groups) {
  * Targets: SCHEDULED, RUNNING, WAITING_NEXT_CYCLE (enabled & not archived).
  */
 export async function findEvaluatableSchedules() {
+    const today = todayAsYYMMDD();
     return await db.query.motorSchedules.findMany({
-        where: and(eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"])),
+        where: and(eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"]), or(
+        // already active — always evaluate regardless of date
+        inArray(motorSchedules.schedule_status, ["RUNNING", "PARTIAL"]), 
+        // today falls within the schedule's date range
+        and(lte(motorSchedules.schedule_start_date, today), gte(motorSchedules.schedule_end_date, today)))),
         columns: {
             id: true,
             schedule_type: true,
@@ -525,8 +530,13 @@ export async function findEvaluatableSchedules() {
             enabled: true,
             actual_start_time: true,
             actual_end_time: true,
+            actual_started_at: true,
+            actual_ended_at: true,
             actual_run_time: true,
             completed_at: true,
+            acknowledgement: true,
+            start_date_time: true,
+            end_date_time: true,
         },
     });
 }
@@ -548,12 +558,14 @@ export async function updateActualScheduleFields(motorId, starterId, scheduleId,
         .set({
         actual_start_time: actualData.actual_start_time,
         actual_end_time: actualData.actual_end_time,
+        actual_started_at: actualData.actual_started_at ?? null,
+        actual_ended_at: actualData.actual_ended_at ?? null,
         actual_run_time: computedRunTime,
         actual_type: actualData.actual_type,
         missed_minutes: actualData.missed_minutes ?? null,
         failure_at: actualData.failure_at ?? null,
-        // failure_reason is a legacy integer code column; device_failure_reason (varchar) stores the string reason
-        failure_reason: null,
+        failure_reason: actualData.failure_reason ?? null,
+        failure_code: actualData.failure_code ?? null,
         updated_at: now,
     })
         .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), eq(motorSchedules.schedule_id, scheduleId), eq(motorSchedules.schedule_start_date, today), sql `${motorSchedules.status} != 'ARCHIVED'`, notInArray(motorSchedules.schedule_status, ["COMPLETED", "FAILED", "MISSED"])));
