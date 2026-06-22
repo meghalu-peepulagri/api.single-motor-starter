@@ -142,8 +142,9 @@ export function evaluateScheduleStatus(schedule, now) {
     // ── PARTIAL ──
     if (schedule.schedule_status === "PARTIAL") {
         // Self-heal rows that were prematurely flipped to PARTIAL while the window
-        // is still open. As soon as the list endpoint is hit, they bounce back to RUNNING.
-        if ((schedule.actual_started_at ?? schedule.actual_start_time) && windowOpen) {
+        // is still open — but only if device has NOT reported a stop yet.
+        // If actual_ended_at is set, motor already stopped — do not re-promote to RUNNING.
+        if ((schedule.actual_started_at ?? schedule.actual_start_time) && !schedule.actual_ended_at && windowOpen) {
             return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
         }
         // Window closed — if actual_run_time catches up to planned, promote to COMPLETED.
@@ -160,7 +161,7 @@ export function evaluateScheduleStatus(schedule, now) {
         if (schedule.schedule_end_date && currentDateNum > schedule.schedule_end_date) {
             return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
         }
-        if ((schedule.actual_started_at ?? schedule.actual_start_time) && windowOpen) {
+        if ((schedule.actual_started_at ?? schedule.actual_start_time) && !schedule.actual_ended_at && windowOpen) {
             return { id: schedule.id, newStatus: "RUNNING", last_started_at: now };
         }
         return null;
