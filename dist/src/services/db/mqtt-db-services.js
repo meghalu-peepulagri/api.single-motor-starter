@@ -172,7 +172,7 @@ async function handleScheduleLiveData(insertedData, motorId, starterId) {
         device_run_time: insertedData.active_schedule_runtime_minutes ?? null,
         device_missed_minutes: insertedData.active_schedule_missed_minutes ?? 0,
         failure_reason: insertedData.active_schedule_failure_reason ?? null,
-        failure_code: insertedData.active_failure_code || null,
+        failure_code: insertedData.active_failure_code || 0,
         received_at: new Date().toISOString(),
     };
     await Promise.all([
@@ -579,7 +579,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
                 missed_minutes: insertedData.active_schedule_missed_minutes,
                 failure_at: insertedData.active_schedule_failure_at,
                 failure_reason: insertedData.active_schedule_failure_reason,
-                failure_code: insertedData.active_failure_code || null,
+                failure_code: insertedData.active_failure_code || 0,
             }, trx);
         }
         const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(notificationMotor, motor_state, mode_description, starter_id, starter_number) : null;
@@ -710,7 +710,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
                 missed_minutes: insertedData.active_schedule_missed_minutes,
                 failure_at: insertedData.active_schedule_failure_at,
                 failure_reason: insertedData.active_schedule_failure_reason,
-                failure_code: insertedData.active_failure_code || null,
+                failure_code: insertedData.active_failure_code || 0,
             }, trx);
         }
         return { notificationDataState };
@@ -833,7 +833,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
                 missed_minutes: insertedData.active_schedule_missed_minutes,
                 failure_at: insertedData.active_schedule_failure_at,
                 failure_reason: insertedData.active_schedule_failure_reason,
-                failure_code: insertedData.active_failure_code || null,
+                failure_code: insertedData.active_failure_code || 0,
             }, trx);
         }
         return { notificationDataMode };

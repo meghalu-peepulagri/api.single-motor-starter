@@ -769,9 +769,9 @@ export async function updateActualScheduleFields(
       actual_type: actualData.actual_type,
       missed_minutes: actualData.missed_minutes ?? null,
       failure_at: actualData.failure_at ?? null,
-      failure_reason: actualData.failure_reason ?? null,
-      failure_code: actualData.failure_code ?? null,
-      updated_at: now,    
+      ...(actualData.failure_reason ? { failure_reason: actualData.failure_reason } : {}),
+      ...(actualData.failure_code ? { failure_code: actualData.failure_code } : {}),
+      updated_at: now,
     })
     .where(
       and(

@@ -564,8 +564,8 @@ export async function updateActualScheduleFields(motorId, starterId, scheduleId,
         actual_type: actualData.actual_type,
         missed_minutes: actualData.missed_minutes ?? null,
         failure_at: actualData.failure_at ?? null,
-        failure_reason: actualData.failure_reason ?? null,
-        failure_code: actualData.failure_code ?? null,
+        ...(actualData.failure_reason ? { failure_reason: actualData.failure_reason } : {}),
+        ...(actualData.failure_code ? { failure_code: actualData.failure_code } : {}),
         updated_at: now,
     })
         .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), eq(motorSchedules.schedule_id, scheduleId), eq(motorSchedules.schedule_start_date, today), sql `${motorSchedules.status} != 'ARCHIVED'`, notInArray(motorSchedules.schedule_status, ["COMPLETED", "FAILED", "MISSED"])));
