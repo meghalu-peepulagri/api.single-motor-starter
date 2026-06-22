@@ -552,8 +552,10 @@ export async function updateActualScheduleFields(motorId, starterId, scheduleId,
         actual_type: actualData.actual_type,
         missed_minutes: actualData.missed_minutes ?? null,
         failure_at: actualData.failure_at ?? null,
-        // failure_reason is a legacy integer code column; device_failure_reason (varchar) stores the string reason
-        failure_reason: null,
+        // Store the device-reported schedule reason (SCH_REASON_* message) in failure_reason so the
+        // schedule logs can explain a PARTIAL outcome. Only write when a real reason is present, so a
+        // later "no reason" report doesn't wipe a reason captured earlier in the run.
+        ...(actualData.failure_reason ? { failure_reason: actualData.failure_reason } : {}),
         updated_at: now,
     })
         .where(and(eq(motorSchedules.motor_id, motorId), eq(motorSchedules.starter_id, starterId), eq(motorSchedules.schedule_id, scheduleId), eq(motorSchedules.schedule_start_date, today), sql `${motorSchedules.status} != 'ARCHIVED'`, notInArray(motorSchedules.schedule_status, ["COMPLETED", "FAILED", "MISSED"])));

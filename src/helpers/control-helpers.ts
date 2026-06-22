@@ -66,22 +66,34 @@ export function motorState(code: number) {
   }
 }
 
-export function getFailureReason(code: number | null | undefined) {
-  switch (code) {
-    case 0:
-      return "No Failure";
+// Device SCHEDULE reason codes (SCH_REASON_*). Returns a human-readable message,
+// or null when there is no meaningful reason (code 0 = NONE, or unknown code).
+export function getFailureReason(code: number | null | undefined): string | null {
+  switch (Number(code)) {
     case 1:
-      return "Power Loss";
+      return "Schedule was not enabled";
     case 2:
-      return "Fault";
+      return "Schedule date was invalid";
     case 3:
-      return "Mode Change";
+      return "Current time was outside the schedule window";
     case 4:
-      return "Overlap";
+      return "Cyclic schedule was in its OFF phase";
     case 5:
-      return "Invalid timings";
+      return "No active schedule";
+    case 6:
+      return "Stopped by manual override";
+    case 7:
+      return "A fault was active on the device";
+    case 8:
+      return "Power was off";
+    case 9:
+      return "Device was not in schedule mode";
+    case 10:
+      return "Motor was in cooldown";
+    case 11:
+      return "Cloud recovery in progress";
     default:
-      return "Invalid failure reason";
+      return null; // 0 = SCH_REASON_NONE, or unknown code
   }
 };
 
