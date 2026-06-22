@@ -58,6 +58,7 @@ import {
   todayAsYYMMDD,
 } from "../helpers/motor-schedule-payload-helper.js";
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
+import { runScheduleEvaluator, filterEvaluatable } from "../services/schedule-evaluator-sync-service.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { schedulePartialAckMap } from "../helpers/ack-tracker-hepler.js";
 import { pushPendingSchedulesForStarter, triggerSyncForCreatedSchedules } from "../helpers/schedule-sync-helper.js";
@@ -162,6 +163,11 @@ export class MotorScheduleHandler {
       const filters = buildMotorScheduleFilters(query);
       const result = await findSchedulesByFilters(filters, page, limit);
 
+      const toEvaluate = filterEvaluatable(result.records);
+      if (toEvaluate.length > 0) {
+        setImmediate(() => runScheduleEvaluator(toEvaluate).catch(() => null));
+      }
+
       return sendResponse(c, 200, SCHEDULED_LIST_FETCHED, formatMotorScheduleListResponse(result, filters.schedule_start_date));
     } catch (error: any) {
       handleAppError(error, "motor Schedule List");
@@ -176,6 +182,11 @@ export class MotorScheduleHandler {
 
       const schedule = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId);
       if (!schedule) throw new BadRequestException(SCHEDULE_NOT_FOUND);
+
+      const toEvaluate = filterEvaluatable([schedule]);
+      if (toEvaluate.length > 0) {
+        setImmediate(() => runScheduleEvaluator(toEvaluate).catch(() => null));
+      }
 
       return sendResponse(c, 200, SCHEDULE_DETAILS_FETCHED, formatMotorScheduleResponse(schedule));
     } catch (error: any) {
@@ -640,60 +651,10 @@ export class MotorScheduleHandler {
   // =================== SYNC STATUSES ===================
   syncScheduleStatusesHandler = async (c: Context) => {
     try {
-      const now = new Date();
       const schedules = await findEvaluatableSchedules();
       if (!schedules || schedules.length === 0) return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, { evaluated: 0, updated: 0, transitions: [] });
 
-      const transitions: { schedule_id: number; from: string; to: string; schedule: any }[] = [];
-
-      for (const s of schedules) {
-        const res = evaluateScheduleStatus(s as ScheduleForEvaluation, now);
-        if (!res) continue;
-        if (res.newStatus === s.schedule_status) continue;
-        transitions.push({ schedule_id: res.id, from: s.schedule_status, to: res.newStatus, schedule: s });
-      }
-
-      if (transitions.length > 0) {
-        const appliedTransitions: typeof transitions = [];
-
-        await db.transaction(async (trx) => {
-          for (const t of transitions) {
-            const s = t.schedule;
-            const setData: Record<string, any> = { schedule_status: t.to, updated_at: now };
-
-            if (t.to === "RUNNING") {
-              if (s.actual_started_at) setData.last_started_at = s.actual_started_at;
-            } else if (["COMPLETED", "PARTIAL", "MISSED", "FAILED", "WAITING_NEXT_CYCLE"].includes(t.to)) {
-              const stoppedAt = s.actual_ended_at ?? s.end_date_time;
-              if (stoppedAt) {
-                setData.last_stopped_at = stoppedAt;
-                if (t.to === "COMPLETED") setData.completed_at = stoppedAt;
-              }
-            }
-
-            try {
-              await trx.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id));
-              appliedTransitions.push(t);
-            } catch (err: any) {
-              const code = err?.cause?.code ?? err?.code;
-              if (code === "23505") continue; // unique index conflict — skip stale row
-              throw err;
-            }
-          }
-
-          if (appliedTransitions.length > 0) {
-            await trx.insert(motorScheduleLogs).values(
-              appliedTransitions.map(t => ({
-                schedule_id: t.schedule_id,
-                event_type: "STATUS_CHANGED" as const,
-                actor_type: "system",
-                old_status: t.from,
-                new_status: t.to,
-              }))
-            );
-          }
-        });
-      }
+      const transitions = await runScheduleEvaluator(schedules as ScheduleForEvaluation[]);
 
       return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
         evaluated: schedules.length,
