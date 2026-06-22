@@ -401,33 +401,14 @@ export function buildScheduleTimeline(record) {
     const events = [];
     if (record.created_at)
         events.push({ event: "CREATED", timestamp: new Date(record.created_at).toISOString() });
-    if (record.acknowledged_at)
-        events.push({ event: "SCHEDULED", timestamp: new Date(record.acknowledged_at).toISOString() });
+    // if (record.acknowledged_at) events.push({ event: "SCHEDULED", timestamp: new Date(record.acknowledged_at).toISOString() });
     if (record.last_started_at)
         events.push({ event: "STARTED", timestamp: new Date(record.last_started_at).toISOString() });
-    if (record.paused_at)
-        events.push({ event: "PAUSED", timestamp: new Date(record.paused_at).toISOString() });
-    if (record.restarted_at)
-        events.push({ event: "RESTARTED", timestamp: new Date(record.restarted_at).toISOString() });
-    if (record.last_stopped_at) {
-        const terminalEventMap = { MISSED: "MISSED", PARTIAL: "PARTIAL" };
-        const event = terminalEventMap[record.schedule_status] ?? "STOPPED";
-        const evt = { event, timestamp: new Date(record.last_stopped_at).toISOString() };
-        // PARTIAL → surface the device-reported schedule reason (failure_reason) and when it occurred
-        // (failure_at), explaining why the motor did not run the full planned duration.
-        if (event === "PARTIAL") {
-            if (record.failure_reason)
-                evt.failure_reason = record.failure_reason;
-            if (record.failure_at)
-                evt.failure_at = new Date(record.failure_at).toISOString();
-        }
-        events.push(evt);
+    // if (record.paused_at) events.push({ event: "PAUSED", timestamp: new Date(record.paused_at).toISOString() });
+    // if (record.restarted_at) events.push({ event: "RESTARTED", timestamp: new Date(record.restarted_at).toISOString() });
+    if (record.last_stopped_at && record.schedule_status === "MISSED") {
+        events.push({ event: "MISSED", timestamp: new Date(record.last_stopped_at).toISOString() });
     }
-    // FAILED is a status, not just a stale timestamp. The device can report a failure
-    // epoch (failure_at) early in the window and then actually start the motor — in that
-    // case the row recovers (RUNNING/STOPPED/COMPLETED) and is NOT failed. Only surface a
-    // FAILED event when the schedule genuinely ended in the FAILED state, otherwise a
-    // recovered schedule shows a misleading FAILED marker between SCHEDULED and RUNNING.
     if (record.schedule_status === "FAILED") {
         const failedTs = record.failure_at ?? record.last_stopped_at ?? record.updated_at;
         if (failedTs)
@@ -435,10 +416,8 @@ export function buildScheduleTimeline(record) {
     }
     if (record.deleted_at)
         events.push({ event: "DELETED", timestamp: new Date(record.deleted_at).toISOString() });
-    if (record.edited_at)
-        events.push({ event: "EDITED", timestamp: new Date(record.edited_at).toISOString() });
-    if (record.completed_at)
-        events.push({ event: "COMPLETED", timestamp: new Date(record.completed_at).toISOString() });
+    // if (record.edited_at) events.push({ event: "EDITED", timestamp: new Date(record.edited_at).toISOString() });
+    // if (record.completed_at) events.push({ event: "COMPLETED", timestamp: new Date(record.completed_at).toISOString() });
     events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     return {
         id: record.id,
