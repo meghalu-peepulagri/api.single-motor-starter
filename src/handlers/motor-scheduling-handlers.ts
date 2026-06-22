@@ -35,6 +35,7 @@ import {
 } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motorSchedules, type MotorSchedule, type MotorScheduleTable } from "../database/schemas/motor-schedules.js";
+import { motorScheduleLogs } from "../database/schemas/motor-schedule-logs.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -653,8 +654,10 @@ export class MotorScheduleHandler {
       }
 
       if (transitions.length > 0) {
-        await Promise.all(
-          transitions.map(t => {
+        const appliedTransitions: typeof transitions = [];
+
+        await db.transaction(async (trx) => {
+          for (const t of transitions) {
             const s = t.schedule;
             const setData: Record<string, any> = { schedule_status: t.to, updated_at: now };
 
@@ -668,20 +671,28 @@ export class MotorScheduleHandler {
               }
             }
 
-            return db.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id))
-              .catch((err: any) => {
-                const code = err?.cause?.code ?? err?.code;
-                if (code === "23505") return null; // unique index conflict — another active row holds this slot, skip
-                throw err;
-              });
-          })
-        );
+            try {
+              await trx.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id));
+              appliedTransitions.push(t);
+            } catch (err: any) {
+              const code = err?.cause?.code ?? err?.code;
+              if (code === "23505") continue; // unique index conflict — skip stale row
+              throw err;
+            }
+          }
 
-        await Promise.all(
-          transitions.map(t =>
-            insertScheduleLog({ schedule_id: t.schedule_id, event_type: "STATUS_CHANGED", actor_type: "system", old_status: t.from, new_status: t.to }).catch(() => null)
-          )
-        );
+          if (appliedTransitions.length > 0) {
+            await trx.insert(motorScheduleLogs).values(
+              appliedTransitions.map(t => ({
+                schedule_id: t.schedule_id,
+                event_type: "STATUS_CHANGED" as const,
+                actor_type: "system",
+                old_status: t.from,
+                new_status: t.to,
+              }))
+            );
+          }
+        });
       }
 
       return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {

@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { ACKNOWLEDGEMENT_UPDATED, ADD_REPEAT_DAYS_VALIDATION_CRITERIA, ALL_SCHEDULES_STOPPED, BULK_SCHEDULE_IDS_REQUIRED, BULK_SCHEDULES_DELETED, BULK_SCHEDULES_RESTARTED, BULK_SCHEDULES_STOPPED, INVALID_SCHEDULE_CMD, MOTOR_NOT_FOUND, MULTIPLE_SCHEDULES_CREATED, NO_ACTIVE_SCHEDULE, PENDING_SCHEDULES_FETCHED, REPEAT_DAYS_ADDED, SCHEDULE_CMD_REQUIRED, SCHEDULE_DELETED, SCHEDULE_DETAILS_FETCHED, SCHEDULE_DEVICE_OFFLINE, SCHEDULE_HISTORY_FETCHED, SCHEDULE_LIVE_DATA_FETCHED, SCHEDULE_LIVE_DATA_NOT_FOUND, SCHEDULE_LOGS_FETCHED, SCHEDULE_NOT_FOUND, SCHEDULE_OPERATIONS_FETCHED, SCHEDULE_REPUBLISHED, SCHEDULE_RESTARTED, SCHEDULED_LIST_FETCHED, SCHEDULE_STATUS_SYNC_COMPLETED, SCHEDULE_STOPPED, SCHEDULE_UPDATED, SCHEDULED_CREATED, UPDATE_MOTOR_SCHEDULE_VALIDATION_CRITERIA, } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
+import { motorScheduleLogs } from "../database/schemas/motor-schedule-logs.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -533,30 +534,44 @@ export class MotorScheduleHandler {
                 transitions.push({ schedule_id: res.id, from: s.schedule_status, to: res.newStatus, schedule: s });
             }
             if (transitions.length > 0) {
-                await Promise.all(transitions.map(t => {
-                    const s = t.schedule;
-                    const setData = { schedule_status: t.to, updated_at: now };
-                    if (t.to === "RUNNING") {
-                        if (s.actual_started_at)
-                            setData.last_started_at = s.actual_started_at;
-                    }
-                    else if (["COMPLETED", "PARTIAL", "MISSED", "FAILED", "WAITING_NEXT_CYCLE"].includes(t.to)) {
-                        const stoppedAt = s.actual_ended_at ?? s.end_date_time;
-                        if (stoppedAt) {
-                            setData.last_stopped_at = stoppedAt;
-                            if (t.to === "COMPLETED")
-                                setData.completed_at = stoppedAt;
+                const appliedTransitions = [];
+                await db.transaction(async (trx) => {
+                    for (const t of transitions) {
+                        const s = t.schedule;
+                        const setData = { schedule_status: t.to, updated_at: now };
+                        if (t.to === "RUNNING") {
+                            if (s.actual_started_at)
+                                setData.last_started_at = s.actual_started_at;
+                        }
+                        else if (["COMPLETED", "PARTIAL", "MISSED", "FAILED", "WAITING_NEXT_CYCLE"].includes(t.to)) {
+                            const stoppedAt = s.actual_ended_at ?? s.end_date_time;
+                            if (stoppedAt) {
+                                setData.last_stopped_at = stoppedAt;
+                                if (t.to === "COMPLETED")
+                                    setData.completed_at = stoppedAt;
+                            }
+                        }
+                        try {
+                            await trx.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id));
+                            appliedTransitions.push(t);
+                        }
+                        catch (err) {
+                            const code = err?.cause?.code ?? err?.code;
+                            if (code === "23505")
+                                continue; // unique index conflict — skip stale row
+                            throw err;
                         }
                     }
-                    return db.update(motorSchedules).set(setData).where(eq(motorSchedules.id, t.schedule_id))
-                        .catch((err) => {
-                        const code = err?.cause?.code ?? err?.code;
-                        if (code === "23505")
-                            return null; // unique index conflict — another active row holds this slot, skip
-                        throw err;
-                    });
-                }));
-                await Promise.all(transitions.map(t => insertScheduleLog({ schedule_id: t.schedule_id, event_type: "STATUS_CHANGED", actor_type: "system", old_status: t.from, new_status: t.to }).catch(() => null)));
+                    if (appliedTransitions.length > 0) {
+                        await trx.insert(motorScheduleLogs).values(appliedTransitions.map(t => ({
+                            schedule_id: t.schedule_id,
+                            event_type: "STATUS_CHANGED",
+                            actor_type: "system",
+                            old_status: t.from,
+                            new_status: t.to,
+                        })));
+                    }
+                });
             }
             return sendResponse(c, 200, SCHEDULE_STATUS_SYNC_COMPLETED, {
                 evaluated: schedules.length,
