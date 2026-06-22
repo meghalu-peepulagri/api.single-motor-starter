@@ -118,7 +118,14 @@ export function evaluateScheduleStatus(schedule, now) {
             return { id: schedule.id, newStatus: "SCHEDULED" };
         }
         if ((schedule.actual_started_at ?? schedule.actual_start_time)) {
-            // Wait until window fully passes — never resolve terminal before or during window.
+            if (schedule.actual_ended_at) {
+                // device confirmed stop → resolve immediately regardless of window
+                if (hasMoreRepeatRange) {
+                    return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
+                }
+                return resolveTerminalStatus(schedule, startMinutes, endMinutes, now);
+            }
+            // no end reported yet → wait for window to pass
             if (windowOpen || windowBefore)
                 return null;
             if (hasMoreRepeatRange) {
