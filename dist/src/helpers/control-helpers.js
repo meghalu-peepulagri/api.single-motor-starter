@@ -67,29 +67,29 @@ export function motorState(code) {
 export function getFailureReason(code) {
     switch (Number(code)) {
         case 1:
-            return "Schedule was not enabled";
+            return "Schedule is disabled. Please enable it to run.";
         case 2:
-            return "Schedule date was invalid";
+            return "The schedule date is invalid or has already passed.";
         case 3:
-            return "Current time was outside the schedule window";
+            return "Motor ran outside the scheduled time window.";
         case 4:
-            return "Cyclic schedule was in its OFF phase";
+            return "Motor is in the OFF phase of a cyclic schedule. It will resume automatically.";
         case 5:
-            return "No active schedule";
+            return "No active schedule found for this motor.";
         case 6:
-            return "Stopped by manual override";
+            return "Schedule was stopped by a manual override.";
         case 7:
-            return "A fault was active on the device";
+            return "Motor stopped due to a device fault. Please check the device.";
         case 8:
-            return "Power was off";
+            return "Motor stopped because power supply was lost.";
         case 9:
-            return "Device was not in schedule mode";
+            return "Device is not in schedule mode. Please switch to schedule mode.";
         case 10:
-            return "Motor was in cooldown";
+            return "Motor is in cooldown. It will start automatically once cooldown ends.";
         case 11:
-            return "Cloud recovery in progress";
+            return "Recovering from power loss. Motor will resume the schedule shortly.";
         default:
-            return null; // 0 = SCH_REASON_NONE, or unknown code
+            return null;
     }
 }
 ;

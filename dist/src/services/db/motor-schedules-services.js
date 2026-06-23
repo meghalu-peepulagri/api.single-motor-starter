@@ -771,6 +771,7 @@ export async function findScheduleHistoryByMotorAndStarter(filters, pageParams) 
             actual_start_time: motorSchedules.actual_start_time,
             actual_end_time: motorSchedules.actual_end_time,
             actual_run_time: motorSchedules.actual_run_time,
+            runtime_minutes: motorSchedules.runtime_minutes,
             missed_minutes: motorSchedules.missed_minutes,
             schedule_start_date: motorSchedules.schedule_start_date,
             schedule_end_date: motorSchedules.schedule_end_date,
