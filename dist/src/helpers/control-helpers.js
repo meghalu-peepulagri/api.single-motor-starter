@@ -85,7 +85,7 @@ export function getFailureReason(code) {
         case 9:
             return "Device is not in schedule mode. Please switch to schedule mode.";
         case 10:
-            return "Motor is in cooldown. It will start automatically once cooldown ends.";
+            return "Motor is in cool down. It will start automatically once cool down ends.";
         case 11:
             return "Recovering from power loss. Motor will resume the schedule shortly.";
         default:
