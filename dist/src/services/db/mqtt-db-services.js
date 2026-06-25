@@ -409,6 +409,7 @@ export async function updateStates(insertedData, previousData) {
                     failure_at: insertedData.active_schedule_failure_at,
                     failure_reason: insertedData.active_schedule_failure_reason,
                     failure_code: insertedData.active_failure_code || 0,
+                    device_schedule_status: insertedData.active_schedule_status,
                 }, trx);
             }
             return {
@@ -580,6 +581,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
                 failure_at: insertedData.active_schedule_failure_at,
                 failure_reason: insertedData.active_schedule_failure_reason,
                 failure_code: insertedData.active_failure_code || 0,
+                device_schedule_status: insertedData.active_schedule_status,
             }, trx);
         }
         const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(notificationMotor, motor_state, mode_description, starter_id, starter_number) : null;
@@ -711,6 +713,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
                 failure_at: insertedData.active_schedule_failure_at,
                 failure_reason: insertedData.active_schedule_failure_reason,
                 failure_code: insertedData.active_failure_code || 0,
+                device_schedule_status: insertedData.active_schedule_status,
             }, trx);
         }
         return { notificationDataState };
@@ -834,6 +837,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
                 failure_at: insertedData.active_schedule_failure_at,
                 failure_reason: insertedData.active_schedule_failure_reason,
                 failure_code: insertedData.active_failure_code || 0,
+                device_schedule_status: insertedData.active_schedule_status,
             }, trx);
         }
         return { notificationDataMode };

@@ -491,6 +491,7 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
           failure_at: insertedData.active_schedule_failure_at,
           failure_reason: insertedData.active_schedule_failure_reason,
           failure_code: insertedData.active_failure_code || 0,
+          device_schedule_status: insertedData.active_schedule_status,
         }, trx);
       }
 
@@ -726,6 +727,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
         failure_at: insertedData.active_schedule_failure_at,
         failure_reason: insertedData.active_schedule_failure_reason,
         failure_code: insertedData.active_failure_code || 0,
+        device_schedule_status: insertedData.active_schedule_status,
       }, trx);
     }
 
@@ -874,6 +876,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData: prepared
         failure_at: insertedData.active_schedule_failure_at,
         failure_reason: insertedData.active_schedule_failure_reason,
         failure_code: insertedData.active_failure_code || 0,
+        device_schedule_status: insertedData.active_schedule_status,
       }, trx);
     }
 
@@ -1012,6 +1015,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
         failure_at: insertedData.active_schedule_failure_at,
         failure_reason: insertedData.active_schedule_failure_reason,
         failure_code: insertedData.active_failure_code || 0,
+        device_schedule_status: insertedData.active_schedule_status,
       }, trx);
     }
 

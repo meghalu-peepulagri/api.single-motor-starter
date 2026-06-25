@@ -505,6 +505,13 @@
       "when": 1782111095188,
       "tag": "0071_military_mentallo",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1782370527468,
+      "tag": "0072_nifty_shriek",
+      "breakpoints": true
     }
   ]
 }

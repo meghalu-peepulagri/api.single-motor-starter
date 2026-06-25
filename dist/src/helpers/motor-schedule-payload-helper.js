@@ -385,6 +385,8 @@ export function formatMotorScheduleResponse(record, queryDate) {
         failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
         device_schedule_id: rest.device_schedule_id ?? null,
         synced: rest.acknowledgement === 1,
+        // Device-reported schedule status: 0=window expired, 1=within window & motor running, 2=within window but motor stopped, null=unknown
+        ss: rest.device_schedule_status ?? null,
     };
 }
 export function formatMotorScheduleListResponse(result, queryDate) {

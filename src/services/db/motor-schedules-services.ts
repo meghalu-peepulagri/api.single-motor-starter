@@ -742,6 +742,7 @@ export async function updateActualScheduleFields(
     failure_at?: Date | null;
     failure_reason?: string | null;
     failure_code?: number | null;
+    device_schedule_status?: number | null;
   },
   trx: DbTransaction
 ) {
@@ -771,6 +772,7 @@ export async function updateActualScheduleFields(
       failure_at: actualData.failure_at ?? null,
       ...(actualData.failure_reason ? { failure_reason: actualData.failure_reason } : {}),
       ...(actualData.failure_code ? { failure_code: actualData.failure_code } : {}),
+      device_schedule_status: actualData.device_schedule_status ?? null,
       updated_at: now,
     })
     .where(

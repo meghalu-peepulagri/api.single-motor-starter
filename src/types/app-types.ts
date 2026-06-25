@@ -300,6 +300,7 @@ export type preparedLiveData = {
   active_schedule_failure_at: Date | null;
   active_schedule_failure_reason: string | null;
   active_failure_code: number;
+  active_schedule_status: number | null;
 };
 
 export type previousPreparedLiveData = {

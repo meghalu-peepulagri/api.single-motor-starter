@@ -111,6 +111,7 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
     active_schedule_failure_at: sch?.fe ? new Date(String(sch.fe).length === 13 ? Number(sch.fe) : Number(sch.fe) * 1000) : null,
     active_schedule_failure_reason: getFailureReason(cleanScalar(sch?.fr)),
     active_failure_code: cleanScalar(sch?.fr) || 0,
+    active_schedule_status: sch?.ss ?? null,
   };
 }
 
