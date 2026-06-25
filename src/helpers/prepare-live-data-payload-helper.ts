@@ -158,5 +158,6 @@ export function prepareStarterParametersRecord(insertedData: preparedLiveData): 
     schedule_failure_at: insertedData.active_schedule_failure_at,
     schedule_failure_reason: insertedData.active_schedule_failure_reason,
     schedule_failure_code: insertedData.active_failure_code || null,
+    schedule_status: insertedData.active_schedule_status ?? null,
   };
 }

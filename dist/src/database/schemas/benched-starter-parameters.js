@@ -57,6 +57,7 @@ export const benchedStarterParameters = pgTable("benched_starter_parameters", {
     schedule_failure_at: timestamp("schedule_failure_at"), // fe
     schedule_failure_reason: varchar("schedule_failure_reason"), // fr
     schedule_failure_code: integer("schedule_failure_code"), // fr raw code
+    schedule_status: integer("schedule_status"), // ss: 0=window expired, 1=within window & motor running, 2=within window but motor stopped
     created_at: timestamp("created_at").notNull().defaultNow(),
     updated_at: timestamp("updated_at").notNull().defaultNow().default(sql `CURRENT_TIMESTAMP`),
 }, table => [

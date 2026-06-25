@@ -512,6 +512,13 @@
       "when": 1782370527468,
       "tag": "0072_nifty_shriek",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1782377013235,
+      "tag": "0073_mushy_proudstar",
+      "breakpoints": true
     }
   ]
 }
