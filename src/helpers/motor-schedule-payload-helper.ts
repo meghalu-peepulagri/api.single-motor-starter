@@ -459,6 +459,13 @@ export function buildScheduleTimeline(record: any): any {
   if (record.last_stopped_at && record.schedule_status === "MISSED") {
     events.push({ event: "MISSED", timestamp: new Date(record.last_stopped_at).toISOString() });
   }
+  if (record.last_stopped_at && record.schedule_status === "PARTIAL") {
+    events.push({
+      event: "PARTIAL",
+      timestamp: new Date(record.last_stopped_at).toISOString(),
+      failure_reason: record.failure_reason ?? undefined,
+    });
+  }
   if (record.schedule_status === "FAILED") {
     const failedTs = record.failure_at ?? record.last_stopped_at ?? record.updated_at;
     if (failedTs) events.push({ event: "FAILED", timestamp: new Date(failedTs).toISOString() });
