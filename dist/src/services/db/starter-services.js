@@ -408,6 +408,14 @@ export async function starterConnectedMotors(starterId) {
                     full_name: true,
                 },
             },
+            user: {
+                where: ne(users.status, "ARCHIVED"),
+                columns: {
+                    id: true,
+                    full_name: true,
+                    phone: true,
+                },
+            },
             dispatch: {
                 where: ne(starterDispatch.status, "ARCHIVED"),
                 columns: {
