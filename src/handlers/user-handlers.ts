@@ -155,13 +155,16 @@ export class UserHandlers {
   userLogOutHandler = async (c: Context) => {
     try {
       const id = +(c.req.param("id") ?? 0);
-      const reqData = await c.req.json();
-      const tokenData = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [reqData.fcm_token, id], ["id"]);
+      const reqData = await c.req.json().catch(() => ({}));
+      const fcmToken = reqData?.fcm_token;
 
-      if (!tokenData)
-        throw new NotFoundException(USER_NOT_FOUND);
+      if (fcmToken) {
+        const tokenData = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, id], ["id"]);
+        if (tokenData) {
+          await deleteRecordById<DeviceTokensTable>(deviceTokens, tokenData.id);
+        }
+      }
 
-      await deleteRecordById<DeviceTokensTable>(deviceTokens, tokenData.id);
       await ActivityService.logActivity({
         performedBy: id,
         action: "LOGGED_OUT",

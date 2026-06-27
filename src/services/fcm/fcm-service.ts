@@ -41,9 +41,21 @@ export async function sendNotificationsForMultipleDevices(tokens: string[], titl
     const message = {
       notification: { title },
       data: { title, body, motor_id: actionId, starter_id: String(starterId) },
-      tokens, // Send to multiple devices
+      tokens,
     };
-    return await getMessaging().sendEachForMulticast(message);
+    const batchResponse = await getMessaging().sendEachForMulticast(message);
+
+    const invalidTokenCleanups = batchResponse.responses
+      .map((resp, i) => ({ resp, token: tokens[i] }))
+      .filter(({ resp }) =>
+        !resp.success &&
+        resp.error?.code === "messaging/registration-token-not-registered"
+      )
+      .map(({ token }) => handleInvalidDeviceToken(token).catch(() => null));
+
+    await Promise.all(invalidTokenCleanups);
+
+    return batchResponse;
   }
   catch (error: any) {
     console.error("Error at sending firebase notifications to multiple devices:", error);
