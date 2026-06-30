@@ -491,7 +491,17 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         }
         const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(notificationMotor, motor_state, mode_description, starter_id, starter_number) : null;
         const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(notificationMotor, mode_description, starter_id, starter_number) : null;
-        return { notificationDataState, notificationDataMode };
+        const isAlertRaised = alertCodeChange.isDetected;
+        const isAlertCleared = alertCodeChange.isCleared;
+        const isFaultRaised = faultCodeChange.isDetected;
+        const isFaultCleared = faultCodeChange.isCleared;
+        const pumpName = notificationMotor.alias_name ?? starter_number;
+        const notifUserId = created_by || device_created_by;
+        const notificationDataAlert = isAlertRaised ? prepareAlertNotificationData({ alertCode: currentAlertCode, alertDescription: alert_description, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataAlertCleared = isAlertCleared ? prepareAlertClearedNotificationData({ currentAlertCode, previousAlertCode: latestAlertsFaultsSnapshot?.alert_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataFault = isFaultRaised ? prepareFaultNotificationData({ faultCode: currentFaultCode, faultDescription: fault_description, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataFaultCleared = isFaultCleared ? prepareFaultClearedNotificationData({ currentFaultCode, previousFaultCode: latestAlertsFaultsSnapshot?.fault_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        return { notificationDataState, notificationDataMode, notificationDataAlert, notificationDataAlertCleared, notificationDataFault, notificationDataFaultCleared };
     });
     if (notificationData.notificationDataState) {
         if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
@@ -501,6 +511,26 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
     if (notificationData.notificationDataMode) {
         if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {
             await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+        }
+    }
+    if (notificationData.notificationDataAlert) {
+        if (shouldSendNotification(notificationData.notificationDataAlert.motorId, "alert", alert_code ?? 0)) {
+            await sendUserNotification(notificationData.notificationDataAlert.userId, notificationData.notificationDataAlert.title, notificationData.notificationDataAlert.message, notificationData.notificationDataAlert.motorId, notificationData.notificationDataAlert.starter_id);
+        }
+    }
+    if (notificationData.notificationDataAlertCleared) {
+        if (shouldSendNotification(notificationData.notificationDataAlertCleared.motorId, "alert_cleared", 0)) {
+            await sendUserNotification(notificationData.notificationDataAlertCleared.userId, notificationData.notificationDataAlertCleared.title, notificationData.notificationDataAlertCleared.message, notificationData.notificationDataAlertCleared.motorId, notificationData.notificationDataAlertCleared.starter_id);
+        }
+    }
+    if (notificationData.notificationDataFault) {
+        if (shouldSendNotification(notificationData.notificationDataFault.motorId, "fault", fault ?? 0)) {
+            await sendUserNotification(notificationData.notificationDataFault.userId, notificationData.notificationDataFault.title, notificationData.notificationDataFault.message, notificationData.notificationDataFault.motorId, notificationData.notificationDataFault.starter_id);
+        }
+    }
+    if (notificationData.notificationDataFaultCleared) {
+        if (shouldSendNotification(notificationData.notificationDataFaultCleared.motorId, "fault_cleared", 0)) {
+            await sendUserNotification(notificationData.notificationDataFaultCleared.userId, notificationData.notificationDataFaultCleared.title, notificationData.notificationDataFaultCleared.message, notificationData.notificationDataFaultCleared.motorId, notificationData.notificationDataFaultCleared.starter_id);
         }
     }
 }
@@ -599,11 +629,41 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
             await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
         }
         const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(notificationMotor, motor_state, mode_description, starter_id, starter_number) : null;
-        return { notificationDataState };
+        const isAlertRaised = alertCodeChange.isDetected;
+        const isAlertCleared = alertCodeChange.isCleared;
+        const isFaultRaised = faultCodeChange.isDetected;
+        const isFaultCleared = faultCodeChange.isCleared;
+        const pumpName = notificationMotor.alias_name ?? starter_number;
+        const notifUserId = created_by || device_created_by;
+        const notificationDataAlert = isAlertRaised ? prepareAlertNotificationData({ alertCode: currentAlertCode, alertDescription: alert_description, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataAlertCleared = isAlertCleared ? prepareAlertClearedNotificationData({ currentAlertCode, previousAlertCode: latestAlertsFaultsSnapshot?.alert_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataFault = isFaultRaised ? prepareFaultNotificationData({ faultCode: currentFaultCode, faultDescription: fault_description, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataFaultCleared = isFaultCleared ? prepareFaultClearedNotificationData({ currentFaultCode, previousFaultCode: latestAlertsFaultsSnapshot?.fault_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        return { notificationDataState, notificationDataAlert, notificationDataAlertCleared, notificationDataFault, notificationDataFaultCleared };
     });
     if (notificationData.notificationDataState) {
         if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
             await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
+        }
+    }
+    if (notificationData.notificationDataAlert) {
+        if (shouldSendNotification(notificationData.notificationDataAlert.motorId, "alert", alert_code ?? 0)) {
+            await sendUserNotification(notificationData.notificationDataAlert.userId, notificationData.notificationDataAlert.title, notificationData.notificationDataAlert.message, notificationData.notificationDataAlert.motorId, notificationData.notificationDataAlert.starter_id);
+        }
+    }
+    if (notificationData.notificationDataAlertCleared) {
+        if (shouldSendNotification(notificationData.notificationDataAlertCleared.motorId, "alert_cleared", 0)) {
+            await sendUserNotification(notificationData.notificationDataAlertCleared.userId, notificationData.notificationDataAlertCleared.title, notificationData.notificationDataAlertCleared.message, notificationData.notificationDataAlertCleared.motorId, notificationData.notificationDataAlertCleared.starter_id);
+        }
+    }
+    if (notificationData.notificationDataFault) {
+        if (shouldSendNotification(notificationData.notificationDataFault.motorId, "fault", fault ?? 0)) {
+            await sendUserNotification(notificationData.notificationDataFault.userId, notificationData.notificationDataFault.title, notificationData.notificationDataFault.message, notificationData.notificationDataFault.motorId, notificationData.notificationDataFault.starter_id);
+        }
+    }
+    if (notificationData.notificationDataFaultCleared) {
+        if (shouldSendNotification(notificationData.notificationDataFaultCleared.motorId, "fault_cleared", 0)) {
+            await sendUserNotification(notificationData.notificationDataFaultCleared.userId, notificationData.notificationDataFaultCleared.title, notificationData.notificationDataFaultCleared.message, notificationData.notificationDataFaultCleared.motorId, notificationData.notificationDataFaultCleared.starter_id);
         }
     }
 }
@@ -700,11 +760,41 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         }
         const hasModeChanged = motorSyncChange.hasModeChanged;
         const notificationDataMode = hasModeChanged ? prepareMotorModeControlNotificationData(notificationMotor, mode_description, starter_id, starter_number) : null;
-        return { notificationDataMode };
+        const isAlertRaised = alertCodeChange.isDetected;
+        const isAlertCleared = alertCodeChange.isCleared;
+        const isFaultRaised = faultCodeChange.isDetected;
+        const isFaultCleared = faultCodeChange.isCleared;
+        const pumpName = notificationMotor.alias_name ?? starter_number;
+        const notifUserId = created_by || device_created_by;
+        const notificationDataAlert = isAlertRaised ? prepareAlertNotificationData({ alertCode: currentAlertCode, alertDescription: alert_description, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataAlertCleared = isAlertCleared ? prepareAlertClearedNotificationData({ currentAlertCode, previousAlertCode: latestAlertsFaultsSnapshot?.alert_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataFault = isFaultRaised ? prepareFaultNotificationData({ faultCode: currentFaultCode, faultDescription: fault_description, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        const notificationDataFaultCleared = isFaultCleared ? prepareFaultClearedNotificationData({ currentFaultCode, previousFaultCode: latestAlertsFaultsSnapshot?.fault_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        return { notificationDataMode, notificationDataAlert, notificationDataAlertCleared, notificationDataFault, notificationDataFaultCleared };
     });
     if (notificationData.notificationDataMode) {
         if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {
             await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
+        }
+    }
+    if (notificationData.notificationDataAlert) {
+        if (shouldSendNotification(notificationData.notificationDataAlert.motorId, "alert", alert_code ?? 0)) {
+            await sendUserNotification(notificationData.notificationDataAlert.userId, notificationData.notificationDataAlert.title, notificationData.notificationDataAlert.message, notificationData.notificationDataAlert.motorId, notificationData.notificationDataAlert.starter_id);
+        }
+    }
+    if (notificationData.notificationDataAlertCleared) {
+        if (shouldSendNotification(notificationData.notificationDataAlertCleared.motorId, "alert_cleared", 0)) {
+            await sendUserNotification(notificationData.notificationDataAlertCleared.userId, notificationData.notificationDataAlertCleared.title, notificationData.notificationDataAlertCleared.message, notificationData.notificationDataAlertCleared.motorId, notificationData.notificationDataAlertCleared.starter_id);
+        }
+    }
+    if (notificationData.notificationDataFault) {
+        if (shouldSendNotification(notificationData.notificationDataFault.motorId, "fault", fault ?? 0)) {
+            await sendUserNotification(notificationData.notificationDataFault.userId, notificationData.notificationDataFault.title, notificationData.notificationDataFault.message, notificationData.notificationDataFault.motorId, notificationData.notificationDataFault.starter_id);
+        }
+    }
+    if (notificationData.notificationDataFaultCleared) {
+        if (shouldSendNotification(notificationData.notificationDataFaultCleared.motorId, "fault_cleared", 0)) {
+            await sendUserNotification(notificationData.notificationDataFaultCleared.userId, notificationData.notificationDataFaultCleared.title, notificationData.notificationDataFaultCleared.message, notificationData.notificationDataFaultCleared.motorId, notificationData.notificationDataFaultCleared.starter_id);
         }
     }
 }

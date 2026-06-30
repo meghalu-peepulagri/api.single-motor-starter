@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { LOGGED_OUT, MOBILE_NUMBER_ALREADY_EXIST, USER_DELETED, USER_DETAILS_FETCHED, USER_DETAILS_WITH_LOCATIONS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
+import { DEVICE_TOKEN_REQUIRED, INVALID_DEVICE_TOKEN, LOGGED_OUT, MOBILE_NUMBER_ALREADY_EXIST, USER_DELETED, USER_DETAILS_FETCHED, USER_DETAILS_WITH_LOCATIONS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTokens, type DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import { users, type UsersTable } from "../database/schemas/users.js";
@@ -150,11 +150,13 @@ export class UserHandlers {
   userLogOutHandler = async (c: Context) => {
     try {
       const id = +c.req.param("id");
+      paramsValidateException.validateId(id, "user id");
       const reqData = await c.req.json();
+      if (!reqData.fcm_token) throw new BadRequestException(DEVICE_TOKEN_REQUIRED);
       const tokenData = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [reqData.fcm_token, id], ["id"]);
 
       if (!tokenData)
-        throw new NotFoundException(USER_NOT_FOUND);
+        throw new NotFoundException(INVALID_DEVICE_TOKEN);
 
       await deleteRecordById<DeviceTokensTable>(deviceTokens, tokenData.id);
       return sendResponse(c, 200, LOGGED_OUT);
@@ -162,6 +164,7 @@ export class UserHandlers {
     catch (err: any) {
       logger.error("Error at logout", err);
       console.error("Error at logout", err.message);
+      handleJsonParseError(err);
       throw err;
     }
   };
