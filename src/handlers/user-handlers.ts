@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { LOGGED_OUT, MOBILE_NUMBER_ALREADY_EXIST, USER_DELETED, USER_DETAILS_FETCHED, USER_DETAILS_WITH_LOCATIONS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
+import { DEVICE_TOKEN_REQUIRED, INVALID_DEVICE_TOKEN, LOGGED_OUT, MOBILE_NUMBER_ALREADY_EXIST, USER_DELETED, USER_DETAILS_FETCHED, USER_DETAILS_WITH_LOCATIONS_FETCHED, USER_NOT_FOUND, USER_UPDATE_VALIDATION_CRITERIA, USER_UPDATED, USERS_LIST } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTokens, type DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import { users, type UsersTable } from "../database/schemas/users.js";
@@ -176,6 +176,7 @@ export class UserHandlers {
     catch (err: any) {
       logger.error("Error at logout", err);
       console.error("Error at logout", err.message);
+      handleJsonParseError(err);
       throw err;
     }
   };

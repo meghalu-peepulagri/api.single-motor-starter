@@ -55,6 +55,7 @@ export async function sendNotificationsForMultipleDevices(tokens: string[], titl
 
     await Promise.all(invalidTokenCleanups);
 
+
     return batchResponse;
   }
   catch (error: any) {
