@@ -40,7 +40,42 @@ function isBeforeWindow(currentMinutes, startMinutes, endMinutes) {
     // Wrap-around windows (e.g., 23:00 → 02:00): can't infer BEFORE/AFTER from time alone.
     return false;
 }
+/** Raw window span in minutes (handles wrap-around windows like 23:00 → 02:00). */
+function windowSpanMinutes(schedule, startMinutes, endMinutes) {
+    if (schedule.runtime_minutes != null)
+        return schedule.runtime_minutes;
+    return endMinutes > startMinutes
+        ? endMinutes - startMinutes
+        : (1440 - startMinutes) + endMinutes;
+}
+/**
+ * CYCLIC only: total minutes the motor is expected to actually RUN across the whole
+ * window. The motor alternates ON → OFF starting with ON, so we count only the ON
+ * portions across every cycle that fits in the window.
+ *   e.g. window 25m, on=5/off=5 → ON(5)·OFF(5)·ON(5)·OFF(5)·ON(5) → 3 ON cycles = 15m run.
+ * Returns the full span as a safe fallback when cycle info is missing/invalid.
+ */
+function cyclicPlannedOnMinutes(schedule, startMinutes, endMinutes) {
+    const span = windowSpanMinutes(schedule, startMinutes, endMinutes);
+    const on = schedule.cycle_on_minutes ?? 0;
+    const off = schedule.cycle_off_minutes ?? 0;
+    if (on <= 0)
+        return span; // no usable cyclic info → fall back to span
+    const cycle = on + off;
+    if (cycle <= 0)
+        return on; // off missing → at least one ON period
+    const fullCycles = Math.floor(span / cycle);
+    const remainder = span - fullCycles * cycle;
+    return fullCycles * on + Math.min(remainder, on);
+}
 function plannedDurationMinutes(schedule, startMinutes, endMinutes) {
+    // CYCLIC only: the motor runs only during the "on" portions, so the expected run time
+    // for COMPLETED is the TOTAL ON time across all cycles in the window — NOT the full span.
+    // e.g. window 25m, on=5/off=5 → 3 ON cycles → run_time(15) == planned(15) → COMPLETED.
+    // Time-based schedules fall through to the unchanged logic below.
+    if (schedule.schedule_type === "CYCLIC" && schedule.cycle_on_minutes != null) {
+        return cyclicPlannedOnMinutes(schedule, startMinutes, endMinutes);
+    }
     if (schedule.runtime_minutes != null)
         return schedule.runtime_minutes;
     return endMinutes > startMinutes
@@ -118,6 +153,19 @@ export function evaluateScheduleStatus(schedule, now) {
             return { id: schedule.id, newStatus: "SCHEDULED" };
         }
         if ((schedule.actual_started_at ?? schedule.actual_start_time)) {
+            // CYCLIC only: the motor runs only during the ON portions, so once the device-reported
+            // run time reaches the TOTAL ON time across all cycles in the window, the schedule is
+            // done — even while the window is still open and even if the device hasn't reported an
+            // end time (actual_ended_at / live-data end time comes back null for cyclic).
+            // e.g. window 25m, on=5/off=5 → 3 ON cycles → completes when run time reaches 15m.
+            if (schedule.schedule_type === "CYCLIC" &&
+                schedule.cycle_on_minutes != null &&
+                (schedule.actual_run_time ?? 0) >= cyclicPlannedOnMinutes(schedule, startMinutes, endMinutes)) {
+                if (hasMoreRepeatRange) {
+                    return { id: schedule.id, newStatus: "WAITING_NEXT_CYCLE", last_stopped_at: now };
+                }
+                return { id: schedule.id, newStatus: "COMPLETED", last_stopped_at: now };
+            }
             if (schedule.actual_ended_at) {
                 // device confirmed stop → resolve immediately regardless of window
                 if (hasMoreRepeatRange) {

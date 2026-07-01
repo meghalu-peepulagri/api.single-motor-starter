@@ -237,6 +237,8 @@ export interface ScheduleForEvaluation {
   bit_wise_days?: number | null;  // active-day bitmask; cleared bit = stopped day
   repeat: number;
   runtime_minutes: number | null;
+  cycle_on_minutes?: number | null;   // CYCLIC only: motor ON duration per cycle
+  cycle_off_minutes?: number | null;  // CYCLIC only: motor OFF duration per cycle
   last_started_at: Date | null;
   enabled: boolean;
   acknowledgement?: number | null;     // 0 = not acknowledged by device, 1 = acknowledged

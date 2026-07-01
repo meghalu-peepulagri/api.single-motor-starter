@@ -526,6 +526,8 @@ export async function findEvaluatableSchedules() {
             bit_wise_days: true,
             repeat: true,
             runtime_minutes: true,
+            cycle_on_minutes: true,
+            cycle_off_minutes: true,
             last_started_at: true,
             enabled: true,
             actual_start_time: true,
