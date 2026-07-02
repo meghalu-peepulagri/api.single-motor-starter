@@ -14,7 +14,18 @@ import { buildDeviceSyncPayloads, buildScheduleData, buildScheduleTimeline, date
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import { runScheduleEvaluator, filterEvaluatable } from "../services/schedule-evaluator-sync-service.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
-import { schedulePartialAckMap } from "../helpers/ack-tracker-hepler.js";
+import { publishingMap, schedulePartialAckMap } from "../helpers/ack-tracker-hepler.js";
+// Resync only: a heartbeat-driven push may be holding the per-starter publishingMap lock
+// (during its ACK wait). publishMultipleTimesInBackground / pushPendingSchedulesForStarter
+// silently skip while that lock is held, so a user-triggered resync publishes nothing.
+// Wait briefly for the lock to clear so resync reliably publishes. Heartbeat/lock behaviour
+// itself is unchanged — only the resync waits its turn.
+const waitForPublishSlot = async (starterId, maxWaitMs = 15000, intervalMs = 300) => {
+    const deadline = Date.now() + maxWaitMs;
+    while (publishingMap.get(starterId) && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+};
 import { pushPendingSchedulesForStarter, triggerSyncForCreatedSchedules } from "../helpers/schedule-sync-helper.js";
 import { getRecordById, getSingleRecordByMultipleColumnValues, updateRecordById, } from "../services/db/base-db-services.js";
 import { findOperationsByScheduleId, insertScheduleOperation, updateOperationAck, } from "../services/db/motor-schedule-operations-services.js";
@@ -758,6 +769,8 @@ export class MotorScheduleHandler {
                     const stillPendingIds = new Set(stillPending.map(r => r.id));
                     const verifiedDbIds = dbIds.filter(id => stillPendingIds.has(id));
                     const verifiedScheduleIds = scheduleIds.filter((_, i) => stillPendingIds.has(dbIds[i]));
+                    // Don't let a mid-flight heartbeat publish cause this resync to be skipped.
+                    await waitForPublishSlot(starterId);
                     const ok = await publishMultipleTimesInBackground(payload, starter);
                     if (ok) {
                         published++;
@@ -890,20 +903,81 @@ export class MotorScheduleHandler {
             if (!isOnline) {
                 return sendResponse(c, 200, SCHEDULE_DEVICE_OFFLINE, { chunks: 0, acked: 0 });
             }
-            // Reset FAILED/PENDING records in the given id list so the sync picks them up fresh.
-            if (ids && ids.length > 0) {
-                await db.update(motorSchedules)
-                    .set({ schedule_status: "PENDING", acknowledgement: 0, updated_at: new Date() })
-                    .where(and(inArray(motorSchedules.id, ids), eq(motorSchedules.starter_id, starterId), inArray(motorSchedules.schedule_status, ["FAILED", "PENDING"]), ne(motorSchedules.status, "ARCHIVED")));
+            // Reset the target schedules to a fresh PENDING state so they get re-sent. We include
+            // SCHEDULED (already delivered → allow a forced re-send) and clear acknowledgement +
+            // publish_attempts. When ids are omitted, all of the starter's re-syncable rows are reset.
+            await db.update(motorSchedules)
+                .set({ schedule_status: "PENDING", acknowledgement: 0, publish_attempts: 0, updated_at: new Date() })
+                .where(and(eq(motorSchedules.starter_id, starterId), inArray(motorSchedules.schedule_status, ["FAILED", "PENDING", "SCHEDULED"]), ne(motorSchedules.status, "ARCHIVED"), ids && ids.length > 0 ? inArray(motorSchedules.id, ids) : undefined));
+            // Fetch via the non-restrictive republish query (no publish_attempts / date-window
+            // filters that make pushPendingSchedulesForStarter return 0 rows), then narrow to ids.
+            const allRecords = await findPendingSchedulesForRepublish(starterId);
+            const records = (allRecords ?? []).filter(r => ids == null || ids.includes(r.id));
+            if (records.length === 0) {
+                return sendResponse(c, 200, "No schedules found to republish", { published: 0, failed: 0 });
             }
-            const result = await pushPendingSchedulesForStarter(starter, undefined, ids);
+            const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
+            const ackedRow = await db.query.motorSchedules.findFirst({
+                where: (ms, { and: a, eq: e, ne: n }) => a(e(ms.starter_id, starterId), e(ms.acknowledgement, 1), n(ms.status, "ARCHIVED")),
+                columns: { id: true },
+            });
+            const firstSyncStarterIds = ackedRow ? new Set() : new Set([starterId]);
+            const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
+            let published = 0, failed = 0;
+            for (const { chunks } of grouped) {
+                for (const { payload, dbIds, scheduleIds } of chunks) {
+                    // Re-verify still PENDING before publishing
+                    const stillPending = await db.query.motorSchedules.findMany({
+                        where: (ms, { and: a, inArray: inArr, eq: e }) => a(inArr(ms.id, dbIds), e(ms.acknowledgement, 0)),
+                        columns: { id: true, schedule_id: true },
+                    });
+                    if (stillPending.length === 0)
+                        continue;
+                    const stillPendingIds = new Set(stillPending.map(r => r.id));
+                    const verifiedDbIds = dbIds.filter(id => stillPendingIds.has(id));
+                    const verifiedScheduleIds = scheduleIds.filter((_, i) => stillPendingIds.has(dbIds[i]));
+                    // Don't let a mid-flight heartbeat publish cause this resync to be skipped.
+                    await waitForPublishSlot(starterId);
+                    const ok = await publishMultipleTimesInBackground(payload, starter);
+                    if (ok) {
+                        published++;
+                        const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
+                        if (publishKey)
+                            schedulePartialAckMap.delete(publishKey);
+                        const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i] }));
+                        const confirmedPairs = partialIds && partialIds.length > 0
+                            ? allPairs.filter(p => new Set(partialIds).has(p.schedule_id))
+                            : allPairs;
+                        if (confirmedPairs.length === 0)
+                            continue;
+                        const confirmedDbIds = confirmedPairs.map(p => p.id);
+                        await db.update(motorSchedules)
+                            .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+                            .where(inArray(motorSchedules.id, confirmedDbIds));
+                        await Promise.all(confirmedPairs.map(p => db.update(motorSchedules)
+                            .set({ device_schedule_id: p.schedule_id })
+                            .where(and(eq(motorSchedules.id, p.id), isNull(motorSchedules.device_schedule_id)))
+                            .catch(() => null)));
+                        await Promise.all(confirmedDbIds.flatMap(id => [
+                            insertScheduleOperation({ schedule_id: id, operation: "CREATE", sent_at: new Date() }).catch(() => null),
+                            insertScheduleLog({ schedule_id: id, event_type: "SENT_TO_DEVICE", actor_type: "system", new_status: "SCHEDULED" }).catch(() => null),
+                        ]));
+                    }
+                    else {
+                        failed++;
+                        if (publishKey)
+                            schedulePartialAckMap.delete(publishKey);
+                        logger.warn(`[bulk-republish] starter=${starterId} chunk publish failed — stays PENDING for heartbeat retry`);
+                    }
+                }
+            }
             await ActivityService.logActivity({
                 performedBy: userPayload.id,
                 action: "SCHEDULES_BULK_RESENT",
                 entityType: "SCHEDULE",
-                newData: { starter_id: starterId, ids: ids ?? "all", ...result },
+                newData: { starter_id: starterId, ids: ids ?? "all", published, failed },
             });
-            return sendResponse(c, 200, SCHEDULE_REPUBLISHED, result);
+            return sendResponse(c, 200, SCHEDULE_REPUBLISHED, { published, failed });
         }
         catch (error) {
             handleAppError(error, "bulk republish schedules");

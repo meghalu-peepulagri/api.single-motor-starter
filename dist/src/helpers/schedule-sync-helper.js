@@ -190,14 +190,25 @@ export async function triggerSyncForCreatedSchedules(records) {
     const today = todayAsYYMMDD();
     const windowEnd = dateToYYMMDD(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000));
     const arr = Array.isArray(records) ? records : [records];
-    const starterIds = [...new Set(arr
-            .filter(r => r.starter_id && r.schedule_start_date >= today && r.schedule_start_date <= windowEnd)
-            .map(r => r.starter_id))];
+    // Group ONLY the just-created schedule ids per starter (within the sync window) so the
+    // create-sync publishes just these new schedules — not other already-PENDING schedules
+    // for the same starter. (Heartbeat still delivers those separately.)
+    const idsByStarter = new Map();
+    for (const r of arr) {
+        if (!r.starter_id || r.id == null)
+            continue;
+        if (!(r.schedule_start_date >= today && r.schedule_start_date <= windowEnd))
+            continue;
+        const list = idsByStarter.get(r.starter_id) ?? [];
+        list.push(r.id);
+        idsByStarter.set(r.starter_id, list);
+    }
+    const starterIds = [...idsByStarter.keys()];
     if (starterIds.length === 0)
         return;
     const starters = await db.query.starterBoxes.findMany({
         where: (s, { inArray: inArr }) => inArr(s.id, starterIds),
         columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true },
     });
-    await Promise.allSettled(starters.map(s => pushPendingSchedulesForStarter(s)));
+    await Promise.allSettled(starters.map(s => pushPendingSchedulesForStarter(s, undefined, idsByStarter.get(s.id))));
 }
