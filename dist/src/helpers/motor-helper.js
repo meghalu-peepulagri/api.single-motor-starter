@@ -1,4 +1,4 @@
-import { ALREADY_SCHEDULED_EXISTS, CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME, CYCLE_ON_MINUTES_REQUIRED, CYCLIC_NO_POWER_LOSS_RECOVERY, ONE_TIME_REQUIRES_START_DATE, SCHEDULE_DATE_PAST, SCHEDULE_GAP_CONFLICT, SCHEDULE_MIN_ADVANCE, SCHEDULE_OVERLAP_CONFLICT } from "../constants/app-constants.js";
+import { ALREADY_SCHEDULED_EXISTS, CYCLE_FIELDS_NOT_ALLOWED_FOR_ONE_TIME, CYCLE_ON_MINUTES_REQUIRED, CYCLIC_NO_POWER_LOSS_RECOVERY, ONE_TIME_REQUIRES_START_DATE, SCHEDULE_DATE_PAST, SCHEDULE_DATE_RANGE_LIMIT, SCHEDULE_GAP_CONFLICT, SCHEDULE_MIN_ADVANCE, SCHEDULE_OVERLAP_CONFLICT } from "../constants/app-constants.js";
 import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
@@ -502,6 +502,15 @@ export function prepareMotorModeControlNotificationData(motor, mode_description,
 }
 export function validateScheduleTypeRules(data) {
     const scheduleType = data.schedule_type || "TIME_BASED";
+    // Single (non-recurring) schedule: the selected date range must not exceed 2 days (48h).
+    // Recurring schedules (repeat=1 or with days_of_week selected) are exempt — they legitimately
+    // span longer ranges and are only ever synced within the near-term window.
+    const isRecurring = data.repeat === 1 || (Array.isArray(data.days_of_week) && data.days_of_week.length > 0);
+    if (!isRecurring && data.schedule_start_date != null && data.schedule_end_date != null) {
+        const spanDays = yymmddToDayIndex(data.schedule_end_date) - yymmddToDayIndex(data.schedule_start_date);
+        if (spanDays > 2)
+            throw new BadRequestException(SCHEDULE_DATE_RANGE_LIMIT);
+    }
     if (scheduleType === "CYCLIC") {
         if (data.power_loss_recovery === true)
             throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);

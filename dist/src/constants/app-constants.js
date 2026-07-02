@@ -320,6 +320,7 @@ export const SCHEDULE_START_DATE_FORMAT = "Schedule start date must be in YYYY-M
 export const SCHEDULE_END_DATE_FORMAT = "Schedule end date must be in YYYY-MM-DD format";
 export const SCHEDULE_END_DATE_PAST = "Schedule end date cannot be in the past";
 export const SCHEDULE_END_DATE_BEFORE_START = "Schedule end date must be on or after start date";
+export const SCHEDULE_DATE_RANGE_LIMIT = "Single schedules support up to 2 days only.";
 export const SCHEDULE_START_TIME_REQUIRED = "Start time is required";
 export const SCHEDULE_START_TIME_INVALID = "Invalid start time";
 export const SCHEDULE_END_TIME_REQUIRED = "End time is required";

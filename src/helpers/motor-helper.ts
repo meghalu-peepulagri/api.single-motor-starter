@@ -5,6 +5,7 @@ import {
   CYCLIC_NO_POWER_LOSS_RECOVERY,
   ONE_TIME_REQUIRES_START_DATE,
   SCHEDULE_DATE_PAST,
+  SCHEDULE_DATE_RANGE_LIMIT,
   SCHEDULE_GAP_CONFLICT,
   SCHEDULE_MIN_ADVANCE,
   SCHEDULE_OVERLAP_CONFLICT
@@ -661,6 +662,7 @@ export function prepareMotorModeControlNotificationData(motor: any, mode_descrip
 export function validateScheduleTypeRules(data: {
   schedule_type?: string;
   repeat?: number;
+  days_of_week?: number[] | null;
   power_loss_recovery?: boolean;
   cycle_on_minutes?: number | null;
   cycle_off_minutes?: number | null;
@@ -668,6 +670,15 @@ export function validateScheduleTypeRules(data: {
   schedule_end_date?: number | null;
 }) {
   const scheduleType = data.schedule_type || "TIME_BASED";
+
+  // Single (non-recurring) schedule: the selected date range must not exceed 2 days (48h).
+  // Recurring schedules (repeat=1 or with days_of_week selected) are exempt — they legitimately
+  // span longer ranges and are only ever synced within the near-term window.
+  const isRecurring = data.repeat === 1 || (Array.isArray(data.days_of_week) && data.days_of_week.length > 0);
+  if (!isRecurring && data.schedule_start_date != null && data.schedule_end_date != null) {
+    const spanDays = yymmddToDayIndex(data.schedule_end_date) - yymmddToDayIndex(data.schedule_start_date);
+    if (spanDays > 2) throw new BadRequestException(SCHEDULE_DATE_RANGE_LIMIT);
+  }
 
   if (scheduleType === "CYCLIC") {
     if (data.power_loss_recovery === true) throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);
