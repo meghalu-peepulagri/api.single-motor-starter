@@ -1,0 +1,1 @@
+ALTER TABLE "motors" ADD COLUMN "motor_reference" varchar;

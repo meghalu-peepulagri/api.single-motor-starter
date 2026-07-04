@@ -4,8 +4,20 @@ import { MOTOR_ID_REQUIRED, STARTER_ID_REQUIRED } from "../constants/app-constan
 export interface ScheduleHistoryFilters {
   motor_id: number;
   starter_id: number;
-  from_date?: Date;
-  to_date?: Date;
+  from_date?: number;
+  to_date?: number;
+}
+
+function parseDateToYYMMDD(dateStr: string, field: string): number {
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) throw new BadRequestException(`Invalid ${field}. Use YYYY-MM-DD format`);
+  const yy = parseInt(parts[0], 10) - 2000;
+  const mm = parseInt(parts[1], 10);
+  const dd = parseInt(parts[2], 10);
+  if (isNaN(yy) || isNaN(mm) || isNaN(dd) || mm < 1 || mm > 12 || dd < 1 || dd > 31) {
+    throw new BadRequestException(`Invalid ${field}. Use YYYY-MM-DD format`);
+  }
+  return yy * 10000 + mm * 100 + dd;
 }
 
 export function buildScheduleHistoryFilters(query: Record<string, string>): ScheduleHistoryFilters {
@@ -15,20 +27,8 @@ export function buildScheduleHistoryFilters(query: Record<string, string>): Sche
   if (!motorId || Number.isNaN(motorId) || motorId <= 0) throw new BadRequestException(MOTOR_ID_REQUIRED);
   if (!starterId || Number.isNaN(starterId) || starterId <= 0) throw new BadRequestException(STARTER_ID_REQUIRED);
 
-  let from_date: Date | undefined;
-  let to_date: Date | undefined;
-
-  if (query.from_date) {
-    from_date = new Date(query.from_date);
-    if (isNaN(from_date.getTime())) throw new BadRequestException("Invalid from_date. Use YYYY-MM-DD format");
-    from_date.setHours(0, 0, 0, 0);
-  }
-
-  if (query.to_date) {
-    to_date = new Date(query.to_date);
-    if (isNaN(to_date.getTime())) throw new BadRequestException("Invalid to_date. Use YYYY-MM-DD format");
-    to_date.setHours(23, 59, 59, 999);
-  }
+  const from_date = query.from_date ? parseDateToYYMMDD(query.from_date, "from_date") : undefined;
+  const to_date = query.to_date ? parseDateToYYMMDD(query.to_date, "to_date") : undefined;
 
   return { motor_id: motorId, starter_id: starterId, from_date, to_date };
 }

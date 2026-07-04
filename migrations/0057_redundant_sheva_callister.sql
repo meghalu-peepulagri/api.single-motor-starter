@@ -1,0 +1,1 @@
+ALTER TYPE "public"."mode_enum" ADD VALUE 'SCHEDULE';

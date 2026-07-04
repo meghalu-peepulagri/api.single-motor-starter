@@ -1,7 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import env from "../env.js";
-import fs from "fs";
 import dbConfig from "../config/db-config.js";
 import * as alertsFaultsSchema from "./schemas/alerts-faults.js";
 import * as benchedStarterParametersSchema from "./schemas/benched-starter-parameters.js";
@@ -12,8 +10,11 @@ import * as fieldsSchema from "./schemas/fields.js";
 import * as gatewaysSchema from "./schemas/gateways.js";
 import * as locationsSchema from "./schemas/locations.js";
 import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
-import * as motorStatusHistorySchema from "./schemas/motor-status-history.js";
+import * as motorScheduleLiveDataSchema from "./schemas/motor-schedule-live-data.js";
+import * as motorScheduleLogsSchema from "./schemas/motor-schedule-logs.js";
+import * as motorScheduleOperationsSchema from "./schemas/motor-schedule-operations.js";
 import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
+import * as motorStatusHistorySchema from "./schemas/motor-status-history.js";
 import * as motorsSchema from "./schemas/motors.js";
 import * as otpSchema from "./schemas/otp.js";
 import * as powerStatusHistorySchema from "./schemas/power-status-history.js";
@@ -24,6 +25,7 @@ import * as starterDispatchSchema from "./schemas/starter-dispatch.js";
 import * as starterBoxParameters from "./schemas/starter-parameters.js";
 import * as starterSettingsLimitsSchema from "./schemas/starter-settings-limits.js";
 import * as starterSettingsSchema from "./schemas/starter-settings.js";
+import * as subUserPermissionsSchema from "./schemas/sub-user-permissions.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
 const dbClient = new Pool({
@@ -51,6 +53,9 @@ const db = drizzle(dbClient, {
         ...starterBoxSchema,
         ...starterBoxParameters,
         ...motorSchedulesSchema,
+        ...motorScheduleOperationsSchema,
+        ...motorScheduleLiveDataSchema,
+        ...motorScheduleLogsSchema,
         ...DeviceRunTimeSchema,
         ...deviceStatusHistorySchema,
         ...MotorRunTimeSchema,
@@ -63,6 +68,7 @@ const db = drizzle(dbClient, {
         ...DefaultSettingsLimitsSchema,
         ...benchedStarterParametersSchema,
         ...starterDispatchSchema,
+        ...subUserPermissionsSchema,
     },
 });
 export default db;

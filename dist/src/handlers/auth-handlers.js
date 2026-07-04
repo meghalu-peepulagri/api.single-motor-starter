@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+// @ts-ignore — date-fns v4 missing index.d.ts for NodeNext ESM resolution
 import { isBefore } from "date-fns";
 import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, MOBILE_NUMBER_ALREADY_EXIST, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
@@ -90,6 +91,12 @@ export class AuthHandlers {
                 throw new UnauthorizedException(INVALID_CREDENTIALS);
             const { access_token, refresh_token } = await genJWTTokensForUser(loginUser.id);
             const { password, ...userWithoutPassword } = loginUser;
+            await ActivityService.logActivity({
+                performedBy: loginUser.id,
+                action: "LOGIN",
+                entityType: "AUTH",
+                entityId: loginUser.id,
+            });
             const response = { user_details: userWithoutPassword, access_token, refresh_token };
             return sendResponse(c, CREATED, LOGIN_DONE, response);
         }
@@ -142,6 +149,12 @@ export class AuthHandlers {
             const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
             const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
             const { password, ...userDetails } = updatedUser;
+            await ActivityService.logActivity({
+                performedBy: user.id,
+                action: "LOGIN",
+                entityType: "AUTH",
+                entityId: user.id,
+            });
             const data = { user_details: userDetails, access_token, refresh_token };
             if (validReqData.fcm_token) {
                 const fcmToken = validReqData.fcm_token;
@@ -156,9 +169,19 @@ export class AuthHandlers {
             return sendResponse(c, 200, USER_LOGIN, data);
         }
         catch (err) {
+            // Drizzle wraps the SQL in err.message but hides the real Postgres error in err.cause.
+            // Log the cause (code + detail) so the actual failure reason is visible.
+            const pg = err?.cause ?? err;
             console.error("Error at verify otp", err.message);
+            console.error("Error at verify otp — cause:", {
+                code: pg?.code,
+                message: pg?.message,
+                detail: pg?.detail,
+                column: pg?.column,
+                constraint: pg?.constraint,
+                table: pg?.table,
+            });
             handleJsonParseError(err);
-            console.error("Error at verify otp", err.message);
             throw err;
         }
     };

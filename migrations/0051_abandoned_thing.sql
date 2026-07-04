@@ -1,0 +1,1 @@
+ALTER TABLE "motor_schedules" ADD COLUMN "edited_at" timestamp;

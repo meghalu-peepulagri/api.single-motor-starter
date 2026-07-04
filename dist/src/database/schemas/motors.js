@@ -6,8 +6,8 @@ import { starterBoxes } from "./starter-boxes.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { users } from "./users.js";
 export const testRunStatusEnum = pgEnum("test_run_status", ["IN_TEST", "COMPLETED", "FAILED", "PROCESSING"]);
-export const modeEnum = pgEnum("mode_enum", ["MANUAL", "AUTO"]);
-// 1 = MANUAL, 0 = AUTO
+export const modeEnum = pgEnum("mode_enum", ["MANUAL", "AUTO", "SCHEDULE"]);
+// 0 = AUTO, 1 = MANUAL, 6 = SCHEDULE
 export const motors = pgTable("motors", {
     id: serial("id").primaryKey(),
     name: varchar("name").notNull(),
@@ -16,9 +16,11 @@ export const motors = pgTable("motors", {
     location_id: integer("location_id").references(() => locations.id),
     state: integer("state").notNull().default(0),
     mode: modeEnum().default("AUTO").notNull(),
+    user_id: integer("user_id").references(() => users.id),
     created_by: integer("created_by").references(() => users.id),
     starter_id: integer("starter_id").references(() => starterBoxes.id),
     motor_index: integer("motor_index").default(1),
+    motor_reference: varchar("motor_reference"),
     status: statusEnum().default("ACTIVE"),
     test_run_status: testRunStatusEnum().default("IN_TEST"),
     test_run_completed_at: timestamp("test_run_completed_at"),

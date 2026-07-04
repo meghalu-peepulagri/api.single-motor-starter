@@ -1,5 +1,4 @@
 import { defineConfig } from "drizzle-kit";
-import fs from "fs";
 
 // // aiven
 // export default defineConfig({

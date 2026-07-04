@@ -3,7 +3,6 @@ import { DEVICE_TOKEN_REQUIRED, INVALID_DEVICE_TOKEN, LOGGED_OUT, MOBILE_NUMBER_
 import db from "../database/configuration.js";
 import { deviceTokens, type DeviceTokensTable } from "../database/schemas/device-tokens.js";
 import { users, type UsersTable } from "../database/schemas/users.js";
-import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import ForbiddenException from "../exceptions/forbidden-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
@@ -13,6 +12,7 @@ import { checkInternalPhoneUniqueness, userFilters } from "../helpers/user-helpe
 import { ActivityService } from "../services/db/activity-service.js";
 import { deleteRecordById, getRecordsConditionally, getSingleRecordByMultipleColumnValues, updateRecordById } from "../services/db/base-db-services.js";
 import { checkPhoneUniqueness, deleteUserWithCascade, getUserDetailsWithLocations, paginatedUsersList } from "../services/db/user-services.js";
+import { getSubUserPermissions } from "../services/db/sub-user-services.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
@@ -58,6 +58,11 @@ export class UserHandlers {
           user = userPayload;
         }
       } else {
+        const subUser = c.get("sub_user_payload");
+        if (subUser) {
+          const permissions = await getSubUserPermissions(subUser.id);
+          return sendResponse(c, 200, USER_DETAILS_FETCHED, { ...subUser, permissions });
+        }
         user = userPayload;
       }
 
@@ -76,9 +81,9 @@ export class UserHandlers {
 
       const searchString = query.search_string?.trim() || "";
       const whereQueryData: WhereQueryData<UsersTable> = {
-        columns: ["status", "user_type", "user_type"],
-        relations: ["!=", "!=", "!="],
-        values: ["ARCHIVED", "ADMIN", "SUPER_ADMIN"],
+        columns: ["status", "user_type", "user_type", "user_type"],
+        relations: ["!=", "!=", "!=", "!="],
+        values: ["ARCHIVED", "ADMIN", "SUPER_ADMIN", "SUB_USER"],
       }
 
       if (searchString) {
@@ -98,7 +103,7 @@ export class UserHandlers {
   updateUserDetailsHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const userId = +c.req.param("id");
+      const userId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(userId, "user id");
       const reqBody = await c.req.json();
       paramsValidateException.emptyBodyValidation(reqBody);
@@ -116,7 +121,7 @@ export class UserHandlers {
 
       await db.transaction(async (trx) => {
         const updatedUser = await updateRecordById<UsersTable>(users, userId, validUserReq, trx);
-        await ActivityService.writeUserUpdatedLog(userId, userPayload.id, verifiedUser, updatedUser, trx);
+        await ActivityService.writeUserUpdatedLog(userId, c.get("performer_id"), verifiedUser, updatedUser, trx);
       })
 
       return sendResponse(c, 201, USER_UPDATED);
@@ -132,7 +137,7 @@ export class UserHandlers {
 
   userDetailsWithLocationsHandler = async (c: Context) => {
     try {
-      const userId = +c.req.param("id");
+      const userId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(userId, "user id");
       const query = c.req.query();
       const paginationParams = getPaginationOffParams(query);
@@ -149,16 +154,23 @@ export class UserHandlers {
 
   userLogOutHandler = async (c: Context) => {
     try {
-      const id = +c.req.param("id");
-      paramsValidateException.validateId(id, "user id");
-      const reqData = await c.req.json();
-      if (!reqData.fcm_token) throw new BadRequestException(DEVICE_TOKEN_REQUIRED);
-      const tokenData = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [reqData.fcm_token, id], ["id"]);
+      const id = +(c.req.param("id") ?? 0);
+      const reqData = await c.req.json().catch(() => ({}));
+      const fcmToken = reqData?.fcm_token;
 
-      if (!tokenData)
-        throw new NotFoundException(INVALID_DEVICE_TOKEN);
+      if (fcmToken) {
+        const tokenData = await getSingleRecordByMultipleColumnValues<DeviceTokensTable>(deviceTokens, ["device_token", "user_id"], ["=", "="], [fcmToken, id], ["id"]);
+        if (tokenData) {
+          await deleteRecordById<DeviceTokensTable>(deviceTokens, tokenData.id);
+        }
+      }
 
-      await deleteRecordById<DeviceTokensTable>(deviceTokens, tokenData.id);
+      await ActivityService.logActivity({
+        performedBy: id,
+        action: "LOGGED_OUT",
+        entityType: "AUTH",
+        entityId: id,
+      });
       return sendResponse(c, 200, LOGGED_OUT);
     }
     catch (err: any) {
@@ -172,7 +184,7 @@ export class UserHandlers {
   deleteUserHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const userId = +c.req.param("id") || 0;
+      const userId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(userId, "user id");
 
       const targetUser = await getSingleRecordByMultipleColumnValues<UsersTable>(
@@ -195,7 +207,7 @@ export class UserHandlers {
         }
       }
 
-      await deleteUserWithCascade(userId, userPayload.id, isSelf, {
+      await deleteUserWithCascade(userId, c.get("performer_id"), isSelf, {
         full_name: targetUser.full_name ?? null,
         phone: targetUser.phone,
         email: targetUser.email ?? null,

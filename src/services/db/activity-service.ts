@@ -1,5 +1,6 @@
 import { userActivityLogs, type NewUserActivityLog } from "../../database/schemas/user-activity-logs.js";
 import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserDeletedLog, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
+import { buildActivityMessage } from "../../constants/activity-messages.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
 import type { User } from "../../database/schemas/users.js";
@@ -11,14 +12,12 @@ type Transaction = any; // Placeholder for now, but will use more specific types
  * Service to handle Database Level Activity Logs (Audit Trail)
  */
 export class ActivityService {
-  /**
-   * Prepares an activity log object without saving it
-   */
+
   static prepareActivityLog(data: {
     userId?: number;
     performedBy: number;
     action: string;
-    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
+    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY' | 'SCHEDULE' | 'DISPATCH' | 'FIELD';
     entityId?: number;
     deviceId?: number;
     oldData?: Record<string, unknown> | null;
@@ -26,7 +25,7 @@ export class ActivityService {
     message?: string;
   }): NewUserActivityLog {
     return {
-      user_id: data.userId || null,
+      user_id: data.userId ?? data.performedBy ?? null,
       performed_by: data.performedBy,
       field_name: null,
       action: data.action,
@@ -35,7 +34,7 @@ export class ActivityService {
       device_id: data.deviceId || null,
       old_data: data.oldData ? JSON.stringify(data.oldData) : null,
       new_data: data.newData ? JSON.stringify(data.newData) : null,
-      message: data.message || null,
+      message: data.message || buildActivityMessage(data.action, data.oldData, data.newData, data.entityId ?? null),
     };
   }
 
@@ -67,10 +66,11 @@ export class ActivityService {
     userId?: number;
     performedBy: number;
     action: string;
-    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY';
+    entityType: 'STARTER' | 'MOTOR' | 'SETTING' | 'AUTH' | 'USER' | 'LOCATION' | 'GATEWAY' | 'SCHEDULE' | 'DISPATCH' | 'FIELD';
     entityId?: number;
     oldData?: Record<string, unknown>;
     newData?: Record<string, unknown>;
+    message?: string;
   }, trx?: Transaction) {
     const log = this.prepareActivityLog(data);
     await this.saveActivityLogs([log], trx);
@@ -313,13 +313,15 @@ export class ActivityService {
     starterId: number,
     oldData: Record<string, unknown>,
     newData: Record<string, unknown>,
-    trx?: Transaction
+    trx?: Transaction,
+    pcbNumber?: string | null
   ) {
     const logs = prepareSettingsUpdateLogs({
       userId,
       starterId,
       oldData,
-      newData
+      newData,
+      pcbNumber
     });
 
     if (logs.length > 0) {
@@ -336,7 +338,8 @@ export class ActivityService {
       action: "LOCATION_ADDED",
       entityType: "LOCATION",
       entityId: locationId,
-      newData: data
+      newData: data,
+      message: `Location '${data.name}' added`
     });
 
     await this.saveActivityLogs([log], trx);
@@ -352,7 +355,8 @@ export class ActivityService {
       entityType: "LOCATION",
       entityId: locationId,
       oldData,
-      newData
+      newData,
+      message: `Location renamed from '${oldData.name}' to '${newData.name}'`
     });
     await this.saveActivityLogs([log], trx);
   }
@@ -360,17 +364,41 @@ export class ActivityService {
   /**
    * Logs a location deletion event
    */
-  static async writeLocationDeletedLog(userId: number, locationId: number, trx?: Transaction) {
+  static async writeLocationDeletedLog(userId: number, locationId: number, locationName: string, trx?: Transaction) {
     const log = prepareDeletionLog({
       userId,
       entityType: "LOCATION",
       entityId: locationId,
-      action: "LOCATION_DELETED"
+      action: "LOCATION_DELETED",
+      entityName: locationName
     });
     await this.saveActivityLogs([log], trx);
   }
 
 
+
+  /**
+   * Logs a device power ON/OFF event from MQTT live data
+   */
+  static async writeDevicePowerLog(
+    userId: number,
+    starterId: number,
+    oldPower: number | null,
+    newPower: number,
+    trx?: any
+  ) {
+    const action = newPower === 1 ? "DEVICE_POWER_ON" : "DEVICE_POWER_OFF";
+    const log = prepareActionLog({
+      userId,
+      action,
+      entityType: "STARTER",
+      entityId: starterId,
+      deviceId: starterId,
+      oldData: { power: oldPower },
+      newData: { power: newPower },
+    });
+    await this.saveActivityLogs([log], trx);
+  }
 
   /**
    * Logs a device allocation event (Allocated / Deallocated / Reallocated)

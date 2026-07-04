@@ -9,6 +9,7 @@ export const deviceStatusHistory = pgTable("device_status_history", {
     status: varchar("status").notNull(),
     time_stamp: timestamp("time_stamp").notNull(),
     created_at: timestamp("created_at").notNull().defaultNow(),
+    updated_at: timestamp("updated_at").notNull().defaultNow(),
 }, table => [
     index("device_status_history_starter_motor_time_desc_idx").on(table.starter_id, table.motor_id, desc(table.time_stamp)),
 ]);

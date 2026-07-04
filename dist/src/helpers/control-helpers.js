@@ -42,6 +42,8 @@ export function controlMode(code) {
             return "INVALID REQUEST";
         case 5:
             return "FEATURE NOT ENABLED";
+        case 6:
+            return "SCHEDULE";
         default:
             return "Unknown mode";
     }
@@ -60,22 +62,34 @@ export function motorState(code) {
         default: return "Unknown state";
     }
 }
+// Device SCHEDULE reason codes (SCH_REASON_*). Returns a human-readable message,
+// or null when there is no meaningful reason (code 0 = NONE, or unknown code).
 export function getFailureReason(code) {
-    switch (code) {
-        case 0:
-            return "No Failure";
+    switch (Number(code)) {
         case 1:
-            return "Power Loss";
+            return "Schedule is disabled. Please enable it to run.";
         case 2:
-            return "Fault";
+            return "The schedule date is invalid or has already passed.";
         case 3:
-            return "Mode Change";
+            return "Motor ran outside the scheduled time window.";
         case 4:
-            return "Overlap";
+            return "Motor is in the OFF phase of a cyclic schedule. It will resume automatically.";
         case 5:
-            return "Invalid timings";
+            return "No active schedule found for this motor.";
+        case 6:
+            return "Schedule was stopped by a manual override.";
+        case 7:
+            return "Motor stopped due to a device fault. Please check the device.";
+        case 8:
+            return "Motor stopped because power supply was lost.";
+        case 9:
+            return "Device is not in schedule mode. Please switch to schedule mode.";
+        case 10:
+            return "Motor is in cool down. It will start automatically once cool down ends.";
+        case 11:
+            return "Recovering from power loss. Motor will resume the schedule shortly.";
         default:
-            return "Invalid failure reason";
+            return null;
     }
 }
 ;

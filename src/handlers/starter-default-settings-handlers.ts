@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_LIMITS_FETCHED, DEFAULT_SETTINGS_LIMITS_NOT_FOUND, DEFAULT_SETTINGS_LIMITS_UPDATED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_LIMITS_FETCHED, DEFAULT_SETTINGS_LIMITS_NOT_FOUND, DEFAULT_SETTINGS_LIMITS_UPDATED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, SETTINGS_FIELD_NAMES, UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { starterDefaultSettings, type StarterDefaultSettingsTable } from "../database/schemas/starter-default-settings.js";
@@ -39,7 +39,7 @@ export class StarterDefaultSettingsHandlers {
   updateStarterDefaultSettingsHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const defaultSettingId = +c.req.param("id");
+      const defaultSettingId = +(c.req.param("id") ?? 0);
       const reqBody = await c.req.json();
       paramsValidateException.emptyBodyValidation(reqBody);
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettings>("update-default-settings", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA);
@@ -61,16 +61,23 @@ export class StarterDefaultSettingsHandlers {
         }
       }
 
+      const defaultSettingChangeSummary = Object.keys(changedNewData)
+        .map(k => {
+          const label = (SETTINGS_FIELD_NAMES as any)[k] ?? k;
+          return `'${label}': ${changedOldData[k]} → ${changedNewData[k]}`;
+        })
+        .join(', ');
+
       await db.transaction(async (trx) => {
         await updateRecordById<StarterDefaultSettingsTable>(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
-        // Add activity log if needed (currently not in service, but let's be consistent)
         await ActivityService.logActivity({
-          performedBy: userPayload.id,
+          performedBy: c.get("performer_id"),
           action: "DEFAULT_SETTINGS_UPDATED",
           entityType: "SETTING",
           entityId: Number(defaultSettingData.id),
           oldData: changedOldData,
           newData: changedNewData,
+          message: defaultSettingChangeSummary ? `Default settings updated — ${defaultSettingChangeSummary}` : "Default settings updated",
         }, trx);
       });
       return sendResponse(c, 200, DEFAULT_SETTINGS_UPDATED);
@@ -84,7 +91,7 @@ export class StarterDefaultSettingsHandlers {
 
   getAcknowledgedStarterSettingsHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +(c.req.param("starter_id") ?? 0);
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
 
@@ -99,7 +106,7 @@ export class StarterDefaultSettingsHandlers {
   insertStarterSettingHandler = async (c: Context) => {
     try {
       const user = c.get("user_payload");
-      const starterId = Number(c.req.param("starter_id"));
+      const starterId = Number(c.req.param("starter_id") ?? 0);
       const body = await c.req.json();
 
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes,
@@ -113,41 +120,16 @@ export class StarterDefaultSettingsHandlers {
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettings>("update-default-settings",
         body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
 
-      // const cleanedBody = removeEmptyObjectsDeep(validatedBody);
-      // if (!Object.keys(cleanedBody).length) {
-      //   throw new BadRequestException("No valid settings provided");
-      // }
-
-      // const oldSettings = (await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(starterSettings,
-      //   ["starter_id", "is_new_configuration_saved", "acknowledgement"],
-      //   ["=", "=", "="],
-      //   [starterId, 1, "TRUE"]
-      // )) || {};
-
-      // const delta = buildCategoryPayloadFromFlat(oldSettings, cleanedBody, DEVICE_SCHEMA);
-
-      // if (!Object.keys(delta).length) {
-      //   return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
-      // }
-
-      // const devicePayload = prepareStarterSettingsData({ T: 4, S: randomSequenceNumber(), D: delta });
-
-      // if (devicePayload?.D) {
-      //   setImmediate(async () => {
-      //     try {
-      //       await publishMultipleTimesInBackground(devicePayload, starter);
-      //     } catch (error) {
-      //       // TODO: Remove catch only for logging
-      //       logger.error("Background publish failed:", error);
-      //       console.error("Background publish failed:", error);
-      //     }
-      //   });
-      // }
+      const oldSettings = await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(
+        starterSettings,
+        ["starter_id", "acknowledgement"],
+        ["=", "="],
+        [starter.id, "TRUE"]
+      ) ?? {};
 
       await db.transaction(async (trx) => {
         await saveSingleRecord<StarterSettingsTable>(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
-        // Handle activity logging for settings update
-        // await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, { ...oldSettings, ...cleanedBody }, trx);
+        await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings as Record<string, unknown>, validatedBody as Record<string, unknown>, trx, starter.pcb_number);
       });
       return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
     } catch (error: any) {
@@ -158,7 +140,7 @@ export class StarterDefaultSettingsHandlers {
 
   getStarterSettingsLimitsHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +(c.req.param("starter_id") ?? 0);
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
 
@@ -172,15 +154,40 @@ export class StarterDefaultSettingsHandlers {
 
   updateStarterSettingsLimitsHandler = async (c: Context) => {
     try {
-      const settingId = +c.req.param("id");
+      const userPayload = c.get("user_payload");
+      const settingId = +(c.req.param("id") ?? 0);
       const body = await c.req.json();
       const { id, starter_id, created_at, updated_at, ...rest } = body;
-
 
       const foundedSettingId = await getRecordById<StarterSettingsLimitsTable>(starterSettingsLimits, settingId);
       if (!foundedSettingId) throw new BadRequestException(SETTINGS_LIMITS_NOT_FOUND);
 
-      await updateRecordById<StarterSettingsLimitsTable>(starterSettingsLimits, foundedSettingId.id, rest);
+      const changedOldData: Record<string, any> = {};
+      const changedNewData: Record<string, any> = {};
+      for (const key of Object.keys(rest)) {
+        const oldValue = (foundedSettingId as any)[key];
+        const newValue = rest[key];
+        if (newValue !== undefined && String(newValue) !== String(oldValue)) {
+          changedOldData[key] = oldValue;
+          changedNewData[key] = newValue;
+        }
+      }
+
+      const starterForLimitsLog = foundedSettingId.starter_id
+        ? await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [foundedSettingId.starter_id, "ARCHIVED"], ["pcb_number"])
+        : null;
+
+      await db.transaction(async (trx) => {
+        await updateRecordById<StarterSettingsLimitsTable>(starterSettingsLimits, foundedSettingId.id, rest, trx);
+        await ActivityService.writeStarterSettingsUpdatedLog(
+          userPayload.id,
+          foundedSettingId.starter_id ?? foundedSettingId.id,
+          changedOldData,
+          changedNewData,
+          trx,
+          starterForLimitsLog?.pcb_number ?? null
+        );
+      });
       return sendResponse(c, 200, SETTINGS_LIMITS_UPDATED);
     } catch (error: any) {
       console.error("Error at updateStarterSettingsLimits:", error);
@@ -190,7 +197,7 @@ export class StarterDefaultSettingsHandlers {
 
   getStarterAckHistoryHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +(c.req.param("starter_id") ?? 0);
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
 
@@ -210,7 +217,7 @@ export class StarterDefaultSettingsHandlers {
 
   getStarterSettingDetailsMobileHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +(c.req.param("starter_id") ?? 0);
       const query = c.req.query();
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
@@ -234,7 +241,7 @@ export class StarterDefaultSettingsHandlers {
 
   getStarterSettingsLimitsMobileHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
+      const starterId = +(c.req.param("starter_id") ?? 0);
       const query = c.req.query();
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
@@ -276,7 +283,7 @@ export class StarterDefaultSettingsHandlers {
   updateStarterDefaultSettingsLimitsHandler = async (c: Context) => {
     try {
       const userPayload = c.get("user_payload");
-      const defaultSettingLimitsId = +c.req.param("id");
+      const defaultSettingLimitsId = +(c.req.param("id") ?? 0);
       const reqBody = await c.req.json();
 
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettingsLimits>(
@@ -305,7 +312,13 @@ export class StarterDefaultSettingsHandlers {
         }
       }
 
-      // Update in transaction with activity log
+      const defaultLimitsChangeSummary = Object.keys(changedNewData)
+        .map(k => {
+          const label = (SETTINGS_FIELD_NAMES as any)[k] ?? k;
+          return `'${label}': ${changedOldData[k]} → ${changedNewData[k]}`;
+        })
+        .join(', ');
+
       await db.transaction(async (trx) => {
         await updateRecordById<StarterDefaultSettingsLimitsTable>(
           StarterDefaultSettingsLimits,
@@ -314,14 +327,14 @@ export class StarterDefaultSettingsHandlers {
           trx
         );
 
-        // Log activity
         await ActivityService.logActivity({
-          performedBy: userPayload.id,
+          performedBy: c.get("performer_id"),
           action: "DEFAULT_SETTINGS_LIMITS_UPDATED",
           entityType: "SETTING",
           entityId: defaultSettingLimitsId,
           oldData: changedOldData,
           newData: changedNewData,
+          message: defaultLimitsChangeSummary ? `Default settings limits updated — ${defaultLimitsChangeSummary}` : "Default settings limits updated",
         }, trx);
       });
 
@@ -335,10 +348,19 @@ export class StarterDefaultSettingsHandlers {
 
   updateLatestSettingAckByStarterHandler = async (c: Context) => {
     try {
-      const starterId = +c.req.param("starter_id");
-      const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id"]);
+      const userPayload = c.get("user_payload");
+      const starterId = +(c.req.param("starter_id") ?? 0);
+      const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "pcb_number"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
       await db.update(starterSettings).set({ acknowledgement: "TRUE", updated_at: sql`CURRENT_TIMESTAMP` }).where(sql`${starterSettings.id} = (SELECT ${starterSettings.id} FROM ${starterSettings} WHERE ${starterSettings.starter_id} = ${starterId} AND ${starterSettings.acknowledgement} = 'FALSE' ORDER BY ${starterSettings.created_at} DESC LIMIT 1)`);
+      await ActivityService.logActivity({
+        performedBy: userPayload.id,
+        action: "SETTINGS_ACK_UPDATED",
+        entityType: "SETTING",
+        entityId: starterData.id,
+        newData: { acknowledgement: "TRUE", starter_id: starterData.id, pcb_number: starterData.pcb_number },
+        message: starterData.pcb_number ? `Settings acknowledged by device '${starterData.pcb_number}'` : "Settings acknowledged by device",
+      });
       return sendResponse(c, 200, "Settings updated successfully");
     } catch (error: any) {
       logger.error("Error at updating latest starter setting acknowledgement updated_at:", error);

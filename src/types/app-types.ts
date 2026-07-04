@@ -10,15 +10,18 @@ import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAs
 import type { ValidatedSignInEmail, ValidatedSignInPhone, ValidatedSignUpUser, ValidatedVerifyOtp } from "../validations/schema/user-validations.js";
 import type { ValidatedAddStarterDispatch } from "../validations/schema/starter-dispatch-validations.js";
 import type { ValidatedAddGateway, ValidatedAssignGatewayToUser, ValidatedRenameGateway, ValidatedUpdateGatewayLabel, ValidatedUpdateGatewayNumber } from "../validations/schema/gateway-validations.js";
+import type { CreateSubUserInput, UpdateSubUserInput, UpdatePermissionsInput, RemovePermissionsInput } from "../validations/schema/sub-user-validations.js";
 import type { MotorStatusHistoryTable } from "../database/schemas/motor-status-history.js";
 import type { PowerStatusHistoryTable } from "../database/schemas/power-status-history.js";
 import type { DeviceStatusHistoryTable } from "../database/schemas/device-status-history.js";
 
 export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | ValidatedAddLocation | ValidatedSignInPhone | ValidatedVerifyOtp | validatedAddField | validatedAddMotor | validatedUpdateMotor | validatedUpdateMotorTestRunStatus | validatedAddStarter | ValidatedMotorSchedule
-  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber | validatedUpdateInstalledLocation;
+  | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber | validatedUpdateInstalledLocation
+  | CreateSubUserInput | UpdateSubUserInput | UpdatePermissionsInput | RemovePermissionsInput;
 
 export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
-  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-installed-location";
+  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-installed-location" |
+  "create-sub-user" | "update-sub-user" | "set-sub-user-permissions" | "remove-sub-user-permissions";
 
 export interface IResp {
   status: ContentfulStatusCode;
@@ -231,15 +234,24 @@ export interface ScheduleForEvaluation {
   schedule_start_date: number | null;  // Numeric YYMMDD (e.g., 260415)
   schedule_end_date: number | null;    // Numeric YYMMDD (e.g., 260416)
   days_of_week: number[];
+  bit_wise_days?: number | null;  // active-day bitmask; cleared bit = stopped day
   repeat: number;
   runtime_minutes: number | null;
+  cycle_on_minutes?: number | null;   // CYCLIC only: motor ON duration per cycle
+  cycle_off_minutes?: number | null;  // CYCLIC only: motor OFF duration per cycle
   last_started_at: Date | null;
   enabled: boolean;
+  acknowledgement?: number | null;     // 0 = not acknowledged by device, 1 = acknowledged
+  actual_start_time?: string | null;
+  actual_end_time?: string | null;
+  actual_started_at?: Date | null;
+  actual_ended_at?: Date | null;
+  actual_run_time?: number | null;
 }
 
 export interface ScheduleStatusUpdate {
   id: number;
-  newStatus: "RUNNING" | "COMPLETED" | "WAITING_NEXT_CYCLE";
+  newStatus: "SCHEDULED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
   last_started_at?: Date;
   last_stopped_at?: Date;
 }
@@ -281,12 +293,16 @@ export type preparedLiveData = {
   // Schedule fields from device payload
   active_schedule_id: number | null;
   active_schedule_type: "TIME_BASED" | "CYCLIC" | null;
-  active_schedule_start_time: string | null;      // HHMM — actual start time device is using
-  active_schedule_runtime_minutes: number | null; // minutes
-  active_schedule_end_time: string | null;        // HHMM — computed (start + runtime)
+  active_schedule_start_time: string | null;
+  active_schedule_end_time: string | null;
+  active_schedule_started_at: Date | null;
+  active_schedule_ended_at: Date | null;
+  active_schedule_runtime_minutes: number | null;
   active_schedule_missed_minutes: number | null;
   active_schedule_failure_at: Date | null;
   active_schedule_failure_reason: string | null;
+  active_failure_code: number;
+  active_schedule_status: number | null;
 };
 
 export type previousPreparedLiveData = {
@@ -301,7 +317,7 @@ export type previousPreparedLiveData = {
     created_by: number | null;
     id: number;
     name: string;
-    mode: "AUTO" | "MANUAL"
+    mode: "AUTO" | "MANUAL" | "SCHEDULE"
     location_id: number | null;
     hp: string;
     state: number;

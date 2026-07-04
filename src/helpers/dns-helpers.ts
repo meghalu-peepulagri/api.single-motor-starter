@@ -1,3 +1,4 @@
+// @ts-ignore — date-fns v4 missing index.d.ts for NodeNext ESM resolution
 import { parse, isValid, startOfDay, endOfDay } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 

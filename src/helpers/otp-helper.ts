@@ -1,3 +1,4 @@
+// @ts-ignore — date-fns v4 missing index.d.ts for NodeNext ESM resolution
 import { addMinutes } from "date-fns";
 
 function prepareOTPData(inputPhone: string, action: any, expireInMin = 15) {
