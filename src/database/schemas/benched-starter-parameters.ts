@@ -31,6 +31,7 @@ export const benchedStarterParameters = pgTable("benched_starter_parameters", {
   mode_description: varchar("mode_description").notNull(),
   motor_state: integer("motor_state").notNull(),
   motor_description: varchar("motor_description").notNull(),
+  motor_reference: varchar("motor_reference"),
 
   // Faults & alerts 
   alert_code: integer("alert").notNull(),
@@ -43,18 +44,34 @@ export const benchedStarterParameters = pgTable("benched_starter_parameters", {
   last_off_code: integer("last_off_code").notNull(),
   last_off_description: varchar("last_off_description").notNull(),
 
+  fault_cleared: boolean("fault_cleared").notNull().default(false),
+
+
   // time stamp
   time_stamp: varchar("time_stamp").notNull(),
 
   // References
   starter_id: integer("starter_id").notNull(),
-  motor_id: integer("motor_id").notNull(),
+  motor_id: integer("motor_id"),
   gateway_id: integer("gateway_id"),
   user_id: integer("user_id").notNull(),
   payload_valid: boolean("payload_valid").notNull().default(false),
   payload_errors: jsonb('payload_errors').notNull().default(sql`'[]'::jsonb`),
   group_id: varchar("group_id"),
   temperature: real("temperature").default(0),
+
+  // Running Schedule fields 
+  schedule_id: integer("schedule_id"),
+  schedule_start_time: varchar("schedule_start_time"), // st
+  schedule_end_time: varchar("schedule_end_time"),     // et
+  schedule_runtime_minutes: integer("schedule_runtime_minutes"), // rt
+  schedule_type: varchar("schedule_type"), // optional (if cy or normal)
+  schedule_missed_minutes: integer("schedule_missed_minutes"), // mm
+  schedule_failure_at: timestamp("schedule_failure_at"), // fe
+  schedule_failure_reason: varchar("schedule_failure_reason"), // fr
+  schedule_failure_code: integer("schedule_failure_code"), // fr raw code
+  schedule_status: integer("schedule_status"), // ss: 0=window expired, 1=within window & motor running, 2=within window but motor stopped
+
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow().default(sql`CURRENT_TIMESTAMP`),
 }, table => [

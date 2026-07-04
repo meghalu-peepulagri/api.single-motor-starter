@@ -98,12 +98,12 @@ function buildStatusRanges(params: {
     }
 
     currentStatus = event.status;
-    
+
     // If turning active, start the range. If the event is before rangeStart, clamp to rangeStart
     if (currentStatus === activeStatus) {
-        openStart = event.time_stamp < rangeStart ? rangeStart : event.time_stamp;
+      openStart = event.time_stamp < rangeStart ? rangeStart : event.time_stamp;
     } else {
-        openStart = null;
+      openStart = null;
     }
   }
 
@@ -111,7 +111,7 @@ function buildStatusRanges(params: {
     const now = new Date();
     // Cap the end time so we don't calculate into the future
     const maxEnd = rangeEnd > now ? now : rangeEnd;
-    
+
     if (maxEnd.getTime() > openStart.getTime()) {
       ranges.push({ start: openStart, end: maxEnd });
     }

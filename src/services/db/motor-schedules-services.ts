@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, SQL, sql, getTableColumns, desc } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, lte, ne, notInArray, or, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
@@ -9,13 +9,17 @@ import { getPaginationData } from "../../helpers/pagination-helper.js";
 import {
   buildScheduleData,
   dateToYYMMDD,
+  expandDateRangeByDays,
+  nextDayYYMMDD,
   normalizeMotorSchedulePayload,
   todayAsYYMMDD
 } from "../../helpers/motor-schedule-payload-helper.js";
 import {
   checkIntraArrayConflicts,
   checkMotorScheduleConflict,
-  validateScheduleTypeRules
+  timeToMinutes,
+  validateScheduleTypeRules,
+  wallClockMinutes
 } from "../../helpers/motor-helper.js";
 import { validatedRequest } from "../../validations/validate-request.js";
 import {
@@ -29,24 +33,24 @@ import {
 import { motors } from "../../database/schemas/motors.js";
 import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../../validations/schema/motor-schedule-validators.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
+import { evaluateScheduleStatus } from "../../helpers/schedule-status-evaluator.js";
+import type { ScheduleForEvaluation } from "../../types/app-types.js";
 
-const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE"] as const;
+const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE", "STOPPED", "RESTARTED", "PARTIAL", "UNDELIVERED", "MISSED"] as const;
 
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
-  // Find the lowest schedule_id from deleted/archived rows
-  // that is NOT used by any active row for the same motor
   const reusable = await db
     .select({ scheduleId: motorSchedules.schedule_id })
     .from(motorSchedules)
     .where(and(
       eq(motorSchedules.motor_id, motorId),
-      sql`(${motorSchedules.status} = 'ARCHIVED' OR ${motorSchedules.schedule_status} IN ('DELETED', 'CANCELLED'))`,
+      sql`(${motorSchedules.status} = 'ARCHIVED' OR ${motorSchedules.schedule_status} IN ('DELETED', 'FAILED'))`,
       sql`NOT EXISTS (
         SELECT 1 FROM motor_schedules ms2
         WHERE ms2.motor_id = ${motorId}
           AND ms2.schedule_id = ${motorSchedules.schedule_id}
           AND ms2.status != 'ARCHIVED'
-          AND ms2.schedule_status NOT IN ('DELETED', 'CANCELLED')
+          AND ms2.schedule_status NOT IN ('DELETED', 'FAILED')
       )`,
     ))
     .orderBy(motorSchedules.schedule_id)
@@ -70,16 +74,18 @@ export async function findConflictingSchedules(
   scheduleStartDate?: number | null,
   scheduleEndDate?: number | null,
   daysOfWeek: number[] = [],
-  excludeScheduleId?: number,
+  excludeScheduleIds?: number | number[],
 ) {
+  const excludeIds = excludeScheduleIds === undefined ? [] : Array.isArray(excludeScheduleIds) ? excludeScheduleIds : [excludeScheduleIds];
+
   const conditions: SQL[] = [
     eq(motorSchedules.motor_id, motorId),
     ne(motorSchedules.status, "ARCHIVED"),
     inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]),
   ];
 
-  if (excludeScheduleId) {
-    conditions.push(ne(motorSchedules.id, excludeScheduleId));
+  if (excludeIds.length > 0) {
+    conditions.push(notInArray(motorSchedules.id, excludeIds));
   }
 
   // Build date/day filter: match by date range overlap OR overlapping days
@@ -115,6 +121,7 @@ export async function findConflictingSchedules(
     where: and(...conditions),
     columns: {
       id: true,
+      schedule_id: true,
       start_time: true,
       end_time: true,
       schedule_start_date: true,
@@ -145,8 +152,7 @@ export async function findScheduleByScheduleId(scheduleId: number) {
   });
 }
 
-// =================== SCHEDULE LOOKUP QUERIES ===================
-
+// =================== SCHEDULE LOOKUP QUERIES ==================
 /**
  * Find an active schedule by its ID (for stop operation).
  */
@@ -160,8 +166,7 @@ export async function findActiveScheduleById(scheduleId: number) {
 }
 
 /**
- * Find all active/pending schedules for a motor (for stop-all operation).
- */
+ * Find all active/pending schedules for a motor (for stop-all operation). */
 export async function findAllActiveSchedulesForMotor(motorId: number) {
   return await db.query.motorSchedules.findMany({
     where: and(
@@ -187,7 +192,6 @@ export async function cancelSchedulesByIds(scheduleIds: number[]) {
       manually_stopped: true,
       paused_at: now,
       enabled: false,
-      last_stopped_at: now,
       updated_at: now,
     })
     .where(inArray(motorSchedules.id, scheduleIds))
@@ -205,7 +209,7 @@ export async function stopScheduleById(scheduleId: number) {
       schedule_status: "STOPPED",
       manually_stopped: true,
       paused_at: now,
-      last_stopped_at: now,
+      enabled: false,
       updated_at: now,
     })
     .where(eq(motorSchedules.id, scheduleId))
@@ -223,6 +227,7 @@ export async function restartScheduleById(scheduleId: number) {
       schedule_status: "SCHEDULED",
       manually_stopped: false,
       restarted_at: now,
+      enabled: true,
       updated_at: now,
     })
     .where(eq(motorSchedules.id, scheduleId))
@@ -301,17 +306,28 @@ export async function findSchedulesByFilters(
       )
     );
   }
-  if (filters.schedule_start_date) {
+  if (filters.schedule_start_date && filters.schedule_end_date) {
+    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_end_date));
+    conditions.push(gte(motorSchedules.schedule_end_date, filters.schedule_start_date));
+  } else if (filters.schedule_start_date) {
+    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_start_date));
+    conditions.push(gte(motorSchedules.schedule_end_date, filters.schedule_start_date));
+    // For repeat schedules: only return records whose days_of_week includes the queried day
+    const queriedDate = String(filters.schedule_start_date).padStart(6, "0");
+    const yyyy = 2000 + parseInt(queriedDate.slice(0, 2), 10);
+    const mm = parseInt(queriedDate.slice(2, 4), 10) - 1;
+    const dd = parseInt(queriedDate.slice(4, 6), 10);
+    const dow = new Date(Date.UTC(yyyy, mm, dd)).getUTCDay(); // 0=Sun..6=Sat
     conditions.push(
-      lte(motorSchedules.schedule_start_date, filters.schedule_start_date)
-    );
-    conditions.push(
-      gte(motorSchedules.schedule_end_date, filters.schedule_start_date)
+      sql`(
+        ${motorSchedules.repeat} = 0
+        OR array_length(${motorSchedules.days_of_week}, 1) IS NULL
+        OR array_length(${motorSchedules.days_of_week}, 1) = 0
+        OR ${motorSchedules.days_of_week} @> ARRAY[${dow}]::int[]
+      )`
     );
   } else if (filters.schedule_end_date) {
-    conditions.push(
-      lte(motorSchedules.schedule_start_date, filters.schedule_end_date)
-    );
+    conditions.push(lte(motorSchedules.schedule_start_date, filters.schedule_end_date));
   }
   if (filters.repeat !== undefined) {
     conditions.push(eq(motorSchedules.repeat, filters.repeat));
@@ -382,7 +398,7 @@ export async function findSchedulesByFilters(
       eq(motorSchedules.starter_id, starterBoxes.id)
     )
     .where(whereClause)
-    .orderBy(desc(motorSchedules.created_at))
+    .orderBy(asc(motorSchedules.start_date_time))
     .limit(limit)
     .offset(offset);
 
@@ -405,30 +421,53 @@ export async function findSchedulesByFilters(
 // =================== PENDING SCHEDULES FOR DEVICE SYNC ===================
 
 /**
- * Fetch unacknowledged, active schedules where schedule_start_date is within
- * today and next 2 days (3 days total: today, tomorrow, day after).
- * Only schedules with ack=0 and a valid start date.
+ * Returns MAX(schedule_end_date) per starter_id for acknowledged schedules
+ * whose end date is >= todayNum. Used to determine whether the device still
+ * has active schedules so the next batch is withheld until they expire.
+ */
+export async function findMaxAckedEndDatePerStarter(todayNum: number): Promise<Map<number, number>> {
+  const rows = await db
+    .select({
+      starter_id: motorSchedules.starter_id,
+      max_end_date: sql<number>`MAX(${motorSchedules.schedule_end_date})`,
+    })
+    .from(motorSchedules)
+    .where(and(
+      eq(motorSchedules.acknowledgement, 1),
+      gte(motorSchedules.schedule_end_date, todayNum),
+      ne(motorSchedules.status, "ARCHIVED"),
+      notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]),
+    ))
+    .groupBy(motorSchedules.starter_id);
+
+  return new Map(
+    rows
+      .filter((r): r is { starter_id: number; max_end_date: number } => r.starter_id != null)
+      .map(r => [r.starter_id, r.max_end_date]),
+  );
+}
+
+/**
+ * Fetch unacknowledged, active schedules where schedule_start_date >= today.
+ * Upper bound (today+2) is applied per-starter in the caller based on the
+ * last acknowledged end date, so we only return the floor here.
  */
 export async function findPendingSchedulesForSync() {
-  const today = new Date();
-  const twoDaysLater = new Date(today);
-  twoDaysLater.setDate(today.getDate() + 2);
-  const todayNum = dateToYYMMDD(today);
-  const lastDayNum = dateToYYMMDD(twoDaysLater);
+  const todayNum = dateToYYMMDD(new Date());
 
   return await db.query.motorSchedules.findMany({
     where: and(
       eq(motorSchedules.acknowledgement, 0),
       eq(motorSchedules.enabled, true),
       ne(motorSchedules.status, "ARCHIVED"),
-      inArray(motorSchedules.schedule_status, [...ACTIVE_STATUSES]),
+      inArray(motorSchedules.schedule_status, ["PENDING"]),
       gte(motorSchedules.schedule_start_date, todayNum),
-      lte(motorSchedules.schedule_start_date, lastDayNum),
     ),
     columns: {
       id: true,
       starter_id: true,
       schedule_id: true,
+      device_schedule_id: true,
       schedule_type: true,
       schedule_start_date: true,
       schedule_end_date: true,
@@ -448,6 +487,146 @@ export async function findPendingSchedulesForSync() {
   });
 }
 
+/**
+ * Fetch unacknowledged, PENDING schedules for ONE starter (and optionally one motor)
+ * within the today→+2 day window. Used by the heartbeat-driven push path: when a
+ * device pings us we already know its id, so we skip the cross-starter join the
+ * cron version does.
+ */
+export async function findPendingSchedulesForStarter(starterId: number, motorId?: number) {
+  const todayNum = dateToYYMMDD(new Date());
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayNum = dateToYYMMDD(yesterdayDate);
+
+  const baseConditions = [
+    eq(motorSchedules.starter_id, starterId),
+    eq(motorSchedules.acknowledgement, 0),
+    eq(motorSchedules.publish_attempts, 0),
+    ne(motorSchedules.status, "ARCHIVED"),
+    inArray(motorSchedules.schedule_status, ["PENDING"]),
+    // Normal 3-day window OR yesterday's cross-midnight schedules still within execution window
+    // (start_date = yesterday but end_date = today → schedule crosses midnight, may still be running)
+    or(
+      gte(motorSchedules.schedule_start_date, todayNum),
+      and(
+        eq(motorSchedules.schedule_start_date, yesterdayNum),
+        gte(motorSchedules.schedule_end_date, todayNum),
+      ),
+    ),
+  ];
+  if (motorId != null) {
+    baseConditions.push(eq(motorSchedules.motor_id, motorId));
+  }
+
+  return await db.query.motorSchedules.findMany({
+    where: and(...baseConditions),
+    columns: {
+      id: true,
+      starter_id: true,
+      schedule_id: true,
+      device_schedule_id: true,
+      schedule_type: true,
+      schedule_start_date: true,
+      schedule_end_date: true,
+      start_time: true,
+      end_time: true,
+      runtime_minutes: true,
+      cycle_on_minutes: true,
+      cycle_off_minutes: true,
+      repeat: true,
+      days_of_week: true,
+      bit_wise_days: true,
+      power_loss_recovery: true,
+      power_loss_recovery_time: true,
+      enabled: true,
+    },
+    orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
+  });
+}
+
+/**
+ * Fetch all unacknowledged PENDING schedules for ONE starter (and optionally one motor).
+ * No date-window filter — used by the republish endpoint to force-push any stuck PENDING
+ * records regardless of how far in the future their start date is.
+ */
+export async function findPendingSchedulesForRepublish(starterId: number, motorId?: number) {
+  const conditions = [
+    eq(motorSchedules.starter_id, starterId),
+    eq(motorSchedules.acknowledgement, 0),
+    ne(motorSchedules.status, "ARCHIVED"),
+    inArray(motorSchedules.schedule_status, ["PENDING"]),
+  ];
+  if (motorId != null) {
+    conditions.push(eq(motorSchedules.motor_id, motorId));
+  }
+
+  return await db.query.motorSchedules.findMany({
+    where: and(...conditions),
+    columns: {
+      id: true,
+      starter_id: true,
+      schedule_id: true,
+      device_schedule_id: true,
+      schedule_type: true,
+      schedule_start_date: true,
+      schedule_end_date: true,
+      start_time: true,
+      end_time: true,
+      runtime_minutes: true,
+      cycle_on_minutes: true,
+      cycle_off_minutes: true,
+      repeat: true,
+      days_of_week: true,
+      bit_wise_days: true,
+      power_loss_recovery: true,
+      power_loss_recovery_time: true,
+      enabled: true,
+    },
+    orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
+  });
+}
+
+// =================== EXPIRED SCHEDULE CLEANUP ===================
+
+/**
+ * Finds all schedules for a starter whose end date has passed and marks them DELETED.
+ * Returns the freed device_schedule_ids so the caller can reuse those slots.
+ * Called before every publish so the device never holds stale past-date schedules.
+ */
+export async function findAndDeleteExpiredSchedules(
+  starterId: number,
+  motorId?: number,
+): Promise<number[]> {
+  const todayNum = dateToYYMMDD(new Date());
+
+  const conditions: SQL[] = [
+    eq(motorSchedules.starter_id, starterId),
+    lt(motorSchedules.schedule_end_date, todayNum),
+    ne(motorSchedules.status, "ARCHIVED"),
+    notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]),
+  ];
+  if (motorId != null) {
+    conditions.push(eq(motorSchedules.motor_id, motorId));
+  }
+
+  const expired = await db.query.motorSchedules.findMany({
+    where: and(...conditions),
+    columns: { id: true, device_schedule_id: true },
+  });
+
+  if (expired.length === 0) return [];
+
+  await db
+    .update(motorSchedules)
+    .set({ schedule_status: "DELETED", updated_at: new Date() })
+    .where(inArray(motorSchedules.id, expired.map(r => r.id)));
+
+  return expired
+    .map(r => r.device_schedule_id)
+    .filter((id): id is number => id != null);
+}
+
 // =================== BATCH STATUS UPDATE FOR SYNC ===================
 
 /**
@@ -456,10 +635,11 @@ export async function findPendingSchedulesForSync() {
  */
 export async function batchUpdateScheduleStatuses(
   groups: {
-    status: "RUNNING" | "COMPLETED" | "WAITING_NEXT_CYCLE";
+    status: "SCHEDULED" | "RUNNING" | "COMPLETED" | "PARTIAL" | "MISSED" | "FAILED" | "WAITING_NEXT_CYCLE";
     ids: number[];
     last_started_at?: Date;
     last_stopped_at?: Date;
+    completed_at?: Date;
   }[],
 ) {
   const results = [];
@@ -471,12 +651,18 @@ export async function batchUpdateScheduleStatuses(
       updated_at: Date;
       last_started_at?: Date;
       last_stopped_at?: Date;
+      completed_at?: Date;
+      actual_start_time?: string | null;
+      actual_end_time?: string | null;
+      actual_run_time?: number | null;
     } = {
       schedule_status: group.status,
       updated_at: new Date(),
     };
     if (group.last_started_at) setData.last_started_at = group.last_started_at;
     if (group.last_stopped_at) setData.last_stopped_at = group.last_stopped_at;
+    if (group.completed_at) setData.completed_at = group.completed_at;
+
 
     const result = await db
       .update(motorSchedules)
@@ -496,11 +682,21 @@ export async function batchUpdateScheduleStatuses(
  * Targets: SCHEDULED, RUNNING, WAITING_NEXT_CYCLE (enabled & not archived).
  */
 export async function findEvaluatableSchedules() {
+  const today = todayAsYYMMDD();
   return await db.query.motorSchedules.findMany({
     where: and(
       eq(motorSchedules.enabled, true),
       ne(motorSchedules.status, "ARCHIVED"),
-      inArray(motorSchedules.schedule_status, ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE"]),
+      inArray(motorSchedules.schedule_status, ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"]),
+      or(
+        // already active — always evaluate regardless of date
+        inArray(motorSchedules.schedule_status, ["RUNNING", "PARTIAL"]),
+        // today falls within the schedule's date range
+        and(
+          lte(motorSchedules.schedule_start_date, today),
+          gte(motorSchedules.schedule_end_date, today),
+        ),
+      ),
     ),
     columns: {
       id: true,
@@ -511,10 +707,22 @@ export async function findEvaluatableSchedules() {
       schedule_start_date: true,
       schedule_end_date: true,
       days_of_week: true,
+      bit_wise_days: true,
       repeat: true,
       runtime_minutes: true,
+      cycle_on_minutes: true,
+      cycle_off_minutes: true,
       last_started_at: true,
       enabled: true,
+      actual_start_time: true,
+      actual_end_time: true,
+      actual_started_at: true,
+      actual_ended_at: true,
+      actual_run_time: true,
+      completed_at: true,
+      acknowledgement: true,
+      start_date_time: true,
+      end_date_time: true,
     },
   });
 }
@@ -528,33 +736,55 @@ export async function updateActualScheduleFields(
   actualData: {
     actual_start_time: string | null;
     actual_end_time: string | null;
+    actual_started_at?: Date | null;
+    actual_ended_at?: Date | null;
     actual_run_time: number | null;
     actual_type: "TIME_BASED" | "CYCLIC" | null;
     missed_minutes?: number | null;
     failure_at?: Date | null;
     failure_reason?: string | null;
+    failure_code?: number | null;
+    device_schedule_status?: number | null;
   },
   trx: DbTransaction
 ) {
+  const now = new Date();
+  // schedule_id is a device slot (1–32) reused across many records — one row per
+  // day for repeating schedules. Without a date filter the update would clobber
+  // every row sharing this slot. Today's row is the one the device is reporting on.
+  const today = todayAsYYMMDD();
+
+  // Recompute actual_run_time from wall-clock window (seconds-inclusive end minute)
+  // so device-reported integer-floor doesn't make a fully-run schedule look short.
+  let computedRunTime = actualData.actual_run_time;
+  // if (actualData.actual_start_time && actualData.actual_end_time) {
+  //   computedRunTime = wallClockMinutes(actualData.actual_start_time, actualData.actual_end_time);
+  // }
+
   await trx
     .update(motorSchedules)
     .set({
       actual_start_time: actualData.actual_start_time,
       actual_end_time: actualData.actual_end_time,
-      actual_run_time: actualData.actual_run_time,
+      actual_started_at: actualData.actual_started_at ?? null,
+      actual_ended_at: actualData.actual_ended_at ?? null,
+      actual_run_time: computedRunTime,
       actual_type: actualData.actual_type,
-      missed_minutes: actualData.missed_minutes ?? 0,
+      missed_minutes: actualData.missed_minutes ?? null,
       failure_at: actualData.failure_at ?? null,
-      failure_reason: actualData.failure_reason ?? null,
-      updated_at: new Date(),
+      ...(actualData.failure_reason ? { failure_reason: actualData.failure_reason } : {}),
+      ...(actualData.failure_code ? { failure_code: actualData.failure_code } : {}),
+      device_schedule_status: actualData.device_schedule_status ?? null,
+      updated_at: now,
     })
     .where(
       and(
         eq(motorSchedules.motor_id, motorId),
         eq(motorSchedules.starter_id, starterId),
-        eq(motorSchedules.schedule_id, scheduleId),
+        eq(motorSchedules.device_schedule_id, scheduleId),
+        eq(motorSchedules.schedule_start_date, today),
         sql`${motorSchedules.status} != 'ARCHIVED'`,
-        sql`${motorSchedules.schedule_status} NOT IN ('DELETED', 'CANCELLED')`,
+        notInArray(motorSchedules.schedule_status, ["COMPLETED", "FAILED", "MISSED"]),
       )
     );
 }
@@ -593,14 +823,41 @@ export async function bulkCreateMotorSchedules(
     return { ...data, schedule_start_date: scheduleStartDate, schedule_end_date: scheduleEndDate };
   });
 
+  // 3b. Expand schedules that have a date range + specific days_of_week into
+  //     individual per-day records. This ensures the device (which only receives
+  //     sd/ed without days_of_week) runs only on the selected days.
+  const expandedList: typeof preparedList = [];
+  for (const item of preparedList) {
+    const hasDays = Array.isArray(item.days_of_week) && item.days_of_week.length > 0;
+    // An overnight window (end time on/before start time) whose end date is exactly
+    // the next day is a SINGLE night, not a multi-day range — its end date is the
+    // morning-after, so it must not be split into per-day records.
+    const isOvernightSingleNight =
+      timeToMinutes(item.end_time) <= timeToMinutes(item.start_time)
+      && item.schedule_end_date === nextDayYYMMDD(item.schedule_start_date);
+    const hasRange = item.schedule_start_date < item.schedule_end_date! && !isOvernightSingleNight;
+
+    if (hasDays && hasRange) {
+      const dates = expandDateRangeByDays(item.schedule_start_date, item.schedule_end_date!, item.days_of_week!);
+      if (dates.length === 0) {
+        throw new BadRequestException("No matching dates found for the selected days within the given date range");
+      }
+      for (const date of dates) {
+        expandedList.push({ ...item, schedule_start_date: date, schedule_end_date: date, repeat: 0, days_of_week: [], bit_wise_days: 0 });
+      }
+    } else {
+      expandedList.push(item);
+    }
+  }
+
   // 4. Multi-layer Conflict Detection
   // Layer A: Check for overlaps within the requested batch itself
-  checkIntraArrayConflicts(preparedList);
+  checkIntraArrayConflicts(expandedList);
 
   // Layer B: Check against existing schedules in the database
-  const startDates = preparedList.map((s) => s.schedule_start_date!);
-  const endDates = preparedList.map((s) => s.schedule_end_date!);
-  const allDays = Array.from(new Set(preparedList.flatMap((s) => s.days_of_week || [])));
+  const startDates = expandedList.map((s) => s.schedule_start_date!);
+  const endDates = expandedList.map((s) => s.schedule_end_date!);
+  const allDays = Array.from(new Set(expandedList.flatMap((s) => s.days_of_week || [])));
 
   const existingInDb = await findConflictingSchedules(
     motorId,
@@ -609,22 +866,179 @@ export async function bulkCreateMotorSchedules(
     allDays,
   );
 
-  for (const schedule of preparedList) {
+  for (const schedule of expandedList) {
     checkMotorScheduleConflict(schedule, existingInDb);
   }
 
-  // 5. Finalize data and perform Bulk Database Insertion
-  const startingScheduleId = await getNextScheduleIdForMotor(motorId);
+  // 4c. Schedule-id slot uniqueness check (mirrors the partial unique index filter).
+  // Guards against inserting into a slot that's still active for this motor.
+  const incomingSlots = [...new Set(expandedList.map((s) => s.schedule_id))];
+  const takenSlots = await db
+    .select({ schedule_id: motorSchedules.schedule_id })
+    .from(motorSchedules)
+    .where(and(
+      eq(motorSchedules.motor_id, motorId),
+      inArray(motorSchedules.schedule_id, incomingSlots),
+      ne(motorSchedules.status, "ARCHIVED"),
+      notInArray(motorSchedules.schedule_status, ["FAILED", "DELETED"]),
+    ));
 
-  const finalPayload = preparedList.map((item, index) => ({
+  if (takenSlots.length > 0) {
+    const ids = takenSlots.map((r) => r.schedule_id).join(", ");
+    throw new BadRequestException(
+      `Schedule slot(s) [${ids}] are already active for this motor. Stop or complete them before reusing.`,
+    );
+  }
+
+  // 5. Finalize data and perform Bulk Database Insertion
+
+  const finalPayload = expandedList.map((item) => ({
     ...buildScheduleData(item, item.schedule_start_date!),
-    schedule_id: startingScheduleId + index,
+    schedule_id: item.schedule_id,
+    device_schedule_id: (item as any).device_schedule_id ?? null,
     created_by: userId,
     enabled: item.enabled ?? true,
     schedule_status: item.schedule_status ?? "PENDING",
   }));
 
-  return await saveRecords(motorSchedules, finalPayload as any);
+  const result = await saveRecords(motorSchedules, finalPayload as any);
+
+  // Update last_device_schedule_id on the starter so the counter never goes backwards.
+  // This ensures subsequent creates start from the correct offset even if ACK never arrives.
+  const starterId = finalPayload[0]?.starter_id;
+  const maxDeviceId = Math.max(0, ...finalPayload.map((p: any) => p.device_schedule_id ?? 0).filter(Boolean));
+  if (starterId && maxDeviceId > 0) {
+    await db.update(starterBoxes)
+      .set({ last_device_schedule_id: sql`GREATEST(last_device_schedule_id, ${maxDeviceId})` })
+      .where(eq(starterBoxes.id, starterId))
+      .catch(() => null);
+  }
+
+  return result;
+}
+
+// =================== DEVICE SCHEDULE ID ASSIGNMENT ===================
+
+/**
+ * Assign device_schedule_id to a batch of schedules for one starter.
+ * Sorted by schedule_id ascending so device slot order is preserved.
+ * Uses FOR UPDATE lock so concurrent heartbeats never double-assign.
+ * Already-assigned rows (device_schedule_id IS NOT NULL) are skipped.
+ */
+const MAX_DEVICE_CAPACITY = 15;
+
+export async function assignDeviceScheduleIds(
+  starterId: number,
+  records: { id: number; schedule_id: number }[],
+): Promise<void> {
+  if (records.length === 0) return;
+
+  const sorted = [...records].sort((a, b) => a.schedule_id - b.schedule_id);
+
+  await db.transaction(async (trx) => {
+    // Only assign to rows that don't already have a device_schedule_id.
+    const nullRows = await trx
+      .select({ id: motorSchedules.id })
+      .from(motorSchedules)
+      .where(and(
+        inArray(motorSchedules.id, sorted.map(r => r.id)),
+        isNull(motorSchedules.device_schedule_id),
+      ));
+
+    if (nullRows.length === 0) return;
+    const toAssign = sorted.filter(r => nullRows.some(n => n.id === r.id));
+
+    // Lock the starter row and read the current counter.
+    const [starterRow] = await trx
+      .select({ last: starterBoxes.last_device_schedule_id })
+      .from(starterBoxes)
+      .where(eq(starterBoxes.id, starterId))
+      .for("update");
+
+    let counter = starterRow?.last ?? 0;
+
+    for (const r of toAssign) {
+      counter++;
+      await trx
+        .update(motorSchedules)
+        .set({ device_schedule_id: counter })
+        .where(and(
+          eq(motorSchedules.id, r.id),
+          isNull(motorSchedules.device_schedule_id),
+        ));
+    }
+
+    await trx
+      .update(starterBoxes)
+      .set({ last_device_schedule_id: counter })
+      .where(eq(starterBoxes.id, starterId));
+  });
+}
+
+export async function syncLastDeviceScheduleId(starterId: number): Promise<void> {
+  const maxRow = await db
+    .select({ maxId: sql<number>`COALESCE(MAX(${motorSchedules.device_schedule_id}), 0)` })
+    .from(motorSchedules)
+    .where(and(
+      eq(motorSchedules.starter_id, starterId),
+      ne(motorSchedules.status, "ARCHIVED"),
+      notInArray(motorSchedules.schedule_status, ["FAILED", "DELETED"]),
+    ));
+
+  const newMax = maxRow[0]?.maxId ?? 0;
+  await db.update(starterBoxes)
+    .set({ last_device_schedule_id: newMax })
+    .where(eq(starterBoxes.id, starterId));
+}
+
+// =================== PER-DAY BITMASK UPDATE ===================
+
+/**
+ * Stop a specific day: clear its bit in bit_wise_days only.
+ * days_of_week is NOT touched — the day is still "known" so it can be restarted.
+ */
+export async function stopDayInSchedule(scheduleId: number, day: number) {
+  return await db
+    .update(motorSchedules)
+    .set({
+      bit_wise_days: sql`${motorSchedules.bit_wise_days} & ~(1 << ${day})`,
+      updated_at: new Date(),
+    })
+    .where(eq(motorSchedules.id, scheduleId))
+    .returning({ id: motorSchedules.id, bit_wise_days: motorSchedules.bit_wise_days, days_of_week: motorSchedules.days_of_week });
+}
+
+/**
+ * Restart a specific day: set its bit back in bit_wise_days.
+ * Only valid if the day is still in days_of_week.
+ */
+export async function restartDayInSchedule(scheduleId: number, day: number) {
+  return await db
+    .update(motorSchedules)
+    .set({
+      bit_wise_days: sql`${motorSchedules.bit_wise_days} | (1 << ${day})`,
+      updated_at: new Date(),
+    })
+    .where(and(
+      eq(motorSchedules.id, scheduleId),
+      sql`${motorSchedules.days_of_week} @> ARRAY[${day}]::int[]`,
+    ))
+    .returning({ id: motorSchedules.id, bit_wise_days: motorSchedules.bit_wise_days, days_of_week: motorSchedules.days_of_week });
+}
+
+/**
+ * Delete a specific day permanently: remove from days_of_week + recalculate bit_wise_days.
+ */
+export async function deleteDayFromSchedule(scheduleId: number, day: number) {
+  return await db
+    .update(motorSchedules)
+    .set({
+      days_of_week: sql`array_remove(${motorSchedules.days_of_week}, ${day})`,
+      bit_wise_days: sql`${motorSchedules.bit_wise_days} & ~(1 << ${day})`,
+      updated_at: new Date(),
+    })
+    .where(eq(motorSchedules.id, scheduleId))
+    .returning({ id: motorSchedules.id, bit_wise_days: motorSchedules.bit_wise_days, days_of_week: motorSchedules.days_of_week });
 }
 
 // =================== SCHEDULE HISTORY ===================
@@ -636,8 +1050,8 @@ export async function findScheduleHistoryByMotorAndStarter(
   const conditions = and(
     eq(motorSchedules.motor_id, filters.motor_id),
     eq(motorSchedules.starter_id, filters.starter_id),
-    filters.from_date ? gte(motorSchedules.created_at, new Date(filters.from_date)) : undefined,
-    filters.to_date ? lte(motorSchedules.created_at, new Date(filters.to_date)) : undefined,
+    filters.from_date ? gte(motorSchedules.schedule_start_date, filters.from_date) : undefined,
+    filters.to_date ? lte(motorSchedules.schedule_end_date, filters.to_date) : undefined,
   );
 
   const [records, countResult] = await Promise.all([
@@ -650,6 +1064,11 @@ export async function findScheduleHistoryByMotorAndStarter(
       schedule_status: motorSchedules.schedule_status,
       start_time: motorSchedules.start_time,
       end_time: motorSchedules.end_time,
+      actual_start_time: motorSchedules.actual_start_time,
+      actual_end_time: motorSchedules.actual_end_time,
+      actual_run_time: motorSchedules.actual_run_time,
+      runtime_minutes: motorSchedules.runtime_minutes,
+      missed_minutes: motorSchedules.missed_minutes,
       schedule_start_date: motorSchedules.schedule_start_date,
       schedule_end_date: motorSchedules.schedule_end_date,
       repeat: motorSchedules.repeat,
@@ -664,10 +1083,12 @@ export async function findScheduleHistoryByMotorAndStarter(
       failure_reason: motorSchedules.failure_reason,
       deleted_at: motorSchedules.deleted_at,
       updated_at: motorSchedules.updated_at,
+      edited_at: motorSchedules.edited_at,
+      completed_at: motorSchedules.completed_at,
     })
       .from(motorSchedules)
       .where(conditions)
-      .orderBy(sql`${motorSchedules.created_at} DESC`)
+      .orderBy(desc(motorSchedules.created_at))
       .limit(pageParams.pageSize)
       .offset(pageParams.offset),
 
@@ -680,4 +1101,103 @@ export async function findScheduleHistoryByMotorAndStarter(
   const pagination = getPaginationData(pageParams.page, pageParams.pageSize, total);
 
   return { records, pagination };
+}
+
+// =================== ON-READ STATUS EVALUATION ===================
+
+const EVALUATABLE_STATUSES_ON_READ = ["PENDING", "SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"];
+
+function evaluateTodayScheduleStatus(s: any, now: Date): { id: number; newStatus: string } | null {
+  const { actual_start_time, actual_end_time, actual_run_time, start_time, end_time, runtime_minutes, acknowledgement, schedule_status } = s;
+
+  // Terminal statuses — never overwrite
+  if (["COMPLETED", "FAILED", "MISSED", "DELETED", "ARCHIVED"].includes(schedule_status)) return null;
+
+  if (!actual_start_time && !actual_end_time) {
+    // Device never reported start — check if window has passed
+    const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    const currentMins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+    const stMins = Math.floor(Number(start_time) / 100) * 60 + (Number(start_time) % 100);
+    const etMins = Math.floor(Number(end_time) / 100) * 60 + (Number(end_time) % 100);
+    const windowPassed = stMins < etMins ? currentMins >= etMins : (currentMins >= etMins && currentMins < stMins);
+    if (!windowPassed) return null;
+    // Wrap-around window (e.g., 22:00→01:00): on the schedule_start_date the window
+    // hasn't opened yet — any time in the gap (01:01–21:59) is BEFORE tonight's start,
+    // not after it. Never resolve MISSED here; the window opens at stMins tonight.
+    if (stMins > etMins) return null;
+    if (acknowledgement === 0) return { id: s.id, newStatus: "FAILED" };
+    return { id: s.id, newStatus: "MISSED" };
+  }
+
+  if (actual_start_time && !actual_end_time) {
+    // Device reported a start but never an end time. Stay RUNNING only while the
+    // scheduled window is still open. Once the window has passed, resolve a
+    // terminal status from how long it actually ran — a missing end time must
+    // NOT keep the schedule stuck in RUNNING.
+    const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    const currentMins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+    const stMins = Math.floor(Number(start_time) / 100) * 60 + (Number(start_time) % 100);
+    const etMins = Math.floor(Number(end_time) / 100) * 60 + (Number(end_time) % 100);
+    const windowPassed = stMins < etMins ? currentMins >= etMins : (currentMins >= etMins && currentMins < stMins);
+
+    // Window still open, or a wrap-around window on its start date (hasn't truly
+    // closed) → genuinely running.
+    if (!windowPassed || stMins > etMins) return { id: s.id, newStatus: "RUNNING" };
+
+    const planned = runtime_minutes ?? (etMins - stMins);
+    const actual = actual_run_time ?? 0;
+    if (actual >= planned) return { id: s.id, newStatus: "COMPLETED" };
+    return { id: s.id, newStatus: "PARTIAL" };
+  }
+
+  if (actual_start_time && actual_end_time) {
+    const stMins = Math.floor(Number(start_time) / 100) * 60 + (Number(start_time) % 100);
+    const etMins = Math.floor(Number(end_time) / 100) * 60 + (Number(end_time) % 100);
+    const planned = runtime_minutes ?? (etMins > stMins ? etMins - stMins : (1440 - stMins) + etMins);
+    const actual = actual_run_time ?? 0;
+    if (actual >= planned) return { id: s.id, newStatus: "COMPLETED" };
+    return { id: s.id, newStatus: "PARTIAL" };
+  }
+
+  return null;
+}
+
+export async function evaluateAndUpdateSchedulesOnRead(records: any[]): Promise<void> {
+  const now = new Date();
+  const todayNum = todayAsYYMMDD();
+  const toEvaluate = records.filter(r => EVALUATABLE_STATUSES_ON_READ.includes(r.schedule_status));
+  if (toEvaluate.length === 0) return;
+
+  const groups = {
+    SCHEDULED: [] as number[],
+    RUNNING: [] as number[],
+    COMPLETED: [] as number[],
+    PARTIAL: [] as number[],
+    MISSED: [] as number[],
+    FAILED: [] as number[],
+    WAITING_NEXT_CYCLE: [] as number[],
+  };
+
+  for (const s of toEvaluate) {
+    const isToday = s.schedule_start_date === todayNum;
+    const res = isToday
+      ? evaluateTodayScheduleStatus(s, now)
+      : evaluateScheduleStatus(s as ScheduleForEvaluation, now);
+    if (!res) continue;
+    const key = res.newStatus as keyof typeof groups;
+    if (groups[key]) groups[key].push(res.id);
+    s.schedule_status = res.newStatus;
+  }
+
+  if (!Object.values(groups).some(ids => ids.length > 0)) return;
+
+  await batchUpdateScheduleStatuses([
+    { status: "SCHEDULED", ids: groups.SCHEDULED },
+    { status: "RUNNING", ids: groups.RUNNING, last_started_at: now },
+    { status: "COMPLETED", ids: groups.COMPLETED, last_stopped_at: now, completed_at: now },
+    { status: "PARTIAL", ids: groups.PARTIAL, last_stopped_at: now },
+    { status: "MISSED", ids: groups.MISSED, last_stopped_at: now },
+    { status: "FAILED", ids: groups.FAILED },
+    { status: "WAITING_NEXT_CYCLE", ids: groups.WAITING_NEXT_CYCLE, last_stopped_at: now },
+  ]);
 }

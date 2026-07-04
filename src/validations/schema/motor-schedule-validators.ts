@@ -145,6 +145,13 @@ export const vAddMotorSchedule = v.pipe(
         "Power loss recovery time requires minimum of 1 minute",
       )
     )),
+    schedule_id: v.pipe(
+      v.number("Schedule ID must be a number"),
+      v.custom(
+        (val: unknown) => typeof val === "number" && Number.isInteger(val) && val >= 1,
+        "Schedule ID must be a positive integer",
+      ),
+    ),
   }),
 
   // Cross-field: CYCLIC schedules require cycle_on_minutes and cycle_off_minutes

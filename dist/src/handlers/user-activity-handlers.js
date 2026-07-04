@@ -8,7 +8,7 @@ const paramsValidateException = new ParamsValidateException();
 export class UserActivityHandlers {
     getUserActivitiesHandler = async (c) => {
         try {
-            const userId = +c.req.param("user_id");
+            const userId = +(c.req.param("user_id") ?? 0);
             paramsValidateException.validateId(userId, "user id");
             const query = c.req.query();
             const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type);

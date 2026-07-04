@@ -25,6 +25,7 @@ export const vAddMotorSchedule = v.pipe(v.object({
     enabled: v.optional(v.boolean()),
     bit_wise_days: v.nullish(v.number()),
     power_loss_recovery_time: v.optional(v.pipe(v.number(), v.custom((val) => typeof val === "number" && Number.isInteger(val) && val >= 1, "Power loss recovery time requires minimum of 1 minute"))),
+    schedule_id: v.pipe(v.number("Schedule ID must be a number"), v.custom((val) => typeof val === "number" && Number.isInteger(val) && val >= 1, "Schedule ID must be a positive integer")),
 }), 
 // Cross-field: CYCLIC schedules require cycle_on_minutes and cycle_off_minutes
 v.custom((data) => {

@@ -15,6 +15,9 @@ import * as locationsSchema from "./schemas/locations.js";
 import * as MotorRunTimeSchema from "./schemas/motor-runtime.js";
 import * as motorStatusHistorySchema from "./schemas/motor-status-history.js";
 import * as motorSchedulesSchema from "./schemas/motor-schedules.js";
+import * as motorScheduleOperationsSchema from "./schemas/motor-schedule-operations.js";
+import * as motorScheduleLiveDataSchema from "./schemas/motor-schedule-live-data.js";
+import * as motorScheduleLogsSchema from "./schemas/motor-schedule-logs.js";
 import * as motorsSchema from "./schemas/motors.js";
 import * as otpSchema from "./schemas/otp.js";
 import * as powerStatusHistorySchema from "./schemas/power-status-history.js";
@@ -27,18 +30,19 @@ import * as starterSettingsLimitsSchema from "./schemas/starter-settings-limits.
 import * as starterSettingsSchema from "./schemas/starter-settings.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
+import * as subUserPermissionsSchema from "./schemas/sub-user-permissions.js";
 
 const dbClient = new Pool({
-  // host: env.DB_HOST,
-  // port: Number(env.DB_PORT),
-  // user: env.DB_USER,
-  // password: env.DB_PASSWORD,
-  // database: env.DB_NAME,
-  // ssl: {
-  //   rejectUnauthorized: true,
-  //   ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
-  // },
-  connectionString: dbConfig.connectionString,
+  host: env.DB_HOST,
+  port: Number(env.DB_PORT),
+  user: env.DB_USER,
+  password: env.DB_PASSWORD,
+  database: env.DB_NAME,
+  ssl: {
+    rejectUnauthorized: true,
+    ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
+  },
+  // connectionString: dbConfig.connectionString,
 });
 
 const db = drizzle(dbClient, {
@@ -54,6 +58,9 @@ const db = drizzle(dbClient, {
     ...starterBoxSchema,
     ...starterBoxParameters,
     ...motorSchedulesSchema,
+    ...motorScheduleOperationsSchema,
+    ...motorScheduleLiveDataSchema,
+    ...motorScheduleLogsSchema,
     ...DeviceRunTimeSchema,
     ...deviceStatusHistorySchema,
     ...MotorRunTimeSchema,
@@ -66,6 +73,7 @@ const db = drizzle(dbClient, {
     ...DefaultSettingsLimitsSchema,
     ...benchedStarterParametersSchema,
     ...starterDispatchSchema,
+    ...subUserPermissionsSchema,
   },
 });
 

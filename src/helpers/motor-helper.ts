@@ -5,6 +5,7 @@ import {
   CYCLIC_NO_POWER_LOSS_RECOVERY,
   ONE_TIME_REQUIRES_START_DATE,
   SCHEDULE_DATE_PAST,
+  SCHEDULE_DATE_RANGE_LIMIT,
   SCHEDULE_GAP_CONFLICT,
   SCHEDULE_MIN_ADVANCE,
   SCHEDULE_OVERLAP_CONFLICT
@@ -81,11 +82,24 @@ export function buildAnalyticsFilter(parameter: string) {
     time_stamp: benchedStarterParameters.time_stamp,
   };
 
+  const scheduleFieldsMain = {
+    ...(starterBoxParameters.schedule_id != null && { schedule_id: starterBoxParameters.schedule_id }),
+    ...(starterBoxParameters.schedule_start_time != null && { schedule_start_time: starterBoxParameters.schedule_start_time }),
+    ...(starterBoxParameters.schedule_end_time != null && { schedule_end_time: starterBoxParameters.schedule_end_time }),
+  };
+
+  const scheduleFieldsBench = {
+    ...(benchedStarterParameters.schedule_id != null && { schedule_id: benchedStarterParameters.schedule_id }),
+    ...(benchedStarterParameters.schedule_start_time != null && { schedule_start_time: benchedStarterParameters.schedule_start_time }),
+    ...(benchedStarterParameters.schedule_end_time != null && { schedule_end_time: benchedStarterParameters.schedule_end_time }),
+  };
+
   const voltageFieldsMain = {
     line_voltage_r: starterBoxParameters.line_voltage_r,
     line_voltage_y: starterBoxParameters.line_voltage_y,
     line_voltage_b: starterBoxParameters.line_voltage_b,
     avg_voltage: starterBoxParameters.avg_voltage,
+    ...scheduleFieldsMain,
   };
 
   const voltageFieldsBench = {
@@ -93,6 +107,7 @@ export function buildAnalyticsFilter(parameter: string) {
     line_voltage_y: benchedStarterParameters.line_voltage_y,
     line_voltage_b: benchedStarterParameters.line_voltage_b,
     avg_voltage: benchedStarterParameters.avg_voltage,
+    ...scheduleFieldsBench,
   };
 
   const currentFieldsMain = {
@@ -100,6 +115,7 @@ export function buildAnalyticsFilter(parameter: string) {
     current_y: starterBoxParameters.current_y,
     current_b: starterBoxParameters.current_b,
     avg_current: starterBoxParameters.avg_current,
+    ...scheduleFieldsMain,
   };
 
   const currentFieldsBench = {
@@ -107,6 +123,7 @@ export function buildAnalyticsFilter(parameter: string) {
     current_y: benchedStarterParameters.current_y,
     current_b: benchedStarterParameters.current_b,
     avg_current: benchedStarterParameters.avg_current,
+    ...scheduleFieldsBench,
   };
 
   if (parameter === "voltage") {
@@ -127,38 +144,49 @@ export function buildAnalyticsFilter(parameter: string) {
 }
 
 export function formatAnalyticsData(data: any[], parameter: string) {
-  return data.map(record => ({
-    id: record.id,
-    time_stamp: record.time_stamp,
-    ...(parameter === "voltage"
-      ? {
-        line_voltage_r: Number.parseFloat((record.line_voltage_r || 0).toFixed(2)),
-        line_voltage_y: Number.parseFloat((record.line_voltage_y || 0).toFixed(2)),
-        line_voltage_b: Number.parseFloat((record.line_voltage_b || 0).toFixed(2)),
-        avg_voltage: Number.parseFloat((record.avg_voltage || 0).toFixed(2)),
-      }
-      : {}),
-    ...(parameter === "current"
-      ? {
-        current_r: Number.parseFloat((record.current_r || 0).toFixed(2)),
-        current_y: Number.parseFloat((record.current_y || 0).toFixed(2)),
-        current_b: Number.parseFloat((record.current_b || 0).toFixed(2)),
-        avg_current: Number.parseFloat((record.avg_current || 0).toFixed(2)),
-      }
-      : {}),
-    ...(!parameter
-      ? {
-        line_voltage_r: Number.parseFloat((record.line_voltage_r || 0).toFixed(2)),
-        line_voltage_y: Number.parseFloat((record.line_voltage_y || 0).toFixed(2)),
-        line_voltage_b: Number.parseFloat((record.line_voltage_b || 0).toFixed(2)),
-        avg_voltage: Number.parseFloat((record.avg_voltage || 0).toFixed(2)),
-        current_r: Number.parseFloat((record.current_r || 0).toFixed(2)),
-        current_y: Number.parseFloat((record.current_y || 0).toFixed(2)),
-        current_b: Number.parseFloat((record.current_b || 0).toFixed(2)),
-        avg_current: Number.parseFloat((record.avg_current || 0).toFixed(2)),
-      }
-      : {}),
-  }));
+  return data.map(record => {
+    const scheduleFields = {
+      ...(record.schedule_id != null && { schedule_id: record.schedule_id }),
+      ...(record.schedule_start_time != null && { schedule_start_time: record.schedule_start_time }),
+      ...(record.schedule_end_time != null && { schedule_end_time: record.schedule_end_time }),
+    };
+
+    return {
+      id: record.id,
+      time_stamp: record.time_stamp,
+      ...(parameter === "voltage"
+        ? {
+          line_voltage_r: Number.parseFloat((record.line_voltage_r || 0).toFixed(2)),
+          line_voltage_y: Number.parseFloat((record.line_voltage_y || 0).toFixed(2)),
+          line_voltage_b: Number.parseFloat((record.line_voltage_b || 0).toFixed(2)),
+          avg_voltage: Number.parseFloat((record.avg_voltage || 0).toFixed(2)),
+          ...scheduleFields,
+        }
+        : {}),
+      ...(parameter === "current"
+        ? {
+          current_r: Number.parseFloat((record.current_r || 0).toFixed(2)),
+          current_y: Number.parseFloat((record.current_y || 0).toFixed(2)),
+          current_b: Number.parseFloat((record.current_b || 0).toFixed(2)),
+          avg_current: Number.parseFloat((record.avg_current || 0).toFixed(2)),
+          ...scheduleFields,
+        }
+        : {}),
+      ...(!parameter
+        ? {
+          line_voltage_r: Number.parseFloat((record.line_voltage_r || 0).toFixed(2)),
+          line_voltage_y: Number.parseFloat((record.line_voltage_y || 0).toFixed(2)),
+          line_voltage_b: Number.parseFloat((record.line_voltage_b || 0).toFixed(2)),
+          avg_voltage: Number.parseFloat((record.avg_voltage || 0).toFixed(2)),
+          current_r: Number.parseFloat((record.current_r || 0).toFixed(2)),
+          current_y: Number.parseFloat((record.current_y || 0).toFixed(2)),
+          current_b: Number.parseFloat((record.current_b || 0).toFixed(2)),
+          avg_current: Number.parseFloat((record.avg_current || 0).toFixed(2)),
+          ...scheduleFields,
+        }
+        : {}),
+    };
+  });
 }
 
 
@@ -185,7 +213,7 @@ export function prepareMotorSyncChangeData(params: {
   const { currentState, currentMode, incomingState, incomingMode, timeStamp } = params;
 
   const normalizedState = incomingState === 0 || incomingState === 1 ? incomingState : null;
-  const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" ? incomingMode : null;
+  const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" || incomingMode === "SCHEDULE" ? incomingMode : null;
 
   const hasStateChanged = normalizedState !== null && normalizedState !== currentState;
   const hasModeChanged = normalizedMode !== null && normalizedMode !== currentMode;
@@ -220,6 +248,14 @@ export function timeToMinutes(time: string): number {
   const h = parseInt(time.substring(0, 2), 10);
   const m = parseInt(time.substring(2, 4), 10);
   return h * 60 + m;
+}
+
+// Wall-clock minutes between two HHMM timestamps. Handles midnight crossover.
+// "1015" → "1020" returns 5.
+export function wallClockMinutes(startHHMM: string, endHHMM: string): number {
+  const s = timeToMinutes(startHHMM);
+  const e = timeToMinutes(endHHMM);
+  return e >= s ? e - s : (1440 - s) + e;
 }
 
 /**
@@ -338,6 +374,57 @@ function hasDateOrDayOverlap(
   return (newStart <= (existEnd ?? existStart)) && ((newEnd ?? newStart) >= existStart);
 }
 
+/** Convert numeric YYMMDD to a day index (days since 2000-01-01) for interval math. */
+function yymmddToDayIndex(yymmdd: number): number {
+  const str = String(yymmdd).padStart(6, "0");
+  const yy = parseInt(str.substring(0, 2), 10);
+  const mm = parseInt(str.substring(2, 4), 10) - 1;
+  const dd = parseInt(str.substring(4, 6), 10);
+  return Math.floor(Date.UTC(2000 + yy, mm, dd) / 86400000);
+}
+
+/**
+ * Absolute [start, end) interval in minutes for a one-time schedule, where minute 0
+ * is midnight of 2000-01-01. This collapses date + time into a single timeline so
+ * overnight windows (e.g. 19:00→02:00) on consecutive days no longer false-trigger.
+ * Returns null when date info is missing.
+ */
+function oneTimeAbsoluteInterval(s: {
+  start_time: string;
+  end_time: string;
+  schedule_start_date?: number | null;
+  schedule_end_date?: number | null;
+}): { start: number; end: number } | null {
+  if (!s.schedule_start_date) return null;
+  const sMin = timeToMinutes(s.start_time);
+  const eMin = timeToMinutes(s.end_time);
+  const startDay = yymmddToDayIndex(s.schedule_start_date);
+  const endDay = s.schedule_end_date != null ? yymmddToDayIndex(s.schedule_end_date) : startDay;
+  const start = startDay * 1440 + sMin;
+  let end = endDay * 1440 + eMin;
+  // Overnight window not reflected in the dates (end on/before start) → roll a day.
+  if (end <= start && eMin <= sMin) end += 1440;
+  return { start, end };
+}
+
+/**
+ * Classify the conflict between two one-time schedules using their absolute
+ * datetime intervals. Returns "exact", "overlap", "gap", or null (no conflict).
+ */
+function oneTimeConflictType(
+  a: { start_time: string; end_time: string; schedule_start_date?: number | null; schedule_end_date?: number | null },
+  b: { start_time: string; end_time: string; schedule_start_date?: number | null; schedule_end_date?: number | null },
+  gapMinutes: number = 5,
+): "exact" | "overlap" | "gap" | null {
+  const ia = oneTimeAbsoluteInterval(a);
+  const ib = oneTimeAbsoluteInterval(b);
+  if (!ia || !ib) return "overlap"; // no date info → assume conflict (preserves prior behavior)
+  if (ia.start === ib.start && ia.end === ib.end) return "exact";
+  if (ia.start < ib.end && ib.start < ia.end) return "overlap";
+  if (ia.start - gapMinutes < ib.end && ib.start < ia.end + gapMinutes) return "gap";
+  return null;
+}
+
 /**
  * Full conflict check against an array of existing schedules.
  * Checks date/day overlap first, then time overlaps and 5-minute gap violations.
@@ -353,6 +440,7 @@ export function checkMotorScheduleConflict(
   },
   existingSchedules: Array<{
     id: number;
+    schedule_id?: number;
     start_time: string;
     end_time: string;
     schedule_start_date?: number | null;
@@ -362,12 +450,15 @@ export function checkMotorScheduleConflict(
 ): void {
   if (!existingSchedules || existingSchedules.length === 0) return;
 
+  const isNewRepeat = (newSchedule.repeat ?? 0) === 1;
+
   for (const existing of existingSchedules) {
     // Skip if no date/day overlap
     if (!hasDateOrDayOverlap(newSchedule, existing)) continue;
 
     const conflictInfo = {
       conflicting_schedule_id: existing.id,
+      conflicting_schedule_slot: existing.schedule_id,
       existing_start_time: existing.start_time,
       existing_end_time: existing.end_time,
       existing_date: existing.schedule_start_date || null,
@@ -376,6 +467,20 @@ export function checkMotorScheduleConflict(
 
     const dateStr = existing.schedule_start_date ? ` on ${formatYYMMDD(existing.schedule_start_date)}` : "";
     const rangeStr = `${formatHHMM(existing.start_time)}–${formatHHMM(existing.end_time)}`;
+
+    // One-time schedules: compare absolute datetime intervals so overnight windows
+    // on consecutive days don't false-trigger an overlap.
+    if (!isNewRepeat) {
+      const conflict = oneTimeConflictType(newSchedule, existing);
+      if (!conflict) continue;
+      if (conflict === "exact") {
+        throw new ConflictException(`${ALREADY_SCHEDULED_EXISTS} (${rangeStr}${dateStr})`, conflictInfo);
+      }
+      if (conflict === "overlap") {
+        throw new ConflictException(`${SCHEDULE_OVERLAP_CONFLICT} (conflicts with ${rangeStr}${dateStr})`, conflictInfo);
+      }
+      throw new ConflictException(`${SCHEDULE_GAP_CONFLICT} (too close to ${rangeStr}${dateStr})`, conflictInfo);
+    }
 
     // Check exact match
     if (newSchedule.start_time === existing.start_time && newSchedule.end_time === existing.end_time) {
@@ -434,6 +539,23 @@ export function checkIntraArrayConflicts(schedules: any[]): void {
         const rangeA = `${formatHHMM(scheduleA.start_time)}–${formatHHMM(scheduleA.end_time)}`;
         const rangeB = `${formatHHMM(scheduleB.start_time)}–${formatHHMM(scheduleB.end_time)}`;
         const dateStr = scheduleA.schedule_start_date ? ` on ${formatYYMMDD(scheduleA.schedule_start_date)}` : "";
+
+        // One-time schedules: use absolute datetime intervals so back-to-back
+        // overnight windows on consecutive days don't false-trigger.
+        if ((scheduleA.repeat ?? 0) !== 1) {
+          const conflict = oneTimeConflictType(scheduleA, scheduleB);
+          if (conflict === "overlap" || conflict === "exact") {
+            throw new ConflictException(
+              `${SCHEDULE_OVERLAP_CONFLICT} between ${rangeA} and ${rangeB}${dateStr}`,
+            );
+          }
+          if (conflict === "gap") {
+            throw new ConflictException(
+              `${SCHEDULE_GAP_CONFLICT} between ${rangeA} and ${rangeB}${dateStr}`,
+            );
+          }
+          continue;
+        }
 
         if (doTimeRangesOverlap(scheduleA.start_time, scheduleA.end_time, scheduleB.start_time, scheduleB.end_time)) {
           throw new ConflictException(
@@ -512,7 +634,7 @@ export function prepareMotorStateControlNotificationData(motor: Motor, newState:
 
 export function prepareMotorModeControlNotificationData(motor: any, mode_description: string, starter_id: number, starter_number: string): { userId: number; title: string; message: string; motorId: number, starterId: number, starterNumber: string } | null {
   const pumpName = motor.alias_name === undefined || motor.alias_name === null ? starter_number : motor.alias_name;
-  const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO";
+  const isValidMode = mode_description === "MANUAL" || mode_description === "AUTO" || mode_description === "SCHEDULE";
 
   const title = isValidMode
     ? `Pump ${pumpName} mode changed to ${mode_description}`
@@ -540,6 +662,7 @@ export function prepareMotorModeControlNotificationData(motor: any, mode_descrip
 export function validateScheduleTypeRules(data: {
   schedule_type?: string;
   repeat?: number;
+  days_of_week?: number[] | null;
   power_loss_recovery?: boolean;
   cycle_on_minutes?: number | null;
   cycle_off_minutes?: number | null;
@@ -547,6 +670,15 @@ export function validateScheduleTypeRules(data: {
   schedule_end_date?: number | null;
 }) {
   const scheduleType = data.schedule_type || "TIME_BASED";
+
+  // Single (non-recurring) schedule: the selected date range must not exceed 2 days (48h).
+  // Recurring schedules (repeat=1 or with days_of_week selected) are exempt — they legitimately
+  // span longer ranges and are only ever synced within the near-term window.
+  const isRecurring = data.repeat === 1 || (Array.isArray(data.days_of_week) && data.days_of_week.length > 0);
+  if (!isRecurring && data.schedule_start_date != null && data.schedule_end_date != null) {
+    const spanDays = yymmddToDayIndex(data.schedule_end_date) - yymmddToDayIndex(data.schedule_start_date);
+    if (spanDays > 2) throw new BadRequestException(SCHEDULE_DATE_RANGE_LIMIT);
+  }
 
   if (scheduleType === "CYCLIC") {
     if (data.power_loss_recovery === true) throw new BadRequestException(CYCLIC_NO_POWER_LOSS_RECOVERY);

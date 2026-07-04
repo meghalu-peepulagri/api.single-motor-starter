@@ -10,7 +10,7 @@ function meaningfulLastOffOnStateMessage(
   lastOnDesc?: string,
   lastOffDesc?: string
 ): string {
-  const modeLabel = (mode === "AUTO" || mode === "MANUAL") ? ` in ${mode} mode` : "";
+  const modeLabel = (mode === "AUTO" || mode === "MANUAL" || mode === "SCHEDULE") ? ` in ${mode} mode` : "";
 
   if (state === 1) {
     return `Pump turned ON${modeLabel}`;
@@ -24,7 +24,7 @@ function meaningfulLastOffOnStateMessage(
 }
 
 export function meaningfulModeMessage(oldMode: string | undefined | null, newMode: string | null): string {
-  if (newMode === "MANUAL" || newMode === "AUTO") {
+  if (newMode === "MANUAL" || newMode === "AUTO" || newMode === "SCHEDULE") {
     return `Pump switched from ${oldMode} to ${newMode} mode.`;
   }
   return `Mode not updated due to '${newMode}'`;
@@ -272,7 +272,8 @@ export function prepareDeletionLog(data: {
     entityType: data.entityType,
     entityId: data.entityId,
     deviceId: data.deviceId,
-    oldData: data.entityName ? { name: data.entityName } : null
+    oldData: data.entityName ? { name: data.entityName } : null,
+    message: data.entityName ? `${data.entityType} '${data.entityName}' deleted` : `${data.entityType} deleted`
   });
 }
 
@@ -281,7 +282,7 @@ export function prepareDeletionLog(data: {
  */
 export function prepareActionLog(data: {
   userId: number;
-  action: "MOTOR_ADDED" | "STARTER_ASSIGNED" | "LOCATION_REPLACED" | "LOCATION_ADDED" | "LOCATION_RENAMED" | "MOTOR_TEST_RUN_STATUS_UPDATED" | "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED" | "FAULT_CLEARED";
+  action: "MOTOR_ADDED" | "STARTER_ASSIGNED" | "LOCATION_REPLACED" | "LOCATION_ADDED" | "LOCATION_RENAMED" | "MOTOR_TEST_RUN_STATUS_UPDATED" | "DEVICE_ALLOCATED" | "DEVICE_DEALLOCATED" | "DEVICE_REALLOCATED" | "FAULT_CLEARED" | "DEVICE_POWER_ON" | "DEVICE_POWER_OFF";
   entityType: "MOTOR" | "STARTER" | "LOCATION";
   entityId: number;
   deviceId?: number;
@@ -422,6 +423,7 @@ export function prepareUserUpdateLogs(data: {
 
   fieldsToTrack.forEach((field) => {
     if (data.newData[field] !== undefined && String(data.newData[field]) !== String(data.oldData[field])) {
+      const label = field.replace(/_/g, " ");
       logs.push(ActivityService.prepareActivityLog({
         userId: data.userId,
         performedBy: data.performedBy,
@@ -430,6 +432,7 @@ export function prepareUserUpdateLogs(data: {
         entityId: data.userId,
         oldData: { [field]: data.oldData[field] },
         newData: { [field]: data.newData[field] },
+        message: `User ${label} updated from '${data.oldData[field]}' to '${data.newData[field]}'`,
       }));
     }
   });
@@ -481,17 +484,19 @@ export function prepareSettingsUpdateLogs(data: {
   starterId: number;
   oldData: any;
   newData: any;
+  pcbNumber?: string | null;
 }): NewUserActivityLog[] {
   const logs: NewUserActivityLog[] = [];
+  const pcbSuffix = data.pcbNumber ? ` — device '${data.pcbNumber}'` : "";
 
   Object.keys(data.newData).forEach((field) => {
-    // Only track if the field exists in SETTINGS_FIELD_NAMES and has changed
     if (
       SETTINGS_FIELD_NAMES[field as keyof typeof SETTINGS_FIELD_NAMES] &&
       data.newData[field] !== undefined &&
       data.newData[field] !== null &&
       String(data.newData[field]) !== String(data.oldData[field])
     ) {
+      const fieldLabel = SETTINGS_FIELD_NAMES[field as keyof typeof SETTINGS_FIELD_NAMES];
       logs.push(ActivityService.prepareActivityLog({
         performedBy: data.userId,
         action: `SETTING_${field.toUpperCase()}_UPDATED`,
@@ -499,7 +504,8 @@ export function prepareSettingsUpdateLogs(data: {
         entityId: data.starterId,
         oldData: { [field]: data.oldData[field] },
         newData: { [field]: data.newData[field] },
-        deviceId: data.starterId
+        deviceId: data.starterId,
+        message: `Setting '${fieldLabel}' changed from '${data.oldData[field]}' to '${data.newData[field]}'${pcbSuffix}`,
       }));
     }
   });

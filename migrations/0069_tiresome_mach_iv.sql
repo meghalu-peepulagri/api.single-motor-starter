@@ -1,0 +1,1 @@
+ALTER TABLE "starter_parameters" ADD COLUMN "schedule_failure_code" integer;

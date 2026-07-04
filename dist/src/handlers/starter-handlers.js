@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, GATEWAY_NOT_FOUND, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
 import { motors } from "../database/schemas/motors.js";
@@ -15,11 +15,11 @@ import { getPaginationData, getPaginationOffParams } from "../helpers/pagination
 import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
-import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getRawAlertFaultCounts, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
+import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -40,6 +40,13 @@ export class StarterHandlers {
             const existedGateway = await gatewayConflicts(validStarterBoxReq.gateway_id ?? undefined);
             const starter = await addStarterWithTransaction(validStarterBoxReq, userPayload, existedGateway?.id);
             const { id, ...restStarterData } = starter;
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "DEVICE_ADDED",
+                entityType: "STARTER",
+                entityId: id,
+                newData: { pcb_number: validStarterBoxReq.pcb_number, name: validStarterBoxReq.name },
+            });
             return sendResponse(c, 201, STARTER_BOX_ADDED_SUCCESSFULLY, { id });
         }
         catch (error) {
@@ -54,8 +61,8 @@ export class StarterHandlers {
     getConsecutiveAlertsFaultsHandler = async (c) => {
         try {
             const query = c.req.query();
-            const starterId = +c.req.param("starter_id");
-            const motorId = +c.req.param("motor_id");
+            const starterId = +(c.req.param("starter_id") ?? 0);
+            const motorId = +(c.req.param("motor_id") ?? 0);
             const type = query.type || "alert";
             // Validate IDs
             paramsValidateException.validateId(starterId, "Starter id");
@@ -84,8 +91,8 @@ export class StarterHandlers {
     getUnifiedLogsHandler = async (c) => {
         try {
             const query = c.req.query();
-            const starterId = +c.req.param("starter_id");
-            const motorId = +c.req.param("motor_id");
+            const starterId = +(c.req.param("starter_id") ?? 0);
+            const motorId = +(c.req.param("motor_id") ?? 0);
             paramsValidateException.validateId(starterId, "Starter id");
             paramsValidateException.validateId(motorId, "Motor id");
             const logTypes = query.log_type
@@ -131,8 +138,8 @@ export class StarterHandlers {
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
                 const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
-                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, {
-                    user_id: userPayload.id,
+                await ActivityService.writeStarterAssignedLog(c.get("performer_id"), starterBox.id, {
+                    user_id: c.get("performer_id"),
                     location_id: updatedStarter.location_id,
                     motor_name: updatedMotor.alias_name
                 }, trx);
@@ -186,7 +193,7 @@ export class StarterHandlers {
     deleteStarterBoxHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             const isUser = userPayload.user_type === "USER";
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starter)
@@ -207,6 +214,13 @@ export class StarterHandlers {
                 if (motor) {
                     await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
                 }
+                await ActivityService.logActivity({
+                    performedBy: userPayload.id,
+                    action: isUser ? "STARTER_REMOVED" : "DEVICE_DELETED",
+                    entityType: "STARTER",
+                    entityId: starterId,
+                    newData: { pcb_number: starter.pcb_number },
+                }, trx);
             });
             return sendResponse(c, 200, isUser ? STARTER_REMOVED_SUCCESS : STARTER_BOX_DELETED_SUCCESSFULLY);
         }
@@ -236,7 +250,7 @@ export class StarterHandlers {
                 throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
             await db.transaction(async (trx) => {
                 const { updatedMotor, updatedStarter } = await replaceStarterWithTransaction(motor, starter, validatedStarterReq.location_id);
-                await ActivityService.writeLocationReplacedLog(userPayload.id, starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx);
+                await ActivityService.writeLocationReplacedLog(c.get("performer_id"), starter.id, { location_id: starter.location_id }, { location_id: updatedStarter.location_id, motor_id: updatedMotor.id }, trx);
             });
             return sendResponse(c, 201, STARTER_REPLACED_SUCCESSFULLY);
         }
@@ -252,7 +266,7 @@ export class StarterHandlers {
     starterAnalyticsHandler = async (c) => {
         try {
             const query = c.req.query();
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             const motorId = +query.motor_id;
             paramsValidateException.validateId(starterId, "Device id");
             if (motorId)
@@ -278,7 +292,7 @@ export class StarterHandlers {
     starterRunTimeHandler = async (c) => {
         try {
             const query = c.req.query();
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             const motorId = +query.motor_id;
             paramsValidateException.validateId(starterId, "Device id");
             if (motorId)
@@ -323,7 +337,7 @@ export class StarterHandlers {
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
                 const { updatedStarter } = await assignStarterWebWithTransaction(starterBox, validatedReqData);
-                await ActivityService.writeStarterAssignedLog(userPayload.id, starterBox.id, { user_id: updatedStarter.user_id }, trx);
+                await ActivityService.writeStarterAssignedLog(c.get("performer_id"), starterBox.id, { user_id: updatedStarter.user_id }, trx);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY);
         }
@@ -340,7 +354,7 @@ export class StarterHandlers {
         try {
             const userPayload = c.get("user_payload");
             const reqData = await c.req.json();
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(starterId, "Device id");
             paramsValidateException.emptyBodyValidation(reqData);
             const validatedReqData = await validatedRequest("update-deployed-status", reqData, STARTER_BOX_VALIDATION_CRITERIA);
@@ -361,8 +375,8 @@ export class StarterHandlers {
             await db.transaction(async (trx) => {
                 await updateRecordByIdWithTrx(starterBoxes, starterBox.id, updateData, trx);
                 await ActivityService.logActivity({
-                    userId: userPayload.id,
-                    performedBy: userPayload.id,
+                    userId: c.get("performer_id"),
+                    performedBy: c.get("performer_id"),
                     action: "DEPLOY_STATUS_UPDATE",
                     entityType: "STARTER",
                     entityId: starterBox.id,
@@ -383,7 +397,7 @@ export class StarterHandlers {
     };
     starterConnectedMotorsHandler = async (c) => {
         try {
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(starterId, "Device id");
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starter)
@@ -414,7 +428,7 @@ export class StarterHandlers {
             await db.transaction(async (trx) => {
                 const updatedStarter = await updateRecordById(starterBoxes, starter.id, { location_id: validatedReqData.location_id, user_id: userPayload.id }, trx);
                 await ActivityService.logActivity({
-                    performedBy: userPayload.id,
+                    performedBy: c.get("performer_id"),
                     action: "LOCATION_ASSIGNED",
                     entityType: "STARTER",
                     entityId: starter.id,
@@ -433,7 +447,7 @@ export class StarterHandlers {
     };
     updateStarterDetailsHandler = async (c) => {
         try {
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             const reqData = await c.req.json();
             paramsValidateException.validateId(starterId, "Device id");
             paramsValidateException.emptyBodyValidation(reqData);
@@ -503,7 +517,7 @@ export class StarterHandlers {
     getTemperatureHandler = async (c) => {
         try {
             const query = c.req.query();
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             const motor_id = +query.motor_id;
             paramsValidateException.validateId(starterId, "Device id");
             if (motor_id)
@@ -541,7 +555,7 @@ export class StarterHandlers {
     updateDeviceAllocationHandler = async (c) => {
         try {
             const userPayload = c.get("user_payload");
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             const { allocation_status: allocationStatus } = await c.req.json();
             paramsValidateException.validateId(starterId, "Device id");
             if (allocationStatus !== "true" && allocationStatus !== "false") {
@@ -567,7 +581,8 @@ export class StarterHandlers {
     };
     updateSettingsSyncStatusHandler = async (c) => {
         try {
-            const starterId = +c.req.param("id");
+            const userPayload = c.get("user_payload");
+            const starterId = +(c.req.param("id") ?? 0);
             const body = await c.req.json();
             const syncStatus = body.synced_settings_status;
             paramsValidateException.validateId(starterId, "Device id");
@@ -578,6 +593,14 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             await updateRecordById(starterBoxes, starterId, { synced_settings_status: syncStatus });
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "SETTINGS_SYNC_STATUS_OVERRIDE",
+                entityType: "STARTER",
+                entityId: starterId,
+                oldData: { synced_settings_status: starter.synced_settings_status },
+                newData: { synced_settings_status: syncStatus },
+            });
             return sendResponse(c, 201, SETTINGS_SYNC_STATUS_UPDATED);
         }
         catch (error) {
@@ -618,7 +641,8 @@ export class StarterHandlers {
     };
     deviceResetHandler = async (c) => {
         try {
-            const starterId = +c.req.param("id");
+            const userPayload = c.get("user_payload");
+            const starterId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(starterId, "Device id");
             const body = await c.req.json();
             const deviceResetStatus = body.device_reset_status;
@@ -629,6 +653,13 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             await updateRecordById(starterBoxes, starterId, { device_reset_status: deviceResetStatus });
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "DEVICE_RESET_TRIGGERED",
+                entityType: "STARTER",
+                entityId: starterId,
+                newData: { device_reset_status: deviceResetStatus, pcb_number: starter.pcb_number },
+            });
             return sendResponse(c, 200, DEVICE_RESET_SUCCESSFULLY);
         }
         catch (error) {
@@ -638,7 +669,8 @@ export class StarterHandlers {
     };
     updateInstalledLocationHandler = async (c) => {
         try {
-            const starterId = +c.req.param("id");
+            const userPayload = c.get("user_payload");
+            const starterId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(starterId, "Device id");
             const reqData = await c.req.json();
             const { device_installed_location } = await validatedRequest("update-installed-location", reqData, STARTER_BOX_VALIDATION_CRITERIA);
@@ -646,6 +678,14 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             await updateRecordById(starterBoxes, starterId, { device_installed_location });
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "DEVICE_INSTALLED_LOCATION_UPDATED",
+                entityType: "STARTER",
+                entityId: starterId,
+                oldData: { device_installed_location: starter.device_installed_location },
+                newData: { device_installed_location },
+            });
             return sendResponse(c, 200, "Device installed location updated successfully");
         }
         catch (error) {
@@ -656,7 +696,7 @@ export class StarterHandlers {
     };
     getInstallationPhotoUploadUrlHandler = async (c) => {
         try {
-            const starterId = +c.req.param("id");
+            const starterId = +(c.req.param("id") ?? 0);
             paramsValidateException.validateId(starterId, "Device id");
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starter)
@@ -719,8 +759,9 @@ export class StarterHandlers {
     };
     faultClearedHandler = async (c) => {
         try {
-            const starterId = +c.req.param("starter_id");
-            const motorId = +c.req.param("motor_id");
+            const userPayload = c.get("user_payload");
+            const starterId = +(c.req.param("starter_id") ?? 0);
+            const motorId = +(c.req.param("motor_id") ?? 0);
             paramsValidateException.validateId(starterId, "Device id");
             paramsValidateException.validateId(motorId, "Motor id");
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
@@ -734,6 +775,13 @@ export class StarterHandlers {
             if (!faultRecord)
                 throw new NotFoundException(NO_ACTIVE_FAULT_FOUND);
             await updateRecordById(starterBoxParameters, faultRecord.id, { fault_cleared: true });
+            await ActivityService.logActivity({
+                performedBy: userPayload.id,
+                action: "FAULT_MANUALLY_CLEARED",
+                entityType: "STARTER",
+                entityId: starterId,
+                newData: { motor_id: motorId, fault_record_id: faultRecord.id, motor_name: motor.alias_name ?? motor.name },
+            });
             return sendResponse(c, 200, FAULT_CLEARED_SUCCESSFULLY);
         }
         catch (error) {
@@ -752,6 +800,19 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at get device details handler:", error);
+            throw error;
+        }
+    };
+    getBasicDetailsHandler = async (c) => {
+        try {
+            const query = c.req.query();
+            const paginationParams = getPaginationOffParams(query);
+            const search = query.search_string ?? query.search ?? "";
+            const basicDetails = await getBasicStarterDetails(paginationParams, search);
+            return sendResponse(c, 200, "Basic device details fetched successfully", basicDetails);
+        }
+        catch (error) {
+            console.error("Error at get basic device details handler:", error);
             throw error;
         }
     };

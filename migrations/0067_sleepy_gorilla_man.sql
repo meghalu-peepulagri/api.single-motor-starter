@@ -1,0 +1,1 @@
+ALTER TABLE "motor_schedules" ADD COLUMN "publish_attempts" integer DEFAULT 0 NOT NULL;

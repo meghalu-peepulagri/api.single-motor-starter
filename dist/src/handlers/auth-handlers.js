@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+// @ts-ignore — date-fns v4 missing index.d.ts for NodeNext ESM resolution
 import { isBefore } from "date-fns";
 import { INVALID_CREDENTIALS, INVALID_OTP, LOGIN_DONE, LOGIN_VALIDATION_CRITERIA, MOBILE_NUMBER_ALREADY_EXIST, OTP_SENT, SIGNUP_VALIDATION_CRITERIA, USER_CREATED, USER_LOGIN, USER_NOT_EXIST_WITH_PHONE, VERIFY_OTP_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import { CREATED } from "../constants/http-status-codes.js";
@@ -21,6 +22,7 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import { checkPhoneUniqueness, checkPhoneUniquenessVerify } from "../services/db/user-services.js";
+import { getSubUserPermissions } from "../services/db/sub-user-services.js";
 import { SmsService } from "../services/sms/sms-service.js";
 const paramsValidateException = new ParamsValidateException();
 const otpService = new OtpService();
@@ -65,7 +67,7 @@ export class AuthHandlers {
                 const phone = createdUser.phone;
                 const otpData = prepareOTPData(phone, "REGISTERED");
                 await otpService.createOTP(otpData);
-                await smsService.sendSms(phone, otpData.otp, validUserReq.signature_id);
+                // await smsService.sendSms(phone, otpData.otp, validUserReq.signature_id);
             }
             return sendResponse(c, CREATED, USER_CREATED);
         }
@@ -90,6 +92,12 @@ export class AuthHandlers {
                 throw new UnauthorizedException(INVALID_CREDENTIALS);
             const { access_token, refresh_token } = await genJWTTokensForUser(loginUser.id);
             const { password, ...userWithoutPassword } = loginUser;
+            await ActivityService.logActivity({
+                performedBy: loginUser.id,
+                action: "LOGIN",
+                entityType: "AUTH",
+                entityId: loginUser.id,
+            });
             const response = { user_details: userWithoutPassword, access_token, refresh_token };
             return sendResponse(c, CREATED, LOGIN_DONE, response);
         }
@@ -110,7 +118,7 @@ export class AuthHandlers {
                 throw new NotFoundException(USER_NOT_EXIST_WITH_PHONE);
             const otpData = prepareOTPData(validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
-            await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
+            // await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
             return sendResponse(c, CREATED, OTP_SENT);
         }
         catch (error) {
@@ -142,6 +150,12 @@ export class AuthHandlers {
             const updatedUser = await otpService.verifyOtpAndUpdateUser(validOtp.id, user.id);
             const { access_token, refresh_token } = await genJWTTokensForUser(user.id);
             const { password, ...userDetails } = updatedUser;
+            await ActivityService.logActivity({
+                performedBy: user.id,
+                action: "LOGIN",
+                entityType: "AUTH",
+                entityId: user.id,
+            });
             const data = { user_details: userDetails, access_token, refresh_token };
             if (validReqData.fcm_token) {
                 const fcmToken = validReqData.fcm_token;

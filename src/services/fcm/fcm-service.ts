@@ -44,12 +44,18 @@ export async function sendNotificationsForMultipleDevices(tokens: string[], titl
       tokens,
     };
     const batchResponse = await getMessaging().sendEachForMulticast(message);
-    const invalidTokens = tokens.filter((_, i) =>
-      batchResponse.responses[i]?.error?.code === "messaging/registration-token-not-registered"
-    );
-    for (const token of invalidTokens) {
-      await handleInvalidDeviceToken(token);
-    }
+
+    const invalidTokenCleanups = batchResponse.responses
+      .map((resp, i) => ({ resp, token: tokens[i] }))
+      .filter(({ resp }) =>
+        !resp.success &&
+        resp.error?.code === "messaging/registration-token-not-registered"
+      )
+      .map(({ token }) => handleInvalidDeviceToken(token).catch(() => null));
+
+    await Promise.all(invalidTokenCleanups);
+
+
     return batchResponse;
   }
   catch (error: any) {

@@ -1,15 +1,17 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { alertsFaults } from "../../database/schemas/alerts-faults.js";
+import { motorSchedules } from "../../database/schemas/motor-schedules.js";
 import { deviceTemperature } from "../../database/schemas/device-temperature.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { pendingAckMap } from "../../helpers/ack-tracker-hepler.js";
+import { pendingAckMap, schedulePartialAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { controlMode } from "../../helpers/control-helpers.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
+import { prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
 import { logger } from "../../utils/logger.js";
@@ -18,26 +20,75 @@ import { mqttServiceInstance } from "../mqtt-service.js";
 import { ActivityService } from "./activity-service.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { updateActualScheduleFields } from "./motor-schedules-services.js";
+import { upsertScheduleLiveData } from "./motor-schedule-live-data-services.js";
+import { insertScheduleLog } from "./motor-schedule-logs-services.js";
+import { uploadLiveDataPacket } from "../s3/s3-service.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
 import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
 import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
+import { pushPendingSchedulesForStarter } from "../../helpers/schedule-sync-helper.js";
+// Postgres deadlock code. Concurrent MQTT messages for the same device can
+// race on (starter_boxes, motors) row locks; the loser is killed with 40P01.
+// The transaction was never committed, so a simple retry is safe.
+const PG_DEADLOCK_CODE = "40P01";
+const PG_SERIALIZATION_CODE = "40001";
+async function withDeadlockRetry(label, fn, maxAttempts = 5) {
+    let attempt = 0;
+    while (true) {
+        try {
+            return await fn();
+        }
+        catch (err) {
+            const code = err?.cause?.code ?? err?.code;
+            const isRetryable = code === PG_DEADLOCK_CODE || code === PG_SERIALIZATION_CODE;
+            attempt++;
+            if (!isRetryable || attempt >= maxAttempts)
+                throw err;
+            // Exponential backoff with jitter: 50ms → 100ms → 200ms → 400ms, +0-100ms jitter.
+            const backoffMs = 50 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100);
+            logger?.warn?.(`[${label}] ${code} on attempt ${attempt} — retrying in ${backoffMs}ms`);
+            await new Promise(r => setTimeout(r, backoffMs));
+        }
+    }
+}
+// Per-device serialization. Concurrent MQTT messages for the SAME starter_id
+// would otherwise race on the same (starter_boxes, motors) rows and deadlock
+// repeatedly even with retries. By chaining work per key, only one tx for a
+// given device runs at a time. Different devices remain fully parallel.
+const deviceLocks = new Map();
+function runSerializedPerDevice(starterId, fn) {
+    // Without a starter_id we can't shard; fall through unserialised.
+    if (!starterId)
+        return fn();
+    const prev = deviceLocks.get(starterId) ?? Promise.resolve();
+    const next = prev.catch(() => undefined).then(fn);
+    deviceLocks.set(starterId, next);
+    // Clean up the map entry once this tail is the current one and it's done,
+    // so the Map doesn't grow forever for short-lived devices.
+    next.finally(() => {
+        if (deviceLocks.get(starterId) === next)
+            deviceLocks.delete(starterId);
+    });
+    return next;
+}
 // Live data
 export async function saveLiveDataTopic(insertedData, groupId, previousData) {
+    const starterId = insertedData?.starter_id;
     switch (groupId) {
         case "G01": //  Live data topic
-            await updateStates(insertedData, previousData);
+            await runSerializedPerDevice(starterId, () => withDeadlockRetry("updateStates", () => updateStates(insertedData, previousData)));
             break;
         case "G02":
             // Update Device power & motor state to ON
-            await updateDevicePowerAndMotorStateToON(insertedData, previousData);
+            await runSerializedPerDevice(starterId, () => withDeadlockRetry("updateDevicePowerAndMotorStateToON", () => updateDevicePowerAndMotorStateToON(insertedData, previousData)));
             break;
         case "G03":
             // Update Device power On & motor state to Off
-            await updateDevicePowerONAndMotorStateOFF(insertedData, previousData);
+            await runSerializedPerDevice(starterId, () => withDeadlockRetry("updateDevicePowerONAndMotorStateOFF", () => updateDevicePowerONAndMotorStateOFF(insertedData, previousData)));
             break;
         case "G04":
-            await updateDevicePowerAndMotorStateOFF(insertedData, previousData);
+            await runSerializedPerDevice(starterId, () => withDeadlockRetry("updateDevicePowerAndMotorStateOFF", () => updateDevicePowerAndMotorStateOFF(insertedData, previousData)));
             break;
         default:
             return null;
@@ -76,13 +127,13 @@ export async function selectTopicAck(topicType, payload, topic) {
             await deviceInfoAckHandler(payload, topic);
             break;
         case "SCHEDULING_ACK":
-            scheduleCreationAckResolver(payload, topic);
+            await scheduleCreationAckResolver(payload, topic);
             break;
         default:
             return null;
     }
 }
-const VALID_MODES = ["AUTO", "MANUAL"];
+const VALID_MODES = ["AUTO", "MANUAL", "SCHEDULE"];
 async function getLockedMotorSnapshot(trx, motorId) {
     const [motorRecord] = await trx
         .select({
@@ -108,17 +159,44 @@ async function getLatestAlertsFaultsSnapshot(trx, starterId, motorId) {
         .limit(1);
     return record ?? null;
 }
+async function handleScheduleLiveData(insertedData, motorId, starterId) {
+    const scheduleId = insertedData.active_schedule_id;
+    if (!scheduleId)
+        return;
+    const packet = {
+        schedule_id: scheduleId,
+        motor_id: motorId,
+        starter_id: starterId,
+        device_start_time: insertedData.active_schedule_start_time ?? null,
+        device_end_time: insertedData.active_schedule_end_time ?? null,
+        device_run_time: insertedData.active_schedule_runtime_minutes ?? null,
+        device_missed_minutes: insertedData.active_schedule_missed_minutes ?? 0,
+        failure_reason: insertedData.active_schedule_failure_reason ?? null,
+        failure_code: insertedData.active_failure_code || 0,
+        received_at: new Date().toISOString(),
+    };
+    await Promise.all([
+        upsertScheduleLiveData(packet).catch(() => null),
+        insertScheduleLog({
+            schedule_id: scheduleId,
+            event_type: "LIVE_DATA_RECEIVED",
+            actor_type: "device",
+            details: packet,
+        }).catch(() => null),
+    ]);
+}
 export async function updateStates(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current, active_schedule_id, active_schedule_type, active_schedule_start_time, active_schedule_runtime_minutes, active_schedule_end_time, active_schedule_missed_minutes, active_schedule_failure_at, active_schedule_failure_reason } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
     const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
     if (!starter_id)
         return null;
     const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
     if (isInTestRun && isInTestRun.test_run_status === "PROCESSING")
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
+    const record = prepareStarterParametersRecord(insertedData);
     try {
         const notificationData = await db.transaction(async (trx) => {
-            await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+            await saveSingleRecord(starterBoxParameters, record, trx);
             await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
             const starterBoxUpdates = {};
             let trackPowerChange = false;
@@ -146,6 +224,9 @@ export async function updateStates(insertedData, previousData) {
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
                 }, trx);
+                if (trackPowerChange) {
+                    await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
+                }
             }
             let effectivePrevState = prevState;
             let effectivePrevMode = prevMode;
@@ -316,15 +397,19 @@ export async function updateStates(insertedData, previousData) {
                 });
             }
             // Update actual schedule fields with device-reported values
-            if (active_schedule_id && motor_id && starter_id) {
-                await updateActualScheduleFields(motor_id, starter_id, active_schedule_id, {
-                    actual_start_time: active_schedule_start_time,
-                    actual_end_time: active_schedule_end_time,
-                    actual_run_time: active_schedule_runtime_minutes,
-                    actual_type: active_schedule_type,
-                    missed_minutes: active_schedule_missed_minutes,
-                    failure_at: active_schedule_failure_at,
-                    failure_reason: active_schedule_failure_reason,
+            if (insertedData.active_schedule_id && motor_id && starter_id) {
+                await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
+                    actual_start_time: insertedData.active_schedule_start_time,
+                    actual_end_time: insertedData.active_schedule_end_time,
+                    actual_started_at: insertedData.active_schedule_started_at,
+                    actual_ended_at: insertedData.active_schedule_ended_at,
+                    actual_run_time: insertedData.active_schedule_runtime_minutes,
+                    actual_type: insertedData.active_schedule_type,
+                    missed_minutes: insertedData.active_schedule_missed_minutes,
+                    failure_at: insertedData.active_schedule_failure_at,
+                    failure_reason: insertedData.active_schedule_failure_reason,
+                    failure_code: insertedData.active_failure_code || 0,
+                    device_schedule_status: insertedData.active_schedule_status,
                 }, trx);
             }
             return {
@@ -336,6 +421,10 @@ export async function updateStates(insertedData, previousData) {
                 notificationDataFaultCleared
             };
         });
+        if (motor_id && starter_id) {
+            handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+            uploadLiveDataPacket(starter_id, insertedData, insertedData.time_stamp).catch(() => null);
+        }
         if (notificationData.notificationDataState) {
             if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state ?? 0)) {
                 await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
@@ -373,15 +462,16 @@ export async function updateStates(insertedData, previousData) {
     }
 }
 export async function updateDevicePowerAndMotorStateToON(insertedData, previousData) {
-    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current, active_schedule_id, active_schedule_start_time, active_schedule_end_time, active_schedule_runtime_minutes, active_schedule_type, active_schedule_missed_minutes, active_schedule_failure_at, active_schedule_failure_reason } = insertedData;
+    const { starter_id, motor_id, power_present, motor_state, mode_description, alert_code, alert_description, fault, fault_description, time_stamp, temp, avg_current } = insertedData;
     const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
     const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
     if (isInTestRun && isInTestRun.test_run_status === "PROCESSING")
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
+    const record = prepareStarterParametersRecord(insertedData);
     const notificationData = await db.transaction(async (trx) => {
-        await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+        await saveSingleRecord(starterBoxParameters, record, trx);
         await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
         const starterBoxUpdates = {};
         let trackPowerChange = false;
@@ -410,6 +500,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
                 }, trx);
+                await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
             }
         }
         let effectivePrevState = prevState;
@@ -478,15 +569,19 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
             await saveSingleRecord(alertsFaults, alertsFaultsRecord, trx);
         }
         // Update actual schedule fields with device-reported values
-        if (active_schedule_id && motor_id && starter_id) {
-            await updateActualScheduleFields(motor_id, starter_id, active_schedule_id, {
-                actual_start_time: active_schedule_start_time,
-                actual_end_time: active_schedule_end_time,
-                actual_run_time: active_schedule_runtime_minutes,
-                actual_type: active_schedule_type,
-                missed_minutes: active_schedule_missed_minutes,
-                failure_at: active_schedule_failure_at,
-                failure_reason: active_schedule_failure_reason,
+        if (insertedData.active_schedule_id && motor_id && starter_id) {
+            await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
+                actual_start_time: insertedData.active_schedule_start_time,
+                actual_end_time: insertedData.active_schedule_end_time,
+                actual_started_at: insertedData.active_schedule_started_at,
+                actual_ended_at: insertedData.active_schedule_ended_at,
+                actual_run_time: insertedData.active_schedule_runtime_minutes,
+                actual_type: insertedData.active_schedule_type,
+                missed_minutes: insertedData.active_schedule_missed_minutes,
+                failure_at: insertedData.active_schedule_failure_at,
+                failure_reason: insertedData.active_schedule_failure_reason,
+                failure_code: insertedData.active_failure_code || 0,
+                device_schedule_status: insertedData.active_schedule_status,
             }, trx);
         }
         const notificationDataState = hasStateChanged ? prepareMotorStateControlNotificationData(notificationMotor, motor_state, mode_description, starter_id, starter_number) : null;
@@ -503,6 +598,10 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         const notificationDataFaultCleared = isFaultCleared ? prepareFaultClearedNotificationData({ currentFaultCode, previousFaultCode: latestAlertsFaultsSnapshot?.fault_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
         return { notificationDataState, notificationDataMode, notificationDataAlert, notificationDataAlertCleared, notificationDataFault, notificationDataFaultCleared };
     });
+    if (motor_id && starter_id) {
+        handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+        uploadLiveDataPacket(starter_id, insertedData, insertedData.time_stamp).catch(() => null);
+    }
     if (notificationData.notificationDataState) {
         if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
             await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
@@ -539,8 +638,9 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
     const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
+    const record = prepareStarterParametersRecord(insertedData);
     const notificationData = await db.transaction(async (trx) => {
-        await saveSingleRecord(starterBoxParameters, { ...insertedData, payload_version: String(insertedData.payload_version), group_id: String(insertedData.group_id), temperature: temp }, trx);
+        await saveSingleRecord(starterBoxParameters, record, trx);
         await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
         const starterBoxUpdates = {};
         let trackPowerChange = false;
@@ -569,6 +669,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
                 }, trx);
+                await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
             }
         }
         const currentMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
@@ -639,8 +740,28 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
         const notificationDataAlertCleared = isAlertCleared ? prepareAlertClearedNotificationData({ currentAlertCode, previousAlertCode: latestAlertsFaultsSnapshot?.alert_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
         const notificationDataFault = isFaultRaised ? prepareFaultNotificationData({ faultCode: currentFaultCode, faultDescription: fault_description, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
         const notificationDataFaultCleared = isFaultCleared ? prepareFaultClearedNotificationData({ currentFaultCode, previousFaultCode: latestAlertsFaultsSnapshot?.fault_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        // Update actual schedule fields with device-reported values
+        if (insertedData.active_schedule_id && motor_id && starter_id) {
+            await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
+                actual_start_time: insertedData.active_schedule_start_time,
+                actual_end_time: insertedData.active_schedule_end_time,
+                actual_started_at: insertedData.active_schedule_started_at,
+                actual_ended_at: insertedData.active_schedule_ended_at,
+                actual_run_time: insertedData.active_schedule_runtime_minutes,
+                actual_type: insertedData.active_schedule_type,
+                missed_minutes: insertedData.active_schedule_missed_minutes,
+                failure_at: insertedData.active_schedule_failure_at,
+                failure_reason: insertedData.active_schedule_failure_reason,
+                failure_code: insertedData.active_failure_code || 0,
+                device_schedule_status: insertedData.active_schedule_status,
+            }, trx);
+        }
         return { notificationDataState, notificationDataAlert, notificationDataAlertCleared, notificationDataFault, notificationDataFaultCleared };
     });
+    if (motor_id && starter_id) {
+        handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+        uploadLiveDataPacket(starter_id, insertedData, insertedData.time_stamp).catch(() => null);
+    }
     if (notificationData.notificationDataState) {
         if (shouldSendNotification(notificationData.notificationDataState.motorId, "state", motor_state)) {
             await sendUserNotification(notificationData.notificationDataState.userId, notificationData.notificationDataState.title, notificationData.notificationDataState.message, notificationData.notificationDataState.motorId, notificationData.notificationDataState.starterId);
@@ -672,7 +793,9 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
     const { power, prevState, prevMode, locationId, created_by, motor, device_created_by, starter_number } = extractPreviousData(previousData, motor_id);
     if (!starter_id || !motor_id)
         return null;
+    const record = prepareStarterParametersRecord(insertedData);
     const notificationData = await db.transaction(async (trx) => {
+        await saveSingleRecord(starterBoxParameters, record, trx);
         await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
         const starterBoxUpdates = {};
         let trackPowerChange = false;
@@ -701,6 +824,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
                     starter_id, motor_id, location_id: locationId, previous_power_state: power,
                     new_power_state: power_present, motor_state, mode_description, time_stamp
                 }, trx);
+                await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
             }
         }
         const currentMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
@@ -770,8 +894,28 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         const notificationDataAlertCleared = isAlertCleared ? prepareAlertClearedNotificationData({ currentAlertCode, previousAlertCode: latestAlertsFaultsSnapshot?.alert_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
         const notificationDataFault = isFaultRaised ? prepareFaultNotificationData({ faultCode: currentFaultCode, faultDescription: fault_description, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
         const notificationDataFaultCleared = isFaultCleared ? prepareFaultClearedNotificationData({ currentFaultCode, previousFaultCode: latestAlertsFaultsSnapshot?.fault_code ?? null, userId: notifUserId, motorId: motor_id, starterId: starter_id, pumpName }) : null;
+        // Update actual schedule fields with device-reported values
+        if (insertedData.active_schedule_id && motor_id && starter_id) {
+            await updateActualScheduleFields(motor_id, starter_id, insertedData.active_schedule_id, {
+                actual_start_time: insertedData.active_schedule_start_time,
+                actual_end_time: insertedData.active_schedule_end_time,
+                actual_started_at: insertedData.active_schedule_started_at,
+                actual_ended_at: insertedData.active_schedule_ended_at,
+                actual_run_time: insertedData.active_schedule_runtime_minutes,
+                actual_type: insertedData.active_schedule_type,
+                missed_minutes: insertedData.active_schedule_missed_minutes,
+                failure_at: insertedData.active_schedule_failure_at,
+                failure_reason: insertedData.active_schedule_failure_reason,
+                failure_code: insertedData.active_failure_code || 0,
+                device_schedule_status: insertedData.active_schedule_status,
+            }, trx);
+        }
         return { notificationDataMode, notificationDataAlert, notificationDataAlertCleared, notificationDataFault, notificationDataFaultCleared };
     });
+    if (motor_id && starter_id) {
+        handleScheduleLiveData(insertedData, motor_id, starter_id).catch(() => null);
+        uploadLiveDataPacket(starter_id, insertedData, insertedData.time_stamp).catch(() => null);
+    }
     if (notificationData.notificationDataMode) {
         if (shouldSendNotification(notificationData.notificationDataMode.motorId, "mode", mode_description)) {
             await sendUserNotification(notificationData.notificationDataMode.userId, notificationData.notificationDataMode.title, notificationData.notificationDataMode.message, notificationData.notificationDataMode.motorId, notificationData.notificationDataMode.starterId);
@@ -876,7 +1020,7 @@ export async function motorModeChangeAckHandler(message, topic) {
         const motor = validMac.motors[0];
         await db.transaction(async (trx) => {
             if (mode !== motor.mode) {
-                if (mode == "MANUAL" || mode == "AUTO") {
+                if (mode == "MANUAL" || mode == "AUTO" || mode == "SCHEDULE") {
                     await trx.update(motors).set({ mode: mode, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
                 }
             }
@@ -928,6 +1072,25 @@ export async function heartbeatHandler(message, topic) {
             if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false")
                 await publishDeviceSettings(validMac);
         });
+        // Heartbeat-driven schedule push: whenever the device is online (signal 1–30),
+        // check for unacknowledged schedules and push them. The push helper early-returns
+        // if there are no pending rows, so calling it on every heartbeat is cheap
+        // (one DB query) — but it means a freshly created schedule reaches the device
+        // on the very next heartbeat, regardless of prior connection state.
+        // Fire-and-forget so the heartbeat handler never blocks on MQTT ACK timeouts.
+        const isNowOnline = strength != null && strength >= 1 && strength <= 30;
+        if (isNowOnline) {
+            const motorList = Array.isArray(validMac.motors) ? validMac.motors : [];
+            setImmediate(() => {
+                if (motorList.length === 0) {
+                    pushPendingSchedulesForStarter(validMac, undefined, undefined, true).catch((err) => logger.error(`heartbeat schedule push failed for starter ${validMac.id}: ${err?.message}`));
+                    return;
+                }
+                for (const motor of motorList) {
+                    pushPendingSchedulesForStarter(validMac, motor.id, undefined, true).catch((err) => logger.error(`heartbeat schedule push failed for starter ${validMac.id} motor ${motor.id}: ${err?.message}`));
+                }
+            });
+        }
     }
     catch (error) {
         console.error("Error at heartbeat topic handler:", error);
@@ -1145,22 +1308,125 @@ export async function deviceInfoAckHandler(message, topic) {
         console.error("Error at device info ack handler:", error);
     }
 }
-function scheduleCreationAckResolver(message, topic) {
+async function handleLateScheduleAck(macOrPcb, message) {
+    try {
+        let dValue;
+        if (typeof message.D === "number") {
+            dValue = message.D;
+        }
+        else if (message.D !== null && typeof message.D === "object" && typeof message.D.ack === "number") {
+            dValue = message.D.ack;
+        }
+        else {
+            dValue = -1;
+        }
+        // Success = 1 or 2. ack=4 (flash issue) must NOT recover records to SCHEDULED.
+        const ackSuccess = dValue === 1 || dValue === 2;
+        if (!ackSuccess) {
+            console.log(`[schedule-ack:LATE] mac=${macOrPcb} dValue=${dValue} not success — skipping recovery`);
+            return;
+        }
+        const starter = await db.query.starterBoxes.findFirst({
+            where: (s, { or: o, eq: e }) => o(e(s.mac_address, macOrPcb), e(s.pcb_number, macOrPcb)),
+            columns: { id: true },
+        });
+        if (!starter) {
+            console.log(`[schedule-ack:LATE] mac=${macOrPcb} — starter not found`);
+            return;
+        }
+        // Partial ACK bitmask: slot IDs confirmed by device
+        let confirmedSlots = null;
+        if (typeof message.D === "object" && message.D !== null && typeof message.D.ids === "number" && message.D.ids > 0) {
+            confirmedSlots = new Set();
+            for (let bit = 0; bit < 16; bit++) {
+                if (Number(BigInt(message.D.ids) & (1n << BigInt(bit))))
+                    confirmedSlots.add(bit + 1);
+            }
+            console.log(`[schedule-ack:LATE] mac=${macOrPcb} partial bitmask=${message.D.ids} → slots=[${[...confirmedSlots].join(",")}]`);
+        }
+        // Find PENDING records that were already dispatched (have device_schedule_id assigned)
+        const pending = await db.query.motorSchedules.findMany({
+            where: (ms, { and: a, eq: e, ne: n }) => a(e(ms.starter_id, starter.id), e(ms.acknowledgement, 0), e(ms.schedule_status, "PENDING"), n(ms.status, "ARCHIVED"), isNotNull(ms.device_schedule_id)),
+            columns: { id: true, device_schedule_id: true },
+        });
+        const toUpdate = confirmedSlots
+            ? pending.filter(r => r.device_schedule_id != null && confirmedSlots.has(r.device_schedule_id))
+            : pending;
+        if (toUpdate.length === 0) {
+            console.log(`[schedule-ack:LATE] mac=${macOrPcb} starter=${starter.id} — no matching PENDING records to recover`);
+            return;
+        }
+        const ids = toUpdate.map(r => r.id);
+        await db.update(motorSchedules)
+            .set({ schedule_status: "SCHEDULED", acknowledgement: 1, acknowledged_at: new Date(), updated_at: new Date() })
+            .where(inArray(motorSchedules.id, ids));
+        console.log(`[schedule-ack:LATE_RECOVERED] mac=${macOrPcb} starter=${starter.id} set SCHEDULED for ${toUpdate.length} record(s) ids=[${ids.join(",")}]`);
+        logger.info(`[schedule-ack] late ACK recovered for ${macOrPcb}: updated ${toUpdate.length} record(s) to SCHEDULED`);
+    }
+    catch (err) {
+        logger.error(`[schedule-ack] late ACK recovery failed for ${macOrPcb}: ${err?.message}`);
+    }
+}
+async function scheduleCreationAckResolver(message, topic) {
     const macFromTopic = topic.split("/")[1];
     if (!macFromTopic)
         return;
     const pendingAck = pendingAckMap.get(macFromTopic);
     if (!pendingAck) {
-        logger.warn(`No pending schedule ACK found for ${macFromTopic}`);
+        console.log(`[schedule-ack:LATE] mac=${macFromTopic} no pending map entry — attempting direct DB recovery. message=${JSON.stringify(message)}`);
+        await handleLateScheduleAck(macFromTopic, message);
         return;
     }
     if (pendingAck.sequenceNumber !== undefined && pendingAck.sequenceNumber !== message.S) {
-        logger.warn(`Schedule ACK sequence mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+        logger.warn(`Schedule ACK sequence mismatch for ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S} — ignoring stale ACK`);
+        // Do NOT return here without resolving: the entry would stay in the map as a zombie,
+        // blocking any subsequent ACK lookup until the timeout fires. Resolve false so the
+        // in-flight waitForAck times out cleanly and retries.
+        pendingAck.resolve(false);
+        pendingAckMap.delete(macFromTopic);
         return;
     }
-    const dValue = typeof message.D === "number" ? message.D : -1;
-    // D=1: processed (success), D=4: waiting for next schedule (success), D=0: failure, D=2: flash issue
-    const ackSuccess = dValue === 1 || dValue === 4;
+    console.log(`[schedule-ack:RAW] mac=${macFromTopic} full_message=${JSON.stringify(message)}`);
+    // D may be a plain number or an object like { ids: <id>, ack: <value> }
+    let dValue;
+    if (typeof message.D === "number") {
+        dValue = message.D;
+    }
+    else if (message.D !== null && typeof message.D === "object" && typeof message.D.ack === "number") {
+        dValue = message.D.ack;
+    }
+    else {
+        dValue = -1;
+    }
+    // Success = 1 or 2. ack=4 is a device flash issue → NOT success, schedule stays PENDING (do NOT mark SCHEDULED).
+    const ackSuccess = dValue === 1 || dValue === 2;
+    console.log(`[schedule-ack:PARSED] mac=${macFromTopic} S=${message.S} D_type=${typeof message.D} dValue=${dValue} ackSuccess=${ackSuccess}`);
+    // Partial ACK: ids is a bitmask from the device.
+    // schedule_id n → bit (n-1) → value 2^(n-1).
+    // e.g. ids=4 (binary 100) → bit 2 → schedule_id 3 confirmed.
+    if (ackSuccess && message.D !== null && typeof message.D === "object") {
+        const rawIds = message.D.ids;
+        if (typeof rawIds === "number" && rawIds > 0) {
+            const acknowledgedIds = [];
+            for (let bit = 0; bit < 16; bit++) {
+                if (Number(BigInt(rawIds) & (1n << BigInt(bit)))) {
+                    acknowledgedIds.push(bit + 1);
+                }
+            }
+            if (acknowledgedIds.length > 0) {
+                schedulePartialAckMap.set(macFromTopic, acknowledgedIds);
+                console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} bitmask=${rawIds} (0b${rawIds.toString(2)}) → slot_ids=[${acknowledgedIds.join(",")}]`);
+                logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: bitmask=${rawIds} (0b${rawIds.toString(2)}) → ids=[${acknowledgedIds.join(",")}]`);
+            }
+        }
+        else {
+            console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} D is object but ids=${rawIds} (not a positive number) → treated as full ACK`);
+        }
+    }
+    else if (ackSuccess) {
+        console.log(`[schedule-ack:FULL] mac=${macFromTopic} D is plain number=${dValue} → full ACK, no bitmask`);
+    }
+    logger.info(`[schedule-ack] ${macFromTopic} D=${dValue} success=${ackSuccess}`);
     pendingAck.resolve(ackSuccess);
     pendingAckMap.delete(macFromTopic);
     logger.info(`Schedule creation ACK resolved for ${macFromTopic}, D=${dValue}, success=${ackSuccess}`);

@@ -3,6 +3,33 @@ import { controlMode, getAlertDescription, getFailureReason, getFaultDescription
 import { parseTimestamp } from "./dns-helpers.js";
 import { normalizeTime } from "./motor-schedule-payload-helper.js";
 import { cleanScalar, cleanThreeNumberArray } from "./payload-validate-helpers.js";
+import type { preparedLiveData } from "../types/app-types.js";
+import type { NewStarterBoxParameters } from "../database/schemas/starter-parameters.js";
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+function toHHMM(value: unknown): string | null {
+  if (value == null) return null;
+  const n = Number(value);
+  if (isNaN(n)) return null;
+  if (n > 2359) {
+    const ms = n > 9_999_999_999 ? n : n * 1000;
+    const istMs = ms + IST_OFFSET_MS;
+    const d = new Date(istMs);
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const mm = String(d.getUTCMinutes()).padStart(2, '0');
+    return `${hh}${mm}`;
+  }
+  return normalizeTime(n) ?? null;
+}
+
+function toEpochDate(value: unknown): Date | null {
+  if (value == null) return null;
+  const n = Number(value);
+  if (isNaN(n) || n <= 2359) return null;
+  const ms = n > 9_999_999_999 ? n : n * 1000;
+  return new Date(ms);
+}
 
 export function prepareLiveDataPayload(validatedData: any, starterData: any) {
 
@@ -16,9 +43,9 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
   const data = validatedData.data;
 
   const sch = data.sch && typeof data.sch === "object" && Object.keys(data.sch).length > 0 ? data.sch : null;
-  const schStartTime = sch ? (normalizeTime(sch.st) ?? null) : null;
+  const schStartTime = sch ? toHHMM(sch.st) : null;
   const schRuntime = sch ? (sch.rt ?? null) : null;
-  const schEndTime = sch?.et ? (normalizeTime(sch.et) ?? null) : null;
+  const schEndTime = sch ? toHHMM(sch.et) : null;
 
   const llvSource = data.llv || data.ll_v || [];
   const llv = cleanThreeNumberArray(llvSource);
@@ -74,12 +101,63 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
 
     // Schedule
     active_schedule_id: sch?.id ?? null,
-    active_schedule_type: null,
+    active_schedule_type: sch ? (sch.cy === 1 ? "CYCLIC" : "TIME_BASED") as "TIME_BASED" | "CYCLIC" : null,
     active_schedule_start_time: schStartTime,
     active_schedule_runtime_minutes: schRuntime,
     active_schedule_end_time: schEndTime,
+    active_schedule_started_at: sch ? toEpochDate(sch.st) : null,
+    active_schedule_ended_at: sch ? toEpochDate(sch.et) : null,
     active_schedule_missed_minutes: sch?.mm ?? 0,
     active_schedule_failure_at: sch?.fe ? new Date(String(sch.fe).length === 13 ? Number(sch.fe) : Number(sch.fe) * 1000) : null,
     active_schedule_failure_reason: getFailureReason(cleanScalar(sch?.fr)),
+    active_failure_code: cleanScalar(sch?.fr) || 0,
+    active_schedule_status: sch?.ss ?? null,
+  };
+}
+
+export function prepareStarterParametersRecord(insertedData: preparedLiveData): NewStarterBoxParameters {
+  return {
+    payload_version: String(insertedData.payload_version),
+    packet_number: insertedData.packet_number,
+    line_voltage_r: insertedData.line_voltage_r,
+    line_voltage_y: insertedData.line_voltage_y,
+    line_voltage_b: insertedData.line_voltage_b,
+    avg_voltage: insertedData.avg_voltage,
+    current_r: insertedData.current_r,
+    current_y: insertedData.current_y,
+    current_b: insertedData.current_b,
+    avg_current: insertedData.avg_current,
+    power_present: insertedData.power_present,
+    motor_mode: insertedData.motor_mode,
+    mode_description: insertedData.mode_description,
+    motor_state: insertedData.motor_state,
+    motor_description: insertedData.motor_description,
+    alert_code: insertedData.alert_code,
+    alert_description: insertedData.alert_description,
+    fault: insertedData.fault,
+    fault_description: insertedData.fault_description,
+    last_on_code: insertedData.last_on_code,
+    last_on_description: insertedData.last_on_description,
+    last_off_code: insertedData.last_off_code,
+    last_off_description: insertedData.last_off_description,
+    time_stamp: insertedData.time_stamp,
+    starter_id: insertedData.starter_id,
+    motor_id: insertedData.motor_id,
+    gateway_id: insertedData.gateway_id,
+    user_id: insertedData.user_id,
+    payload_valid: insertedData.payload_valid,
+    payload_errors: insertedData.payload_errors,
+    group_id: String(insertedData.group_id),
+    temperature: insertedData.temp,
+    schedule_id: insertedData.active_schedule_id,
+    schedule_start_time: insertedData.active_schedule_start_time,
+    schedule_end_time: insertedData.active_schedule_end_time,
+    schedule_runtime_minutes: insertedData.active_schedule_runtime_minutes,
+    schedule_type: insertedData.active_schedule_type,
+    schedule_missed_minutes: insertedData.active_schedule_missed_minutes,
+    schedule_failure_at: insertedData.active_schedule_failure_at,
+    schedule_failure_reason: insertedData.active_schedule_failure_reason,
+    schedule_failure_code: insertedData.active_failure_code || null,
+    schedule_status: insertedData.active_schedule_status ?? null,
   };
 }

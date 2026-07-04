@@ -107,6 +107,38 @@ export async function generateInvoiceUploadUrl(dispatchId: number | string, cont
   }
 }
 
+export async function uploadLiveDataPacket(
+  starterId: number,
+  packet: Record<string, any>,
+  timestamp?: string | Date,
+): Promise<string> {
+  try {
+    const ts = timestamp ? new Date(timestamp) : new Date();
+    const yyyy = ts.getUTCFullYear();
+    const mm   = String(ts.getUTCMonth() + 1).padStart(2, "0");
+    const dd   = String(ts.getUTCDate()).padStart(2, "0");
+    const hh   = String(ts.getUTCHours()).padStart(2, "0");
+    const min  = String(ts.getUTCMinutes()).padStart(2, "0");
+    const ss   = String(ts.getUTCSeconds()).padStart(2, "0");
+
+    const date = `${yyyy}-${mm}-${dd}`;
+    const time = `${hh}${min}${ss}`;
+    const key  = `iDhara/${starterId}/${date}/${time}.json`;
+
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: Buffer.from(JSON.stringify(packet), "utf-8"),
+      ContentType: "application/json",
+    });
+
+    await s3Client.send(command);
+    return key;
+  } catch (error: any) {
+    throw new S3ErrorException(500, `Failed to upload live data packet: ${error.message}`);
+  }
+}
+
 function getExtension(contentType: string): string {
   const map: Record<string, string> = {
     "image/jpeg": "jpg",
