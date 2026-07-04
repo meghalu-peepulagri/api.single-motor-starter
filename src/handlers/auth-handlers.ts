@@ -25,7 +25,6 @@ import { validatedRequest } from "../validations/validate-request.js";
 
 import ConflictException from "../exceptions/conflict-exception.js";
 import { checkPhoneUniqueness, checkPhoneUniquenessVerify } from "../services/db/user-services.js";
-import { getSubUserPermissions } from "../services/db/sub-user-services.js";
 import { SmsService } from "../services/sms/sms-service.js";
 
 const paramsValidateException = new ParamsValidateException();
@@ -80,7 +79,7 @@ export class AuthHandlers {
                 const phone = createdUser.phone;
                 const otpData = prepareOTPData(phone, "REGISTERED");
                 await otpService.createOTP(otpData);
-                // await smsService.sendSms(phone, otpData.otp, validUserReq.signature_id);
+                await smsService.sendSms(phone, otpData.otp, validUserReq.signature_id);
             }
 
             return sendResponse(c, CREATED, USER_CREATED);
@@ -109,10 +108,10 @@ export class AuthHandlers {
             const { password, ...userWithoutPassword } = loginUser;
 
             await ActivityService.logActivity({
-              performedBy: loginUser.id,
-              action: "LOGIN",
-              entityType: "AUTH",
-              entityId: loginUser.id,
+                performedBy: loginUser.id,
+                action: "LOGIN",
+                entityType: "AUTH",
+                entityId: loginUser.id,
             });
             const response = { user_details: userWithoutPassword, access_token, refresh_token };
             return sendResponse(c, CREATED, LOGIN_DONE, response);
@@ -135,7 +134,7 @@ export class AuthHandlers {
 
             const otpData = prepareOTPData(validatedPhone.phone, "SIGN_IN_WITH_OTP");
             await otpService.createOTP(otpData);
-            // await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
+            await smsService.sendSms(validatedPhone.phone, otpData.otp, validatedPhone.signature_id);
             return sendResponse(c, CREATED, OTP_SENT);
         } catch (error: any) {
             console.error("Error at sign in with phone :", error);
@@ -177,10 +176,10 @@ export class AuthHandlers {
             const { password, ...userDetails } = updatedUser;
 
             await ActivityService.logActivity({
-              performedBy: user.id,
-              action: "LOGIN",
-              entityType: "AUTH",
-              entityId: user.id,
+                performedBy: user.id,
+                action: "LOGIN",
+                entityType: "AUTH",
+                entityId: user.id,
             });
             const data = { user_details: userDetails, access_token, refresh_token };
 
@@ -198,9 +197,19 @@ export class AuthHandlers {
             return sendResponse(c, 200, USER_LOGIN, data);
         }
         catch (err: any) {
+            // Drizzle wraps the SQL in err.message but hides the real Postgres error in err.cause.
+            // Log the cause (code + detail) so the actual failure reason is visible.
+            const pg = err?.cause ?? err;
             console.error("Error at verify otp", err.message);
+            console.error("Error at verify otp — cause:", {
+                code: pg?.code,
+                message: pg?.message,
+                detail: pg?.detail,
+                column: pg?.column,
+                constraint: pg?.constraint,
+                table: pg?.table,
+            });
             handleJsonParseError(err);
-            console.error("Error at verify otp", err.message);
             throw err;
         }
     };
