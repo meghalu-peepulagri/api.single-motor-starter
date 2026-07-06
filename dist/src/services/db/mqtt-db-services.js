@@ -196,6 +196,11 @@ export async function updateStates(insertedData, previousData) {
     const record = prepareStarterParametersRecord(insertedData);
     try {
         const notificationData = await db.transaction(async (trx) => {
+            // Lock the motor row FIRST (exclusive) — before the inserts below take a FOR SHARE lock
+            // on it via their motor_id foreign key. Taking the FOR UPDATE lock up front gives every
+            // concurrent live-data transaction the same lock order, avoiding the SHARE→UPDATE lock
+            // upgrade that was deadlocking (40P01).
+            const lockedMotorRecord = motor_id ? await getLockedMotorSnapshot(trx, motor_id) : null;
             await saveSingleRecord(starterBoxParameters, record, trx);
             await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
             const starterBoxUpdates = {};
@@ -234,7 +239,8 @@ export async function updateStates(insertedData, previousData) {
             let effectiveLocationId = locationId;
             let notificationMotor = motor;
             if (motor_id) {
-                const currentMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
+                // Reuse the snapshot taken (and row lock acquired) at the top of the transaction.
+                const currentMotorRecord = lockedMotorRecord;
                 effectivePrevState = currentMotorRecord?.state ?? prevState;
                 effectivePrevMode = currentMotorRecord?.mode ?? prevMode;
                 effectiveCreatedBy = currentMotorRecord?.created_by ?? created_by ?? device_created_by;
@@ -471,6 +477,8 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         await updateLatestStarterSettingsFlc(starter_id, avg_current);
     const record = prepareStarterParametersRecord(insertedData);
     const notificationData = await db.transaction(async (trx) => {
+        // Lock the motor row FIRST to avoid the SHARE→UPDATE lock-upgrade deadlock (see updateStates).
+        const lockedMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
         await saveSingleRecord(starterBoxParameters, record, trx);
         await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
         const starterBoxUpdates = {};
@@ -509,7 +517,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         let effectiveLocationId = locationId;
         let notificationMotor = motor;
         if (motor_id) {
-            const currentMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
+            const currentMotorRecord = lockedMotorRecord;
             effectivePrevState = currentMotorRecord?.state ?? prevState;
             effectivePrevMode = currentMotorRecord?.mode ?? prevMode;
             effectiveCreatedBy = currentMotorRecord?.created_by ?? created_by ?? device_created_by;
@@ -640,6 +648,8 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
         return null;
     const record = prepareStarterParametersRecord(insertedData);
     const notificationData = await db.transaction(async (trx) => {
+        // Lock the motor row FIRST to avoid the SHARE→UPDATE lock-upgrade deadlock (see updateStates).
+        const lockedMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
         await saveSingleRecord(starterBoxParameters, record, trx);
         await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
         const starterBoxUpdates = {};
@@ -672,7 +682,7 @@ export async function updateDevicePowerONAndMotorStateOFF(insertedData, previous
                 await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
             }
         }
-        const currentMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
+        const currentMotorRecord = lockedMotorRecord;
         const effectivePrevState = currentMotorRecord?.state ?? prevState;
         const effectivePrevMode = currentMotorRecord?.mode ?? prevMode;
         const effectiveCreatedBy = currentMotorRecord?.created_by ?? created_by ?? device_created_by;
@@ -795,6 +805,8 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         return null;
     const record = prepareStarterParametersRecord(insertedData);
     const notificationData = await db.transaction(async (trx) => {
+        // Lock the motor row FIRST to avoid the SHARE→UPDATE lock-upgrade deadlock (see updateStates).
+        const lockedMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
         await saveSingleRecord(starterBoxParameters, record, trx);
         await saveSingleRecord(deviceTemperature, { device_id: starter_id, motor_id, temperature: temp, time_stamp }, trx);
         const starterBoxUpdates = {};
@@ -827,7 +839,7 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
                 await ActivityService.writeDevicePowerLog((created_by ?? device_created_by), starter_id, power, power_present, trx);
             }
         }
-        const currentMotorRecord = await getLockedMotorSnapshot(trx, motor_id);
+        const currentMotorRecord = lockedMotorRecord;
         const effectivePrevState = currentMotorRecord?.state ?? prevState;
         const effectivePrevMode = currentMotorRecord?.mode ?? prevMode;
         const effectiveCreatedBy = currentMotorRecord?.created_by ?? created_by ?? device_created_by;
