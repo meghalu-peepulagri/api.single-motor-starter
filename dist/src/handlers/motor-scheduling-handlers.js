@@ -743,7 +743,7 @@ export class MotorScheduleHandler {
                 throw new BadRequestException("Starter not found");
             const isOnline = starter.signal_quality != null && starter.signal_quality >= 1 && starter.signal_quality <= 30;
             if (!isOnline) {
-                return sendResponse(c, 200, "Device is offline — schedules remain PENDING and will be delivered on next heartbeat", { published: 0, failed: 0, pending: 0 });
+                return sendResponse(c, 200, "Device offline. Schedule will sync when online", { published: 0, failed: 0, pending: 0 });
             }
             const records = await findPendingSchedulesForRepublish(starterId, motorId);
             if (!records || records.length === 0) {
