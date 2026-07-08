@@ -29,8 +29,6 @@ import * as starterSettingsSchema from "./schemas/starter-settings.js";
 import * as subUserPermissionsSchema from "./schemas/sub-user-permissions.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
-import { env } from "process";
-import fs from "fs";
 const dbClient = new Pool({
     host: env.DB_HOST,
     port: Number(env.DB_PORT),
