@@ -87,7 +87,7 @@ export function getFailureReason(code: number | null | undefined): string | null
     case 8:
       return "Motor stopped because power supply was lost.";
     case 9:
-      return "Device is not in schedule mode. Please switch to schedule mode.";
+      return "Device was not in Schedule Mode during the scheduled time window";
     case 10:
       return "Motor is in cool down. It will start automatically once cool down ends.";
     case 11:
