@@ -3,7 +3,7 @@ import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motorScheduleLogs } from "../database/schemas/motor-schedule-logs.js";
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
-const EVALUATABLE_STATUSES = ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"];
+const EVALUATABLE_STATUSES = ["PENDING", "SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"];
 export function filterEvaluatable(schedules) {
     return schedules.filter(s => EVALUATABLE_STATUSES.includes(s.schedule_status));
 }

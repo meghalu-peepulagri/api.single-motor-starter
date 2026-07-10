@@ -5,7 +5,7 @@ import { motorScheduleLogs } from "../database/schemas/motor-schedule-logs.js";
 import { evaluateScheduleStatus } from "../helpers/schedule-status-evaluator.js";
 import type { ScheduleForEvaluation } from "../types/app-types.js";
 
-const EVALUATABLE_STATUSES = ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"] as const;
+const EVALUATABLE_STATUSES = ["PENDING", "SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"] as const;
 
 export function filterEvaluatable(schedules: any[]): ScheduleForEvaluation[] {
   return schedules.filter(s => EVALUATABLE_STATUSES.includes(s.schedule_status));
