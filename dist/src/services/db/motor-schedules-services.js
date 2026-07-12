@@ -504,12 +504,12 @@ export async function batchUpdateScheduleStatuses(groups) {
 // =================== EVALUATABLE SCHEDULES FOR STATUS SYNC ===================
 /**
  * Fetch all schedules whose status can be evaluated by the cron sync.
- * Targets: SCHEDULED, RUNNING, WAITING_NEXT_CYCLE (enabled & not archived).
+ * Targets: PENDING, SCHEDULED, RUNNING, WAITING_NEXT_CYCLE, PARTIAL (enabled & not archived).
  */
 export async function findEvaluatableSchedules() {
     const today = todayAsYYMMDD();
     return await db.query.motorSchedules.findMany({
-        where: and(eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, ["SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"]), or(
+        where: and(eq(motorSchedules.enabled, true), ne(motorSchedules.status, "ARCHIVED"), inArray(motorSchedules.schedule_status, ["PENDING", "SCHEDULED", "RUNNING", "WAITING_NEXT_CYCLE", "PARTIAL"]), or(
         // already active — always evaluate regardless of date
         inArray(motorSchedules.schedule_status, ["RUNNING", "PARTIAL"]), 
         // today falls within the schedule's date range
