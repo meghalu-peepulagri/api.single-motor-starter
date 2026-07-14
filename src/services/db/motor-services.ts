@@ -870,3 +870,27 @@ export async function getMotorsActiveScheduleCount(motorIds: number[]): Promise<
   }
   return map;
 }
+
+/**
+ * Fetch motors by id, scoped to a single starter box, for a manual control request.
+ * Returns only motors that actually belong to `starterId` and aren't archived —
+ * callers must treat any requested id missing from the result as invalid.
+ */
+export async function getMotorsByIdsForStarter(starterId: number, motorIds: number[]) {
+  if (!motorIds.length) return [];
+
+  return await db.query.motors.findMany({
+    where: and(
+      eq(motors.starter_id, starterId),
+      inArray(motors.id, motorIds),
+      ne(motors.status, "ARCHIVED"),
+    ),
+    columns: {
+      id: true,
+      motor_index: true,
+      starter_id: true,
+      alias_name: true,
+      state: true,
+    },
+  });
+}
