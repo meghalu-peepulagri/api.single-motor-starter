@@ -11,7 +11,7 @@ import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prep
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
 import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
-import { prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
+import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { getModeControlStatusDescription, getMotorControlStatusDescription, getValidNetwork, getValidStrength, isMotorControlStateCode, modeControlCodeToMode } from "../../helpers/packet-types-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
@@ -101,6 +101,28 @@ export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId:
       break;
     default:
       return null;
+  }
+}
+
+/**
+ * Inserts a starter_parameters record for an unmatched multi-motor block — the
+ * device is reporting live data for a motor slot (m1/m2) that has no motor
+ * currently attached at that motor_index. Bypasses the full updateStates/
+ * updateDevicePower... pipeline entirely (those short-circuit without motor_id
+ * for G02-G04, and would wrongly touch motors/alerts/runtime tables for G01) —
+ * this just records the raw reading with motor_id left null.
+ */
+export async function insertParametersForUnmatchedMotor(device: any, motorIndex: number, validated: any) {
+  const stubMotor = { id: null, state: 0, mode: "AUTO" };
+  const prepared = prepareLiveDataPayload(validated, device, stubMotor);
+  if (!prepared) return;
+
+  const record = prepareStarterParametersRecord(prepared);
+  try {
+    await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, record);
+    logger.info(`[multi-motor] parameters-only insert starter_id=${device.id} motor_index=${motorIndex} (no motor attached at this slot)`);
+  } catch (err: any) {
+    logger.error(`[multi-motor] parameters-only insert failed starter_id=${device.id} motor_index=${motorIndex}`, err);
   }
 }
 
