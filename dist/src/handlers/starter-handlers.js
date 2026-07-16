@@ -1,5 +1,5 @@
 import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, PCB_NUMBER_REQUIRED, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature } from "../database/schemas/device-temperature.js";
 import { motors } from "../database/schemas/motors.js";
@@ -19,7 +19,7 @@ import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsec
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterMotorsByPcb, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -127,21 +127,27 @@ export class StarterHandlers {
             const starterBox = await findStarterByPcbOrStarterNumber(validatedReqData.pcb_number);
             if (!starterBox)
                 throw new BadRequestException(STARTER_BOX_NOT_FOUND);
-            const lowerCaseTitle = validatedReqData.motor_name.trim().toLocaleLowerCase();
-            const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["location_id", "alias_name", "status"], ["=", "LOWER", "!="], [validatedReqData.location_id, lowerCaseTitle, "ARCHIVED"]);
-            if (existedMotor)
+            // Reject duplicate names within the same request.
+            const requestNames = validatedReqData.motors.map(m => m.motor_name.trim().toLocaleLowerCase());
+            if (new Set(requestNames).size !== requestNames.length)
                 throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
+            // Reject any name already used by another motor at this location.
+            for (const lowerCaseTitle of requestNames) {
+                const existedMotor = await getSingleRecordByMultipleColumnValues(motors, ["location_id", "alias_name", "status"], ["=", "LOWER", "!="], [validatedReqData.location_id, lowerCaseTitle, "ARCHIVED"]);
+                if (existedMotor)
+                    throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
+            }
             const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
             if (starterBox.device_status === "ASSIGNED" && motorCount > 0)
                 throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
             if (starterBox.device_status !== "DEPLOYED")
                 throw new BadRequestException(STARTER_NOT_DEPLOYED);
             await db.transaction(async (trx) => {
-                const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
+                const { updatedStarter, updatedMotors } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
                 await ActivityService.writeStarterAssignedLog(c.get("performer_id"), starterBox.id, {
                     user_id: c.get("performer_id"),
                     location_id: updatedStarter.location_id,
-                    motor_name: updatedMotor.alias_name
+                    motor_name: updatedMotors.map((m) => m.alias_name).filter(Boolean).join(", ")
                 }, trx);
             });
             return sendResponse(c, 201, STARTER_ASSIGNED_SUCCESSFULLY, { starter_id: starterBox.id });
@@ -413,6 +419,23 @@ export class StarterHandlers {
         }
         catch (error) {
             console.error("Error at starter connected motors :", error);
+            throw error;
+        }
+    };
+    // Same payload as starterConnectedMotorsHandler (device + all its motors, M1/M2...),
+    // but resolves the device by PCB / starter number instead of the numeric id.
+    motorsByPcbNumberHandler = async (c) => {
+        try {
+            const pcbNumber = c.req.param("pcbNumber");
+            if (!pcbNumber || !pcbNumber.trim())
+                throw new BadRequestException(PCB_NUMBER_REQUIRED);
+            const connectedMotors = await getStarterMotorsByPcb(pcbNumber);
+            if (!connectedMotors)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
+        }
+        catch (error) {
+            console.error("Error at motors by pcb number :", error);
             throw error;
         }
     };

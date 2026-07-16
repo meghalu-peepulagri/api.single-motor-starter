@@ -30,9 +30,12 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload, 
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
     const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
     const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
+    const { motorsList, ...starterInsertData } = preparedStarerData;
     return await db.transaction(async (trx) => {
-        const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
-        await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+        const starter = await saveSingleRecord(starterBoxes, starterInsertData, trx);
+        for (const motor of motorsList) {
+            await saveSingleRecord(motors, { ...motor, starter_id: starter.id }, trx);
+        }
         await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
         await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
         await saveSingleRecord(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
@@ -43,11 +46,6 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload, 
 }
 export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload, externalTrx) {
     const assignedAt = new Date();
-    const motorDetails = {
-        alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
-        location_id: payload.location_id, created_by: userPayload.id, assigned_at: assignedAt,
-    };
-    const existedMotorData = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterBoxPayload.id);
     const action = async (trx) => {
         const starterUpdateData = {
             user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt,
@@ -57,10 +55,23 @@ export async function assignStarterWithTransaction(payload, userPayload, starter
             starterUpdateData.installation_photo_key = payload.installation_photo_key;
         }
         const updatedStarter = await updateRecordById(starterBoxes, starterBoxPayload.id, starterUpdateData, trx);
-        const updatedMotor = existedMotorData
-            ? (await trx.update(motors).set({ ...motorDetails }).where(eq(motors.id, existedMotorData.id)).returning())[0]
-            : null;
-        return { updatedStarter, updatedMotor };
+        const updatedMotors = [];
+        for (const input of payload.motors) {
+            // Resolve the exact motor by id, scoped to this starter (single = 1 entry, dual = 2).
+            const target = await getSingleRecordByMultipleColumnValues(motors, ["id", "starter_id", "status"], ["=", "=", "!="], [input.motor_id, starterBoxPayload.id, "ARCHIVED"]);
+            if (!target)
+                continue;
+            const motorUpdate = {
+                alias_name: input.motor_name, location_id: payload.location_id, created_by: userPayload.id, assigned_at: assignedAt,
+            };
+            if (input.hp !== undefined && input.hp !== null)
+                motorUpdate.hp = String(input.hp);
+            if (input.motor_reference !== undefined && input.motor_reference !== null)
+                motorUpdate.motor_reference = input.motor_reference;
+            const updated = (await trx.update(motors).set(motorUpdate).where(eq(motors.id, target.id)).returning())[0];
+            updatedMotors.push(updated);
+        }
+        return { updatedStarter, updatedMotors };
     };
     if (externalTrx) {
         return await action(externalTrx);
@@ -93,6 +104,7 @@ export async function getStarterByMacWithMotor(mac) {
             hardware_version: true,
             sim_recharge_expires_at: true,
             device_mobile_number: true,
+            motor_support_type: true,
         },
         with: {
             motors: {
@@ -106,6 +118,7 @@ export async function getStarterByMacWithMotor(mac) {
                     location_id: true,
                     created_by: true,
                     alias_name: true,
+                    motor_index: true,
                 },
             },
         },
@@ -448,6 +461,39 @@ export async function findStarterByPcbOrStarterNumber(key) {
     const searchTerm = key.trim().toUpperCase();
     return await db.query.starterBoxes.findFirst({
         where: and(or(eq(starterBoxes.pcb_number, searchTerm), eq(starterBoxes.starter_number, searchTerm)), ne(starterBoxes.status, "ARCHIVED")),
+    });
+}
+// Focused payload for the mobile "motors by PCB" screen: device type info + its motors (M1/M2...).
+// Deliberately narrow (no name/power/device_mobile_number/device_status/gateway/location) so it
+// stays separate from starterConnectedMotors used by GET /starters/:id/motors.
+export async function getStarterMotorsByPcb(pcbNumber) {
+    const searchTerm = pcbNumber.trim().toUpperCase();
+    return await db.query.starterBoxes.findFirst({
+        where: and(or(eq(starterBoxes.pcb_number, searchTerm), eq(starterBoxes.starter_number, searchTerm)), ne(starterBoxes.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            pcb_number: true,
+            starter_number: true,
+            mac_address: true,
+            starter_type: true,
+            motor_starter_type: true,
+            motor_support_type: true,
+        },
+        with: {
+            motors: {
+                where: ne(motors.status, "ARCHIVED"),
+                columns: {
+                    id: true,
+                    name: true,
+                    hp: true,
+                    state: true,
+                    mode: true,
+                    alias_name: true,
+                    motor_index: true,
+                    test_run_completed_at: true,
+                },
+            },
+        },
     });
 }
 export async function getUniqueStarterIdsWithInTime(time) {

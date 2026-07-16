@@ -21,6 +21,7 @@ starterRoutes.patch("/update-status", starterHandlers.markStarterStatusHandler);
 starterRoutes.get("/:id/run-time", isAuthorized, starterHandlers.starterRunTimeHandler);
 starterRoutes.get("/:id/analytics", isAuthorized, starterHandlers.starterAnalyticsHandler);
 starterRoutes.get("/:id/motors", isAuthorized, starterHandlers.starterConnectedMotorsHandler);
+starterRoutes.get("/pcb/:pcbNumber/motors", isAuthorized, starterHandlers.motorsByPcbNumberHandler);
 starterRoutes.get("/:id/temperature", isAuthorized, starterHandlers.getTemperatureHandler);
 starterRoutes.get("/:starter_id/motors/:motor_id/alerts-faults", isAuthorized, starterHandlers.getConsecutiveAlertsFaultsHandler);
 starterRoutes.get("/:starter_id/motors/:motor_id/logs", isAuthorized, starterHandlers.getUnifiedLogsHandler);

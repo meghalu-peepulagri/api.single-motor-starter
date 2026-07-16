@@ -55,6 +55,93 @@ export function findTopicACKByType(payload) {
         default: return "UNKNOWN";
     }
 }
+// Status codes reported by the device inside a MOTOR_CONTROL_ACK (T:31) payload's
+// `D.m<N>` values, e.g. `{ "T": 31, "S": 89, "D": { "m1": 1, "m2": 6 } }`.
+// Only STATUS_OFF/STATUS_ON reflect an actual motor state change — the rest are
+// rejection/error reasons the device sends back instead of actuating the motor.
+export const MOTOR_CONTROL_STATUS = {
+    STATUS_OFF: 0,
+    STATUS_ON: 1,
+    STATUS_POWER_NOT_PRESENT: 2,
+    STATUS_FAULT_BLOCKED: 3,
+    STATUS_INVALID_CONTROL_MODE_CHANGE: 4,
+    STATUS_INVALID_REQUEST: 5,
+    STATUS_ALREADY_ON: 6,
+    STATUS_ALREADY_OFF: 7,
+    STATUS_FEATURE_NOT_ENABLED: 8,
+};
+export function getMotorControlStatusDescription(code) {
+    switch (code) {
+        case MOTOR_CONTROL_STATUS.STATUS_OFF: return "Motor turned OFF";
+        case MOTOR_CONTROL_STATUS.STATUS_ON: return "Motor turned ON";
+        case MOTOR_CONTROL_STATUS.STATUS_POWER_NOT_PRESENT: return "Power not present";
+        case MOTOR_CONTROL_STATUS.STATUS_FAULT_BLOCKED: return "Blocked by an active fault";
+        case MOTOR_CONTROL_STATUS.STATUS_INVALID_CONTROL_MODE_CHANGE: return "Invalid control mode change";
+        case MOTOR_CONTROL_STATUS.STATUS_INVALID_REQUEST: return "Invalid request";
+        case MOTOR_CONTROL_STATUS.STATUS_ALREADY_ON: return "Motor already ON";
+        case MOTOR_CONTROL_STATUS.STATUS_ALREADY_OFF: return "Motor already OFF";
+        case MOTOR_CONTROL_STATUS.STATUS_FEATURE_NOT_ENABLED: return "Feature not enabled";
+        default: return "Unknown motor control status";
+    }
+}
+// STATUS_OFF/STATUS_ON are the only codes that represent a real state transition;
+// every other code is an error/rejection reason and must not be written to motors.state.
+export function isMotorControlStateCode(code) {
+    return code === MOTOR_CONTROL_STATUS.STATUS_OFF || code === MOTOR_CONTROL_STATUS.STATUS_ON;
+}
+// Status codes reported by the device inside a MODE_CHANGE_ACK (T:32) payload's
+// `D.m<N>` values, e.g. `{ "T": 32, "S": 89, "D": { "m1": 1, "m2": 6 } }`.
+// Codes 0/1/2 are the actual mode reached; 3-8 are rejection reasons the device
+// sends back instead of changing mode. NOTE: this numbering is specific to the
+// multi-motor MODE_CHANGE ack and intentionally differs from the legacy scalar
+// `controlMode()` mapping in control-helpers.ts (used for single-motor live-data
+// mode parsing, T:41/35) — the two message types are not interchangeable.
+export const MODE_CONTROL_STATUS = {
+    MANUAL: 0,
+    AUTO: 1,
+    SCHEDULE: 2,
+    STATUS_FAULT_BLOCKED: 3,
+    STATUS_INVALID_CONTROL_MODE_CHANGE: 4,
+    STATUS_INVALID_REQUEST: 5,
+    STATUS_ALREADY_MANUAL: 6,
+    STATUS_ALREADY_AUTO: 7,
+    STATUS_FEATURE_NOT_ENABLED: 8,
+};
+export function getModeControlStatusDescription(code) {
+    switch (code) {
+        case MODE_CONTROL_STATUS.MANUAL: return "Mode set to MANUAL";
+        case MODE_CONTROL_STATUS.AUTO: return "Mode set to AUTO";
+        case MODE_CONTROL_STATUS.SCHEDULE: return "Mode set to SCHEDULE";
+        case MODE_CONTROL_STATUS.STATUS_FAULT_BLOCKED: return "Blocked by an active fault";
+        case MODE_CONTROL_STATUS.STATUS_INVALID_CONTROL_MODE_CHANGE: return "Invalid control mode change";
+        case MODE_CONTROL_STATUS.STATUS_INVALID_REQUEST: return "Invalid request";
+        case MODE_CONTROL_STATUS.STATUS_ALREADY_MANUAL: return "Mode already MANUAL";
+        case MODE_CONTROL_STATUS.STATUS_ALREADY_AUTO: return "Mode already AUTO";
+        case MODE_CONTROL_STATUS.STATUS_FEATURE_NOT_ENABLED: return "Feature not enabled";
+        default: return "Unknown mode control status";
+    }
+}
+const MODE_CONTROL_CODE_TO_MODE = {
+    [MODE_CONTROL_STATUS.MANUAL]: "MANUAL",
+    [MODE_CONTROL_STATUS.AUTO]: "AUTO",
+    [MODE_CONTROL_STATUS.SCHEDULE]: "SCHEDULE",
+};
+// True only for 0/1/2 — the codes that represent an actual mode, not a rejection reason.
+export function isModeControlStateCode(code) {
+    return code === 0 || code === 1 || code === 2;
+}
+/** Maps a MODE_CHANGE_ACK code (0/1/2) to the motors.mode enum value; null for rejection codes. */
+export function modeControlCodeToMode(code) {
+    return MODE_CONTROL_CODE_TO_MODE[code] ?? null;
+}
+/** Inverse of modeControlCodeToMode — used to build the T:2 publish payload. */
+export function modeToControlCode(mode) {
+    if (mode === "MANUAL")
+        return 0;
+    if (mode === "AUTO")
+        return 1;
+    return 2;
+}
 export function getPacketDescription(code) {
     switch (code) {
         // ACK TYPES

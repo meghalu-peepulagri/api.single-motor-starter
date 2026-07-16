@@ -17,6 +17,7 @@ export async function getMotorWithStarterDetails(motorId) {
             mode: true,
             created_by: true,
             alias_name: true,
+            motor_reference: true,
         },
         with: {
             location: {
@@ -42,6 +43,8 @@ export async function getMotorWithStarterDetails(motorId) {
                     sim_recharge_expires_at: true,
                     hardware_version: true,
                     device_mobile_number: true,
+                    starter_type: true,
+                    motor_starter_type: true,
                 },
                 with: {
                     starterParameters: {

@@ -6,14 +6,14 @@ import { deviceTemperature } from "../../database/schemas/device-temperature.js"
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { pendingAckMap, schedulePartialAckMap } from "../../helpers/ack-tracker-hepler.js";
-import { controlMode } from "../../helpers/control-helpers.js";
+import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
+import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
-import { prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
+import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
-import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
+import { getModeControlStatusDescription, getMotorControlStatusDescription, getValidNetwork, getValidStrength, isMotorControlStateCode, modeControlCodeToMode } from "../../helpers/packet-types-helper.js";
 import { logger } from "../../utils/logger.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
@@ -92,6 +92,28 @@ export async function saveLiveDataTopic(insertedData, groupId, previousData) {
             break;
         default:
             return null;
+    }
+}
+/**
+ * Inserts a starter_parameters record for an unmatched multi-motor block — the
+ * device is reporting live data for a motor slot (m1/m2) that has no motor
+ * currently attached at that motor_index. Bypasses the full updateStates/
+ * updateDevicePower... pipeline entirely (those short-circuit without motor_id
+ * for G02-G04, and would wrongly touch motors/alerts/runtime tables for G01) —
+ * this just records the raw reading with motor_id left null.
+ */
+export async function insertParametersForUnmatchedMotor(device, motorIndex, validated) {
+    const stubMotor = { id: null, state: 0, mode: "AUTO" };
+    const prepared = prepareLiveDataPayload(validated, device, stubMotor);
+    if (!prepared)
+        return;
+    const record = prepareStarterParametersRecord(prepared);
+    try {
+        await saveSingleRecord(starterBoxParameters, record);
+        logger.info(`[multi-motor] parameters-only insert starter_id=${device.id} motor_index=${motorIndex} (no motor attached at this slot)`);
+    }
+    catch (err) {
+        logger.error(`[multi-motor] parameters-only insert failed starter_id=${device.id} motor_index=${motorIndex}`, err);
     }
 }
 export async function selectTopicAck(topicType, payload, topic) {
@@ -954,10 +976,13 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData, previousDa
         }
     }
 }
-// Motor control ack
+// Motor control ack — D is a map of one or more motor slots, e.g. { m1: 1, m2: 6 }.
+// Only STATUS_OFF(0)/STATUS_ON(1) are real state transitions; codes 2-8 are
+// rejection reasons (fault, already on/off, invalid request, ...) reported back
+// by the device instead of an actuation, and must not be written to motors.state.
 export async function motorControlAckHandler(message, topic) {
+    const macAddress = topic.split("/")[1];
     try {
-        const macAddress = topic.split("/")[1];
         if (!macAddress) {
             console.error("Invalid topic format: MAC address not found");
             return;
@@ -967,49 +992,74 @@ export async function motorControlAckHandler(message, topic) {
             console.error(`No starter found with MAC address [${macAddress}] or no motors attached`);
             return;
         }
-        const motor = validMac.motors[0];
+        const ackData = message?.D ?? {};
+        const motorsByIndex = new Map(validMac.motors.map((m) => [m.motor_index ?? 1, m]));
         const starter_id = validMac.id;
-        const motor_id = motor.id;
-        const location_id = motor.location_id;
-        const mode_description = motor.mode;
-        const prevState = motor.state;
-        const newState = message.D;
-        const stateChanged = newState !== prevState;
-        const shouldWriteMotorHistory = newState === 0 || newState === 1;
-        const notificationData = await db.transaction(async (trx) => {
-            // Update motor state ONLY if changed
-            if (stateChanged && (newState === 0 || newState === 1)) {
-                const updateData = { state: newState, updated_at: new Date() };
-                if (newState === 1)
-                    updateData.motor_last_on_at = new Date();
-                else if (newState === 0)
-                    updateData.motor_last_off_at = new Date();
-                await trx.update(motors).set(updateData).where(eq(motors.id, motor.id));
-                await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
-            }
-            else {
-                const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
-                if (isFirstRecord) {
+        const notifications = [];
+        const debouncedStateResults = [];
+        await db.transaction(async (trx) => {
+            for (const [key, rawState] of Object.entries(ackData)) {
+                const motorIndex = parseMotorKey(key);
+                const motor = motorIndex !== null ? motorsByIndex.get(motorIndex) : undefined;
+                if (!motor) {
+                    logger.warn(`[motor-control-ack] Unknown motor slot "${key}" on starter ${macAddress} (starter_id=${starter_id}) — skipping`);
+                    continue;
+                }
+                const newState = Number(rawState);
+                const motor_id = motor.id;
+                const location_id = motor.location_id;
+                const mode_description = motor.mode;
+                const prevState = motor.state;
+                const isStateCode = isMotorControlStateCode(newState);
+                const stateChanged = isStateCode && newState !== prevState;
+                if (stateChanged) {
+                    const updateData = { state: newState, updated_at: new Date() };
+                    if (newState === 1)
+                        updateData.motor_last_on_at = new Date();
+                    else
+                        updateData.motor_last_off_at = new Date();
+                    await trx.update(motors).set(updateData).where(eq(motors.id, motor_id));
                     await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+                    await writeMotorStatusHistoryIfChanged({
+                        starter_id,
+                        motor_id,
+                        status: newState === 1 ? "ON" : "OFF",
+                        time_stamp: new Date(),
+                        trx,
+                    });
+                }
+                else if (isStateCode) {
+                    const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+                    if (isFirstRecord) {
+                        await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+                    }
+                }
+                else {
+                    // Rejection/error code (fault, already on/off, invalid request, ...) — log only.
+                    logger.warn(`[motor-control-ack] starter=${starter_id} motor=${motor_id} (${key}) rejected: ${getMotorControlStatusDescription(newState)} (code=${newState})`);
+                }
+                // Always log the ACK itself (changed or not), same as before.
+                await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor_id, { state: prevState, mode: mode_description }, { state: isStateCode ? newState : prevState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
+                if (stateChanged) {
+                    const notificationData = prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, validMac.starter_number);
+                    if (notificationData) {
+                        notifications.push(notificationData);
+                        debouncedStateResults.push({ motorId: motor_id, newState });
+                    }
                 }
             }
-            if (shouldWriteMotorHistory) {
-                await writeMotorStatusHistoryIfChanged({
-                    starter_id,
-                    motor_id,
-                    status: newState === 1 ? "ON" : "OFF",
-                    time_stamp: new Date(),
-                    trx,
-                });
-            }
-            // Always log ACK (changed or not)
-            await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
-            return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, validMac.starter_number) : null;
         });
-        // Send notification after transaction completes (debounced)
-        if (notificationData) {
-            if (shouldSendNotification(notificationData.motorId, "state", newState)) {
-                await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, starter_id);
+        // Resolve any in-flight REST request waiting on this ack (sendMotorControlCommand).
+        const pendingAck = motorControlPendingAckMap.get(macAddress);
+        if (pendingAck && pendingAck.sequenceNumber === message.S) {
+            pendingAck.resolve({ acked: true, data: ackData });
+        }
+        // Send notifications after the transaction commits (debounced per motor).
+        for (let i = 0; i < notifications.length; i++) {
+            const n = notifications[i];
+            const { newState } = debouncedStateResults[i];
+            if (shouldSendNotification(n.motorId, "state", newState)) {
+                await sendUserNotification(n.userId, n.title, n.message, n.motorId, n.starterId);
             }
         }
     }
@@ -1019,30 +1069,66 @@ export async function motorControlAckHandler(message, topic) {
         throw error;
     }
 }
-// Motor mode ack
+// Motor mode ack — D is a map of one or more motor slots, e.g. { m1: 1, m2: 6 }.
+// Only codes 0/1/2 (MANUAL/AUTO/SCHEDULE) are real mode transitions; codes 3-8 are
+// rejection reasons (fault, already manual/auto, invalid request, ...) reported
+// back by the device instead of a mode change, and must not be written to motors.mode.
 export async function motorModeChangeAckHandler(message, topic) {
+    const macAddress = topic.split("/")[1];
     try {
-        const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+        const validMac = await getStarterByMacWithMotor(macAddress);
         if (!validMac?.id || !validMac.motors.length) {
             logger.error(`Any starter found with given MAC [${topic}]`);
             return null;
         }
         ;
-        const mode = controlMode(message.D);
-        const motor = validMac.motors[0];
+        const ackData = message?.D ?? {};
+        const motorsByIndex = new Map(validMac.motors.map((m) => [m.motor_index ?? 1, m]));
+        const starter_id = validMac.id;
+        const notifications = [];
+        const debouncedModeResults = [];
         await db.transaction(async (trx) => {
-            if (mode !== motor.mode) {
-                if (mode == "MANUAL" || mode == "AUTO" || mode == "SCHEDULE") {
-                    await trx.update(motors).set({ mode: mode, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
+            for (const [key, rawCode] of Object.entries(ackData)) {
+                const motorIndex = parseMotorKey(key);
+                const motor = motorIndex !== null ? motorsByIndex.get(motorIndex) : undefined;
+                if (!motor) {
+                    logger.warn(`[mode-control-ack] Unknown motor slot "${key}" on starter ${macAddress} (starter_id=${starter_id}) — skipping`);
+                    continue;
+                }
+                const code = Number(rawCode);
+                const motor_id = motor.id;
+                const prevMode = motor.mode;
+                const newMode = modeControlCodeToMode(code);
+                const modeChanged = newMode !== null && newMode !== prevMode;
+                if (modeChanged) {
+                    await trx.update(motors).set({ mode: newMode, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor_id));
+                }
+                else if (newMode === null) {
+                    // Rejection/error code (fault, already manual/auto, invalid request, ...) — log only.
+                    logger.warn(`[mode-control-ack] starter=${starter_id} motor=${motor_id} (${key}) rejected: ${getModeControlStatusDescription(code)} (code=${code})`);
+                }
+                // Always log the ACK itself (changed or not), same as before.
+                await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor_id, { mode: prevMode }, { mode: newMode ?? prevMode }, "MOTOR_MODE_ACK", trx, starter_id);
+                if (modeChanged) {
+                    const notificationData = prepareMotorModeControlNotificationData(motor, newMode, starter_id, validMac.starter_number);
+                    if (notificationData) {
+                        notifications.push(notificationData);
+                        debouncedModeResults.push({ motorId: motor_id, newMode: newMode });
+                    }
                 }
             }
-            await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, validMac.id);
         });
-        const modeChanged = mode !== motor.mode;
-        const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, validMac.id, validMac.starter_number) : null;
-        if (notificationData) {
-            if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
-                await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
+        // Resolve any in-flight REST request waiting on this ack (sendModeControlCommand).
+        const pendingAck = modeControlPendingAckMap.get(macAddress);
+        if (pendingAck && pendingAck.sequenceNumber === message.S) {
+            pendingAck.resolve({ acked: true, data: ackData });
+        }
+        // Send notifications after the transaction commits (debounced per motor).
+        for (let i = 0; i < notifications.length; i++) {
+            const n = notifications[i];
+            const { newMode } = debouncedModeResults[i];
+            if (shouldSendNotification(n.motorId, "mode", newMode)) {
+                await sendUserNotification(n.userId, n.title, n.message, n.motorId, n.starterId);
             }
         }
     }
