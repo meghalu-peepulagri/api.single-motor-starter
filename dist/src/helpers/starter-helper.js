@@ -15,16 +15,20 @@ export function prepareStarterData(starterBoxPayload, userPayload, dispatchDetai
             name: motor.name,
             hp: String(motor.hp),
             motor_index: index + 1,
+            motor_reference: motor.motor_reference ?? null,
         }))
         : [{
                 name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
                 hp: "2",
                 motor_index: 1,
             }];
-    // Keep the device's motor_support_type consistent with how many motors were actually created.
-    const motor_support_type = motorsList.length > 1 ? "MULTIPLE_MOTORS" : "SINGLE_MOTOR";
+    // Single vs multiple motor drives motor_support_type; starter_type honors the payload value
+    // when sent, otherwise falls back to the same single/multiple derivation.
+    const isMultiMotor = motorsList.length > 1;
+    const motor_support_type = isMultiMotor ? "MULTIPLE_MOTORS" : "SINGLE_MOTOR";
+    const starter_type = starterFields.starter_type ?? (isMultiMotor ? "MULTI_STARTER" : "SINGLE_STARTER");
     return {
-        ...starterFields, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorsList, motor_support_type,
+        ...starterFields, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorsList, motor_support_type, starter_type,
         sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,
         device_mobile_number: dispatchDetails?.sim_no ?? starterFields.device_mobile_number, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
     };
