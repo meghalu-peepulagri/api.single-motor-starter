@@ -519,6 +519,13 @@
       "when": 1782377013235,
       "tag": "0073_mushy_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1784131169450,
+      "tag": "0074_wise_valkyrie",
+      "breakpoints": true
     }
   ]
 }

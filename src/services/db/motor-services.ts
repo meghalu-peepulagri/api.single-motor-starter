@@ -89,6 +89,7 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
       state: true,
       alias_name: true,
       test_run_status: true,
+      motor_reference: true,
     },
 
     with: {
@@ -110,6 +111,9 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
           network_type: true,
           starter_number: true,
           device_allocation: true,
+          starter_type: true,
+          motor_starter_type: true,
+          motor_support_type: true,
         },
 
         with: {

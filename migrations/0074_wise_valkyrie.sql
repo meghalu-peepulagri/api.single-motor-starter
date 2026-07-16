@@ -1,0 +1,2 @@
+CREATE TYPE "public"."motor_starter_type" AS ENUM('STAR_RELAY', 'CONTACTOR');--> statement-breakpoint
+ALTER TABLE "starter_boxes" ADD COLUMN "motor_starter_type" "motor_starter_type" DEFAULT 'CONTACTOR' NOT NULL;

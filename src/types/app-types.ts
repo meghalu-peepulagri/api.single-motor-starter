@@ -61,6 +61,11 @@ export interface starterBoxPayloadType {
   starter_number: string;
   mac_address?: string | null | undefined;
   gateway_id?: number | null | undefined;
+  device_mobile_number?: string | null | undefined;
+  hardware_version?: string | null | undefined;
+  motor_support_type?: "SINGLE_MOTOR" | "MULTIPLE_MOTORS";
+  motor_starter_type?: "STAR_RELAY" | "CONTACTOR";
+  motors?: { name: string; hp: number }[];
 }
 
 export interface ValidationOutput {
@@ -75,11 +80,11 @@ export interface ValidationOutput {
 
 export interface AssignStarterType {
   pcb_number: string;
-  motor_name: string;
   location_id: number;
-  hp: number;
   device_installed_location?: string | null;
   installation_photo_key?: string;
+  // Unified single & dual motor input: one entry per motor of the device.
+  motors: { motor_id: number; motor_name: string; hp?: number; motor_reference?: string | null }[];
 }
 
 export interface RetryOptions {

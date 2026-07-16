@@ -13,15 +13,29 @@ import type { StarterDispatch } from "../database/schemas/starter-dispatch.js";
 
 export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User, dispatchDetails?: StarterDispatch | null, gatewayId?: number) {
 
-  const motorDetails = {
-    name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
-    hp: 2,
-  };
+  const { motors: motorsInput, ...starterFields } = starterBoxPayload;
+
+  // One row per motor from the "Motors" section (M1, M2...), each with its own motor_index.
+  // Fall back to the legacy single default motor when no motors are supplied.
+  const motorsList = Array.isArray(motorsInput) && motorsInput.length > 0
+    ? motorsInput.map((motor, index) => ({
+        name: motor.name,
+        hp: String(motor.hp),
+        motor_index: index + 1,
+      }))
+    : [{
+        name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
+        hp: "2",
+        motor_index: 1,
+      }];
+
+  // Keep the device's motor_support_type consistent with how many motors were actually created.
+  const motor_support_type = motorsList.length > 1 ? "MULTIPLE_MOTORS" : "SINGLE_MOTOR";
 
   return {
-    ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails
+    ...starterFields, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorsList, motor_support_type
     , sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,
-    device_mobile_number: dispatchDetails?.sim_no, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
+    device_mobile_number: dispatchDetails?.sim_no ?? starterFields.device_mobile_number, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
   }
 };
 
