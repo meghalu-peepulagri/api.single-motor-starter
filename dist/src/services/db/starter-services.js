@@ -143,6 +143,9 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             signal_quality: true,
             network_type: true,
             device_mobile_number: true,
+            starter_type: true,
+            motor_support_type: true,
+            motor_starter_type: true,
         },
         with: {
             gateway: {

@@ -14,7 +14,7 @@ import { sendMotorControlCommand } from "../helpers/motor-control-sync-helper.js
 import { sendModeControlCommand } from "../helpers/mode-control-sync-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { getMotorsByIdsForStarter, getMotorsLatestRuntime, getMotorsTotalRunOnTime, paginatedMotorsList } from "../services/db/motor-services.js";
+import { getMotorsForStarterControl, getMotorsLatestRuntime, getMotorsTotalRunOnTime, paginatedMotorsList } from "../services/db/motor-services.js";
 import { getMotorWithStarterDetails } from "../services/db/motor-starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -139,32 +139,42 @@ export class MotorHandlers {
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
-      const requestedByMotorId = new Map(validReq.motors.map(m => [m.motor_id, m.state]));
-      const uniqueMotorIds = [...requestedByMotorId.keys()];
+      // Resolve each request entry to one of the starter's motors — motor_reference takes
+      // precedence when provided, otherwise motor_id — then publish keyed by that motor's
+      // motor_index (m1/m2...).
+      const starterMotors = await getMotorsForStarterControl(starterId);
+      const resolved = validReq.motors.map(m => {
+        const motor = m.motor_reference
+          ? starterMotors.find(sm => sm.motor_reference === m.motor_reference)
+          : starterMotors.find(sm => sm.id === m.motor_id);
+        return motor ? { motor, state: m.state as 0 | 1 } : null;
+      });
 
+      if (resolved.some(r => r === null)) {
+        throw new BadRequestException(MOTOR_CONTROL_MOTORS_NOT_FOUND);
+      }
+      const resolvedMotors = resolved as { motor: (typeof starterMotors)[number]; state: 0 | 1 }[];
+
+      const uniqueMotorIds = [...new Set(resolvedMotors.map(r => r.motor.id))];
       if (starter.motor_support_type === "SINGLE_MOTOR" && uniqueMotorIds.length > 1) {
         throw new BadRequestException(MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED);
       }
 
-      const motorsFound = await getMotorsByIdsForStarter(starterId, uniqueMotorIds);
-      if (motorsFound.length !== uniqueMotorIds.length) {
-        throw new BadRequestException(MOTOR_CONTROL_MOTORS_NOT_FOUND);
-      }
-
-      const targets = motorsFound.map(m => ({
-        motor_index: m.motor_index ?? 1,
-        state: requestedByMotorId.get(m.id) as 0 | 1,
+      const targets = resolvedMotors.map(r => ({
+        motor_index: r.motor.motor_index ?? 1,
+        state: r.state,
       }));
 
       const ackResult = await sendMotorControlCommand(starter, targets);
 
-      const results = motorsFound.map(m => {
-        const idx = m.motor_index ?? 1;
+      const results = resolvedMotors.map(r => {
+        const idx = r.motor.motor_index ?? 1;
         const ackCode = ackResult.data?.[motorKey(idx)];
         return {
-          motor_id: m.id,
+          motor_id: r.motor.id,
+          motor_reference: r.motor.motor_reference ?? null,
           motor_index: idx,
-          requested_state: requestedByMotorId.get(m.id),
+          requested_state: r.state,
           acked: ackCode !== undefined,
           ack_code: ackCode ?? null,
           ack_status: ackCode !== undefined ? getMotorControlStatusDescription(ackCode) : null,
@@ -200,32 +210,41 @@ export class MotorHandlers {
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
-      const requestedByMotorId = new Map(validReq.motors.map(m => [m.motor_id, m.mode]));
-      const uniqueMotorIds = [...requestedByMotorId.keys()];
+      // Resolve each request entry to one of the starter's motors — motor_reference takes
+      // precedence when provided, otherwise motor_id — then publish keyed by motor_index (m1/m2...).
+      const starterMotors = await getMotorsForStarterControl(starterId);
+      const resolved = validReq.motors.map(m => {
+        const motor = m.motor_reference
+          ? starterMotors.find(sm => sm.motor_reference === m.motor_reference)
+          : starterMotors.find(sm => sm.id === m.motor_id);
+        return motor ? { motor, mode: m.mode as "MANUAL" | "AUTO" } : null;
+      });
 
+      if (resolved.some(r => r === null)) {
+        throw new BadRequestException(MOTOR_CONTROL_MOTORS_NOT_FOUND);
+      }
+      const resolvedMotors = resolved as { motor: (typeof starterMotors)[number]; mode: "MANUAL" | "AUTO" }[];
+
+      const uniqueMotorIds = [...new Set(resolvedMotors.map(r => r.motor.id))];
       if (starter.motor_support_type === "SINGLE_MOTOR" && uniqueMotorIds.length > 1) {
         throw new BadRequestException(MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED);
       }
 
-      const motorsFound = await getMotorsByIdsForStarter(starterId, uniqueMotorIds);
-      if (motorsFound.length !== uniqueMotorIds.length) {
-        throw new BadRequestException(MOTOR_CONTROL_MOTORS_NOT_FOUND);
-      }
-
-      const targets = motorsFound.map(m => ({
-        motor_index: m.motor_index ?? 1,
-        mode: requestedByMotorId.get(m.id) as "MANUAL" | "AUTO",
+      const targets = resolvedMotors.map(r => ({
+        motor_index: r.motor.motor_index ?? 1,
+        mode: r.mode,
       }));
 
       const ackResult = await sendModeControlCommand(starter, targets);
 
-      const results = motorsFound.map(m => {
-        const idx = m.motor_index ?? 1;
+      const results = resolvedMotors.map(r => {
+        const idx = r.motor.motor_index ?? 1;
         const ackCode = ackResult.data?.[motorKey(idx)];
         return {
-          motor_id: m.id,
+          motor_id: r.motor.id,
+          motor_reference: r.motor.motor_reference ?? null,
           motor_index: idx,
-          requested_mode: requestedByMotorId.get(m.id),
+          requested_mode: r.mode,
           acked: ackCode !== undefined,
           ack_code: ackCode ?? null,
           ack_status: ackCode !== undefined ? getModeControlStatusDescription(ackCode) : null,

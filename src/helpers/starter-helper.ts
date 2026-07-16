@@ -76,6 +76,23 @@ export function starterFilters(query: any, user: any) {
 
   if (query.status) filters.push(eq(starterBoxes.status, query.status));
   if (query.location_id) filters.push(eq(starterBoxes.location_id, query.location_id));
+
+  // Filter by motor type based on the ACTUAL number of (non-archived) motors, so it matches
+  // what the UI renders (single toggle vs M1/M2) — not the motor_support_type column, which
+  // can be out of sync with the real motor count.
+  // ?motor_type=single -> exactly 1 motor, ?motor_type=dual -> 2 or more motors.
+  if (query.motor_type) {
+    const motorType = String(query.motor_type).trim().toLowerCase();
+    const motorCount = sql`(
+      SELECT COUNT(*) FROM ${motors} AS m
+      WHERE m.starter_id = ${starterBoxes.id} AND m.status <> 'ARCHIVED'
+    )`;
+    if (motorType === "single") {
+      filters.push(sql`${motorCount} = 1`);
+    } else if (motorType === "dual" || motorType === "multiple" || motorType === "multi") {
+      filters.push(sql`${motorCount} >= 2`);
+    }
+  }
   if (query.power) {
     const powerValue = query.power === "ON" ? 1 : query.power === "OFF" ? 0 : undefined;
     if (powerValue !== undefined) {

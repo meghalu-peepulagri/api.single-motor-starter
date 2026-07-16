@@ -20,6 +20,7 @@ export const vUpdateMotorTestRunStatus = v.object({
 export const vControlMotors = v.object({
     motors: v.pipe(v.array(v.object({
         motor_id: requiredNumber(MOTOR_ID_REQUIRED),
+        motor_reference: v.optional(v.string()),
         state: v.picklist([0, 1], MOTOR_CONTROL_STATE_INVALID),
     })), v.minLength(1, MOTORS_ARRAY_REQUIRED)),
 });
@@ -29,6 +30,7 @@ export const vControlMotors = v.object({
 export const vControlMotorsMode = v.object({
     motors: v.pipe(v.array(v.object({
         motor_id: requiredNumber(MOTOR_ID_REQUIRED),
+        motor_reference: v.optional(v.string()),
         mode: v.picklist(["MANUAL", "AUTO"], MOTOR_CONTROL_MODE_INVALID),
     })), v.minLength(1, MOTORS_ARRAY_REQUIRED)),
 });

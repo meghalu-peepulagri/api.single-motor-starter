@@ -898,3 +898,22 @@ export async function getMotorsByIdsForStarter(starterId: number, motorIds: numb
     },
   });
 }
+
+/**
+ * Fetch all non-archived motors of a starter for a manual control request, so each
+ * request entry can be matched by motor_id OR motor_reference and mapped to its motor_index.
+ */
+export async function getMotorsForStarterControl(starterId: number) {
+  return await db.query.motors.findMany({
+    where: and(
+      eq(motors.starter_id, starterId),
+      ne(motors.status, "ARCHIVED"),
+    ),
+    columns: {
+      id: true,
+      motor_index: true,
+      motor_reference: true,
+      starter_id: true,
+    },
+  });
+}
