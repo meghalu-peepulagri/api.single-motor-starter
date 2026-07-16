@@ -64,8 +64,9 @@ export interface starterBoxPayloadType {
   device_mobile_number?: string | null | undefined;
   hardware_version?: string | null | undefined;
   motor_support_type?: "SINGLE_MOTOR" | "MULTIPLE_MOTORS";
+  starter_type?: "SINGLE_STARTER" | "MULTI_STARTER";
   motor_starter_type?: "STAR_RELAY" | "CONTACTOR";
-  motors?: { name: string; hp: number }[];
+  motors?: { name: string; hp: number; motor_reference?: string | null }[];
 }
 
 export interface ValidationOutput {

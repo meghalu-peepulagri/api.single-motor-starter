@@ -18,11 +18,13 @@ export const vAddStarter = v.object({
   // Add Device & Motors screen. All optional so existing single-motor callers that omit
   // them keep working (they fall back to one default motor).
   motor_support_type: v.optional(v.picklist(["SINGLE_MOTOR", "MULTIPLE_MOTORS"], "Invalid motor type")),
-  motor_starter_type: v.optional(v.picklist(["STAR_RELAY", "CONTACTOR"], "Invalid starter type")),
+  starter_type: v.optional(v.picklist(["SINGLE_STARTER", "MULTI_STARTER"], "Invalid starter type")),
+  motor_starter_type: v.optional(v.picklist(["STAR_RELAY", "CONTACTOR"], "Invalid motor starter type")),
   motors: v.optional(v.pipe(
     v.array(v.object({
       name: motorNameValidator,
       hp: hpValidator,
+      motor_reference: v.nullish(v.optional(v.string())),
     })),
     v.minLength(1, MOTORS_ARRAY_REQUIRED),
     v.maxLength(2, "A device supports at most 2 motors"),
