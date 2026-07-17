@@ -1,8 +1,13 @@
 import { sql } from "drizzle-orm";
-import { integer, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import type { MultiMotorSettingsDefaultsConfig } from "../../types/multi-motor-settings-types.js";
 
 export const starterDefaultSettings = pgTable("starter_default_settings", {
   id: serial("id").primaryKey(),
+
+  // Global template block the admin UI pre-fills a new motor's settings form with —
+  // see starter-settings.ts for the rationale behind JSON instead of a child table.
+  multi_motor_defaults: jsonb("multi_motor_defaults").$type<MultiMotorSettingsDefaultsConfig>(),
 
   // ================= Device Configuration (35 fields) =================
   allflt_en: integer("allflt_en").default(0),       // To enable and disable faults

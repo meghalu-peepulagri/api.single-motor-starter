@@ -10,6 +10,7 @@ import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWe
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
+import { vUpdateMultiMotorSettings } from "./schema/multi-motor-settings-validations.js";
 import { vAddStarterDispatch } from "./schema/starter-dispatch-validations.js";
 import { vAddGateway, vAssignGatewayToUser, vRenameGateway, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
 import { createSubUserSchema, updateSubUserSchema, updatePermissionsSchema, removePermissionsSchema } from "./schema/sub-user-validations.js";
@@ -40,6 +41,7 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "assign-location-to-starter": vAssignLocationToStarter,
   "update-default-settings": vUpdateDefaultSettings,
   "update-default-settings-limits": vUpdateDefaultSettingsLimits,
+  "update-multi-motor-settings": vUpdateMultiMotorSettings,
   "add-starter-dispatch": vAddStarterDispatch,
   "update-starter-dispatch": vAddStarterDispatch,
   "add-gateway": vAddGateway,

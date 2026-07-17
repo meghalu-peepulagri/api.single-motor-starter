@@ -105,6 +105,7 @@ export async function getStarterByMacWithMotor(mac) {
             sim_recharge_expires_at: true,
             device_mobile_number: true,
             motor_support_type: true,
+            starter_type: true,
         },
         with: {
             motors: {
@@ -158,6 +159,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             },
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,
@@ -165,6 +167,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     state: true,
                     mode: true,
                     alias_name: true,
+                    motor_index: true,
                     test_run_status: true,
                 },
                 with: {
@@ -224,6 +227,7 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
         with: {
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,
@@ -231,6 +235,7 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
                     state: true,
                     mode: true,
                     alias_name: true,
+                    motor_index: true,
                     test_run_status: true,
                     test_run_completed_at: true,
                 },
@@ -402,6 +407,7 @@ export async function starterConnectedMotors(starterId) {
             },
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,
@@ -409,6 +415,7 @@ export async function starterConnectedMotors(starterId) {
                     state: true,
                     mode: true,
                     alias_name: true,
+                    motor_index: true,
                     test_run_completed_at: true,
                 },
             },
@@ -486,6 +493,7 @@ export async function getStarterMotorsByPcb(pcbNumber) {
         with: {
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,
@@ -611,6 +619,7 @@ export async function getBasicStarterDetails(pageParams, search) {
         with: {
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,

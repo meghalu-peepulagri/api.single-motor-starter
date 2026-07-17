@@ -1,9 +1,12 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { starterBoxes } from "./starter-boxes.js";
 export const starterSettingsLimits = pgTable("starter_settings_limits", {
     id: serial("id").primaryKey(),
     starter_id: integer("starter_id").references(() => starterBoxes.id).notNull(),
+    // Present only for MULTI_STARTER boxes — see starter-settings.ts for the rationale
+    // behind storing per-motor data as JSON instead of a child table.
+    multi_motor_limits: jsonb("multi_motor_limits").$type(),
     // ================= Device Configurations – Settings =================
     pr_flt_en_min: integer("pr_flt_en_min").default(0),
     pr_flt_en_max: integer("pr_flt_en_max").default(65355),

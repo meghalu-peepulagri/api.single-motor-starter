@@ -498,6 +498,13 @@ export const SETTINGS_FIELD_NAMES = {
   pr_flt_en: "Pre fault enable",
   tpf: "Time per fault",
 
+  /* ================= Multi-motor Configuration ================= */
+
+  v_flt_en: "Voltage fault enable (bitwise)",
+  sd_time: "Star-delta time",
+  flt_en: "Motor fault enable (bitwise)",
+  motor_id: "Motor",
+
   /* ================= Enables ================= */
 
   v_en: "Voltage faults enable",

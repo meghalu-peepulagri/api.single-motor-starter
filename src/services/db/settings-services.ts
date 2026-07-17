@@ -10,6 +10,10 @@ import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { logger } from "../../utils/logger.js";
 import { motors } from "../../database/schemas/motors.js";
+import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
+import { sendMultiMotorSettingsCommand } from "../../helpers/multi-motor-settings-sync-helper.js";
+import { getMotorsForStarterControl } from "./motor-services.js";
+import type { MultiMotorSettingsConfig } from "../../types/multi-motor-settings-types.js";
 
 export async function getStarterDefaultSettings() {
   return await db.select().from(starterDefaultSettings).limit(1);
@@ -224,6 +228,12 @@ export async function syncQuery(batchSize: number) {
 }
 
 export async function publishDeviceSettings(starter: any) {
+  // MULTI_STARTER boxes carry per-motor settings and a per-motor ack — a separate
+  // function so the SINGLE_STARTER body below is never touched.
+  if (starter.starter_type === "MULTI_STARTER") {
+    return publishMultiMotorDeviceSettings(starter);
+  }
+
   try {
     const ackSettings = await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(starterSettings,
       ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"]
@@ -270,4 +280,113 @@ export async function publishDeviceSettings(starter: any) {
     logger.error("Error in publishDeviceSettings:", error);
     console.error("Error in publishDeviceSettings:", error);
   }
+}
+
+// MULTI_STARTER counterpart of publishDeviceSettings above — same "insert a pending
+// copy, publish, let the inbound ack write the DB" shape, but the ack is per-motor
+// (resolved via sendMultiMotorSettingsCommand + settingsControlPendingAckMap instead
+// of the boolean publishMultipleTimesInBackground/pendingAckMap pair) and the DB
+// write on success (updateMultiMotorSettingsAck, below) happens once the device's
+// T:34 response lands, in deviceSyncUpdate (mqtt-db-services.ts).
+export async function publishMultiMotorDeviceSettings(starter: any) {
+  try {
+    const ackSettings = await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(starterSettings,
+      ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"]
+    );
+
+    if (!ackSettings || !ackSettings.multi_motor_config) {
+      console.warn(`No multi-motor ACK settings found for starter ${starter.id}`);
+      return;
+    }
+
+    const multiMotorConfig = ackSettings.multi_motor_config;
+    const { id: _, is_new_configuration_saved, created_at, updated_at, starter_id, acknowledgement, ...ackWithoutId } = ackSettings;
+
+    const motorIndexByMotorId = new Map<number, number>(
+      (starter.motors ?? []).map((m: any) => [m.id, m.motor_index ?? 1])
+    );
+
+    setImmediate(async () => {
+      try {
+        // Pending "in flight" copy — every motor starts unacknowledged, same as the
+        // single-motor pending row's is_new_configuration_saved:0.
+        const pendingConfig: MultiMotorSettingsConfig = {
+          ...multiMotorConfig,
+          motors: multiMotorConfig.motors.map((m) => ({ ...m, acknowledgement: "FALSE" as const })),
+        };
+
+        const pendingRow = await saveSingleRecord<StarterSettingsTable>(starterSettings, {
+          ...ackWithoutId,
+          starter_id: starter.id,
+          is_new_configuration_saved: 0,
+          acknowledgement: "FALSE",
+          multi_motor_config: pendingConfig,
+        });
+
+        await sendMultiMotorSettingsCommand(starter, pendingRow, motorIndexByMotorId);
+        // No further action here on success/timeout — deviceSyncUpdate applies the
+        // authoritative per-motor ack outcome to pendingRow once (and if) the
+        // device's T:34 response lands, same division of labour as the
+        // SINGLE_STARTER path (deviceSyncUpdate also writes updateLatestStarterSettings).
+      } catch (error) {
+        logger.error("Publish multi-motor device settings synced at heartbeat:", error);
+        console.error("Publish multi-motor device settings synced at heartbeat:", error);
+      }
+    });
+  } catch (error: any) {
+    logger.error("Error in publishMultiMotorDeviceSettings:", error);
+    console.error("Error in publishMultiMotorDeviceSettings:", error);
+  }
+}
+
+export async function getLatestStarterSettingsRow(starterId: number) {
+  const rows = await db.select().from(starterSettings)
+    .where(eq(starterSettings.starter_id, starterId))
+    .orderBy(desc(starterSettings.created_at))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Applies a MULTI_STARTER settings ack (T:34, D:{m1,m2,...}) to the latest
+ * starter_settings row's multi_motor_config, per motor — the multi-motor
+ * counterpart of updateLatestStarterSettings above, which flips a whole row.
+ * Per-motor ack code convention mirrors the legacy scalar CALIBRATION_ACK (1 =
+ * acknowledged, anything else = not) — not yet confirmed against firmware, see the
+ * plan's open items.
+ * Returns true once every motor in the config has been acknowledged, so the caller
+ * knows whether to mark the starter box as synced.
+ */
+export async function updateMultiMotorSettingsAck(starterId: number, ackData: Record<string, number>): Promise<boolean> {
+  const latestRow = await getLatestStarterSettingsRow(starterId);
+  if (!latestRow?.multi_motor_config) return false;
+
+  const starterMotors = await getMotorsForStarterControl(starterId);
+  const motorIdByIndex = new Map(starterMotors.map((m) => [m.motor_index ?? 1, m.id]));
+
+  const ackedMotorIds = new Set<number>();
+  for (const [key, code] of Object.entries(ackData)) {
+    const index = parseMotorKey(key);
+    const motorId = index !== null ? motorIdByIndex.get(index) : undefined;
+    if (motorId !== undefined && Number(code) === 1) ackedMotorIds.add(motorId);
+  }
+
+  const updatedMotors = latestRow.multi_motor_config.motors.map((motorBlock) => (
+    ackedMotorIds.has(motorBlock.motor_id)
+      ? { ...motorBlock, acknowledgement: "TRUE" as const }
+      : motorBlock
+  ));
+
+  const allAcked = updatedMotors.length > 0 && updatedMotors.every((m) => m.acknowledgement === "TRUE");
+
+  await db.update(starterSettings)
+    .set({
+      multi_motor_config: { ...latestRow.multi_motor_config, motors: updatedMotors },
+      is_new_configuration_saved: allAcked ? 1 : 0,
+      acknowledgement: allAcked ? "TRUE" : "FALSE",
+      updated_at: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(starterSettings.id, latestRow.id));
+
+  return allAcked;
 }
