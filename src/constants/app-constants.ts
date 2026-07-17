@@ -222,7 +222,7 @@ export const MOTOR_CONTROL_MOTORS_NOT_FOUND = "One or more requested motors were
 export const MOTOR_CONTROL_COMMAND_SENT = "Motor control command sent";
 export const MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED = "This starter supports only a single motor — only one motor can be controlled at a time";
 export const MOTOR_MODE_CONTROL_VALIDATION_CRITERIA = "Motor mode control details provided do not meet the required validation criteria";
-export const MOTOR_CONTROL_MODE_INVALID = "Motor mode must be MANUAL or AUTO";
+export const MOTOR_CONTROL_MODE_INVALID = "Motor mode must be MANUAL, AUTO or SCHEDULE";
 export const MOTOR_MODE_CONTROL_COMMAND_SENT = "Motor mode control command sent";
 
 

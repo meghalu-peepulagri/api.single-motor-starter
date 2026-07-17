@@ -160,6 +160,15 @@ export class MotorHandlers {
         throw new BadRequestException(MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED);
       }
 
+      // Persist the requested state immediately so it's stored (each motor) even if the device never acks.
+      const controlNow = new Date();
+      for (const r of resolvedMotors) {
+        await updateRecordById<MotorsTable>(motors, r.motor.id, {
+          state: r.state,
+          ...(r.state === 1 ? { motor_last_on_at: controlNow } : { motor_last_off_at: controlNow }),
+        });
+      }
+
       const targets = resolvedMotors.map(r => ({
         motor_index: r.motor.motor_index ?? 1,
         state: r.state,
@@ -217,17 +226,26 @@ export class MotorHandlers {
         const motor = m.motor_reference
           ? starterMotors.find(sm => sm.motor_reference === m.motor_reference)
           : starterMotors.find(sm => sm.id === m.motor_id);
-        return motor ? { motor, mode: m.mode as "MANUAL" | "AUTO" } : null;
+        return motor ? { motor, mode: m.mode as "MANUAL" | "AUTO" | "SCHEDULE" } : null;
       });
 
       if (resolved.some(r => r === null)) {
         throw new BadRequestException(MOTOR_CONTROL_MOTORS_NOT_FOUND);
       }
-      const resolvedMotors = resolved as { motor: (typeof starterMotors)[number]; mode: "MANUAL" | "AUTO" }[];
+      const resolvedMotors = resolved as { motor: (typeof starterMotors)[number]; mode: "MANUAL" | "AUTO" | "SCHEDULE" }[];
 
       const uniqueMotorIds = [...new Set(resolvedMotors.map(r => r.motor.id))];
       if (starter.motor_support_type === "SINGLE_MOTOR" && uniqueMotorIds.length > 1) {
         throw new BadRequestException(MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED);
+      }
+
+      // Persist the requested mode immediately so it's stored (each motor) even if the device never acks.
+      const modeNow = new Date();
+      for (const r of resolvedMotors) {
+        await updateRecordById<MotorsTable>(motors, r.motor.id, {
+          mode: r.mode,
+          last_mode_change_at: modeNow,
+        });
       }
 
       const targets = resolvedMotors.map(r => ({

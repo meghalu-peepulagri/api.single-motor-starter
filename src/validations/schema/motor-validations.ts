@@ -40,7 +40,7 @@ export const vControlMotorsMode = v.object({
     v.array(v.object({
       motor_id: requiredNumber(MOTOR_ID_REQUIRED),
       motor_reference: v.optional(v.string()),
-      mode: v.picklist(["MANUAL", "AUTO"], MOTOR_CONTROL_MODE_INVALID),
+      mode: v.picklist(["MANUAL", "AUTO", "SCHEDULE"], MOTOR_CONTROL_MODE_INVALID),
     })),
     v.minLength(1, MOTORS_ARRAY_REQUIRED),
   ),
