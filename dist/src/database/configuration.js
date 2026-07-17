@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import fs from "fs";
 import { Pool } from "pg";
+import fs from "fs";
 import { env } from "process";
 import * as alertsFaultsSchema from "./schemas/alerts-faults.js";
 import * as benchedStarterParametersSchema from "./schemas/benched-starter-parameters.js";

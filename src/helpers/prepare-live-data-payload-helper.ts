@@ -31,9 +31,13 @@ function toEpochDate(value: unknown): Date | null {
   return new Date(ms);
 }
 
-export function prepareLiveDataPayload(validatedData: any, starterData: any) {
+// motor is explicit on the multi-motor path (resolved by motor_index in
+// multi-motor-live-data-helper.ts, or a { id: null, ... } stub for an
+// unmatched slot) and defaults to motors[0] on the legacy single-motor path.
+export function prepareLiveDataPayload(validatedData: any, starterData: any, motor?: { id: number | null; state?: number; mode?: string; [key: string]: any }) {
+  const resolvedMotor = motor ?? starterData?.motors?.[0];
 
-  if (!validatedData || !starterData || !starterData.motors || starterData.motors.length === 0) {
+  if (!validatedData || !starterData || !resolvedMotor) {
     logger.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
     console.error("Invalid validatedData or starterData found with no motors attached", undefined, { mac: starterData?.mac_address });
     return null;
@@ -97,7 +101,11 @@ export function prepareLiveDataPayload(validatedData: any, starterData: any) {
     starter_id: starterData.id || null,
     gateway_id: starterData.gateway_id || null,
     user_id: starterData.created_by || null,
-    motor_id: starterData.motors[0].id || null,
+    // Only the unmatched-motor-slot stub (multi-motor-live-data-helper.ts) ever
+    // passes a null id here, and that path is insert-only (prepareStarterParametersRecord
+    // -> saveSingleRecord) — it never reaches updateStates/updateDevicePower...,
+    // which are the only other consumers of preparedLiveData.motor_id and do assume non-null.
+    motor_id: (resolvedMotor.id ?? null) as number,
 
     // Schedule
     active_schedule_id: sch?.id ?? null,

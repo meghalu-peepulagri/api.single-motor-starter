@@ -5,7 +5,7 @@ import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vAddMotorSchedule, vAddRepeatDays, vArrayOfMotorScheduleValidators, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
-import { vAddMotor, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
+import { vAddMotor, vControlMotors, vControlMotorsMode, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
 import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vUpdateDefaultSettings } from "./schema/default-settings.js";
@@ -26,6 +26,8 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "add-motor": vAddMotor,
   "update-motor": vUpdateMotor,
   "update-motor-test-run-status": vUpdateMotorTestRunStatus,
+  "control-motors": vControlMotors,
+  "control-motors-mode": vControlMotorsMode,
   "add-starter": vAddStarter,
   "create-motor-schedule": vAddMotorSchedule,
   "create-bulk-motor-schedule": vArrayOfMotorScheduleValidators,

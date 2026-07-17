@@ -68,6 +68,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
             state: true,
             alias_name: true,
             test_run_status: true,
+            motor_reference: true,
         },
         with: {
             location: {
@@ -87,6 +88,9 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
                     network_type: true,
                     starter_number: true,
                     device_allocation: true,
+                    starter_type: true,
+                    motor_starter_type: true,
+                    motor_support_type: true,
                 },
                 with: {
                     starterParameters: {
@@ -662,4 +666,38 @@ export async function getMotorsActiveScheduleCount(motorIds) {
         map[row.motor_id] = row.count;
     }
     return map;
+}
+/**
+ * Fetch motors by id, scoped to a single starter box, for a manual control request.
+ * Returns only motors that actually belong to `starterId` and aren't archived —
+ * callers must treat any requested id missing from the result as invalid.
+ */
+export async function getMotorsByIdsForStarter(starterId, motorIds) {
+    if (!motorIds.length)
+        return [];
+    return await db.query.motors.findMany({
+        where: and(eq(motors.starter_id, starterId), inArray(motors.id, motorIds), ne(motors.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            motor_index: true,
+            starter_id: true,
+            alias_name: true,
+            state: true,
+        },
+    });
+}
+/**
+ * Fetch all non-archived motors of a starter for a manual control request, so each
+ * request entry can be matched by motor_id OR motor_reference and mapped to its motor_index.
+ */
+export async function getMotorsForStarterControl(starterId) {
+    return await db.query.motors.findMany({
+        where: and(eq(motors.starter_id, starterId), ne(motors.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            motor_index: true,
+            motor_reference: true,
+            starter_id: true,
+        },
+    });
 }

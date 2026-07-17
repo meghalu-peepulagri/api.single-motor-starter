@@ -216,6 +216,14 @@ export const MOTOR_DETAILS_FETCHED = "Pump details fetched successfully";
 export const MOTOR_NAME_EXISTED = "Pump name already exist";
 export const MOTOR_NAME_ALREADY_LOCATION = "Pump name already exists in this location."
 export const MOTOR_TEST_RUN_STATUS_UPDATED = "Pump test run status updated successfully";
+export const MOTOR_CONTROL_VALIDATION_CRITERIA = "Motor control details provided do not meet the required validation criteria";
+export const MOTOR_CONTROL_STATE_INVALID = "Motor state must be 0 (OFF) or 1 (ON)";
+export const MOTOR_CONTROL_MOTORS_NOT_FOUND = "One or more requested motors were not found on this starter";
+export const MOTOR_CONTROL_COMMAND_SENT = "Motor control command sent";
+export const MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED = "This starter supports only a single motor — only one motor can be controlled at a time";
+export const MOTOR_MODE_CONTROL_VALIDATION_CRITERIA = "Motor mode control details provided do not meet the required validation criteria";
+export const MOTOR_CONTROL_MODE_INVALID = "Motor mode must be MANUAL, AUTO or SCHEDULE";
+export const MOTOR_MODE_CONTROL_COMMAND_SENT = "Motor mode control command sent";
 
 
 // Starter Box
