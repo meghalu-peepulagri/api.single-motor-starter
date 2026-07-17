@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_LIMITS_FETCHED, DEFAULT_SETTINGS_LIMITS_NOT_FOUND, DEFAULT_SETTINGS_LIMITS_UPDATED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, SETTINGS_FIELD_NAMES, UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { ADDED_STARTER_SETTINGS, DEFAULT_SETTINGS_FETCHED, DEFAULT_SETTINGS_LIMITS_FETCHED, DEFAULT_SETTINGS_LIMITS_NOT_FOUND, DEFAULT_SETTINGS_LIMITS_UPDATED, DEFAULT_SETTINGS_NOT_FOUND, DEFAULT_SETTINGS_UPDATED, DEVICE_NOT_FOUND, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA, MOTOR_CONTROL_MOTORS_NOT_FOUND, SETTINGS_FETCHED, SETTINGS_LIMITS_FETCHED, SETTINGS_LIMITS_NOT_FOUND, SETTINGS_LIMITS_UPDATED, SETTINGS_FIELD_NAMES, UPDATE_DEFAULT_SETTINGS_LIMITS_VALIDATION_CRITERIA, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { starterBoxes, type StarterBoxTable } from "../database/schemas/starter-boxes.js";
 import { starterDefaultSettings, type StarterDefaultSettingsTable } from "../database/schemas/starter-default-settings.js";
@@ -11,14 +11,17 @@ import { ParamsValidateException } from "../exceptions/params-validate-exception
 import { ActivityService } from "../services/db/activity-service.js";
 import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getAcknowledgedStarterSettings, getStarterDefaultSettings, starterAcknowledgedSettings } from "../services/db/settings-services.js";
+import { getMotorsForStarterControl } from "../services/db/motor-services.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import type { ValidatedUpdateDefaultSettingsLimits } from "../validations/schema/default-settings-limits.js";
+import type { ValidatedUpdateMultiMotorSettings } from "../validations/schema/multi-motor-settings-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { logger } from "../utils/logger.js";
 import { sql } from "drizzle-orm";
+import type { MultiMotorSettingsConfig } from "../types/multi-motor-settings-types.js";
 
 const paramsValidateException = new ParamsValidateException();
 
@@ -117,6 +120,14 @@ export class StarterDefaultSettingsHandlers {
         throw new BadRequestException(DEVICE_NOT_FOUND);
       }
 
+      // MULTI_STARTER boxes carry per-motor settings (m1/m2) alongside the shared
+      // box-level fields — a separate branch so the SINGLE_STARTER path below is
+      // never touched. See insertMultiMotorStarterSetting below for the full flow.
+      if (starter.starter_type === "MULTI_STARTER") {
+        await this.insertMultiMotorStarterSetting(c, starter, body);
+        return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
+      }
+
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettings>("update-default-settings",
         body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
 
@@ -136,6 +147,89 @@ export class StarterDefaultSettingsHandlers {
       console.error("Error at insert Starter Setting:", error);
       throw error;
     }
+  };
+
+  // MULTI_STARTER insert path: shared box-level fields (v_flt_en, sd_time) + one
+  // block per motor, stored together as a single JSON column (starter_settings.
+  // multi_motor_config) rather than a child table — see the schema file for why.
+  // Motor resolution mirrors controlMotorsHandler/controlMotorsModeHandler in
+  // motor-handlers.ts: motor_reference takes precedence over motor_id.
+  private insertMultiMotorStarterSetting = async (c: Context, starter: StarterBoxTable["$inferSelect"], body: any) => {
+    const user = c.get("user_payload");
+
+    const validatedBody = await validatedRequest<ValidatedUpdateMultiMotorSettings>(
+      "update-multi-motor-settings", body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA
+    );
+
+    const starterMotors = await getMotorsForStarterControl(starter.id);
+    const resolved = validatedBody.motors.map((entry) => {
+      const motor = entry.motor_reference
+        ? starterMotors.find((sm) => sm.motor_reference === entry.motor_reference)
+        : starterMotors.find((sm) => sm.id === entry.motor_id);
+      return motor ? { motor, entry } : null;
+    });
+
+    if (resolved.some((r) => r === null)) {
+      throw new BadRequestException(MOTOR_CONTROL_MOTORS_NOT_FOUND);
+    }
+    const resolvedMotors = resolved as { motor: (typeof starterMotors)[number]; entry: (typeof validatedBody.motors)[number] }[];
+
+    const multiMotorConfig: MultiMotorSettingsConfig = {
+      v_flt_en: validatedBody.v_flt_en,
+      sd_time: validatedBody.sd_time,
+      motors: resolvedMotors.map(({ motor, entry }) => ({
+        motor_id: motor.id,
+        flt_en: entry.flt_en,
+        flc: entry.flc,
+        f_dr: entry.f_dr,
+        f_ol: entry.f_ol,
+        f_lr: entry.f_lr,
+        f_opf: entry.f_opf,
+        f_ci: entry.f_ci,
+        dr: entry.dr,
+        ol: entry.ol,
+        lr: entry.lr,
+        ci: entry.ci,
+        drf: entry.drf,
+        olf: entry.olf,
+        lrf: entry.lrf,
+        opf: entry.opf,
+        cif: entry.cif,
+        olr: entry.olr,
+        lrr: entry.lrr,
+        cir: entry.cir,
+        ig_r: entry.ig_r,
+        ig_y: entry.ig_y,
+        ig_b: entry.ig_b,
+        io_r: entry.io_r,
+        io_y: entry.io_y,
+        io_b: entry.io_b,
+        acknowledgement: "FALSE",
+      })),
+    };
+
+    const oldSettings = await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(
+      starterSettings,
+      ["starter_id", "acknowledgement"],
+      ["=", "="],
+      [starter.id, "TRUE"]
+    );
+
+    await db.transaction(async (trx) => {
+      await saveSingleRecord<StarterSettingsTable>(
+        starterSettings,
+        { starter_id: starter.id, created_by: user.id, multi_motor_config: multiMotorConfig },
+        trx
+      );
+      await ActivityService.writeStarterSettingsUpdatedLog(
+        user.id,
+        starter.id,
+        { multi_motor_config: oldSettings?.multi_motor_config ?? null },
+        { multi_motor_config: multiMotorConfig },
+        trx,
+        starter.pcb_number
+      );
+    });
   };
 
   getStarterSettingsLimitsHandler = async (c: Context) => {

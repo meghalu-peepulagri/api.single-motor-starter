@@ -21,7 +21,7 @@ export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | Vali
 
 export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
   "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-installed-location" |
-  "create-sub-user" | "update-sub-user" | "set-sub-user-permissions" | "remove-sub-user-permissions" | "control-motors" | "control-motors-mode";
+  "create-sub-user" | "update-sub-user" | "set-sub-user-permissions" | "remove-sub-user-permissions" | "control-motors" | "control-motors-mode" | "update-multi-motor-settings";
 
 export interface IResp {
   status: ContentfulStatusCode;

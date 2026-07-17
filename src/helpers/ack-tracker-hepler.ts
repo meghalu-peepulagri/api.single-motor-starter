@@ -36,3 +36,13 @@ export const modeControlPendingAckMap = new Map<
   { resolve: (result: DeviceCommandAckResult) => void; sequenceNumber: number }
 >();
 
+// Multi-motor settings/calibration (T:4 -> T:34) ack tracking, for MULTI_STARTER
+// boxes only — the device's ack now carries per-motor status (D: { m1, m2 }) instead
+// of the single scalar D:0|1 the SINGLE_STARTER CALIBRATION_ACK path (pendingAckMap,
+// settings-helpers.ts) still uses untouched. Kept separate from that map so the two
+// ack shapes can never resolve each other's promise.
+export const settingsControlPendingAckMap = new Map<
+  string,
+  { resolve: (result: DeviceCommandAckResult) => void; sequenceNumber: number }
+>();
+

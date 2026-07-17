@@ -9,7 +9,7 @@ import { users } from "./users.js";
 import { starterDispatch } from "./starter-dispatch.js";
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY", "TEST"]);
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);
-export const motorStarterTypeEnum = pgEnum("motor_starter_type", ["STAR_RELAY", "CONTACTOR"]);
+export const motorStarterTypeEnum = pgEnum("motor_starter_type", ["STAR_RELAY", "CONTACTOR", "STAR_DELTA"]);
 export const motorSupportTypeEnum = pgEnum("motor_support_type", ["SINGLE_MOTOR", "MULTIPLE_MOTORS"]);
 export const deviceRoleEnum = pgEnum("device_role", ["STANDALONE", "MASTER", "CHILD"]);
 
