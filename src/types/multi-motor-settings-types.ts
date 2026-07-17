@@ -3,31 +3,35 @@
 // existing flat starter_settings columns) vary per motor rather than per box.
 export interface MotorSettingsBlock {
   motor_id: number;
-  flt_en: number;   // bitwise per-motor fault-enable, opaque to the server
-  flc: number;
-  f_dr: number;
-  f_ol: number;
-  f_lr: number;
-  f_opf: number;
-  f_ci: number;
-  dr: number;
-  ol: number;
-  lr: number;
-  ci: number;
-  drf: number;
-  olf: number;
-  lrf: number;
-  opf: number;
-  cif: number;
-  olr: number;
-  lrr: number;
-  cir: number;
-  ig_r: number;
-  ig_y: number;
-  ig_b: number;
-  io_r: number;
-  io_y: number;
-  io_b: number;
+  motor_index?: number;        // 1 = M1, 2 = M2 — lets the frontend map each block to a motor
+  motor_reference?: string | null;
+  // Per-motor fields are optional — the grouped device payload (dvc_c.mN) sends only a
+  // subset (flt_en, flc, drf, olf, opf, cif + calibration); absent fields are omitted.
+  flt_en?: number;   // bitwise per-motor fault-enable, opaque to the server
+  flc?: number;
+  f_dr?: number;
+  f_ol?: number;
+  f_lr?: number;
+  f_opf?: number;
+  f_ci?: number;
+  dr?: number;
+  ol?: number;
+  lr?: number;
+  ci?: number;
+  drf?: number;
+  olf?: number;
+  lrf?: number;
+  opf?: number;
+  cif?: number;
+  olr?: number;
+  lrr?: number;
+  cir?: number;
+  ig_r?: number;
+  ig_y?: number;
+  ig_b?: number;
+  io_r?: number;
+  io_y?: number;
+  io_b?: number;
   acknowledgement: "TRUE" | "FALSE";
 }
 

@@ -1,7 +1,10 @@
 import { sql } from "drizzle-orm";
-import { integer, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 export const StarterDefaultSettingsLimits = pgTable("starter_default_settings_limits", {
     id: serial("id").primaryKey(),
+    // Global template bounds for the per-motor field set — see starter-settings.ts for
+    // the rationale behind JSON instead of a child table.
+    multi_motor_default_limits: jsonb("multi_motor_default_limits").$type(),
     // ================= Device Configurations – Settings =================
     pr_flt_en_min: integer("pr_flt_en_min").default(0),
     pr_flt_en_max: integer("pr_flt_en_max").default(65355),

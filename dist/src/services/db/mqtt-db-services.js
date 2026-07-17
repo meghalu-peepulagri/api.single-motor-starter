@@ -6,7 +6,7 @@ import { deviceTemperature } from "../../database/schemas/device-temperature.js"
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap } from "../../helpers/ack-tracker-hepler.js";
+import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap, settingsControlPendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
 import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
@@ -25,7 +25,7 @@ import { insertScheduleLog } from "./motor-schedule-logs-services.js";
 import { uploadLiveDataPacket } from "../s3/s3-service.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
-import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
+import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc, updateMultiMotorSettingsAck } from "./settings-services.js";
 import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
 import { pushPendingSchedulesForStarter } from "../../helpers/schedule-sync-helper.js";
 // Postgres deadlock code. Concurrent MQTT messages for the same device can
@@ -1247,6 +1247,33 @@ export async function deviceSyncUpdate(message, topic) {
             console.error("Invalid topic format: MAC/PCB not found");
             return null;
         }
+        // MULTI_STARTER boxes send a per-motor ack (D: { m1: 0|1, m2: 0|1, ... }) instead
+        // of the scalar D:0|1 below — the shape itself is a safe discriminator, since
+        // SINGLE_STARTER firmware only ever sends the scalar and MULTI_STARTER firmware
+        // only ever sends the object. The scalar branch beneath this one is untouched.
+        if (message.D !== null && typeof message.D === "object") {
+            const pendingAck = settingsControlPendingAckMap.get(macFromTopic);
+            if (!pendingAck) {
+                logger.warn(`No pending multi-motor settings ACK found for ${macFromTopic}`);
+                return null;
+            }
+            if (pendingAck.sequenceNumber !== message.S) {
+                logger.warn(`Sequence number mismatch for multi-motor settings ACK ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+                return null;
+            }
+            const ackData = message.D;
+            pendingAck.resolve({ acked: true, data: ackData });
+            settingsControlPendingAckMap.delete(macFromTopic);
+            const validMac = await getStarterByMacWithMotor(macFromTopic);
+            if (validMac?.id) {
+                const allAcked = await updateMultiMotorSettingsAck(validMac.id, ackData);
+                logger.info(`[multi-motor-settings] ack applied for starter=${validMac.id} allAcked=${allAcked}`);
+                if (allAcked && validMac.synced_settings_status === "false") {
+                    await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
+                }
+            }
+            return null;
+        }
         if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
             console.error(`Invalid message data in calibration ack [${message.D}]`);
             return null;
@@ -1284,11 +1311,16 @@ export async function deviceSyncUpdate(message, topic) {
         }
     }
     catch (error) {
-        // On error, reject the pending ACK so caller doesn't hang
+        // On error, reject whichever pending ACK was in flight so the caller doesn't hang.
         const pendingAck = pendingAckMap.get(macFromTopic);
         if (pendingAck) {
             pendingAck.resolve(false);
             pendingAckMap.delete(macFromTopic);
+        }
+        const pendingSettingsAck = settingsControlPendingAckMap.get(macFromTopic);
+        if (pendingSettingsAck) {
+            pendingSettingsAck.resolve({ acked: false });
+            settingsControlPendingAckMap.delete(macFromTopic);
         }
         console.error("Error at device sync update (calibration ack):", error);
         throw error;
