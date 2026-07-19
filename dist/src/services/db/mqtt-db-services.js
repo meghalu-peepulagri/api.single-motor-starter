@@ -9,7 +9,7 @@ import { starterBoxParameters } from "../../database/schemas/starter-parameters.
 import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap, settingsControlPendingAckMap } from "../../helpers/ack-tracker-hepler.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
-import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
+import { normalizeDeviceAckD, parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
 import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
@@ -992,7 +992,10 @@ export async function motorControlAckHandler(message, topic) {
             console.error(`No starter found with MAC address [${macAddress}] or no motors attached`);
             return;
         }
-        const ackData = message?.D ?? {};
+        // Multi-motor devices send D as a map ({ m1: 0, m2: 1 }); single-motor devices
+        // send a bare scalar (D: 0). Normalize both to the map form so single-motor state
+        // acks are actually persisted instead of silently dropped by Object.entries.
+        const ackData = normalizeDeviceAckD(message?.D);
         const motorsByIndex = new Map(validMac.motors.map((m) => [m.motor_index ?? 1, m]));
         const starter_id = validMac.id;
         const notifications = [];
@@ -1082,7 +1085,10 @@ export async function motorModeChangeAckHandler(message, topic) {
             return null;
         }
         ;
-        const ackData = message?.D ?? {};
+        // Multi-motor devices send D as a map ({ m1: 0, m2: 1 }); single-motor devices
+        // send a bare scalar (D: 0). Normalize both to the map form so single-motor mode
+        // acks are actually persisted instead of silently dropped by Object.entries.
+        const ackData = normalizeDeviceAckD(message?.D);
         const motorsByIndex = new Map(validMac.motors.map((m) => [m.motor_index ?? 1, m]));
         const starter_id = validMac.id;
         const notifications = [];
