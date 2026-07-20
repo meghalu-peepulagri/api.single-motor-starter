@@ -46,6 +46,7 @@ export async function getMotorWithStarterDetails(motorId: number) {
           device_mobile_number: true,
           starter_type: true,
           motor_starter_type: true,
+          motor_support_type: true,
         },
         with: {
           starterParameters: {
