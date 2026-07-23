@@ -19,7 +19,7 @@ export const vAddStarter = v.object({
   // them keep working (they fall back to one default motor).
   motor_support_type: v.optional(v.picklist(["SINGLE_MOTOR", "MULTIPLE_MOTORS"], "Invalid motor type")),
   starter_type: v.optional(v.picklist(["SINGLE_STARTER", "MULTI_STARTER"], "Invalid starter type")),
-  motor_starter_type: v.optional(v.picklist(["STAR_RELAY", "CONTACTOR"], "Invalid motor starter type")),
+  motor_starter_type: v.optional(v.picklist(["STAR_RELAY", "CONTACTOR", "STAR_DELTA"], "Invalid motor starter type")),
   motors: v.optional(v.pipe(
     v.array(v.object({
       name: motorNameValidator,
