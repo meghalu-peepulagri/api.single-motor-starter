@@ -1752,14 +1752,25 @@ async function handleLateScheduleAck(macOrPcb: string, message: any): Promise<vo
       return;
     }
 
-    // Partial ACK bitmask: slot IDs confirmed by device
+    // Partial ACK bitmask: slot IDs confirmed by device. Flat `ids` (single-motor /
+    // legacy) plus per-motor `m1_ids` / `m2_ids` / ... (multi-motor). Slots are unique
+    // per starter across motors, so all bitmasks merge into one global slot set.
     let confirmedSlots: Set<number> | null = null;
-    if (typeof message.D === "object" && message.D !== null && typeof message.D.ids === "number" && message.D.ids > 0) {
-      confirmedSlots = new Set<number>();
-      for (let bit = 0; bit < 16; bit++) {
-        if (Number(BigInt(message.D.ids) & (1n << BigInt(bit)))) confirmedSlots.add(bit + 1);
+    if (typeof message.D === "object" && message.D !== null) {
+      const masks: { key: string; mask: number }[] = [];
+      if (typeof message.D.ids === "number" && message.D.ids > 0) masks.push({ key: "ids", mask: message.D.ids });
+      for (const [key, val] of Object.entries(message.D)) {
+        if (/^m\d+_ids$/i.test(key) && typeof val === "number" && val > 0) masks.push({ key, mask: val });
       }
-      console.log(`[schedule-ack:LATE] mac=${macOrPcb} partial bitmask=${message.D.ids} → slots=[${[...confirmedSlots].join(",")}]`);
+      if (masks.length > 0) {
+        confirmedSlots = new Set<number>();
+        for (const { mask } of masks) {
+          for (let bit = 0; bit < 16; bit++) {
+            if (Number(BigInt(mask) & (1n << BigInt(bit)))) confirmedSlots.add(bit + 1);
+          }
+        }
+        console.log(`[schedule-ack:LATE] mac=${macOrPcb} partial bitmasks=[${masks.map(m => `${m.key}=${m.mask}`).join(",")}] → slots=[${[...confirmedSlots].join(",")}]`);
+      }
     }
 
     // Find PENDING records that were already dispatched (have device_schedule_id assigned)
@@ -1833,25 +1844,39 @@ async function scheduleCreationAckResolver(message: any, topic: string) {
 
   console.log(`[schedule-ack:PARSED] mac=${macFromTopic} S=${message.S} D_type=${typeof message.D} dValue=${dValue} ackSuccess=${ackSuccess}`);
 
-  // Partial ACK: ids is a bitmask from the device.
-  // schedule_id n → bit (n-1) → value 2^(n-1).
-  // e.g. ids=4 (binary 100) → bit 2 → schedule_id 3 confirmed.
+  // Partial ACK: a bitmask of confirmed device slots. slot n → bit (n-1) → value 2^(n-1).
+  // e.g. bitmask=4 (binary 100) → bit 2 → slot 3 confirmed.
+  //  - Single-motor / legacy boxes send a flat `ids` bitmask.
+  //  - Multi-motor boxes send per-motor `m1_ids` / `m2_ids` / ... bitmasks.
+  // device_schedule_id (the slot each bit references) is unique per starter across
+  // motors, so every bitmask decodes into the same global slot space and they merge.
   if (ackSuccess && message.D !== null && typeof message.D === "object") {
-    const rawIds = message.D.ids;
-    if (typeof rawIds === "number" && rawIds > 0) {
-      const acknowledgedIds: number[] = [];
-      for (let bit = 0; bit < 16; bit++) {
-        if (Number(BigInt(rawIds) & (1n << BigInt(bit)))) {
-          acknowledgedIds.push(bit + 1);
+    const bitmasks: { key: string; mask: number }[] = [];
+    if (typeof message.D.ids === "number" && message.D.ids > 0) {
+      bitmasks.push({ key: "ids", mask: message.D.ids });
+    }
+    for (const [key, val] of Object.entries(message.D)) {
+      if (/^m\d+_ids$/i.test(key) && typeof val === "number" && val > 0) {
+        bitmasks.push({ key, mask: val });
+      }
+    }
+
+    if (bitmasks.length > 0) {
+      const acknowledgedSet = new Set<number>();
+      for (const { mask } of bitmasks) {
+        for (let bit = 0; bit < 16; bit++) {
+          if (Number(BigInt(mask) & (1n << BigInt(bit)))) acknowledgedSet.add(bit + 1);
         }
       }
+      const acknowledgedIds = [...acknowledgedSet].sort((a, b) => a - b);
       if (acknowledgedIds.length > 0) {
         schedulePartialAckMap.set(macFromTopic, acknowledgedIds);
-        console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} bitmask=${rawIds} (0b${rawIds.toString(2)}) → slot_ids=[${acknowledgedIds.join(",")}]`);
-        logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: bitmask=${rawIds} (0b${rawIds.toString(2)}) → ids=[${acknowledgedIds.join(",")}]`);
+        const maskDesc = bitmasks.map(b => `${b.key}=${b.mask}(0b${b.mask.toString(2)})`).join(" ");
+        console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} ${maskDesc} → slot_ids=[${acknowledgedIds.join(",")}]`);
+        logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: ${maskDesc} → ids=[${acknowledgedIds.join(",")}]`);
       }
     } else {
-      console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} D is object but ids=${rawIds} (not a positive number) → treated as full ACK`);
+      console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} D is object but no positive bitmask (ids / m*_ids) → treated as full ACK`);
     }
   } else if (ackSuccess) {
     console.log(`[schedule-ack:FULL] mac=${macFromTopic} D is plain number=${dValue} → full ACK, no bitmask`);

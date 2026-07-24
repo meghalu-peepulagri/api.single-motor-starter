@@ -428,6 +428,9 @@ export function formatMotorScheduleResponse(record: any, queryDate?: number): an
     failure_reason_description: getFailureReason(rest.failure_reason),
     failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
     device_schedule_id: rest.device_schedule_id ?? null,
+    // motor_reference (m1/m2/...) from the motor; motor_support_type from the starter box.
+    motor_reference: rest.motor_reference ?? null,
+    motor_support_type: rest.motor_support_type ?? null,
     synced: rest.acknowledgement === 1,
   };
 }
@@ -576,14 +579,38 @@ function toCompactSchedule(record: any): Record<string, any> | null {
 }
 
 /**
+ * Resolve the per-motor payload key (m1, m2, ...) for a schedule record on a
+ * multi-motor box. The reference comes from the joined motor row
+ * (`record.motor.motor_reference`) or a directly-attached `record.motor_reference`.
+ * Defaults to `m1` when no valid reference is present so a mis-configured motor
+ * never drops the schedule.
+ */
+function motorReferenceKey(record: any): string {
+  const ref = record?.motor?.motor_reference ?? record?.motor_reference;
+  if (typeof ref === "string" && /^m\d+$/i.test(ref.trim())) {
+    return ref.trim().toLowerCase();
+  }
+  return "m1";
+}
+
+/**
  * Build compact device sync payloads from schedule records.
  * Groups by starter_id, takes first 10 schedules per device,
  * splits into chunks of max 8 items each.
  *
- * Each chunk is a single payload object:
- * { T: "SCHEDULE CREATION", S: seq, D: { idx, last, sch_cnt, plr, m1: [...] } }
+ * Each chunk is a single payload object. Multi-motor boxes nest each motor's
+ * schedules under its motor-reference key as { sch_cnt, sch: [...] }, with the
+ * top-level `sch_cnt` holding the number of motor groups. Single-motor boxes carry
+ * the schedule list as a flat array under `m1` with `sch_cnt` as the schedule count:
+ *   multi : { T: 3, S: seq, D: { idx, last, sch_cnt: <#motors>, plr,
+ *                                m1: { sch_cnt: <#m1>, sch: [...] },
+ *                                m2: { sch_cnt: <#m2>, sch: [...] } } }
+ *   single: { T: 3, S: seq, D: { idx, last, sch_cnt: <#sch>, plr, m1: [...] } }
+ *
+ * `singleMotorStarterIds` lists the starters that should use the flat single-motor
+ * shape; any starter not in the set keeps the multi-motor per-motor-reference shape.
  */
-export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set<number> = new Set()): { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] {
+export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set<number> = new Set(), singleMotorStarterIds: Set<number> = new Set()): { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] {
   // Group schedules by starter_id
   const grouped = new Map<number, any[]>();
   for (const record of records) {
@@ -615,6 +642,10 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
     // Get plr from the first valid schedule (default 30)
     const plr = validRecords[0]?.power_loss_recovery_time ?? 30;
 
+    // Single-motor boxes use a flat `sch` array; multi-motor boxes bucket each
+    // schedule under its own motor-reference key (m1/m2/...).
+    const isSingleMotor = singleMotorStarterIds.has(starterId);
+
     // Split into chunks of MAX_ITEMS_PER_CHUNK
     const chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] = [];
     for (let i = 0; i < compactItems.length; i += MAX_ITEMS_PER_CHUNK) {
@@ -631,17 +662,33 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
       const idx = firstSyncStarterIds.has(starterId) ? 1 : 2;
       const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
 
+      // Single-motor: schedule list as a flat array under `m1`, with sch_cnt =
+      // schedule count.
+      // Multi-motor: bucket by each schedule's motor_reference so a motor with
+      // reference m2 is published under `m2` (not always `m1`); each motor becomes
+      // { sch_cnt: <its schedule count>, sch: [...] } and the top-level sch_cnt holds
+      // the number of motor groups.
+      let D: Record<string, any>;
+      if (isSingleMotor) {
+        D = { idx, last: isLast, sch_cnt: totalCount, plr, m1: slice };
+      } else {
+        const byMotor: Record<string, any[]> = {};
+        slice.forEach((item, j) => {
+          const key = motorReferenceKey(recordSlice[j]);
+          (byMotor[key] ??= []).push(item);
+        });
+        const motorGroups: Record<string, any> = {};
+        for (const [key, items] of Object.entries(byMotor)) {
+          motorGroups[key] = { sch_cnt: items.length, sch: items };
+        }
+        D = { idx, last: isLast, sch_cnt: Object.keys(byMotor).length, plr, ...motorGroups };
+      }
+
       chunks.push({
         payload: {
           T: 3,
           S: randomSequenceNumber(),
-          D: {
-            idx,
-            last: isLast,
-            sch_cnt: totalCount,
-            plr,
-            m1: slice,
-          },
+          D,
         },
         dbIds,
         scheduleIds,

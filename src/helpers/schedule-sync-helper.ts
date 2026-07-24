@@ -96,7 +96,9 @@ export async function pushPendingSchedulesForStarter(
     });
     const isFirstSync = !ackedRow;
     const firstSyncStarterIds = isFirstSync ? new Set([starter.id]) : new Set<number>()
-    const grouped = buildDeviceSyncPayloads(assignedRecords, firstSyncStarterIds);
+    // Single-motor boxes get the flat `sch` payload; multi-motor keeps the `m1` shape.
+    const singleMotorStarterIds = (starter as any).motor_support_type === "SINGLE_MOTOR" ? new Set([starter.id]) : new Set<number>()
+    const grouped = buildDeviceSyncPayloads(assignedRecords, firstSyncStarterIds, singleMotorStarterIds);
     for (const { chunks } of grouped) {
       for (const { payload, dbIds, scheduleIds } of chunks) {
         chunksSent++;
@@ -208,7 +210,7 @@ export async function runScheduleSync(label = "cron"): Promise<{ starters: numbe
 
   const starters = await db.query.starterBoxes.findMany({
     where: (s, { and: a, inArray: inArr, ne: n }) => a(inArr(s.id, starterIds), n(s.status, "ARCHIVED")),
-    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true, signal_quality: true },
+    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true, signal_quality: true, motor_support_type: true },
   });
 
   const online = starters.filter(s => s.signal_quality != null && s.signal_quality >= 1 && s.signal_quality <= 30);
@@ -252,7 +254,7 @@ export async function triggerSyncForCreatedSchedules(records: any[]) {
 
   const starters = await db.query.starterBoxes.findMany({
     where: (s, { inArray: inArr }) => inArr(s.id, starterIds),
-    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true },
+    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true, motor_support_type: true },
   });
 
   await Promise.allSettled(
