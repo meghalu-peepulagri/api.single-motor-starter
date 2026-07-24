@@ -13,6 +13,7 @@ import { motors } from "../../database/schemas/motors.js";
 import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
 import { sendMultiMotorSettingsCommand } from "../../helpers/multi-motor-settings-sync-helper.js";
 import { getMotorsForStarterControl } from "./motor-services.js";
+import { publishingMap } from "../../helpers/ack-tracker-hepler.js";
 export async function getStarterDefaultSettings() {
     return await db.select().from(starterDefaultSettings).limit(1);
 }
@@ -240,6 +241,18 @@ export async function publishDeviceSettings(starter) {
 // write on success (updateMultiMotorSettingsAck, below) happens once the device's
 // T:34 response lands, in deviceSyncUpdate (mqtt-db-services.ts).
 export async function publishMultiMotorDeviceSettings(starter) {
+    // Prevent overlapping publishes for the same starter. A heartbeat-driven publish
+    // waits up to ~30s for the device's T:34 ack; without this lock every subsequent
+    // heartbeat in that window would fire another publish with a NEW sequence number,
+    // overwriting the pending-ack entry so the device's ack no longer matches
+    // (sequence mismatch) — the box then never gets marked synced and it republishes
+    // forever. Mirrors the SINGLE_STARTER guard in publishMultipleTimesInBackground.
+    if (publishingMap.get(starter.id)) {
+        logger.warn(`Multi-motor settings publish already in progress for starter ${starter.id}, skipping this request.`);
+        return;
+    }
+    publishingMap.set(starter.id, true);
+    let scheduled = false;
     try {
         const ackSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"]);
         if (!ackSettings || !ackSettings.multi_motor_config) {
@@ -249,6 +262,7 @@ export async function publishMultiMotorDeviceSettings(starter) {
         const multiMotorConfig = ackSettings.multi_motor_config;
         const { id: _, is_new_configuration_saved, created_at, updated_at, starter_id, acknowledgement, ...ackWithoutId } = ackSettings;
         const motorIndexByMotorId = new Map((starter.motors ?? []).map((m) => [m.id, m.motor_index ?? 1]));
+        scheduled = true;
         setImmediate(async () => {
             try {
                 // Pending "in flight" copy — every motor starts unacknowledged, same as the
@@ -274,11 +288,22 @@ export async function publishMultiMotorDeviceSettings(starter) {
                 logger.error("Publish multi-motor device settings synced at heartbeat:", error);
                 console.error("Publish multi-motor device settings synced at heartbeat:", error);
             }
+            finally {
+                // Release the lock only after the full publish+ack window completes, so the
+                // next heartbeat can retry if this cycle didn't get acked.
+                publishingMap.delete(starter.id);
+            }
         });
     }
     catch (error) {
         logger.error("Error in publishMultiMotorDeviceSettings:", error);
         console.error("Error in publishMultiMotorDeviceSettings:", error);
+    }
+    finally {
+        // If we returned/threw before scheduling the async publish, release here — otherwise
+        // the setImmediate above owns releasing the lock when its ack window finishes.
+        if (!scheduled)
+            publishingMap.delete(starter.id);
     }
 }
 export async function getLatestStarterSettingsRow(starterId) {
