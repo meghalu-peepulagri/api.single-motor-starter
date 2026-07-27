@@ -6,7 +6,7 @@ import { deviceTemperature, type DeviceTemperatureTable } from "../../database/s
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
-import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap, settingsControlPendingAckMap } from "../../helpers/ack-tracker-hepler.js";
+import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap, settingsControlPendingAckMap, MAX_SETTINGS_SYNC_ATTEMPTS, clearSettingsSyncAttempts, getSettingsSyncAttempts, incrementSettingsSyncAttempts } from "../../helpers/ack-tracker-hepler.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
 import { normalizeDeviceAckD, parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
@@ -1401,7 +1401,25 @@ export async function heartbeatHandler(message: any, topic: string) {
     await db.transaction(async (trx) => {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, validMac.id, starterBoxUpdates, trx);
 
-      if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
+      // Heartbeat-driven config sync, bounded. The gate below is the only automatic
+      // publisher of a box's stored (initially default) settings, and it re-fires on
+      // every heartbeat until the device acks — which for a box that never acks means
+      // forever, plus one new pending starter_settings row per cycle. Cap the number of
+      // cycles; the count is cleared on a successful ack, and an admin can re-arm a
+      // given box via PATCH /starters/:id (updateSettingsSyncStatusHandler).
+      if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false") {
+        const syncAttempts = getSettingsSyncAttempts(validMac.id);
+        if (syncAttempts >= MAX_SETTINGS_SYNC_ATTEMPTS) {
+          // Log once, on the heartbeat that crosses the limit — not on every later one.
+          if (syncAttempts === MAX_SETTINGS_SYNC_ATTEMPTS) {
+            incrementSettingsSyncAttempts(validMac.id);
+            logger.warn(`Settings sync abandoned for starter ${validMac.id} after ${MAX_SETTINGS_SYNC_ATTEMPTS} unacknowledged attempts; re-arm to retry.`);
+          }
+        } else {
+          incrementSettingsSyncAttempts(validMac.id);
+          await publishDeviceSettings(validMac);
+        }
+      }
     });
 
     // Heartbeat-driven schedule push: whenever the device is online (signal 1–30),
@@ -1519,6 +1537,9 @@ export async function deviceSyncUpdate(message: any, topic: string) {
         if (allAcked && validMac.synced_settings_status === "false") {
           await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
         }
+        // Only a full ack counts as synced — a partial one leaves the count in place so
+        // the remaining motors still get their bounded retries.
+        if (allAcked) clearSettingsSyncAttempts(validMac.id);
       }
 
       return null;
@@ -1557,6 +1578,7 @@ export async function deviceSyncUpdate(message: any, topic: string) {
         if (validMac.synced_settings_status === "false") {
           await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
         }
+        clearSettingsSyncAttempts(validMac.id);
       }
     } else {
       // ACK failed (D === 0) — resolve false, do NOT update DB
@@ -1628,6 +1650,7 @@ export async function adminConfigDataRequestAckHandler(
         { synced_settings_status: "true" }
       );
     }
+    clearSettingsSyncAttempts(validMac.id);
 
   } catch (error: any) {
     console.error("Error at admin config ack handler:", error);

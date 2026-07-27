@@ -1,5 +1,28 @@
 export const publishingMap = new Map<number, boolean>();
 
+// Bounds the heartbeat-driven settings sync (heartbeatHandler -> publishDeviceSettings).
+// publishingMap only suppresses *overlapping* publishes inside one ack window; this
+// caps how many windows a box gets before the auto-sync gives up, so a device that is
+// online but never acks stops republishing its config on every heartbeat.
+// Key = starter box id, value = publish cycles since the last successful ack.
+export const settingsSyncAttemptsMap = new Map<number, number>();
+
+// Each cycle is itself 3 publishes with a 10s ack wait, so 3 cycles is ~90s of trying.
+export const MAX_SETTINGS_SYNC_ATTEMPTS = 3;
+
+export const getSettingsSyncAttempts = (starterId: number): number =>
+  settingsSyncAttemptsMap.get(starterId) ?? 0;
+
+export const incrementSettingsSyncAttempts = (starterId: number): number => {
+  const next = getSettingsSyncAttempts(starterId) + 1;
+  settingsSyncAttemptsMap.set(starterId, next);
+  return next;
+};
+
+export const clearSettingsSyncAttempts = (starterId: number): void => {
+  settingsSyncAttemptsMap.delete(starterId);
+};
+
 export const pendingAckMap = new Map<
   string,
   { resolve: (value: boolean) => void; sequenceNumber?: number }
