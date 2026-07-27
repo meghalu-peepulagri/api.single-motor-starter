@@ -6,7 +6,7 @@ import { deviceTemperature } from "../../database/schemas/device-temperature.js"
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
-import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap, settingsControlPendingAckMap } from "../../helpers/ack-tracker-hepler.js";
+import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap, settingsControlPendingAckMap, MAX_SETTINGS_SYNC_ATTEMPTS, clearSettingsSyncAttempts, getSettingsSyncAttempts, incrementSettingsSyncAttempts } from "../../helpers/ack-tracker-hepler.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
 import { normalizeDeviceAckD, parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
@@ -1173,8 +1173,26 @@ export async function heartbeatHandler(message, topic) {
         }
         await db.transaction(async (trx) => {
             await updateRecordByIdWithTrx(starterBoxes, validMac.id, starterBoxUpdates, trx);
-            if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false")
-                await publishDeviceSettings(validMac);
+            // Heartbeat-driven config sync, bounded. The gate below is the only automatic
+            // publisher of a box's stored (initially default) settings, and it re-fires on
+            // every heartbeat until the device acks — which for a box that never acks means
+            // forever, plus one new pending starter_settings row per cycle. Cap the number of
+            // cycles; the count is cleared on a successful ack, and an admin can re-arm a
+            // given box via PATCH /starters/:id (updateSettingsSyncStatusHandler).
+            if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false") {
+                const syncAttempts = getSettingsSyncAttempts(validMac.id);
+                if (syncAttempts >= MAX_SETTINGS_SYNC_ATTEMPTS) {
+                    // Log once, on the heartbeat that crosses the limit — not on every later one.
+                    if (syncAttempts === MAX_SETTINGS_SYNC_ATTEMPTS) {
+                        incrementSettingsSyncAttempts(validMac.id);
+                        logger.warn(`Settings sync abandoned for starter ${validMac.id} after ${MAX_SETTINGS_SYNC_ATTEMPTS} unacknowledged attempts; re-arm to retry.`);
+                    }
+                }
+                else {
+                    incrementSettingsSyncAttempts(validMac.id);
+                    await publishDeviceSettings(validMac);
+                }
+            }
         });
         // Heartbeat-driven schedule push: whenever the device is online (signal 1–30),
         // check for unacknowledged schedules and push them. The push helper early-returns
@@ -1277,6 +1295,10 @@ export async function deviceSyncUpdate(message, topic) {
                 if (allAcked && validMac.synced_settings_status === "false") {
                     await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
                 }
+                // Only a full ack counts as synced — a partial one leaves the count in place so
+                // the remaining motors still get their bounded retries.
+                if (allAcked)
+                    clearSettingsSyncAttempts(validMac.id);
             }
             return null;
         }
@@ -1307,6 +1329,7 @@ export async function deviceSyncUpdate(message, topic) {
                 if (validMac.synced_settings_status === "false") {
                     await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
                 }
+                clearSettingsSyncAttempts(validMac.id);
             }
         }
         else {
@@ -1358,6 +1381,7 @@ export async function adminConfigDataRequestAckHandler(message, topic) {
             validMac.synced_settings_status === "false") {
             await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });
         }
+        clearSettingsSyncAttempts(validMac.id);
     }
     catch (error) {
         console.error("Error at admin config ack handler:", error);
@@ -1470,15 +1494,28 @@ async function handleLateScheduleAck(macOrPcb, message) {
             console.log(`[schedule-ack:LATE] mac=${macOrPcb} — starter not found`);
             return;
         }
-        // Partial ACK bitmask: slot IDs confirmed by device
+        // Partial ACK bitmask: slot IDs confirmed by device. Flat `ids` (single-motor /
+        // legacy) plus per-motor `m1_ids` / `m2_ids` / ... (multi-motor). Slots are unique
+        // per starter across motors, so all bitmasks merge into one global slot set.
         let confirmedSlots = null;
-        if (typeof message.D === "object" && message.D !== null && typeof message.D.ids === "number" && message.D.ids > 0) {
-            confirmedSlots = new Set();
-            for (let bit = 0; bit < 16; bit++) {
-                if (Number(BigInt(message.D.ids) & (1n << BigInt(bit))))
-                    confirmedSlots.add(bit + 1);
+        if (typeof message.D === "object" && message.D !== null) {
+            const masks = [];
+            if (typeof message.D.ids === "number" && message.D.ids > 0)
+                masks.push({ key: "ids", mask: message.D.ids });
+            for (const [key, val] of Object.entries(message.D)) {
+                if (/^m\d+_ids$/i.test(key) && typeof val === "number" && val > 0)
+                    masks.push({ key, mask: val });
             }
-            console.log(`[schedule-ack:LATE] mac=${macOrPcb} partial bitmask=${message.D.ids} → slots=[${[...confirmedSlots].join(",")}]`);
+            if (masks.length > 0) {
+                confirmedSlots = new Set();
+                for (const { mask } of masks) {
+                    for (let bit = 0; bit < 16; bit++) {
+                        if (Number(BigInt(mask) & (1n << BigInt(bit))))
+                            confirmedSlots.add(bit + 1);
+                    }
+                }
+                console.log(`[schedule-ack:LATE] mac=${macOrPcb} partial bitmasks=[${masks.map(m => `${m.key}=${m.mask}`).join(",")}] → slots=[${[...confirmedSlots].join(",")}]`);
+            }
         }
         // Find PENDING records that were already dispatched (have device_schedule_id assigned)
         const pending = await db.query.motorSchedules.findMany({
@@ -1537,26 +1574,40 @@ async function scheduleCreationAckResolver(message, topic) {
     // Success = 1 or 2. ack=4 is a device flash issue → NOT success, schedule stays PENDING (do NOT mark SCHEDULED).
     const ackSuccess = dValue === 1 || dValue === 2;
     console.log(`[schedule-ack:PARSED] mac=${macFromTopic} S=${message.S} D_type=${typeof message.D} dValue=${dValue} ackSuccess=${ackSuccess}`);
-    // Partial ACK: ids is a bitmask from the device.
-    // schedule_id n → bit (n-1) → value 2^(n-1).
-    // e.g. ids=4 (binary 100) → bit 2 → schedule_id 3 confirmed.
+    // Partial ACK: a bitmask of confirmed device slots. slot n → bit (n-1) → value 2^(n-1).
+    // e.g. bitmask=4 (binary 100) → bit 2 → slot 3 confirmed.
+    //  - Single-motor / legacy boxes send a flat `ids` bitmask.
+    //  - Multi-motor boxes send per-motor `m1_ids` / `m2_ids` / ... bitmasks.
+    // device_schedule_id (the slot each bit references) is unique per starter across
+    // motors, so every bitmask decodes into the same global slot space and they merge.
     if (ackSuccess && message.D !== null && typeof message.D === "object") {
-        const rawIds = message.D.ids;
-        if (typeof rawIds === "number" && rawIds > 0) {
-            const acknowledgedIds = [];
-            for (let bit = 0; bit < 16; bit++) {
-                if (Number(BigInt(rawIds) & (1n << BigInt(bit)))) {
-                    acknowledgedIds.push(bit + 1);
+        const bitmasks = [];
+        if (typeof message.D.ids === "number" && message.D.ids > 0) {
+            bitmasks.push({ key: "ids", mask: message.D.ids });
+        }
+        for (const [key, val] of Object.entries(message.D)) {
+            if (/^m\d+_ids$/i.test(key) && typeof val === "number" && val > 0) {
+                bitmasks.push({ key, mask: val });
+            }
+        }
+        if (bitmasks.length > 0) {
+            const acknowledgedSet = new Set();
+            for (const { mask } of bitmasks) {
+                for (let bit = 0; bit < 16; bit++) {
+                    if (Number(BigInt(mask) & (1n << BigInt(bit))))
+                        acknowledgedSet.add(bit + 1);
                 }
             }
+            const acknowledgedIds = [...acknowledgedSet].sort((a, b) => a - b);
             if (acknowledgedIds.length > 0) {
                 schedulePartialAckMap.set(macFromTopic, acknowledgedIds);
-                console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} bitmask=${rawIds} (0b${rawIds.toString(2)}) → slot_ids=[${acknowledgedIds.join(",")}]`);
-                logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: bitmask=${rawIds} (0b${rawIds.toString(2)}) → ids=[${acknowledgedIds.join(",")}]`);
+                const maskDesc = bitmasks.map(b => `${b.key}=${b.mask}(0b${b.mask.toString(2)})`).join(" ");
+                console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} ${maskDesc} → slot_ids=[${acknowledgedIds.join(",")}]`);
+                logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: ${maskDesc} → ids=[${acknowledgedIds.join(",")}]`);
             }
         }
         else {
-            console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} D is object but ids=${rawIds} (not a positive number) → treated as full ACK`);
+            console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} D is object but no positive bitmask (ids / m*_ids) → treated as full ACK`);
         }
     }
     else if (ackSuccess) {
