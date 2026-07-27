@@ -13,6 +13,7 @@ import UnauthorizedException from "../exceptions/unauthorized-exception.js";
 import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
+import { clearSettingsSyncAttempts } from "../helpers/ack-tracker-hepler.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
@@ -616,6 +617,9 @@ export class StarterHandlers {
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
             await updateRecordById(starterBoxes, starterId, { synced_settings_status: syncStatus });
+            // Re-arm the bounded heartbeat sync: without this, flipping the flag back to
+            // "false" on a box whose attempts are already exhausted would never republish.
+            clearSettingsSyncAttempts(starterId);
             await ActivityService.logActivity({
                 performedBy: userPayload.id,
                 action: "SETTINGS_SYNC_STATUS_OVERRIDE",

@@ -70,7 +70,21 @@ export class MotorScheduleHandler {
                 entityType: "SCHEDULE",
                 newData: logNewData,
             });
-            return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED);
+            // Return motor_reference (from the motor) + motor_support_type/starter_type (from the
+            // starter box) so the client knows which motor slot (m1/m2...) and box type this
+            // schedule belongs to. All schedules in a bulk create share one motor, so resolve once.
+            const firstReq = Array.isArray(reqData) ? reqData[0] : reqData;
+            const scheduleMeta = { motor_reference: null, motor_support_type: null, starter_type: null };
+            if (firstReq?.motor_id) {
+                const motorForMeta = await getRecordById(motors, firstReq.motor_id, ["motor_reference"]);
+                scheduleMeta.motor_reference = motorForMeta?.motor_reference ?? null;
+            }
+            if (firstReq?.starter_id) {
+                const starterForMeta = await getRecordById(starterBoxes, firstReq.starter_id, ["motor_support_type", "starter_type"]);
+                scheduleMeta.motor_support_type = starterForMeta?.motor_support_type ?? null;
+                scheduleMeta.starter_type = starterForMeta?.starter_type ?? null;
+            }
+            return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED, scheduleMeta);
         }
         catch (error) {
             handleAppError(error, "create Motor Schedule");
@@ -139,10 +153,17 @@ export class MotorScheduleHandler {
             checkMotorScheduleConflict({ ...data, schedule_start_date: scheduleStartDate, schedule_end_date: data.schedule_end_date || scheduleStartDate }, existingSchedules);
             await updateRecordById(motorSchedules, scheduleId, { ...buildScheduleData(data, scheduleStartDate), edited_at: new Date() });
             let pcbForEditLog = null;
+            let motorSupportType = null;
+            let starterType = null;
             if (existed.starter_id) {
-                const starterForLog = await getRecordById(starterBoxes, existed.starter_id, ["pcb_number"]);
+                const starterForLog = await getRecordById(starterBoxes, existed.starter_id, ["pcb_number", "motor_support_type", "starter_type"]);
                 pcbForEditLog = starterForLog?.pcb_number ?? null;
+                motorSupportType = starterForLog?.motor_support_type ?? null;
+                starterType = starterForLog?.starter_type ?? null;
             }
+            const motorForMeta = existed.motor_id
+                ? await getRecordById(motors, existed.motor_id, ["motor_reference"])
+                : null;
             const changedParts = [];
             if (data.start_time !== existed.start_time)
                 changedParts.push(`Start time: ${formatHHMM(existed.start_time)} → ${formatHHMM(data.start_time)}`);
@@ -165,7 +186,11 @@ export class MotorScheduleHandler {
                 oldData: { schedule_status: existed.schedule_status },
                 newData: editLogNewData,
             });
-            return sendResponse(c, 200, SCHEDULE_UPDATED);
+            return sendResponse(c, 200, SCHEDULE_UPDATED, {
+                motor_reference: motorForMeta?.motor_reference ?? null,
+                motor_support_type: motorSupportType,
+                starter_type: starterType,
+            });
         }
         catch (error) {
             handleAppError(error, "edit motor Schedule");
@@ -654,7 +679,12 @@ export class MotorScheduleHandler {
                 : [];
             const ackedStarterSet = new Set(ackedRows.map(r => r.starter_id).filter((id) => id != null));
             const firstSyncStarterIds = new Set(starterIds.filter(id => !ackedStarterSet.has(id)));
-            const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
+            // Single-motor boxes get the flat `sch` payload; multi-motor keeps the `m1` shape.
+            const singleMotorRows = starterIds.length > 0
+                ? await db.select({ id: starterBoxes.id, mst: starterBoxes.motor_support_type }).from(starterBoxes).where(inArray(starterBoxes.id, starterIds))
+                : [];
+            const singleMotorStarterIds = new Set(singleMotorRows.filter(r => r.mst === "SINGLE_MOTOR").map(r => r.id));
+            const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds, singleMotorStarterIds);
             const starters = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, grouped.map(g => g.starter_id)));
             const starterMap = new Map(starters.map(s => [s.id, s]));
             const isOnline = (sq) => sq != null && sq >= 1 && sq <= 30;
@@ -755,7 +785,10 @@ export class MotorScheduleHandler {
                 columns: { id: true },
             });
             const firstSyncStarterIds = ackedRow ? new Set() : new Set([starterId]);
-            const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
+            // Single-motor boxes get the flat `sch` payload; multi-motor keeps the `m1` shape.
+            const starterMstA = await getRecordById(starterBoxes, starterId, ["motor_support_type"]);
+            const singleMotorStarterIds = starterMstA?.motor_support_type === "SINGLE_MOTOR" ? new Set([starterId]) : new Set();
+            const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds, singleMotorStarterIds);
             let published = 0, failed = 0;
             for (const { chunks } of grouped) {
                 for (const { payload, dbIds, scheduleIds } of chunks) {
@@ -922,7 +955,10 @@ export class MotorScheduleHandler {
                 columns: { id: true },
             });
             const firstSyncStarterIds = ackedRow ? new Set() : new Set([starterId]);
-            const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
+            // Single-motor boxes get the flat `sch` payload; multi-motor keeps the `m1` shape.
+            const starterMstB = await getRecordById(starterBoxes, starterId, ["motor_support_type"]);
+            const singleMotorStarterIds = starterMstB?.motor_support_type === "SINGLE_MOTOR" ? new Set([starterId]) : new Set();
+            const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds, singleMotorStarterIds);
             let published = 0, failed = 0;
             for (const { chunks } of grouped) {
                 for (const { payload, dbIds, scheduleIds } of chunks) {

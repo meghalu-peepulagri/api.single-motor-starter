@@ -391,11 +391,17 @@ export async function findSchedulesByFilters(
       starter_device_allocation: starterBoxes.device_allocation,
       starter_pcb_number: starterBoxes.pcb_number,
       starter_mac_address: starterBoxes.mac_address,
+      motor_support_type: starterBoxes.motor_support_type,
+      motor_reference: motors.motor_reference,
     })
     .from(motorSchedules)
     .leftJoin(
       starterBoxes,
       eq(motorSchedules.starter_id, starterBoxes.id)
+    )
+    .leftJoin(
+      motors,
+      eq(motorSchedules.motor_id, motors.id)
     )
     .where(whereClause)
     .orderBy(asc(motorSchedules.start_date_time))
@@ -483,6 +489,8 @@ export async function findPendingSchedulesForSync() {
       power_loss_recovery_time: true,
       enabled: true,
     },
+    // motor_reference drives the per-motor payload key (m1/m2/...) on multi-motor boxes.
+    with: { motor: { columns: { motor_reference: true } } },
     orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.schedule_id)],
   });
 }
@@ -541,6 +549,8 @@ export async function findPendingSchedulesForStarter(starterId: number, motorId?
       power_loss_recovery_time: true,
       enabled: true,
     },
+    // motor_reference drives the per-motor payload key (m1/m2/...) on multi-motor boxes.
+    with: { motor: { columns: { motor_reference: true } } },
     orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
   });
 }
@@ -583,6 +593,8 @@ export async function findPendingSchedulesForRepublish(starterId: number, motorI
       power_loss_recovery_time: true,
       enabled: true,
     },
+    // motor_reference drives the per-motor payload key (m1/m2/...) on multi-motor boxes.
+    with: { motor: { columns: { motor_reference: true } } },
     orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
   });
 }
