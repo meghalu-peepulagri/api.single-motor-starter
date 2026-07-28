@@ -547,6 +547,20 @@
       "when": 1785221185956,
       "tag": "0077_brief_juggernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1785239611898,
+      "tag": "0078_yielding_zeigeist",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1785240571719,
+      "tag": "0079_marvelous_vivisector",
+      "breakpoints": true
     }
   ]
 }

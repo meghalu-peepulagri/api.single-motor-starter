@@ -6,6 +6,17 @@ export const vUpdateDefaultSettings = v.object({
     flc: realOnly("flc"),
     as_dly: integerOnly("as_dly"),
     pr_flt_en: integerOnly("pr_flt_en"),
+    /* ================= Trip timings =================
+       Nullish for the same reason as the star-delta timings below: added after the screens
+       that post to this schema, so payloads without them must still pass. */
+    irt_time: v.nullish(realOnly("irt_time")),
+    lvt_time: v.nullish(realOnly("lvt_time")),
+    hvt_time: v.nullish(realOnly("hvt_time")),
+    ipt_time: v.nullish(realOnly("ipt_time")),
+    drt_time: v.nullish(realOnly("drt_time")),
+    olt_time: v.nullish(realOnly("olt_time")),
+    opt_time: v.nullish(realOnly("opt_time")),
+    cit_time: v.nullish(realOnly("cit_time")),
     /* ================= Star-delta timings =================
        Nullish, unlike the fields around them: they were added after the screens that post
        to this schema, so a payload without them (or with explicit nulls) must still pass.

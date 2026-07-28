@@ -455,6 +455,15 @@ export const SETTINGS_FIELD_NAMES = {
     step_delay: "Step delay",
     start_time: "Start time",
     transfer_time: "Transfer time",
+    /* ================= Trip timings ================= */
+    irt_time: "Inrush current trip time",
+    lvt_time: "Low voltage trip time",
+    hvt_time: "High voltage trip time",
+    ipt_time: "Input phase failure trip time",
+    drt_time: "Dry run trip time",
+    olt_time: "Overload trip time",
+    opt_time: "Output phase failure trip time",
+    cit_time: "Current imbalance trip time",
     flt_en: "Motor fault enable (bitwise)",
     motor_id: "Motor",
     /* ================= Enables ================= */

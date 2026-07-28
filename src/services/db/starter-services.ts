@@ -253,6 +253,11 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
       device_mobile_number: true,
       device_installed_location: true,
       installation_photo_key: true,
+      // Single vs multiple motors, plus both starter-type fields: starter_type is
+      // SINGLE_STARTER/MULTI_STARTER, motor_starter_type is STAR_RELAY/CONTACTOR/STAR_DELTA.
+      motor_support_type: true,
+      starter_type: true,
+      motor_starter_type: true,
     },
     with: {
       motors: {
@@ -266,6 +271,8 @@ export async function paginatedStarterListForMobile(WhereQueryData: any, orderBy
           mode: true,
           alias_name: true,
           motor_index: true,
+          // m1 / m2 — lets the app map each motor to its device payload key.
+          motor_reference: true,
           test_run_status: true,
           test_run_completed_at: true,
         },

@@ -15,6 +15,16 @@ export const starterDefaultSettings = pgTable("starter_default_settings", {
     // PATCH /settings/default/:id. Reuses the enum that starter_boxes.motor_starter_type
     // already uses, so both carry the same three values.
     motor_starter_type: motorStarterTypeEnum("motor_starter_type").default("CONTACTOR"),
+    // ================= Trip timings (sec) =================
+    // real, not integer — trip times are fractional (e.g. 0.5).
+    irt_time: real("irt_time").default(0.5), // Inrush / locked rotor trip time
+    lvt_time: real("lvt_time").default(2), // Low voltage trip time
+    hvt_time: real("hvt_time").default(3), // High voltage trip time
+    ipt_time: real("ipt_time").default(2), // Input phase failure trip time
+    drt_time: real("drt_time").default(2), // Dry run trip time
+    olt_time: real("olt_time").default(3), // Overload trip time
+    opt_time: real("opt_time").default(2), // Output phase failure trip time
+    cit_time: real("cit_time").default(2), // Current imbalance trip time
     // ================= Star-delta timings =================
     // Device payload mapping: start_time -> sd_time, step_delay -> step_dly,
     // transfer_time -> tf_time.
