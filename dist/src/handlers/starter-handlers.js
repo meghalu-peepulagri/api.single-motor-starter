@@ -475,17 +475,28 @@ export class StarterHandlers {
             const reqData = await c.req.json();
             paramsValidateException.validateId(starterId, "Device id");
             paramsValidateException.emptyBodyValidation(reqData);
-            const validatedReqData = await validatedRequest("add-starter", reqData, STARTER_BOX_VALIDATION_CRITERIA);
+            const validatedReqData = await validatedRequest("update-starter-details", reqData, STARTER_BOX_VALIDATION_CRITERIA);
             const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starter)
                 throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            // Partial payload: write only the keys that actually arrived, so a field the screen
+            // omits (or sends as null) keeps its stored value instead of being blanked.
+            const starterUpdates = Object.fromEntries(Object.entries(validatedReqData).filter(([, value]) => value !== undefined && value !== null));
             const userId = c.get("user_payload").id;
             await db.transaction(async (trx) => {
-                const updatedStarter = await updateRecordById(starterBoxes, starter.id, validatedReqData, trx);
-                await updateRecordById(starterDispatch, starter.id, {
-                    pcb_number: validatedReqData.pcb_number, box_serial_no: validatedReqData.starter_number,
-                    sim_no: validatedReqData.device_mobile_number
-                }, trx);
+                const updatedStarter = await updateRecordById(starterBoxes, starter.id, starterUpdates, trx);
+                // Same rule for the dispatch row — these three were previously written
+                // unconditionally, which blanked them whenever the payload omitted them.
+                const dispatchUpdates = {};
+                if (validatedReqData.pcb_number != null)
+                    dispatchUpdates.pcb_number = validatedReqData.pcb_number;
+                if (validatedReqData.starter_number != null)
+                    dispatchUpdates.box_serial_no = validatedReqData.starter_number;
+                if (validatedReqData.device_mobile_number != null)
+                    dispatchUpdates.sim_no = validatedReqData.device_mobile_number;
+                if (Object.keys(dispatchUpdates).length > 0) {
+                    await updateRecordById(starterDispatch, starter.id, dispatchUpdates, trx);
+                }
                 await ActivityService.writeStarterUpdatedLog(userId, starterId, {
                     name: starter.name,
                     pcb_number: starter.pcb_number,

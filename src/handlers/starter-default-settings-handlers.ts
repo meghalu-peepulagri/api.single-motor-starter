@@ -15,7 +15,7 @@ import { getMotorsForStarterControl } from "../services/db/motor-services.js";
 import type { WhereQueryData } from "../types/db-types.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
-import type { ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
+import type { ValidatedDefaultSettingsStarterType, ValidatedUpdateDefaultSettings } from "../validations/schema/default-settings.js";
 import type { ValidatedUpdateDefaultSettingsLimits } from "../validations/schema/default-settings-limits.js";
 import type { ValidatedUpdateMultiMotorSettings } from "../validations/schema/multi-motor-settings-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -46,16 +46,30 @@ export class StarterDefaultSettingsHandlers {
       const reqBody = await c.req.json();
       paramsValidateException.emptyBodyValidation(reqBody);
       const validatedBody = await validatedRequest<ValidatedUpdateDefaultSettings>("update-default-settings", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA);
+
+      // motor_starter_type, validated on its own: vUpdateDefaultSettings' output is also
+      // spread into starter_settings inserts, and that table has no such column.
+      const starterTypeBody = await validatedRequest<ValidatedDefaultSettingsStarterType>(
+        "default-settings-starter-type", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA
+      );
+      // Write it only when a value actually arrived — the screen posts explicit nulls for
+      // anything unset, and a null must not overwrite the stored choice.
+      const starterTypeUpdate = starterTypeBody.motor_starter_type
+        ? { motor_starter_type: starterTypeBody.motor_starter_type }
+        : {};
+
       const defaultSettingData = await getSingleRecordByAColumnValue<StarterDefaultSettingsTable>(starterDefaultSettings, "id", "=", defaultSettingId);
       if (!defaultSettingData) throw new BadRequestException(DEFAULT_SETTINGS_NOT_FOUND);
       const { id, created_at, updated_at, ...rest } = defaultSettingData;
 
+      const updatePayload = { ...validatedBody, ...starterTypeUpdate };
+
       const changedOldData: Record<string, any> = {};
       const changedNewData: Record<string, any> = {};
 
-      for (const key of Object.keys(validatedBody)) {
+      for (const key of Object.keys(updatePayload)) {
         const oldValue = (rest as any)[key];
-        const newValue = (validatedBody as any)[key];
+        const newValue = (updatePayload as any)[key];
 
         // strict comparison to avoid false positives
         if (newValue !== undefined && oldValue !== newValue) {
@@ -72,7 +86,7 @@ export class StarterDefaultSettingsHandlers {
         .join(', ');
 
       await db.transaction(async (trx) => {
-        await updateRecordById<StarterDefaultSettingsTable>(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
+        await updateRecordById<StarterDefaultSettingsTable>(starterDefaultSettings, Number(defaultSettingData.id), updatePayload, trx);
         await ActivityService.logActivity({
           performedBy: c.get("performer_id"),
           action: "DEFAULT_SETTINGS_UPDATED",

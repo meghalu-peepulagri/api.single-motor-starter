@@ -15,6 +15,14 @@ export const starterSettings = pgTable("starter_settings", {
   flc: real("flc").default(1.65),               // Motor Full Load Current
   as_dly: integer("as_dly").default(5),             // Auto Start Seed Time for Motor
   pr_flt_en: integer("pr_flt_en").default(0),
+
+  // ================= Star-delta timings =================
+  // Device payload mapping: start_time -> sd_time, step_delay -> step_dly,
+  // transfer_time -> tf_time.
+  step_delay: integer("step_delay").default(0),
+  start_time: integer("start_time").default(0),
+  transfer_time: integer("transfer_time").default(0),
+
   tpf: real("tpf").default(0),                   // Time per fault
 
   // Enables (2 fields)
