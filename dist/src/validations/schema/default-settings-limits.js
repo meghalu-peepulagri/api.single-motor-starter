@@ -58,6 +58,23 @@ const baseSchema = v.object({
     flc_max: realLimitValue("Full load current maximum"),
     as_dly_min: integerLimitValue("Auto start delay minimum"),
     as_dly_max: integerLimitValue("Auto start delay maximum"),
+    // Trip timing bounds. Nullish for the same reason as the star-delta bounds below.
+    irt_time_min: v.nullish(realLimitValue("Inrush current trip time minimum")),
+    irt_time_max: v.nullish(realLimitValue("Inrush current trip time maximum")),
+    lvt_time_min: v.nullish(realLimitValue("Low voltage trip time minimum")),
+    lvt_time_max: v.nullish(realLimitValue("Low voltage trip time maximum")),
+    hvt_time_min: v.nullish(realLimitValue("High voltage trip time minimum")),
+    hvt_time_max: v.nullish(realLimitValue("High voltage trip time maximum")),
+    ipt_time_min: v.nullish(realLimitValue("Input phase failure trip time minimum")),
+    ipt_time_max: v.nullish(realLimitValue("Input phase failure trip time maximum")),
+    drt_time_min: v.nullish(realLimitValue("Dry run trip time minimum")),
+    drt_time_max: v.nullish(realLimitValue("Dry run trip time maximum")),
+    olt_time_min: v.nullish(realLimitValue("Overload trip time minimum")),
+    olt_time_max: v.nullish(realLimitValue("Overload trip time maximum")),
+    opt_time_min: v.nullish(realLimitValue("Output phase failure trip time minimum")),
+    opt_time_max: v.nullish(realLimitValue("Output phase failure trip time maximum")),
+    cit_time_min: v.nullish(realLimitValue("Current imbalance trip time minimum")),
+    cit_time_max: v.nullish(realLimitValue("Current imbalance trip time maximum")),
     // Star-delta timing bounds. Nullish because they were added after the screens that
     // post to this schema, so payloads that omit them must still validate.
     step_delay_min: v.nullish(integerLimitValue("Step delay minimum")),
