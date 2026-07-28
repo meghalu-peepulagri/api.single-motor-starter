@@ -14,6 +14,13 @@ export const starterSettingsLimits = pgTable("starter_settings_limits", {
     flc_max: real("flc_max").default(10.0),
     as_dly_min: integer("as_dly_min").default(5),
     as_dly_max: integer("as_dly_max"),
+    // Star-delta timing bounds
+    step_delay_min: integer("step_delay_min").default(0),
+    step_delay_max: integer("step_delay_max"),
+    start_time_min: integer("start_time_min").default(0),
+    start_time_max: integer("start_time_max"),
+    transfer_time_min: integer("transfer_time_min").default(0),
+    transfer_time_max: integer("transfer_time_max"),
     tpf_min: real("tpf_min").default(0),
     tpf_max: real("tpf_max").default(10),
     // Enables

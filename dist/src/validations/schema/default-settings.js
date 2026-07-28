@@ -6,6 +6,14 @@ export const vUpdateDefaultSettings = v.object({
     flc: realOnly("flc"),
     as_dly: integerOnly("as_dly"),
     pr_flt_en: integerOnly("pr_flt_en"),
+    /* ================= Star-delta timings =================
+       Nullish, unlike the fields around them: they were added after the screens that post
+       to this schema, so a payload without them (or with explicit nulls) must still pass.
+       Device payload mapping: start_time -> sd_time, step_delay -> step_dly,
+       transfer_time -> tf_time. */
+    step_delay: v.nullish(integerOnly("step_delay")),
+    start_time: v.nullish(integerOnly("start_time")),
+    transfer_time: v.nullish(integerOnly("transfer_time")),
     tpf: realOnly("tpf"),
     /* ================= Enables ================= */
     v_en: enable01("v_en"),
@@ -99,4 +107,18 @@ export const vUpdateDefaultSettings = v.object({
     ivrs_en: enable01("ivrs_en"),
     sms_en: enable01("sms_en"),
     rmt_en: enable01("rmt_en"),
+});
+/**
+ * Global default starter type for PATCH /settings/default/:id, e.g. { "motor_starter_type": "CONTACTOR" }.
+ *
+ * Deliberately NOT a field on vUpdateDefaultSettings: that schema's output is spread
+ * straight into starter_settings inserts (insertStarterSettingHandler and
+ * insertMultiMotorStarterSetting), and starter_settings has no motor_starter_type column,
+ * so putting it there would push an unknown column into those writes.
+ *
+ * Nullish rather than optional because the screen loads the record with GET and posts the
+ * whole thing back — an unset value arrives as an explicit null, which v.optional rejects.
+ */
+export const vDefaultSettingsStarterType = v.object({
+    motor_starter_type: v.nullish(v.picklist(["STAR_RELAY", "CONTACTOR", "STAR_DELTA"], "Invalid motor starter type")),
 });

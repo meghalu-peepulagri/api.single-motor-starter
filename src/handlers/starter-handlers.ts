@@ -34,7 +34,7 @@ import { starterBoxParameters, type StarterBoxParametersTable } from "../databas
 import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
 import { generateDownloadUrl, generateUploadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
-import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
+import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus, ValidatedUpdateStarterDetails } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 
@@ -534,17 +534,29 @@ export class StarterHandlers {
       paramsValidateException.validateId(starterId, "Device id");
       paramsValidateException.emptyBodyValidation(reqData);
 
-      const validatedReqData = await validatedRequest<validatedAddStarter>("add-starter", reqData, STARTER_BOX_VALIDATION_CRITERIA);
+      const validatedReqData = await validatedRequest<ValidatedUpdateStarterDetails>("update-starter-details", reqData, STARTER_BOX_VALIDATION_CRITERIA);
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
+      // Partial payload: write only the keys that actually arrived, so a field the screen
+      // omits (or sends as null) keeps its stored value instead of being blanked.
+      const starterUpdates = Object.fromEntries(
+        Object.entries(validatedReqData).filter(([, value]) => value !== undefined && value !== null)
+      );
+
       const userId = (c.get("user_payload") as User).id;
       await db.transaction(async (trx) => {
-        const updatedStarter = await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, validatedReqData, trx);
-        await updateRecordById<StarterDispatchTable>(starterDispatch, starter.id, {
-          pcb_number: validatedReqData.pcb_number, box_serial_no: validatedReqData.starter_number,
-          sim_no: validatedReqData.device_mobile_number
-        }, trx);
+        const updatedStarter = await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, starterUpdates, trx);
+
+        // Same rule for the dispatch row — these three were previously written
+        // unconditionally, which blanked them whenever the payload omitted them.
+        const dispatchUpdates: Record<string, any> = {};
+        if (validatedReqData.pcb_number != null) dispatchUpdates.pcb_number = validatedReqData.pcb_number;
+        if (validatedReqData.starter_number != null) dispatchUpdates.box_serial_no = validatedReqData.starter_number;
+        if (validatedReqData.device_mobile_number != null) dispatchUpdates.sim_no = validatedReqData.device_mobile_number;
+        if (Object.keys(dispatchUpdates).length > 0) {
+          await updateRecordById<StarterDispatchTable>(starterDispatch, starter.id, dispatchUpdates, trx);
+        }
 
         await ActivityService.writeStarterUpdatedLog(userId, starterId,
           {

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { integer, jsonb, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { motorStarterTypeEnum } from "./starter-boxes.js";
 export const starterDefaultSettings = pgTable("starter_default_settings", {
     id: serial("id").primaryKey(),
     // Global template block the admin UI pre-fills a new motor's settings form with —
@@ -10,6 +11,16 @@ export const starterDefaultSettings = pgTable("starter_default_settings", {
     flc: real("flc").default(1.65), // Motor Full Load Current
     as_dly: integer("as_dly").default(5), // Auto Start Seed Time for Motor
     pr_flt_en: integer("pr_flt_en").default(0),
+    // Global default starter type, edited on the Default Settings screen via
+    // PATCH /settings/default/:id. Reuses the enum that starter_boxes.motor_starter_type
+    // already uses, so both carry the same three values.
+    motor_starter_type: motorStarterTypeEnum("motor_starter_type").default("CONTACTOR"),
+    // ================= Star-delta timings =================
+    // Device payload mapping: start_time -> sd_time, step_delay -> step_dly,
+    // transfer_time -> tf_time.
+    step_delay: integer("step_delay").default(0),
+    start_time: integer("start_time").default(0),
+    transfer_time: integer("transfer_time").default(0),
     tpf: real("tpf").default(0), // Temperature Protection Factor
     // Enables (2 fields)
     v_en: integer("v_en").default(0), // Voltage faults enable

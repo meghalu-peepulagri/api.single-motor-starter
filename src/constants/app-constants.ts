@@ -502,6 +502,9 @@ export const SETTINGS_FIELD_NAMES = {
 
   v_flt_en: "Voltage fault enable (bitwise)",
   sd_time: "Star-delta time",
+  step_delay: "Step delay",
+  start_time: "Start time",
+  transfer_time: "Transfer time",
   flt_en: "Motor fault enable (bitwise)",
   motor_id: "Motor",
 

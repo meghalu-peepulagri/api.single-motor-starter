@@ -37,15 +37,24 @@ export class StarterDefaultSettingsHandlers {
             const reqBody = await c.req.json();
             paramsValidateException.emptyBodyValidation(reqBody);
             const validatedBody = await validatedRequest("update-default-settings", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA);
+            // motor_starter_type, validated on its own: vUpdateDefaultSettings' output is also
+            // spread into starter_settings inserts, and that table has no such column.
+            const starterTypeBody = await validatedRequest("default-settings-starter-type", reqBody, UPDATE_DEFAULT_SETTINGS_VALIDATION_CRITERIA);
+            // Write it only when a value actually arrived — the screen posts explicit nulls for
+            // anything unset, and a null must not overwrite the stored choice.
+            const starterTypeUpdate = starterTypeBody.motor_starter_type
+                ? { motor_starter_type: starterTypeBody.motor_starter_type }
+                : {};
             const defaultSettingData = await getSingleRecordByAColumnValue(starterDefaultSettings, "id", "=", defaultSettingId);
             if (!defaultSettingData)
                 throw new BadRequestException(DEFAULT_SETTINGS_NOT_FOUND);
             const { id, created_at, updated_at, ...rest } = defaultSettingData;
+            const updatePayload = { ...validatedBody, ...starterTypeUpdate };
             const changedOldData = {};
             const changedNewData = {};
-            for (const key of Object.keys(validatedBody)) {
+            for (const key of Object.keys(updatePayload)) {
                 const oldValue = rest[key];
-                const newValue = validatedBody[key];
+                const newValue = updatePayload[key];
                 // strict comparison to avoid false positives
                 if (newValue !== undefined && oldValue !== newValue) {
                     changedOldData[key] = oldValue;
@@ -59,7 +68,7 @@ export class StarterDefaultSettingsHandlers {
             })
                 .join(', ');
             await db.transaction(async (trx) => {
-                await updateRecordById(starterDefaultSettings, Number(defaultSettingData.id), validatedBody, trx);
+                await updateRecordById(starterDefaultSettings, Number(defaultSettingData.id), updatePayload, trx);
                 await ActivityService.logActivity({
                     performedBy: c.get("performer_id"),
                     action: "DEFAULT_SETTINGS_UPDATED",

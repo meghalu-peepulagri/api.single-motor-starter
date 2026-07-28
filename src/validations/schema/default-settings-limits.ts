@@ -105,6 +105,15 @@ const baseSchema = v.object({
   as_dly_min: integerLimitValue("Auto start delay minimum"),
   as_dly_max: integerLimitValue("Auto start delay maximum"),
 
+  // Star-delta timing bounds. Nullish because they were added after the screens that
+  // post to this schema, so payloads that omit them must still validate.
+  step_delay_min: v.nullish(integerLimitValue("Step delay minimum")),
+  step_delay_max: v.nullish(integerLimitValue("Step delay maximum")),
+  start_time_min: v.nullish(integerLimitValue("Start time minimum")),
+  start_time_max: v.nullish(integerLimitValue("Start time maximum")),
+  transfer_time_min: v.nullish(integerLimitValue("Transfer time minimum")),
+  transfer_time_max: v.nullish(integerLimitValue("Transfer time maximum")),
+
   tpf_min: realLimitValue("Time per fault minimum"),
   tpf_max: realLimitValue("Time per fault maximum"),
 
