@@ -15,7 +15,7 @@ import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { logger } from "../utils/logger.js";
-import { sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettingsHandler = async (c) => {
@@ -126,8 +126,64 @@ export class StarterDefaultSettingsHandlers {
             }
             const validatedBody = await validatedRequest("update-default-settings", body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
             const oldSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement"], ["=", "="], [starter.id, "TRUE"]) ?? {};
+            // Every save inserts a NEW row, so any column the flat payload doesn't carry starts
+            // out empty. For a MULTI_STARTER box that means multi_motor_config would land as
+            // NULL and the per-motor block would be lost — which is what happens when the mobile
+            // app posts a flat payload (no dvc_c / m1 / m2 / motors[]). Carry the existing block
+            // forward; the multi-motor path above still owns updating it when the payload
+            // actually contains per-motor data.
+            // Read from the most recent row that still HAS a block, not merely the most recent
+            // acknowledged one: once a flat save has already nulled it, the newest row carries
+            // nothing and the block would stay lost forever.
+            const lastConfigRow = starter.starter_type === "MULTI_STARTER"
+                ? await db.query.starterSettings.findFirst({
+                    where: and(eq(starterSettings.starter_id, starter.id), isNotNull(starterSettings.multi_motor_config)),
+                    orderBy: desc(starterSettings.id),
+                    columns: { multi_motor_config: true },
+                })
+                : undefined;
+            const storedConfig = (lastConfigRow?.multi_motor_config ?? null);
+            // The mobile app posts the whole settings record back, multi_motor_config included,
+            // with its per-motor edits inside it — but without the top-level m1/m2 blocks the web
+            // sends, so it never reaches the multi-motor path above. Merge the request's block
+            // over the stored one; otherwise the carry-forward would put the stale per-motor
+            // values back and FLC / current protection would never change.
+            const incomingConfig = body?.multi_motor_config;
+            let nextConfig = storedConfig;
+            if (starter.starter_type === "MULTI_STARTER" && Array.isArray(incomingConfig?.motors) && incomingConfig.motors.length > 0) {
+                const validatedConfig = await validatedRequest("update-multi-motor-settings", incomingConfig, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
+                // Keep only the fields the request actually sent, so a partial motor block overlays
+                // rather than wiping the rest. Identity fields are taken from the stored block.
+                const sentFieldsOf = (entry) => Object.fromEntries(Object.entries(entry).filter(([key, value]) => value !== undefined && key !== "motor_id" && key !== "motor_reference"));
+                const incomingById = new Map(validatedConfig.motors
+                    .filter((m) => m.motor_id !== undefined && m.motor_id !== null)
+                    .map((m) => [m.motor_id, m]));
+                const mergedMotors = (storedConfig?.motors ?? []).map((motorBlock) => {
+                    const incoming = incomingById.get(motorBlock.motor_id);
+                    if (!incoming)
+                        return motorBlock;
+                    incomingById.delete(motorBlock.motor_id);
+                    // Changed values need re-acknowledging by the device.
+                    return { ...motorBlock, ...sentFieldsOf(incoming), acknowledgement: "FALSE" };
+                });
+                // Motors sent for the first time (no stored block yet).
+                for (const incoming of incomingById.values()) {
+                    mergedMotors.push({
+                        ...sentFieldsOf(incoming),
+                        motor_id: incoming.motor_id,
+                        motor_reference: incoming.motor_reference,
+                        acknowledgement: "FALSE",
+                    });
+                }
+                nextConfig = {
+                    v_flt_en: validatedConfig.v_flt_en ?? storedConfig?.v_flt_en ?? 0,
+                    sd_time: validatedConfig.sd_time ?? storedConfig?.sd_time ?? 0,
+                    motors: mergedMotors,
+                };
+            }
+            const carriedConfig = nextConfig ? { multi_motor_config: nextConfig } : {};
             await db.transaction(async (trx) => {
-                await saveSingleRecord(starterSettings, { ...validatedBody, starter_id: starter.id, created_by: user.id }, trx);
+                await saveSingleRecord(starterSettings, { ...validatedBody, ...carriedConfig, starter_id: starter.id, created_by: user.id }, trx);
                 await ActivityService.writeStarterSettingsUpdatedLog(user.id, starter.id, oldSettings, validatedBody, trx, starter.pcb_number);
             });
             return sendResponse(c, 200, ADDED_STARTER_SETTINGS);
@@ -314,7 +370,9 @@ export class StarterDefaultSettingsHandlers {
             const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
-            const defaultColumns = ["id", "starter_id", "lvf_min", "lvf_max", "hvf_min", "hvf_max", "created_at"];
+            // as_dly_min/max are returned alongside the voltage bounds without the caller having
+            // to ask for them, since the mobile Start Delay field always needs its limits.
+            const defaultColumns = ["id", "starter_id", "lvf_min", "lvf_max", "hvf_min", "hvf_max", "as_dly_min", "as_dly_max", "created_at"];
             let columnsToFetch = defaultColumns;
             if (query.columns) {
                 const extraColumns = query.columns.split(",");
