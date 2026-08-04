@@ -113,7 +113,17 @@ export class StarterDefaultSettingsHandlers {
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
 
       const starterSettings = await starterAcknowledgedSettings(starterId);
-      return sendResponse(c, 200, SETTINGS_FETCHED, starterSettings);
+
+      // Surface the box's starter/support type at the top level too. The nested `starter`
+      // object carries them as well, but a box with no acknowledged settings row yet has no
+      // nested object at all, and the screen still needs the two types to render.
+      const responseData = {
+        ...(starterSettings ?? {}),
+        motor_starter_type: starterData.motor_starter_type,
+        motor_support_type: starterData.motor_support_type,
+      };
+
+      return sendResponse(c, 200, SETTINGS_FETCHED, responseData);
     } catch (error: any) {
       console.error("Error at add starter default settings :", error);
       throw error;
@@ -461,9 +471,10 @@ export class StarterDefaultSettingsHandlers {
       const starterData = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starterData) throw new BadRequestException(DEVICE_NOT_FOUND);
 
-      // as_dly_min/max are returned alongside the voltage bounds without the caller having
-      // to ask for them, since the mobile Start Delay field always needs its limits.
-      const defaultColumns = ["id", "starter_id", "lvf_min", "lvf_max", "hvf_min", "hvf_max", "as_dly_min", "as_dly_max", "created_at"];
+      // as_dly_min/max and start_time_min/max are returned alongside the voltage bounds
+      // without the caller having to ask for them, since the mobile Start Delay and Start
+      // Time fields always need their limits.
+      const defaultColumns = ["id", "starter_id", "lvf_min", "lvf_max", "hvf_min", "hvf_max", "as_dly_min", "as_dly_max", "start_time_min", "start_time_max", "created_at"];
       let columnsToFetch = defaultColumns;
 
       if (query.columns) {
