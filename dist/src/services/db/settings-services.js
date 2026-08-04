@@ -30,6 +30,8 @@ export async function starterAcknowledgedSettings(starterId, filter) {
                     pcb_number: true,
                     mac_address: true,
                     device_allocation: true,
+                    motor_starter_type: true,
+                    motor_support_type: true,
                 },
                 with: {
                     motors: {
