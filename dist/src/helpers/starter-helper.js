@@ -5,6 +5,8 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 // import { randomSequenceNumber } from "./mqtt-helpers.js";
 // import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
+import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID } from "../constants/app-constants.js";
 import { getStartersWithSimRechargeExpiry } from "../services/db/starter-services.js";
 export function prepareStarterData(starterBoxPayload, userPayload, dispatchDetails, gatewayId) {
     const { motors: motorsInput, ...starterFields } = starterBoxPayload;
@@ -27,8 +29,15 @@ export function prepareStarterData(starterBoxPayload, userPayload, dispatchDetai
     const isMultiMotor = motorsList.length > 1;
     const motor_support_type = isMultiMotor ? "MULTIPLE_MOTORS" : "SINGLE_MOTOR";
     const starter_type = starterFields.starter_type ?? (isMultiMotor ? "MULTI_STARTER" : "SINGLE_STARTER");
+    // A dual-motor box has no 1.0 payload shape (nowhere to put m2), so it is always 2.0.
+    // A single-motor box honours the Admin Panel's choice and defaults to 1.0 — the safe
+    // assumption for a board whose firmware we haven't been told about.
+    if (isMultiMotor && starterFields.payload_version === "1.0") {
+        throw new BadRequestException(PAYLOAD_VERSION_DUAL_MOTOR_INVALID);
+    }
+    const payload_version = isMultiMotor ? "2.0" : (starterFields.payload_version ?? "1.0");
     return {
-        ...starterFields, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorsList, motor_support_type, starter_type,
+        ...starterFields, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorsList, motor_support_type, starter_type, payload_version,
         sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,
         device_mobile_number: dispatchDetails?.sim_no ?? starterFields.device_mobile_number, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
     };

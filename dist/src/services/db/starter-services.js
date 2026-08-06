@@ -105,6 +105,7 @@ export async function getStarterByMacWithMotor(mac) {
             sim_recharge_expires_at: true,
             device_mobile_number: true,
             motor_support_type: true,
+            payload_version: true,
             starter_type: true,
         },
         with: {
@@ -146,6 +147,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             device_mobile_number: true,
             starter_type: true,
             motor_support_type: true,
+            payload_version: true,
             motor_starter_type: true,
         },
         with: {
@@ -226,6 +228,7 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
             // Single vs multiple motors, plus both starter-type fields: starter_type is
             // SINGLE_STARTER/MULTI_STARTER, motor_starter_type is STAR_RELAY/CONTACTOR/STAR_DELTA.
             motor_support_type: true,
+            payload_version: true,
             starter_type: true,
             motor_starter_type: true,
         },
@@ -388,6 +391,11 @@ export async function starterConnectedMotors(starterId) {
             network_type: true,
             device_status: true,
             motor_starter_type: true,
+            // The settings screen publishes T:4 itself, so it needs the same two columns
+            // publishDeviceSettings resolves the grammar from — without them the Admin
+            // Panel falls back to "1.0" and sends a V2.0 board the flat body.
+            payload_version: true,
+            motor_support_type: true,
             assigned_at: true,
             deployed_at: true,
             device_allocation: true,
@@ -496,6 +504,7 @@ export async function getStarterMotorsByPcb(pcbNumber) {
             starter_type: true,
             motor_starter_type: true,
             motor_support_type: true,
+            payload_version: true,
         },
         with: {
             motors: {

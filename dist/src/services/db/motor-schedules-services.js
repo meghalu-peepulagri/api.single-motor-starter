@@ -281,6 +281,7 @@ export async function findSchedulesByFilters(filters, page = 1, limit = 10) {
         starter_pcb_number: starterBoxes.pcb_number,
         starter_mac_address: starterBoxes.mac_address,
         motor_support_type: starterBoxes.motor_support_type,
+        payload_version: starterBoxes.payload_version,
         motor_reference: motors.motor_reference,
     })
         .from(motorSchedules)

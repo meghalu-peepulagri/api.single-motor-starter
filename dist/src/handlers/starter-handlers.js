@@ -14,6 +14,9 @@ import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
 import { clearSettingsSyncAttempts } from "../helpers/ack-tracker-hepler.js";
+import { isDualMotor, isInvalidVersionMotorPair, payloadVersionOf } from "../helpers/payload-version-helper.js";
+import { motorSchedules } from "../database/schemas/motor-schedules.js";
+import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID } from "../constants/app-constants.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
@@ -482,6 +485,23 @@ export class StarterHandlers {
             // Partial payload: write only the keys that actually arrived, so a field the screen
             // omits (or sends as null) keeps its stored value instead of being blanked.
             const starterUpdates = Object.fromEntries(Object.entries(validatedReqData).filter(([, value]) => value !== undefined && value !== null));
+            // A dual-motor box has no 1.0 payload shape, so reject the pair whichever half of
+            // it arrived in this request — the version, the motor count, or both.
+            const nextVersion = payloadVersionOf({ payload_version: validatedReqData.payload_version ?? starter.payload_version });
+            const nextDualMotor = isDualMotor({
+                motor_support_type: validatedReqData.motor_support_type ?? starter.motor_support_type,
+                starter_type: validatedReqData.starter_type ?? starter.starter_type,
+            });
+            if (isInvalidVersionMotorPair(nextVersion, nextDualMotor)) {
+                throw new BadRequestException(PAYLOAD_VERSION_DUAL_MOTOR_INVALID);
+            }
+            // Changing the grammar means everything already on the device is in the old format.
+            // Clear the synced flag so the next heartbeat republishes settings, and drop the
+            // bounded-retry counter that would otherwise suppress that republish.
+            const versionChanged = validatedReqData.payload_version != null
+                && validatedReqData.payload_version !== starter.payload_version;
+            if (versionChanged)
+                starterUpdates.synced_settings_status = "false";
             const userId = c.get("user_payload").id;
             await db.transaction(async (trx) => {
                 const updatedStarter = await updateRecordById(starterBoxes, starter.id, starterUpdates, trx);
@@ -513,6 +533,18 @@ export class StarterHandlers {
                     device_mobile_number: updatedStarter.device_mobile_number
                 }, trx);
             });
+            if (versionChanged) {
+                // Settings: drop the bounded-retry counter so the next heartbeat actually
+                // republishes instead of being suppressed as "already tried enough times".
+                clearSettingsSyncAttempts(starter.id);
+                // Schedules: whatever the device already stored is in the old grammar, so mark
+                // this starter's still-pending schedules for resend. Scoped to PENDING/non-archived
+                // rows, so past and cancelled schedules are not resurrected.
+                await db.update(motorSchedules)
+                    .set({ acknowledgement: 0, publish_attempts: 0 })
+                    .where(and(eq(motorSchedules.starter_id, starter.id), eq(motorSchedules.schedule_status, "PENDING"), ne(motorSchedules.status, "ARCHIVED")));
+                logger.info(`[payload-version] starter=${starter.id} switched ${starter.payload_version} -> ${validatedReqData.payload_version}; settings and schedules queued for resend`);
+            }
             return sendResponse(c, 201, STARTER_DETAILS_UPDATED);
         }
         catch (error) {

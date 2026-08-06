@@ -91,6 +91,7 @@ export async function paginatedMotorsList(whereQueryData, orderByQueryData, page
                     starter_type: true,
                     motor_starter_type: true,
                     motor_support_type: true,
+                    payload_version: true,
                 },
                 with: {
                     starterParameters: {
