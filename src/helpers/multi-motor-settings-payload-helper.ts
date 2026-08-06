@@ -29,6 +29,7 @@ export type MultiMotorSettingsPayload = {
 export function buildMultiMotorSettingsPayload(
   settings: StarterSettings,
   motorIndexByMotorId: Map<number, number>,
+  options: { singleMotor?: boolean } = {},
 ): MultiMotorSettingsPayload {
   const config = settings.multi_motor_config;
 
@@ -40,35 +41,14 @@ export function buildMultiMotorSettingsPayload(
     hvf: settings.hvf,
     vif: settings.vif,
     v_flt_en: config?.v_flt_en,
-    sd_time: config?.sd_time,
+    // Dual boxes keep reading sd_time from the JSON block so their payload stays
+    // byte-identical to what they get today. A single-motor box has no block, so it
+    // falls back to the flat star-delta column.
+    sd_time: options.singleMotor ? (config?.sd_time ?? settings.start_time) : config?.sd_time,
   };
 
-  for (const motor of config?.motors ?? []) {
-    const index = motorIndexByMotorId.get(motor.motor_id);
-    if (index === undefined) continue;
-
-    const key = motorKey(index);
-    dvc_c[key] = {
-      flt_en: motor.flt_en,
-      flc: motor.flc,
-      f_dr: motor.f_dr,
-      f_ol: motor.f_ol,
-      f_lr: motor.f_lr,
-      f_opf: motor.f_opf,
-      f_ci: motor.f_ci,
-      dr: motor.dr,
-      ol: motor.ol,
-      lr: motor.lr,
-      ci: motor.ci,
-      drf: motor.drf,
-      olf: motor.olf,
-      lrf: motor.lrf,
-      opf: motor.opf,
-      cif: motor.cif,
-      olr: motor.olr,
-      lrr: motor.lrr,
-      cir: motor.cir,
-    };
+  for (const block of motorBlocksFor(settings, motorIndexByMotorId, options.singleMotor === true)) {
+    dvc_c[motorKey(block.index)] = block.values;
   }
 
   return {
@@ -76,4 +56,61 @@ export function buildMultiMotorSettingsPayload(
     S: randomSequenceNumber(),
     D: { dvc_c },
   };
+}
+
+/**
+ * The nineteen per-motor keys, picked identically from either source so the block a
+ * device sees is the same shape whichever fed it. `source` is a multi_motor_config
+ * motor entry for a dual box, or the flat starter_settings row for a single-motor one.
+ */
+function perMotorFields(source: Record<string, any>) {
+  return {
+    flt_en: source.flt_en,
+    flc: source.flc,
+    f_dr: source.f_dr,
+    f_ol: source.f_ol,
+    f_lr: source.f_lr,
+    f_opf: source.f_opf,
+    f_ci: source.f_ci,
+    dr: source.dr,
+    ol: source.ol,
+    lr: source.lr,
+    ci: source.ci,
+    drf: source.drf,
+    olf: source.olf,
+    lrf: source.lrf,
+    opf: source.opf,
+    cif: source.cif,
+    olr: source.olr,
+    lrr: source.lrr,
+    cir: source.cir,
+  };
+}
+
+/**
+ * Dual boxes take their blocks from multi_motor_config.motors[], keyed to the live
+ * motor_index. A single-motor V2.0 box has no such block — its motor settings live in
+ * the flat starter_settings columns — so those are PROJECTED into slot 1 at publish
+ * time. Projection rather than migration: the flat columns stay the single source of
+ * truth, so switching the box back to 1.0 is lossless and the save path never needs to
+ * know which version the box is on.
+ */
+function motorBlocksFor(
+  settings: StarterSettings,
+  motorIndexByMotorId: Map<number, number>,
+  singleMotor: boolean,
+): { index: number; values: Record<string, any> }[] {
+  if (singleMotor) {
+    return [{ index: 1, values: perMotorFields(settings as unknown as Record<string, any>) }];
+  }
+
+  const blocks: { index: number; values: Record<string, any> }[] = [];
+  for (const motor of settings.multi_motor_config?.motors ?? []) {
+    const index = motorIndexByMotorId.get(motor.motor_id);
+    // A motor_id with no current match (e.g. motor since reassigned) is skipped rather
+    // than sent with a stale index.
+    if (index === undefined) continue;
+    blocks.push({ index, values: perMotorFields(motor as unknown as Record<string, any>) });
+  }
+  return blocks;
 }

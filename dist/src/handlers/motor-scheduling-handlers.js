@@ -35,6 +35,7 @@ import { assignDeviceScheduleIds, syncLastDeviceScheduleId, bulkCreateMotorSched
 import { ActivityService } from "../services/db/activity-service.js";
 import { handleAppError } from "../utils/on-error.js";
 import { logger } from "../utils/logger.js";
+import { isV2Payload } from "../helpers/payload-version-helper.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { formatHHMM, formatYYMMDD, formatScheduleDateTime } from "../helpers/motor-schedule-helpers.js";
@@ -785,9 +786,10 @@ export class MotorScheduleHandler {
                 columns: { id: true },
             });
             const firstSyncStarterIds = ackedRow ? new Set() : new Set([starterId]);
-            // Single-motor boxes get the flat `sch` payload; multi-motor keeps the `m1` shape.
-            const starterMstA = await getRecordById(starterBoxes, starterId, ["motor_support_type"]);
-            const singleMotorStarterIds = starterMstA?.motor_support_type === "SINGLE_MOTOR" ? new Set([starterId]) : new Set();
+            // Only V1.0 single-motor boxes get the legacy flat `m1: [...]` array; a V2.0 box uses
+            // the per-motor object form produced by the multi-motor branch. See schedule-sync-helper.
+            const starterMstA = await getRecordById(starterBoxes, starterId, ["motor_support_type", "payload_version"]);
+            const singleMotorStarterIds = !isV2Payload(starterMstA) && starterMstA?.motor_support_type === "SINGLE_MOTOR" ? new Set([starterId]) : new Set();
             const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds, singleMotorStarterIds);
             let published = 0, failed = 0;
             for (const { chunks } of grouped) {
@@ -955,9 +957,10 @@ export class MotorScheduleHandler {
                 columns: { id: true },
             });
             const firstSyncStarterIds = ackedRow ? new Set() : new Set([starterId]);
-            // Single-motor boxes get the flat `sch` payload; multi-motor keeps the `m1` shape.
-            const starterMstB = await getRecordById(starterBoxes, starterId, ["motor_support_type"]);
-            const singleMotorStarterIds = starterMstB?.motor_support_type === "SINGLE_MOTOR" ? new Set([starterId]) : new Set();
+            // Only V1.0 single-motor boxes get the legacy flat `m1: [...]` array; a V2.0 box uses
+            // the per-motor object form produced by the multi-motor branch. See schedule-sync-helper.
+            const starterMstB = await getRecordById(starterBoxes, starterId, ["motor_support_type", "payload_version"]);
+            const singleMotorStarterIds = !isV2Payload(starterMstB) && starterMstB?.motor_support_type === "SINGLE_MOTOR" ? new Set([starterId]) : new Set();
             const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds, singleMotorStarterIds);
             let published = 0, failed = 0;
             for (const { chunks } of grouped) {

@@ -17,6 +17,9 @@ export const vAddStarter = v.object({
     motor_support_type: v.optional(v.picklist(["SINGLE_MOTOR", "MULTIPLE_MOTORS"], "Invalid motor type")),
     starter_type: v.optional(v.picklist(["SINGLE_STARTER", "MULTI_STARTER"], "Invalid starter type")),
     motor_starter_type: v.optional(v.picklist(["STAR_RELAY", "CONTACTOR", "STAR_DELTA"], "Invalid motor starter type")),
+    // Which payload grammar the board's firmware speaks. Omitted -> derived from the
+    // motor count in prepareStarterData (dual must be 2.0; single defaults to 1.0).
+    payload_version: v.optional(v.picklist(["1.0", "2.0"], "Invalid payload version")),
     motors: v.optional(v.pipe(v.array(v.object({
         name: motorNameValidator,
         hp: hpValidator,
@@ -45,6 +48,10 @@ export const vUpdateStarterDetails = v.object({
     motor_support_type: v.optional(v.picklist(["SINGLE_MOTOR", "MULTIPLE_MOTORS"], "Invalid motor type")),
     starter_type: v.optional(v.picklist(["SINGLE_STARTER", "MULTI_STARTER"], "Invalid starter type")),
     motor_starter_type: v.optional(v.picklist(["STAR_RELAY", "CONTACTOR", "STAR_DELTA"], "Invalid motor starter type")),
+    // Switching a board between payload grammars. Valid both ways for a single-motor
+    // box; a dual box can never go to 1.0 (the handler rejects that pair). A change here
+    // forces a full re-sync so the device stops running the old format.
+    payload_version: v.optional(v.picklist(["1.0", "2.0"], "Invalid payload version")),
 });
 export const vAssignStarter = v.object({
     pcb_number: pcbOrSerialNumberValidator,

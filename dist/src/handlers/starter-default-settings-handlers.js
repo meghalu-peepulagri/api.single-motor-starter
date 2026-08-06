@@ -95,13 +95,14 @@ export class StarterDefaultSettingsHandlers {
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             const starterSettings = await starterAcknowledgedSettings(starterId);
-            // Surface the box's starter/support type at the top level too. The nested `starter`
-            // object carries them as well, but a box with no acknowledged settings row yet has no
-            // nested object at all, and the screen still needs the two types to render.
+            // Surface the box's starter/support type and payload version at the top level too.
+            // The nested `starter` object carries them as well, but a box with no acknowledged
+            // settings row yet has no nested object at all, and the screen still needs them.
             const responseData = {
                 ...(starterSettings ?? {}),
                 motor_starter_type: starterData.motor_starter_type,
                 motor_support_type: starterData.motor_support_type,
+                payload_version: starterData.payload_version,
             };
             return sendResponse(c, 200, SETTINGS_FETCHED, responseData);
         }
@@ -364,7 +365,13 @@ export class StarterDefaultSettingsHandlers {
             }
             const columnsToFetchObj = columnsToFetch.reduce((obj, column) => { obj[column] = true; return obj; }, {});
             const response = await getAcknowledgedStarterSettings(starterId, columnsToFetchObj);
-            return sendResponse(c, 200, SETTINGS_FETCHED, response);
+            // payload_version lives on starter_boxes, not on the settings row, so it is merged in
+            // from the box already loaded above — that also keeps it present for a starter with
+            // no acknowledged settings row yet, where `response` is undefined.
+            return sendResponse(c, 200, SETTINGS_FETCHED, {
+                ...(response ?? {}),
+                payload_version: starterData.payload_version,
+            });
         }
         catch (error) {
             console.error("Error at get starter setting details in Mobile:", error);
@@ -388,7 +395,13 @@ export class StarterDefaultSettingsHandlers {
                 columnsToFetch = getTableColumnsWithDefaults(starterSettingsLimits, defaultColumns, extraColumns);
             }
             const response = await getSingleRecordByAColumnValue(starterSettingsLimits, "starter_id", "=", [starterId], columnsToFetch);
-            return sendResponse(c, 200, SETTINGS_LIMITS_FETCHED, response);
+            // Same as the acknowledged-settings endpoint: payload_version is a property of the
+            // box, merged in from the row already loaded above so it is returned even when the
+            // starter has no limits row yet.
+            return sendResponse(c, 200, SETTINGS_LIMITS_FETCHED, {
+                ...(response ?? {}),
+                payload_version: starterData.payload_version,
+            });
         }
         catch (error) {
             console.error("Error at get starter setting details in Mobile:", error);

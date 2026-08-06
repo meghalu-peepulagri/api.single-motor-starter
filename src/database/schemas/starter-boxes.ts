@@ -12,6 +12,11 @@ export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STAR
 export const motorStarterTypeEnum = pgEnum("motor_starter_type", ["STAR_RELAY", "CONTACTOR", "STAR_DELTA"]);
 export const motorSupportTypeEnum = pgEnum("motor_support_type", ["SINGLE_MOTOR", "MULTIPLE_MOTORS"]);
 export const deviceRoleEnum = pgEnum("device_role", ["STANDALONE", "MASTER", "CHILD"]);
+// Which payload grammar this board's firmware speaks. "1.0" is the legacy
+// single-motor format (no m1/m2 blocks); "2.0" carries per-motor m1 (single) or
+// m1 + m2 (dual). String, not numeric, so "2.1"/"3.0" slot in later and "2.0"
+// can never silently compare equal to 2.
+export const payloadVersionEnum = pgEnum("payload_version", ["1.0", "2.0"]);
 
 
 export const starterBoxes = pgTable("starter_boxes", {
@@ -34,6 +39,9 @@ export const starterBoxes = pgTable("starter_boxes", {
   starter_type: starterType().notNull().default("SINGLE_STARTER"),
   motor_starter_type: motorStarterTypeEnum().notNull().default("CONTACTOR"),
   motor_support_type: motorSupportTypeEnum().notNull().default("SINGLE_MOTOR"),
+  // Default 1.0 deliberately: an unset or newly-restored box must get the oldest,
+  // safest format. Never infer "new firmware" from missing information.
+  payload_version: payloadVersionEnum().notNull().default("1.0"),
   role: deviceRoleEnum().notNull().default("STANDALONE"),
   parent_starter_id: integer("parent_starter_id").references((): any => starterBoxes.id),
 

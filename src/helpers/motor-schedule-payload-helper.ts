@@ -428,9 +428,12 @@ export function formatMotorScheduleResponse(record: any, queryDate?: number): an
     failure_reason_description: getFailureReason(rest.failure_reason),
     failure_at: rest.failure_at ? new Date(rest.failure_at).toISOString() : null,
     device_schedule_id: rest.device_schedule_id ?? null,
-    // motor_reference (m1/m2/...) from the motor; motor_support_type from the starter box.
+    // motor_reference (m1/m2/...) from the motor; motor_support_type and payload_version
+    // from the starter box. payload_version tells the client which schedule payload
+    // grammar this box receives — 1.0 sends `m1` as a flat array, 2.0 as { sch_cnt, sch }.
     motor_reference: rest.motor_reference ?? null,
     motor_support_type: rest.motor_support_type ?? null,
+    payload_version: rest.payload_version ?? null,
     synced: rest.acknowledgement === 1,
   };
 }

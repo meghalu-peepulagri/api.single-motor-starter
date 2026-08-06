@@ -27,23 +27,24 @@ function waitForSettingsControlAck(publishedKey, sequenceNumber, timeoutMs) {
     });
 }
 /**
- * Publishes a T:4 multi-motor settings/calibration command for a MULTI_STARTER box
- * and waits (with retries) for the matching per-motor T:34 ack. Mirrors
- * sendMotorControlCommand (motor-control-sync-helper.ts) exactly — same retry shape,
- * just resolved via settingsControlPendingAckMap instead of motorControlPendingAckMap
- * so it can never be resolved by (or resolve) an unrelated control/mode ack.
+ * Publishes a T:4 V2.0 settings/calibration command and waits (with retries) for the
+ * matching per-motor T:34 ack. Mirrors sendMotorControlCommand
+ * (motor-control-sync-helper.ts) exactly — same retry shape, just resolved via
+ * settingsControlPendingAckMap instead of motorControlPendingAckMap so it can never be
+ * resolved by (or resolve) an unrelated control/mode ack.
  *
- * The SINGLE_STARTER settings publish path (publishMultipleTimesInBackground in
- * settings-helpers.ts, resolved via the generic pendingAckMap) is untouched — this
- * function is only ever called for MULTI_STARTER boxes.
+ * Called for every V2.0 box, single or dual: a dual box gets m1 + m2 from its
+ * multi_motor_config, a single-motor one gets m1 projected from the flat columns.
+ * The V1.0 settings publish path (publishMultipleTimesInBackground in
+ * settings-helpers.ts, resolved via the generic pendingAckMap) is untouched.
  */
-export async function sendMultiMotorSettingsCommand(starter, settings, motorIndexByMotorId) {
+export async function sendMultiMotorSettingsCommand(starter, settings, motorIndexByMotorId, options = {}) {
     const publishedKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
     if (!publishedKey) {
         logger.error(`[multi-motor-settings] No valid publish key (mac/pcb) for starter ${starter.id}`);
         return { acked: false };
     }
-    const payload = buildMultiMotorSettingsPayload(settings, motorIndexByMotorId);
+    const payload = buildMultiMotorSettingsPayload(settings, motorIndexByMotorId, options);
     for (let attempt = 1; attempt <= TOTAL_ATTEMPTS; attempt++) {
         logger.info(`[multi-motor-settings] attempt ${attempt}/${TOTAL_ATTEMPTS} starter=${starter.id} key=${publishedKey} seq=${payload.S}`);
         publishData(payload, starter);

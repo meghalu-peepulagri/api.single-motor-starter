@@ -9,6 +9,7 @@ import { findAndDeleteExpiredSchedules, findPendingSchedulesForStarter } from ".
 import { buildDeviceSyncPayloads, dateToYYMMDD, todayAsYYMMDD } from "./motor-schedule-payload-helper.js";
 import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { publishingMap, schedulePartialAckMap } from "./ack-tracker-hepler.js";
+import { isV2Payload } from "./payload-version-helper.js";
 
 async function waitForPublishLock(starterId: number, maxWaitMs = 30000, intervalMs = 500): Promise<boolean> {
   const start = Date.now();
@@ -96,8 +97,13 @@ export async function pushPendingSchedulesForStarter(
     });
     const isFirstSync = !ackedRow;
     const firstSyncStarterIds = isFirstSync ? new Set([starter.id]) : new Set<number>()
-    // Single-motor boxes get the flat `sch` payload; multi-motor keeps the `m1` shape.
-    const singleMotorStarterIds = (starter as any).motor_support_type === "SINGLE_MOTOR" ? new Set([starter.id]) : new Set<number>()
+    // Only V1.0 single-motor boxes get the legacy flat `m1: [...]` array. A V2.0 box —
+    // single or dual — uses the per-motor `m1: { sch_cnt, sch: [] }` object form, which
+    // the multi-motor branch already produces (it buckets by motor_reference, defaulting
+    // to m1), so a V2.0 single box simply stays out of this set.
+    const singleMotorStarterIds = !isV2Payload(starter as any) && (starter as any).motor_support_type === "SINGLE_MOTOR"
+      ? new Set([starter.id])
+      : new Set<number>()
     const grouped = buildDeviceSyncPayloads(assignedRecords, firstSyncStarterIds, singleMotorStarterIds);
     for (const { chunks } of grouped) {
       for (const { payload, dbIds, scheduleIds } of chunks) {
@@ -210,7 +216,7 @@ export async function runScheduleSync(label = "cron"): Promise<{ starters: numbe
 
   const starters = await db.query.starterBoxes.findMany({
     where: (s, { and: a, inArray: inArr, ne: n }) => a(inArr(s.id, starterIds), n(s.status, "ARCHIVED")),
-    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true, signal_quality: true, motor_support_type: true },
+    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true, signal_quality: true, motor_support_type: true, payload_version: true },
   });
 
   const online = starters.filter(s => s.signal_quality != null && s.signal_quality >= 1 && s.signal_quality <= 30);
@@ -254,7 +260,7 @@ export async function triggerSyncForCreatedSchedules(records: any[]) {
 
   const starters = await db.query.starterBoxes.findMany({
     where: (s, { inArray: inArr }) => inArr(s.id, starterIds),
-    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true, motor_support_type: true },
+    columns: { id: true, mac_address: true, pcb_number: true, device_allocation: true, motor_support_type: true, payload_version: true },
   });
 
   await Promise.allSettled(

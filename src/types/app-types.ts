@@ -66,6 +66,7 @@ export interface starterBoxPayloadType {
   motor_support_type?: "SINGLE_MOTOR" | "MULTIPLE_MOTORS";
   starter_type?: "SINGLE_STARTER" | "MULTI_STARTER";
   motor_starter_type?: "STAR_RELAY" | "CONTACTOR" | "STAR_DELTA";
+  payload_version?: "1.0" | "2.0";
   motors?: { name: string; hp: number; motor_reference?: string | null }[];
 }
 

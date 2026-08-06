@@ -1554,6 +1554,32 @@ export async function deviceSyncUpdate(message: any, topic: string) {
     const pendingAck = pendingAckMap.get(macFromTopic);
 
     if (!pendingAck) {
+      // Shape/version mismatch: a V2.0 box published through the per-motor path (which
+      // registers in settingsControlPendingAckMap) but replied with the legacy scalar.
+      // Trust the device — resolve the per-motor wait with the scalar folded into slot 1
+      // rather than dropping the ack and republishing forever.
+      const pendingSettingsAck = settingsControlPendingAckMap.get(macFromTopic);
+      if (pendingSettingsAck) {
+        if (pendingSettingsAck.sequenceNumber !== message.S) {
+          logger.warn(`Sequence number mismatch for scalar settings ACK ${macFromTopic}: expected ${pendingSettingsAck.sequenceNumber}, received ${message.S}`);
+          return null;
+        }
+        const ackData = normalizeDeviceAckD(message.D);
+        pendingSettingsAck.resolve({ acked: true, data: ackData });
+        settingsControlPendingAckMap.delete(macFromTopic);
+        logger.warn(`[payload-version] ${macFromTopic} acked T:34 with a scalar on the per-motor path; honouring it as ${JSON.stringify(ackData)}`);
+
+        const validMac = await getStarterByMacWithMotor(macFromTopic);
+        if (validMac?.id) {
+          const allAcked = await updateMultiMotorSettingsAck(validMac.id, ackData);
+          if (allAcked && validMac.synced_settings_status === "false") {
+            await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
+          }
+          if (allAcked) clearSettingsSyncAttempts(validMac.id);
+        }
+        return null;
+      }
+
       logger.warn(`No pending ACK found for ${macFromTopic}`);
       return null;
     }
