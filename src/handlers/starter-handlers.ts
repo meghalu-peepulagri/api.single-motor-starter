@@ -18,7 +18,7 @@ import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilt
 import { clearSettingsSyncAttempts } from "../helpers/ack-tracker-hepler.js";
 import { isDualMotor, isInvalidVersionMotorPair, payloadVersionOf } from "../helpers/payload-version-helper.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
-import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID } from "../constants/app-constants.js";
+import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID, PAYLOAD_VERSION_MOTOR_CHANGE_NOT_ALLOWED } from "../constants/app-constants.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
@@ -558,11 +558,27 @@ export class StarterHandlers {
         throw new BadRequestException(PAYLOAD_VERSION_DUAL_MOTOR_INVALID);
       }
 
+      const versionChanged = validatedReqData.payload_version != null
+        && validatedReqData.payload_version !== starter.payload_version;
+
+      // A version switch must preserve the motor configuration: 1.0 single -> 2.0 single,
+      // never single -> dual in the same request. The two changes mean different things —
+      // the version says what grammar the firmware speaks, the motor count says what
+      // hardware is wired — and combining them republishes a box in a shape that was never
+      // reviewed against either fact on its own. Change one, then the other.
+      if (versionChanged) {
+        const motorSupportChanged = validatedReqData.motor_support_type != null
+          && validatedReqData.motor_support_type !== starter.motor_support_type;
+        const starterTypeChanged = validatedReqData.starter_type != null
+          && validatedReqData.starter_type !== starter.starter_type;
+        if (motorSupportChanged || starterTypeChanged) {
+          throw new BadRequestException(PAYLOAD_VERSION_MOTOR_CHANGE_NOT_ALLOWED);
+        }
+      }
+
       // Changing the grammar means everything already on the device is in the old format.
       // Clear the synced flag so the next heartbeat republishes settings, and drop the
       // bounded-retry counter that would otherwise suppress that republish.
-      const versionChanged = validatedReqData.payload_version != null
-        && validatedReqData.payload_version !== starter.payload_version;
       if (versionChanged) starterUpdates.synced_settings_status = "false";
 
       const userId = (c.get("user_payload") as User).id;
