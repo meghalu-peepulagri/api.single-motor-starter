@@ -473,10 +473,18 @@ export class StarterDefaultSettingsHandlers {
         try {
             const userPayload = c.get("user_payload");
             const starterId = +(c.req.param("starter_id") ?? 0);
-            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "pcb_number"]);
+            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["id", "pcb_number", "synced_settings_status"]);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             await db.update(starterSettings).set({ acknowledgement: "TRUE", updated_at: sql `CURRENT_TIMESTAMP` }).where(sql `${starterSettings.id} = (SELECT ${starterSettings.id} FROM ${starterSettings} WHERE ${starterSettings.starter_id} = ${starterId} AND ${starterSettings.acknowledgement} = 'FALSE' ORDER BY ${starterSettings.created_at} DESC LIMIT 1)`);
+            // The Admin Panel publishes T:4 itself, so no pending ack is registered here
+            // and none of the MQTT ack handlers ever run for it — this endpoint is the
+            // panel reporting the device acked. Mark the box synced on the same
+            // condition those handlers use, or it stays "false" forever and every save
+            // republishes the whole body instead of just the edited fields.
+            if (starterData.synced_settings_status === "false") {
+                await updateRecordById(starterBoxes, starterData.id, { synced_settings_status: "true" });
+            }
             await ActivityService.logActivity({
                 performedBy: userPayload.id,
                 action: "SETTINGS_ACK_UPDATED",
