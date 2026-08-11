@@ -4,7 +4,7 @@ import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vAddMotorSchedule, vAddRepeatDays, vArrayOfMotorScheduleValidators, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
-import { vAddMotor, vControlMotors, vControlMotorsMode, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
+import { vAddMotor, vAddMotorToStarter, vControlMotors, vControlMotorsMode, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
 import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation, vUpdateStarterDetails } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vDefaultSettingsStarterType, vUpdateDefaultSettings } from "./schema/default-settings.js";
@@ -23,6 +23,7 @@ const schemaMap = {
     "verify-otp": vVerifyOtp,
     "add-field": vAddField,
     "add-motor": vAddMotor,
+    "add-motor-to-starter": vAddMotorToStarter,
     "update-motor": vUpdateMotor,
     "update-motor-test-run-status": vUpdateMotorTestRunStatus,
     "control-motors": vControlMotors,

@@ -63,7 +63,7 @@ export function buildMultiMotorSettingsPayload(
  * device sees is the same shape whichever fed it. `source` is a multi_motor_config
  * motor entry for a dual box, or the flat starter_settings row for a single-motor one.
  */
-function perMotorFields(source: Record<string, any>) {
+export function perMotorFields(source: Record<string, any>) {
   return {
     flt_en: source.flt_en,
     flc: source.flc,

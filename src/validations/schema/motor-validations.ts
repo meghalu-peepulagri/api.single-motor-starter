@@ -8,6 +8,19 @@ export const vAddMotor = v.object({
   location_id: requiredNumber(LOCATION_REQUIRED),
 });
 
+/**
+ * Adding a second motor to an existing single-motor starter (POST /motors/starter/:starterId).
+ * Separate from vAddMotor, which creates a standalone motor row and is left untouched.
+ * location_id is optional here — it defaults to the existing motor's location, since both
+ * motors of one box sit at the same site.
+ */
+export const vAddMotorToStarter = v.object({
+  name: motorNameValidator,
+  hp: hpValidator,
+  location_id: v.nullish(v.optional(v.number())),
+  motor_reference: v.nullish(v.optional(v.string())),
+});
+
 export const vUpdateMotor = v.object({
   name: motorNameValidator,
   hp: hpValidator,
@@ -47,6 +60,7 @@ export const vControlMotorsMode = v.object({
 });
 
 export type validatedAddMotor = v.InferOutput<typeof vAddMotor>;
+export type validatedAddMotorToStarter = v.InferOutput<typeof vAddMotorToStarter>;
 export type validatedUpdateMotor = v.InferOutput<typeof vUpdateMotor>;
 export type validatedUpdateMotorTestRunStatus = v.InferOutput<typeof vUpdateMotorTestRunStatus>;
 export type validatedControlMotors = v.InferOutput<typeof vControlMotors>;

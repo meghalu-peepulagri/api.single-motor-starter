@@ -1,6 +1,9 @@
-import { MOTOR_ADDED, MOTOR_CONTROL_COMMAND_SENT, MOTOR_CONTROL_MOTORS_NOT_FOUND, MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED, MOTOR_CONTROL_VALIDATION_CRITERIA, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_MODE_CONTROL_COMMAND_SENT, MOTOR_MODE_CONTROL_VALIDATION_CRITERIA, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA, STARTER_BOX_NOT_FOUND } from "../constants/app-constants.js";
+import { DUAL_MOTOR_CONVERSION_ALREADY_DUAL, DUAL_MOTOR_CONVERSION_DONE, DUAL_MOTOR_CONVERSION_NO_EXISTING_MOTOR, DUAL_MOTOR_CONVERSION_REQUIRES_V2, MOTOR_ADDED, MOTOR_CONTROL_COMMAND_SENT, MOTOR_CONTROL_MOTORS_NOT_FOUND, MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED, MOTOR_CONTROL_VALIDATION_CRITERIA, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_MODE_CONTROL_COMMAND_SENT, MOTOR_MODE_CONTROL_VALIDATION_CRITERIA, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA, STARTER_BOX_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motors } from "../database/schemas/motors.js";
+import { isDualMotor, isV2Payload } from "../helpers/payload-version-helper.js";
+import { armSettingsResyncAfterConversion, convertStarterToDualMotor, findSingleLiveMotor } from "../services/db/motor-conversion-services.js";
+import { logger } from "../utils/logger.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
@@ -55,6 +58,55 @@ export class MotorHandlers {
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
             console.error("Error at add motor :", error);
+            throw error;
+        }
+    };
+    /**
+     * Adds a second motor to an existing single-motor starter, converting it to dual motor.
+     *
+     * Deliberately a separate endpoint from addMotorHandler above, which creates a
+     * standalone motor row and is untouched.
+     *
+     * The box must already be on payload version 2.0: a dual-motor box has no 1.0 payload
+     * shape, and promoting the version here would change the box's payload grammar as a
+     * side effect of what looks like a data-entry action. Same "change one, then the other"
+     * rule the version-switch guard enforces.
+     */
+    addMotorToStarterHandler = async (c) => {
+        try {
+            const starterId = +(c.req.param("starterId") ?? 0);
+            paramsValidateException.validateId(starterId, "Device id");
+            const motorPayload = await c.req.json();
+            paramsValidateException.emptyBodyValidation(motorPayload);
+            const validMotorReq = await validatedRequest("add-motor-to-starter", motorPayload, MOTOR_VALIDATION_CRITERIA);
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            if (!isV2Payload(starter))
+                throw new BadRequestException(DUAL_MOTOR_CONVERSION_REQUIRES_V2);
+            if (isDualMotor(starter))
+                throw new BadRequestException(DUAL_MOTOR_CONVERSION_ALREADY_DUAL);
+            const { motors: liveMotors, only: existingMotor } = await findSingleLiveMotor(starter.id);
+            // The payload grammar defines m1 and m2 only, so two live motors is the ceiling.
+            if (liveMotors.length >= 2)
+                throw new BadRequestException(DUAL_MOTOR_CONVERSION_ALREADY_DUAL);
+            if (!existingMotor)
+                throw new BadRequestException(DUAL_MOTOR_CONVERSION_NO_EXISTING_MOTOR);
+            const { motor, settingsSeeded } = await convertStarterToDualMotor(starter, existingMotor, validMotorReq, c.get("performer_id"));
+            armSettingsResyncAfterConversion(starter.id);
+            if (!settingsSeeded) {
+                // The box has never had an acknowledged settings row, so there was nothing to seed
+                // a per-motor block from. It will publish once its settings are saved for the
+                // first time — until then the conversion is recorded but nothing reaches the device.
+                logger.warn(`[dual-motor-conversion] starter=${starter.id} has no acknowledged settings row; multi_motor_config not seeded`);
+            }
+            return sendResponse(c, 201, DUAL_MOTOR_CONVERSION_DONE, { motor_id: motor.id, settings_seeded: settingsSeeded });
+        }
+        catch (error) {
+            console.error("Error at add motor to starter :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
             throw error;
         }
     };
