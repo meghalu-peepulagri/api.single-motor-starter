@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { REQUEST_TYPES } from "../../helpers/packet-types-helper.js";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
@@ -50,7 +51,7 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
 
     await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
     await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
-    const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
+    const deviceInfoPayload = { T: REQUEST_TYPES.DEVICE_INFO_REQUEST, S: randomSequenceNumber(), D: 1 };
     publishMultipleTimesInBackground(deviceInfoPayload, starter);
     return starter as StarterBox;
   });

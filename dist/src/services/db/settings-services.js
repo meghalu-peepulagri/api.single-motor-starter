@@ -7,6 +7,7 @@ import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { prepareDeviceConfigurationPayload } from "../../helpers/heart-beat-prepared-payload-helper.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
+import { REQUEST_TYPES } from "../../helpers/packet-types-helper.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { logger } from "../../utils/logger.js";
 import { motors } from "../../database/schemas/motors.js";
@@ -220,7 +221,7 @@ export async function publishDeviceSettings(starter) {
             return;
         }
         const preparedPayload = prepareDeviceConfigurationPayload(ackSettings);
-        const formattedPayload = { T: 4, S: randomSequenceNumber(), ...preparedPayload };
+        const formattedPayload = { T: REQUEST_TYPES.CALIBRATION, S: randomSequenceNumber(), ...preparedPayload };
         const { id: _, is_new_configuration_saved, created_at, updated_at, starter_id, ...ackWithoutId } = ackSettings;
         // Save to DB and publish in background
         setImmediate(async () => {

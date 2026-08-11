@@ -2,13 +2,15 @@
 export const REQUEST_TYPES = {
   MOTOR_CONTROL: 1,
   MODE_CHANGE: 2,
-  SCHEDULING: 3,
-  CALIBRATION: 4,
-  LIVE_DATA_REQUEST: 5,
+  SCHEDULING: 3,              // TOPIC_SCHEDULING_CREATE
+  // Renumbered 4 -> 5: TOPIC_CALIBRATION is 5 in the device spec, and 4/34 now belong
+  // to TOPIC_SCHEDULE_UPDATE (a packet this backend does not implement).
+  CALIBRATION: 5,
+  LIVE_DATA_REQUEST: 9,
   CONFIG_DATA_REQUEST: 6,
   SCHEDULING_DATA_REQUEST: 7,
   POWER_INFO_REQUEST: 8,
-  DEVICE_INFO_REQUEST: 10,
+  DEVICE_INFO_REQUEST: 15,    // renumbered 10 -> 15
   QUECTEL_FILE_DELETE: 11,
   QUECTEL_FILE_ADD: 12,
   UPDATE_STARTER_SETTINGS: 13
@@ -16,17 +18,17 @@ export const REQUEST_TYPES = {
 
 
 export const ACK_TYPES = {
-  LIVE_DATA: 41,
+  LIVE_DATA: 47,              // renumbered 41 -> 47
   MOTOR_CONTROL_ACK: 31,
   MODE_CHANGE_ACK: 32,
-  SCHEDULING_ACK: 33,
-  CALIBRATION_ACK: 34,
-  LIVE_DATA_REQUEST_ACK: 35,
+  SCHEDULING_ACK: 33,         // TOPIC_SCHEDULING_CREATE_ACK
+  CALIBRATION_ACK: 35,        // renumbered 34 -> 35, matching CALIBRATION 4 -> 5
+  LIVE_DATA_REQUEST_ACK: 39,  // renumbered 35 -> 39, matching LIVE_DATA_REQUEST 5 -> 9
   CONFIG_DATA_REQUEST_ACK: 36,
   SCHEDULING_DATA_REQUEST_ACK: 37,
   POWER_INFO_REQUEST_ACK: 38,
-  DEVICE_INFO_ACK: 39,
-  HEART_BEAT: 40,
+  DEVICE_INFO_ACK: 45,        // renumbered 39 -> 45, matching DEVICE_INFO_REQUEST 10 -> 15
+  HEART_BEAT: 46,             // renumbered 40 -> 46
   QUECTEL_FILE_DELETE_ACK: 42,
   QUECTEL_FILE_ADD_ACK: 43,
   ADMIN_CONFIG_DATA_REQUEST_ACK: 44
@@ -36,27 +38,34 @@ export const ACK_TYPES = {
 export function findTopicACKByType(payload: any) {
   const type = payload.T;
   switch (type) {
-    case 41: return "LIVE_DATA";
     case 31: return "MOTOR_CONTROL_ACK";
     case 32: return "MODE_CHANGE_ACK";
     case 33: return "SCHEDULING_ACK";
-    case 34: return "CALIBRATION_ACK";
-    case 35: return "LIVE_DATA_REQUEST_ACK";
-    case 36: return "USER_CONFIG_DATA_REQUEST_ACK";
-    case 37: return "SCHEDULING_DATA_REQUEST_ACK";
-    case 38: return "POWER_INFO_REQUEST_ACK";
-    case 39: return "DEVICE_INFO_ACK";
-    case 40: return "HEART_BEAT";
+    case 35: return "CALIBRATION_ACK";
+    // 36 was USER_CONFIG_DATA_REQUEST_ACK, 37 SCHEDULING_DATA_REQUEST_ACK and 38
+    // POWER_INFO_REQUEST_ACK before the spec reassigned 36/38 to serial-number update and
+    // device reset. None of the three was routed by selectTopicAck.
+    // case 36: return "USER_CONFIG_DATA_REQUEST_ACK";
+    // case 37: return "SCHEDULING_DATA_REQUEST_ACK";
+    // case 38: return "POWER_INFO_REQUEST_ACK";
+    case 36: return "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK";   // was 48
+    case 38: return "DEVICE_RESET_ACK";                      // was 52
+    case 39: return "LIVE_DATA_REQUEST_ACK";
     case 42: return "QUECTEL_FILE_DELETE_ACK";
     case 43: return "QUECTEL_FILE_ADD_ACK";
     case 44: return "ADMIN_CONFIG_DATA_REQUEST_ACK"
-    case 45: return "FOTA_REQUEST_ACK"
-    case 46: return "FOTA_FILE_INFO_ACK"
-    case 47: return "FOTA_INITIALIZATION_REQUEST_ACK"
-    case 48: return "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK"
+    // 45 was FOTA_REQUEST_ACK, unrouted, before the spec gave it to device info.
+    // case 45: return "FOTA_REQUEST_ACK"
+    case 45: return "DEVICE_INFO_ACK";                       // was 39
+    // 46/47 were FOTA_FILE_INFO_ACK / FOTA_INITIALIZATION_REQUEST_ACK before the device
+    // spec reassigned them to heartbeat and live data. Neither FOTA case was routed by
+    // selectTopicAck, so nothing was lost — kept here for reference if FOTA comes back.
+    // case 46: return "FOTA_FILE_INFO_ACK"
+    // case 47: return "FOTA_INITIALIZATION_REQUEST_ACK"
+    case 46: return "HEART_BEAT";
+    case 47: return "LIVE_DATA";
     case 49: return "BOOT_MANIFEST_ACK"
     case 50: return "TEMPERATURE_THRESHOLD_SETTING"
-    case 52: return "DEVICE_RESET_ACK"
 
     default: return "UNKNOWN";
   }
