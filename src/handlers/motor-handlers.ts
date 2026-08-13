@@ -10,7 +10,7 @@ import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { motorFilters } from "../helpers/motor-helper.js";
+import { motorFilters, motorStarterScopeCondition } from "../helpers/motor-helper.js";
 import { getModeControlStatusDescription, getMotorControlStatusDescription } from "../helpers/packet-types-helper.js";
 import { motorKey } from "../helpers/motor-control-payload-helper.js";
 import { sendMotorControlCommand } from "../helpers/motor-control-sync-helper.js";
@@ -392,7 +392,10 @@ export class MotorHandlers {
       const paginationParams = getPaginationOffParams(query);
       const orderQueryData = parseOrderByQueryCondition<MotorsTable>(query.order_by, query.order_type, "assigned_at", "desc");
       const whereQueryData = motorFilters(query, userPayload);
-      const motorsData = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
+      // Scope to motors whose device the caller owns, so this list agrees with
+      // GET /starters/mobile instead of surfacing motors from unassigned boxes.
+      const starterScope = motorStarterScopeCondition(userPayload);
+      const motorsData = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams, starterScope ? [starterScope] : []);
 
       const motorIds = motorsData.records.map((m: any) => m.id).filter(Boolean);
 

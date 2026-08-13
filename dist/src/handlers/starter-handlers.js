@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { REQUEST_TYPES } from "../helpers/packet-types-helper.js";
 import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, PCB_NUMBER_REQUIRED, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
@@ -212,7 +212,13 @@ export class StarterHandlers {
             if (userPayload.user_type === "ADMIN" && starter.device_status !== "READY" && starter.device_status !== "TEST") {
                 throw new UnauthorizedException("Unauthorized");
             }
-            const motor = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            // EVERY live motor on the box, not just the first one. getSingleRecordByMultipleColumnValues
+            // returns a single row, so deleting a dual-motor device archived one motor and left the
+            // other alive pointing at a deleted box — which is why it kept appearing in the dashboard.
+            // Read before the transaction so the replacement motor the isUser branch creates below is
+            // not swept up by the archive.
+            const liveMotors = await db.select({ id: motors.id }).from(motors)
+                .where(and(eq(motors.starter_id, starter.id), ne(motors.status, "ARCHIVED")));
             await db.transaction(async (trx) => {
                 if (isUser) {
                     await updateRecordById(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
@@ -222,8 +228,9 @@ export class StarterHandlers {
                     await updateRecordById(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
                     await updateRecordById(starterDispatch, starterId, { status: "ARCHIVED" }, trx);
                 }
-                if (motor) {
-                    await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
+                if (liveMotors.length > 0) {
+                    await trx.update(motors).set({ status: "ARCHIVED" })
+                        .where(inArray(motors.id, liveMotors.map((m) => m.id)));
                 }
                 await ActivityService.logActivity({
                     performedBy: userPayload.id,

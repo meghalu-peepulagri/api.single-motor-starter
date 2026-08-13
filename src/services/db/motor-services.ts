@@ -68,9 +68,12 @@ export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?
 
 
 export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsTable>, orderByQueryData: OrderByQueryData<MotorsTable>,
-  pageParams: { page: number; pageSize: number; offset: number }
+  pageParams: { page: number; pageSize: number; offset: number },
+  // Extra raw conditions the column/relation/value builder cannot express — currently the
+  // device-ownership scope. Merged before the count so records and total_records agree.
+  extraConditions: SQL[] = []
 ) {
-  const whereConditions = prepareWhereQueryConditions<MotorsTable>(motors, whereQueryData);
+  const whereConditions = [...(prepareWhereQueryConditions<MotorsTable>(motors, whereQueryData) ?? []), ...extraConditions];
   const whereQuery = whereConditions?.length ? and(...whereConditions) : undefined;
 
   const orderQuery = prepareOrderByQueryConditions<MotorsTable>(motors, orderByQueryData);
