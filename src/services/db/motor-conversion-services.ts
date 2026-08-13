@@ -117,7 +117,12 @@ export async function convertStarterToDualMotor(
       starter_id: starter.id,
       motor_index: SECOND_MOTOR_INDEX,
       motor_reference: payload.motor_reference ?? SECOND_MOTOR_REFERENCE,
-      created_by: performerId,
+      // created_by is the OWNER on a motor row, not the actor — assignStarterWithTransaction
+      // sets it to the assigned user's id, and motorFilters uses it to scope GET /motors for
+      // non-admins. Stamping the admin who ran the conversion here made the new motor
+      // invisible to the box's owner, so the mobile app kept showing a single motor.
+      // Mirror the existing motor so both belong to whoever owns the box.
+      created_by: existingMotor.created_by ?? starter.user_id ?? performerId,
       user_id: starter.user_id,
       assigned_at: new Date(),
     };
