@@ -3,6 +3,7 @@ const { clientId, brokerUrl, username, password } = mqttConfig;
 import mqtt from "mqtt";
 import { findTopicACKByType } from "../helpers/packet-types-helper.js";
 import { selectTopicAck } from "./db/mqtt-db-services.js";
+import { getStarterPayloadVersion } from "./db/starter-services.js";
 import { logger } from "../utils/logger.js";
 export class MqttService {
     client = null;
@@ -75,7 +76,12 @@ export class MqttService {
             switch (true) {
                 case /^peepul\/[^/]+\/status$/.test(topic):
                 case /^peepul\/[^/]+\/[^/]+\/status$/.test(topic):
-                    const topicType = findTopicACKByType(parsedMessage);
+                    // Several tag ids mean different acks on 1.0 vs 2.0 firmware (see
+                    // packet-types-helper.ts), so the sending box's payload_version has to be
+                    // resolved from the topic's mac/pcb before the packet can be classified.
+                    const identifier = topic.split("/")[1];
+                    const payloadVersion = identifier ? await getStarterPayloadVersion(identifier) : "1.0";
+                    const topicType = findTopicACKByType(parsedMessage, payloadVersion);
                     await selectTopicAck(topicType, message, topic);
                     break;
                 default:

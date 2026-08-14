@@ -7,7 +7,7 @@ import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById } from "./base-db-services.js";
 import { prepareDeviceConfigurationPayload } from "../../helpers/heart-beat-prepared-payload-helper.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
-import { REQUEST_TYPES } from "../../helpers/packet-types-helper.js";
+import { requestTypesFor } from "../../helpers/packet-types-helper.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { logger } from "../../utils/logger.js";
 import { motors } from "../../database/schemas/motors.js";
@@ -15,7 +15,7 @@ import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
 import { sendMultiMotorSettingsCommand } from "../../helpers/multi-motor-settings-sync-helper.js";
 import { getMotorsForStarterControl } from "./motor-services.js";
 import { publishingMap } from "../../helpers/ack-tracker-hepler.js";
-import { isDualMotor, isV2Payload } from "../../helpers/payload-version-helper.js";
+import { isDualMotor, isV2Payload, payloadVersionOf } from "../../helpers/payload-version-helper.js";
 export async function getStarterDefaultSettings() {
     return await db.select().from(starterDefaultSettings).limit(1);
 }
@@ -221,7 +221,10 @@ export async function publishDeviceSettings(starter) {
             return;
         }
         const preparedPayload = prepareDeviceConfigurationPayload(ackSettings);
-        const formattedPayload = { T: REQUEST_TYPES.CALIBRATION, S: randomSequenceNumber(), ...preparedPayload };
+        // Reached only when the starter is 1.0 single-motor (see the V2.0/dual guard
+        // above) — resolve the tag id from the version anyway rather than hardcoding it,
+        // so this doesn't silently drift if that guard's shape ever changes.
+        const formattedPayload = { T: requestTypesFor(payloadVersionOf(starter)).CALIBRATION, S: randomSequenceNumber(), ...preparedPayload };
         const { id: _, is_new_configuration_saved, created_at, updated_at, starter_id, ...ackWithoutId } = ackSettings;
         // Save to DB and publish in background
         setImmediate(async () => {

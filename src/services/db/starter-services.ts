@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
-import { REQUEST_TYPES } from "../../helpers/packet-types-helper.js";
+import { requestTypesFor } from "../../helpers/packet-types-helper.js";
+import { payloadVersionOf } from "../../helpers/payload-version-helper.js";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
@@ -51,7 +52,7 @@ export async function addStarterWithTransaction(starterBoxPayload: starterBoxPay
 
     await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
     await saveSingleRecord<StarterSettingsLimitsTable>(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
-    const deviceInfoPayload = { T: REQUEST_TYPES.DEVICE_INFO_REQUEST, S: randomSequenceNumber(), D: 1 };
+    const deviceInfoPayload = { T: requestTypesFor(payloadVersionOf(starter)).DEVICE_INFO_REQUEST, S: randomSequenceNumber(), D: 1 };
     publishMultipleTimesInBackground(deviceInfoPayload, starter);
     return starter as StarterBox;
   });
@@ -559,6 +560,24 @@ export async function getStarterByMac(mac: string) {
       network_type: true,
     },
   });
+}
+
+/**
+ * Cheapest lookup for the one thing MQTT ingestion needs before it can even classify an
+ * inbound packet: which tag-id table (packet-types-helper.ts) this box's firmware
+ * speaks. Matches by mac or pcb like getStarterByMacWithMotor, but selects nothing else
+ * — the full record is refetched downstream by whichever ack handler ends up routed to.
+ */
+export async function getStarterPayloadVersion(macOrPcb: string) {
+  const identifier = macOrPcb.trim().toUpperCase();
+  const starter = await db.query.starterBoxes.findFirst({
+    where: and(
+      or(eq(starterBoxes.mac_address, identifier), eq(starterBoxes.pcb_number, identifier)),
+      ne(starterBoxes.status, "ARCHIVED")
+    ),
+    columns: { payload_version: true },
+  });
+  return payloadVersionOf(starter);
 }
 
 export async function findStarterByPcbOrStarterNumber(key: string) {
