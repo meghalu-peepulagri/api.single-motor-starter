@@ -21,6 +21,11 @@ export const motors = pgTable("motors", {
     starter_id: integer("starter_id").references(() => starterBoxes.id),
     motor_index: integer("motor_index").default(1),
     motor_reference: varchar("motor_reference"),
+    // Device-assigned schedule slot counter, scoped to THIS motor — each motor has its
+    // own independent slot table on the device, so m1 and m2 both start from slot 1.
+    // Mirrors starter_boxes.last_device_schedule_id, which was device-wide before
+    // schedules were split into per-motor slot tables.
+    last_device_schedule_id: integer("last_device_schedule_id").notNull().default(0),
     status: statusEnum().default("ACTIVE"),
     test_run_status: testRunStatusEnum().default("IN_TEST"),
     test_run_completed_at: timestamp("test_run_completed_at"),

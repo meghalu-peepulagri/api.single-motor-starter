@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
+import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { logger } from "../utils/logger.js";
 import { findAndDeleteExpiredSchedules, findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
@@ -19,8 +20,10 @@ async function waitForPublishLock(starterId, maxWaitMs = 30000, intervalMs = 500
 }
 /**
  * Push all unacknowledged PENDING schedules for ONE starter via MQTT.
- * device_schedule_id is assigned only to records that don't already have one,
- * using an ever-increasing counter (last_device_schedule_id on starter_boxes).
+ * device_schedule_id is assigned only to records that don't already have one, using an
+ * ever-increasing counter scoped to EACH MOTOR (last_device_schedule_id on motors) —
+ * every motor has its own independent slot table on the device, so a dual-motor box's
+ * m1 and m2 schedules are numbered from their own counters, not a shared device one.
  */
 export async function pushPendingSchedulesForStarter(starter, motorId, filterIds, fromHeartbeat = false) {
     if (publishingMap.get(starter.id)) {
@@ -45,29 +48,41 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
             .filter(r => filterIds == null || filterIds.includes(r.id));
         if (records.length === 0)
             return { chunks: 0, acked: 0 };
-        // Step 3 — Assign device_schedule_id to records that don't have one yet,
-        // using an ever-increasing counter per starter (never reuses freed IDs).
+        // Step 3 — Assign device_schedule_id to records that don't have one yet, using an
+        // ever-increasing counter per MOTOR (never reuses freed IDs). Grouped by motor_id
+        // first since each motor's slot table is independent of any other motor on the box.
         const unassigned = records.filter(r => r.device_schedule_id == null);
         if (unassigned.length > 0) {
+            const unassignedByMotor = new Map();
+            for (const r of unassigned) {
+                const motorId = r.motor_id;
+                if (motorId == null)
+                    continue;
+                const list = unassignedByMotor.get(motorId) ?? [];
+                list.push(r);
+                unassignedByMotor.set(motorId, list);
+            }
             await db.transaction(async (trx) => {
-                const [starterRow] = await trx
-                    .select({ last: starterBoxes.last_device_schedule_id })
-                    .from(starterBoxes)
-                    .where(eq(starterBoxes.id, starter.id))
-                    .for("update");
-                let counter = starterRow?.last ?? 0;
-                for (const r of unassigned) {
-                    counter++;
-                    r.device_schedule_id = counter;
+                for (const [motorRowId, motorUnassigned] of unassignedByMotor) {
+                    const [motorRow] = await trx
+                        .select({ last: motors.last_device_schedule_id })
+                        .from(motors)
+                        .where(eq(motors.id, motorRowId))
+                        .for("update");
+                    let counter = motorRow?.last ?? 0;
+                    for (const r of motorUnassigned) {
+                        counter++;
+                        r.device_schedule_id = counter;
+                        await trx
+                            .update(motorSchedules)
+                            .set({ device_schedule_id: counter })
+                            .where(and(eq(motorSchedules.id, r.id), isNull(motorSchedules.device_schedule_id)));
+                    }
                     await trx
-                        .update(motorSchedules)
-                        .set({ device_schedule_id: counter })
-                        .where(and(eq(motorSchedules.id, r.id), isNull(motorSchedules.device_schedule_id)));
+                        .update(motors)
+                        .set({ last_device_schedule_id: counter })
+                        .where(eq(motors.id, motorRowId));
                 }
-                await trx
-                    .update(starterBoxes)
-                    .set({ last_device_schedule_id: counter })
-                    .where(eq(starterBoxes.id, starter.id));
             }).catch(err => logger.warn(`[schedule-sync] device_schedule_id assignment failed: ${err?.message}`));
         }
         const assignedRecords = records.filter(r => r.device_schedule_id != null);
@@ -90,13 +105,16 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
             : new Set();
         const grouped = buildDeviceSyncPayloads(assignedRecords, firstSyncStarterIds, singleMotorStarterIds);
         for (const { chunks } of grouped) {
-            for (const { payload, dbIds, scheduleIds } of chunks) {
+            for (const { payload, dbIds, scheduleIds, motorRefs } of chunks) {
                 chunksSent++;
                 const lockFree = await waitForPublishLock(starter.id);
                 if (!lockFree) {
                     logger.warn(`[schedule-sync] publish lock still held after wait for starter=${starter.id}; will retry next heartbeat`);
                     continue;
                 }
+                // Each motor has its own slot table, so a raw device_schedule_id is ambiguous —
+                // pair it with the motor it belongs to before matching against the ACK bitmask.
+                const motorRefByDbId = new Map(dbIds.map((id, i) => [id, motorRefs[i]]));
                 const stillPending = await db.query.motorSchedules.findMany({
                     where: (ms, { and, inArray: inArr, eq: e }) => and(inArr(ms.id, dbIds), e(ms.acknowledgement, 0)),
                     columns: { id: true, schedule_id: true, device_schedule_id: true },
@@ -118,16 +136,20 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
                         schedulePartialAckMap.delete(publishKey);
                     console.log(`[schedule-sync:PARTIAL_IDS] starter=${starter.id} partialIds=${JSON.stringify(partialIds)} stillPending=${JSON.stringify(stillPending)}`);
                     let idsToUpdate;
-                    if (partialIds && partialIds.length > 0) {
-                        const confirmedSet = new Set(partialIds);
-                        // device_schedule_id is the slot (1–15) sent in payload `id` field — matches the bitmask
+                    if (partialIds && Object.keys(partialIds).length > 0) {
+                        // device_schedule_id is the slot (1–15) sent in payload `id` field — matches the
+                        // bitmask, but only within the same motor's slot table.
                         idsToUpdate = stillPending
-                            .filter((r) => confirmedSet.has(r.device_schedule_id ?? r.schedule_id))
+                            .filter((r) => {
+                            const motorRef = motorRefByDbId.get(r.id) ?? "m1";
+                            return partialIds[motorRef]?.includes(r.device_schedule_id ?? r.schedule_id) ?? false;
+                        })
                             .map((r) => r.id);
-                        const unmatched = scheduleIds.filter((sid) => !confirmedSet.has(sid));
-                        console.log(`[schedule-sync:PARTIAL_MATCH] confirmedSet=[${[...confirmedSet].join(",")}] stillPending_slots=[${stillPending.map(r => r.device_schedule_id ?? r.schedule_id).join(",")}] idsToUpdate=[${idsToUpdate.join(",")}] unmatched=[${unmatched.join(",")}]`);
+                        const confirmedDesc = Object.entries(partialIds).map(([ref, ids]) => `${ref}=[${ids.join(",")}]`).join(" ");
+                        const unmatched = scheduleIds.filter((sid, i) => !(partialIds[motorRefs[i]]?.includes(sid) ?? false));
+                        console.log(`[schedule-sync:PARTIAL_MATCH] confirmed=${confirmedDesc} stillPending_slots=[${stillPending.map(r => r.device_schedule_id ?? r.schedule_id).join(",")}] idsToUpdate=[${idsToUpdate.join(",")}] unmatched=[${unmatched.join(",")}]`);
                         if (unmatched.length > 0) {
-                            logger.warn(`[schedule-sync] starter=${starter.id} partial ACK: confirmed=[${partialIds.join(",")}] unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
+                            logger.warn(`[schedule-sync] starter=${starter.id} partial ACK: confirmed=${confirmedDesc} unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
                         }
                     }
                     else {

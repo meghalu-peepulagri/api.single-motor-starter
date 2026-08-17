@@ -613,7 +613,7 @@ function motorReferenceKey(record: any): string {
  * `singleMotorStarterIds` lists the starters that should use the flat single-motor
  * shape; any starter not in the set keeps the multi-motor per-motor-reference shape.
  */
-export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set<number> = new Set(), singleMotorStarterIds: Set<number> = new Set()): { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] {
+export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set<number> = new Set(), singleMotorStarterIds: Set<number> = new Set()): { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[]; motorRefs: string[] }[] }[] {
   // Group schedules by starter_id
   const grouped = new Map<number, any[]>();
   for (const record of records) {
@@ -623,7 +623,7 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
     grouped.set(record.starter_id, list);
   }
 
-  const result: { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] }[] = [];
+  const result: { starter_id: number; chunks: { payload: any; dbIds: number[]; scheduleIds: number[]; motorRefs: string[] }[] }[] = [];
 
   for (const [starterId, schedules] of grouped) {
     // Limit to first MAX_SCHEDULES_PER_DEVICE schedules per device, skip invalid
@@ -650,7 +650,7 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
     const isSingleMotor = singleMotorStarterIds.has(starterId);
 
     // Split into chunks of MAX_ITEMS_PER_CHUNK
-    const chunks: { payload: any; dbIds: number[]; scheduleIds: number[] }[] = [];
+    const chunks: { payload: any; dbIds: number[]; scheduleIds: number[]; motorRefs: string[] }[] = [];
     for (let i = 0; i < compactItems.length; i += MAX_ITEMS_PER_CHUNK) {
       // `id` MUST be the absolute device slot (device_schedule_id), NOT a per-chunk
       // row index — the firmware stores each schedule in slot `id` (1–15) and the
@@ -662,6 +662,10 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
       // scheduleIds must match the `id` field sent in the payload (device_schedule_id slot 1-15),
       // because the device's partial ACK bitmask references those same slot IDs.
       const scheduleIds = recordSlice.map((r: any) => r.device_schedule_id ?? r.schedule_id);
+      // motorRefs runs parallel to dbIds/scheduleIds — each motor has its own slot table,
+      // so a slot number alone is ambiguous; callers need to know which motor (m1/m2/...)
+      // it belongs to before matching it against the device's per-motor ACK bitmask.
+      const motorRefs = isSingleMotor ? recordSlice.map(() => "m1") : recordSlice.map((r: any) => motorReferenceKey(r));
       const idx = firstSyncStarterIds.has(starterId) ? 1 : 2;
       const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
 
@@ -677,7 +681,7 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
       } else {
         const byMotor: Record<string, any[]> = {};
         slice.forEach((item, j) => {
-          const key = motorReferenceKey(recordSlice[j]);
+          const key = motorRefs[j];
           (byMotor[key] ??= []).push(item);
         });
         const motorGroups: Record<string, any> = {};
@@ -695,6 +699,7 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
         },
         dbIds,
         scheduleIds,
+        motorRefs,
       });
     }
 
