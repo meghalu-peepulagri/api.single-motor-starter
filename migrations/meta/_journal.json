@@ -568,6 +568,13 @@
       "when": 1785919650156,
       "tag": "0080_great_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1786711020748,
+      "tag": "0081_calm_hellcat",
+      "breakpoints": true
     }
   ]
 }

@@ -598,6 +598,10 @@ export function buildDeviceSyncPayloads(records, firstSyncStarterIds = new Set()
             // scheduleIds must match the `id` field sent in the payload (device_schedule_id slot 1-15),
             // because the device's partial ACK bitmask references those same slot IDs.
             const scheduleIds = recordSlice.map((r) => r.device_schedule_id ?? r.schedule_id);
+            // motorRefs runs parallel to dbIds/scheduleIds — each motor has its own slot table,
+            // so a slot number alone is ambiguous; callers need to know which motor (m1/m2/...)
+            // it belongs to before matching it against the device's per-motor ACK bitmask.
+            const motorRefs = isSingleMotor ? recordSlice.map(() => "m1") : recordSlice.map((r) => motorReferenceKey(r));
             const idx = firstSyncStarterIds.has(starterId) ? 1 : 2;
             const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
             // Single-motor: schedule list as a flat array under `m1`, with sch_cnt =
@@ -613,7 +617,7 @@ export function buildDeviceSyncPayloads(records, firstSyncStarterIds = new Set()
             else {
                 const byMotor = {};
                 slice.forEach((item, j) => {
-                    const key = motorReferenceKey(recordSlice[j]);
+                    const key = motorRefs[j];
                     (byMotor[key] ??= []).push(item);
                 });
                 const motorGroups = {};
@@ -630,6 +634,7 @@ export function buildDeviceSyncPayloads(records, firstSyncStarterIds = new Set()
                 },
                 dbIds,
                 scheduleIds,
+                motorRefs,
             });
         }
         result.push({ starter_id: starterId, chunks });

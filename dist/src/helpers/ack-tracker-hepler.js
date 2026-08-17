@@ -18,7 +18,10 @@ export const clearSettingsSyncAttempts = (starterId) => {
 };
 export const pendingAckMap = new Map();
 // Stores partial ACK results from T:33 device responses.
-// Key = device MAC/PCB, value = schedule_ids the device confirmed it saved.
+// Key = device MAC/PCB, value = confirmed device_schedule_id slots, keyed by motor
+// reference ("m1"/"m2"/...). Each motor has its own independent slot table on the
+// device, so a bare slot number is ambiguous — it must be paired with which motor's
+// bitmask (m1_ids/m2_ids/legacy flat ids) it was decoded from before matching.
 // Written by scheduleCreationAckResolver before resolving the pendingAckMap promise,
 // consumed and deleted by schedule-sync-helper after publishMultipleTimesInBackground returns.
 export const schedulePartialAckMap = new Map();
