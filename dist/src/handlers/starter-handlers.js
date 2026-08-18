@@ -21,7 +21,7 @@ import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID, PAYLOAD_VERSION_MOTOR_CHANGE_NOT_AL
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
-import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterMotorsByPcb, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
@@ -215,14 +215,38 @@ export class StarterHandlers {
             // EVERY live motor on the box, not just the first one. getSingleRecordByMultipleColumnValues
             // returns a single row, so deleting a dual-motor device archived one motor and left the
             // other alive pointing at a deleted box — which is why it kept appearing in the dashboard.
-            const liveMotors = await db.select({ id: motors.id }).from(motors)
-                .where(and(eq(motors.starter_id, starter.id), ne(motors.status, "ARCHIVED")));
+            // motor_index/motor_reference are read too so the isUser branch below can reseed the same
+            // slots (m1, m2...) instead of collapsing a dual-motor box down to a single motor.
+            const liveMotors = await db.select({ id: motors.id, motor_index: motors.motor_index, motor_reference: motors.motor_reference }).from(motors)
+                .where(and(eq(motors.starter_id, starter.id), ne(motors.status, "ARCHIVED")))
+                .orderBy(motors.motor_index);
             await db.transaction(async (trx) => {
-                await updateRecordById(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
-                await trx.update(starterDispatch).set({ status: "ARCHIVED" }).where(eq(starterDispatch.starter_id, starterId));
+                // Archive the old motors BEFORE inserting replacements: unique_starter_motor_index is a
+                // live-rows-only unique constraint on (starter_id, motor_index), so inserting a fresh
+                // motor at an index that's still occupied by a not-yet-archived row would violate it.
                 if (liveMotors.length > 0) {
                     await trx.update(motors).set({ status: "ARCHIVED" })
                         .where(inArray(motors.id, liveMotors.map((m) => m.id)));
+                }
+                if (isUser) {
+                    await updateRecordById(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
+                    // Reseed one fresh motor per slot the box actually had (m1, m2...), so a dual-motor
+                    // device stays dual in the admin panel instead of coming back as single-motor.
+                    const motorSlots = liveMotors.length > 0 ? liveMotors : [{ motor_index: 1, motor_reference: null }];
+                    for (const slot of motorSlots) {
+                        const motorIndex = slot.motor_index ?? 1;
+                        await saveSingleRecord(motors, {
+                            name: `Pump ${motorIndex} - ${starter.pcb_number}`,
+                            hp: String(2),
+                            starter_id: starterId,
+                            motor_index: motorIndex,
+                            motor_reference: slot.motor_reference ?? undefined,
+                        }, trx);
+                    }
+                }
+                else {
+                    await updateRecordById(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
+                    await trx.update(starterDispatch).set({ status: "ARCHIVED" }).where(eq(starterDispatch.starter_id, starterId));
                 }
                 await ActivityService.logActivity({
                     performedBy: userPayload.id,
