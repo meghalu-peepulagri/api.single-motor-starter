@@ -21,7 +21,7 @@ import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID, PAYLOAD_VERSION_MOTOR_CHANGE_NOT_AL
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
-import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterMotorsByPcb, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
@@ -215,11 +215,19 @@ export class StarterHandlers {
             // EVERY live motor on the box, not just the first one. getSingleRecordByMultipleColumnValues
             // returns a single row, so deleting a dual-motor device archived one motor and left the
             // other alive pointing at a deleted box — which is why it kept appearing in the dashboard.
+            // Read before the transaction so the replacement motor the isUser branch creates below is
+            // not swept up by the archive.
             const liveMotors = await db.select({ id: motors.id }).from(motors)
                 .where(and(eq(motors.starter_id, starter.id), ne(motors.status, "ARCHIVED")));
             await db.transaction(async (trx) => {
-                await updateRecordById(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
-                await trx.update(starterDispatch).set({ status: "ARCHIVED" }).where(eq(starterDispatch.starter_id, starterId));
+                if (isUser) {
+                    await updateRecordById(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
+                    await saveSingleRecord(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
+                }
+                else {
+                    await updateRecordById(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
+                    await trx.update(starterDispatch).set({ status: "ARCHIVED" }).where(eq(starterDispatch.starter_id, starterId));
+                }
                 if (liveMotors.length > 0) {
                     await trx.update(motors).set({ status: "ARCHIVED" })
                         .where(inArray(motors.id, liveMotors.map((m) => m.id)));
