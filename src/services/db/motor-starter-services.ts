@@ -8,7 +8,7 @@ import { starterBoxParameters } from "../../database/schemas/starter-parameters.
 export async function getMotorWithStarterDetails(motorId: number) {
   if (!motorId) return null;
 
-  return await db.query.motors.findFirst({
+  const motor = await db.query.motors.findFirst({
     where: and(eq(motors.id, motorId), ne(motors.status, 'ARCHIVED')),
     columns: {
       id: true,
@@ -49,26 +49,35 @@ export async function getMotorWithStarterDetails(motorId: number) {
           motor_support_type: true,
           payload_version: true,
         },
-        with: {
-          starterParameters: {
-            where: isNotNull(starterBoxParameters.time_stamp),
-            orderBy: desc(starterBoxParameters.time_stamp),
-            limit: 1,
-            columns: {
-              id: true,
-              line_voltage_r: true,
-              line_voltage_y: true,
-              line_voltage_b: true,
-              current_r: true,
-              current_y: true,
-              current_b: true,
-              time_stamp: true,
-              fault: true,
-              fault_description: true,
-            },
-          },
+      },
+
+      // Motor-scoped relation (starterBoxParameters.motor_id), not the box-level one nested
+      // under `starter` — that one matches only on starter_id, so a dual-motor box's two
+      // motors both got the same "latest for either motor" fault row instead of their own.
+      starterParameters: {
+        where: isNotNull(starterBoxParameters.time_stamp),
+        orderBy: desc(starterBoxParameters.time_stamp),
+        limit: 1,
+        columns: {
+          id: true,
+          line_voltage_r: true,
+          line_voltage_y: true,
+          line_voltage_b: true,
+          current_r: true,
+          current_y: true,
+          current_b: true,
+          time_stamp: true,
+          fault: true,
+          fault_description: true,
         },
       },
     },
   } as any);
+
+  if (!motor) return null;
+
+  // starterParameters comes back motor-scoped (see query above) but callers expect it nested
+  // under starter, as it was when the query read the box-level relation.
+  const { starterParameters, starter, ...rest } = motor as any;
+  return { ...rest, starter: starter ? { ...starter, starterParameters: starterParameters ?? [] } : starter };
 }

@@ -401,13 +401,19 @@ export class MotorHandlers {
 
       const latestRuntimeMap = await getMotorsLatestRuntime(motorIds);
 
-      const records = motorsData.records.map((motor: any) => ({
-        ...motor,
-        run_time: {
-          last_state: latestRuntimeMap[motor.id]?.state,
-          state_duration: latestRuntimeMap[motor.id]?.duration,
-        },
-      }));
+      const records = motorsData.records.map((motor: any) => {
+        // starterParameters comes back motor-scoped (see paginatedMotorsList) but the app
+        // expects it nested under starter, as it was when the query read the box-level relation.
+        const { starterParameters, starter, ...rest } = motor;
+        return {
+          ...rest,
+          starter: starter ? { ...starter, starterParameters: starterParameters ?? [] } : starter,
+          run_time: {
+            last_state: latestRuntimeMap[motor.id]?.state,
+            state_duration: latestRuntimeMap[motor.id]?.duration,
+          },
+        };
+      });
 
       return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, {
         ...motorsData,

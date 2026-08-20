@@ -62,6 +62,10 @@ export function buildActivityMessage(
       const motorName = (newData?.motor_name ?? oldData?.motor_name) as string | undefined;
       return motorName ? `Fault manually cleared for motor '${motorName}'` : "Fault manually cleared";
     }
+    case "FAULT_CLEARED_BY_DEVICE": {
+      const motorName = (newData?.motor_name ?? oldData?.motor_name) as string | undefined;
+      return motorName ? `Fault cleared by device for motor '${motorName}'` : "Fault cleared by device";
+    }
     case "DEVICE_POWER_ON": return "Device powered ON";
     case "DEVICE_POWER_OFF": return "Device powered OFF";
     case "DEVICE_ALLOCATED":
