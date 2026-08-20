@@ -119,28 +119,29 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
           motor_support_type: true,
           payload_version: true,
         },
+      },
 
-        with: {
-          starterParameters: {
-            where: isNotNull(starterBoxParameters.time_stamp),
-            orderBy: [desc(starterBoxParameters.time_stamp)],
-            limit: 1,
+      // Motor-scoped relation (starterBoxParameters.motor_id), not the box-level one nested
+      // under `starter` — that one matches only on starter_id, so a dual-motor box's two
+      // motors both got the same "latest for either motor" fault row instead of their own.
+      starterParameters: {
+        where: isNotNull(starterBoxParameters.time_stamp),
+        orderBy: [desc(starterBoxParameters.time_stamp)],
+        limit: 1,
 
-            columns: {
-              id: true,
-              time_stamp: true,
-              fault: true,
-              fault_description: true,
-              fault_cleared: true,
-              line_voltage_r: true,
-              line_voltage_y: true,
-              line_voltage_b: true,
+        columns: {
+          id: true,
+          time_stamp: true,
+          fault: true,
+          fault_description: true,
+          fault_cleared: true,
+          line_voltage_r: true,
+          line_voltage_y: true,
+          line_voltage_b: true,
 
-              current_r: true,
-              current_y: true,
-              current_b: true,
-            },
-          },
+          current_r: true,
+          current_y: true,
+          current_b: true,
         },
       },
     },

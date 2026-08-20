@@ -15,6 +15,7 @@ import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../he
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
 import { getModeControlStatusDescription, getMotorControlStatusDescription, getValidNetwork, getValidStrength, isMotorControlStateCode, modeControlCodeToMode } from "../../helpers/packet-types-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
+import type { OrderByQueryData } from "../../types/db-types.js";
 import { logger } from "../../utils/logger.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
@@ -161,6 +162,9 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
       break;
     case "SCHEDULING_ACK":
       await scheduleCreationAckResolver(payload, topic);
+      break;
+    case "FAULT_CLEAR_ACK":
+      await faultClearAckHandler(payload, topic);
       break;
     default:
       return null;
@@ -1364,6 +1368,68 @@ export async function motorModeChangeAckHandler(message: any, topic: string) {
   } catch (error: any) {
     logger.error("Error at motor mode change ack handler", error);
     console.error("Error at motor mode change ack handler", error);
+    throw error;
+  }
+}
+
+
+// Fault-clear ack (2.0-only, T:37 — see ACK_TYPES_V2.FAULT_CLEAR_ACK). D is a map of the
+// motor slots the device is reporting on, e.g. { m1: 1 } or { m1: 1, m2: 1 }; a value of 1
+// means that motor's fault is cleared on the device side, so flip fault_cleared on its
+// latest active fault row. Scoped to starter_id AND motor_id — same query faultClearedHandler
+// (the manual "Clear Fault" REST endpoint) uses — so a dual-motor box's two motors are never
+// mixed up.
+export async function faultClearAckHandler(message: any, topic: string) {
+  const macAddress = topic.split("/")[1];
+  try {
+    if (!macAddress) {
+      logger.error("[fault-clear-ack] Invalid topic format: MAC address not found");
+      return;
+    }
+
+    const validMac = await getStarterByMacWithMotor(macAddress);
+    if (!validMac?.id || !validMac.motors || validMac.motors.length === 0) {
+      logger.error(`[fault-clear-ack] No starter found with MAC [${macAddress}] or no motors attached`);
+      return;
+    }
+
+    const ackData: Record<string, number> = normalizeDeviceAckD(message?.D);
+    const motorsByIndex = new Map(validMac.motors.map((m: any) => [m.motor_index ?? 1, m]));
+    const starter_id = validMac.id;
+    const orderBy: OrderByQueryData<StarterBoxParametersTable> = { columns: ["id"], values: ["desc"] };
+
+    for (const [key, rawValue] of Object.entries(ackData)) {
+      if (Number(rawValue) !== 1) continue; // only a "cleared" report acts; anything else is ignored
+
+      const motorIndex = parseMotorKey(key);
+      const motor: any = motorIndex !== null ? motorsByIndex.get(motorIndex) : undefined;
+      if (!motor) {
+        logger.warn(`[fault-clear-ack] Unknown motor slot "${key}" on starter ${macAddress} (starter_id=${starter_id}) — skipping`);
+        continue;
+      }
+
+      const faultRecord = await getSingleRecordByMultipleColumnValues<StarterBoxParametersTable>(starterBoxParameters,
+        ["starter_id", "motor_id", "fault", "fault_cleared"], ["=", "=", "!=", "="],
+        [starter_id, motor.id, 0, false], ["id"], orderBy
+      );
+
+      if (!faultRecord) {
+        logger.warn(`[fault-clear-ack] starter=${starter_id} motor=${motor.id} (${key}) acked but no active fault row found — skipping`);
+        continue;
+      }
+
+      await updateRecordById<StarterBoxParametersTable>(starterBoxParameters, faultRecord.id, { fault_cleared: true });
+      await ActivityService.logActivity({
+        performedBy: motor.created_by || validMac.created_by,
+        action: "FAULT_CLEARED_BY_DEVICE",
+        entityType: "STARTER",
+        entityId: starter_id,
+        newData: { motor_id: motor.id, fault_record_id: faultRecord.id, motor_name: motor.alias_name ?? motor.name },
+      });
+    }
+  } catch (error: any) {
+    logger.error("Error at fault clear ack handler", error);
+    console.error("Error at fault clear ack handler", error);
     throw error;
   }
 }

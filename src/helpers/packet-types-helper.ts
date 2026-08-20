@@ -66,6 +66,9 @@ export const ACK_TYPES_V2 = {
   DEVICE_INFO_ACK: 45,                        // renumbered 39 -> 45
   HEART_BEAT: 46,                             // renumbered 40 -> 46
   LIVE_DATA: 47,                              // renumbered 41 -> 47
+  // 2.0-only: no 1.0 equivalent. T:37 keeps meaning SCHEDULING_DATA_REQUEST_ACK on 1.0
+  // firmware (ACK_TYPES_V1) — this id is reused for a different purpose only on 2.0 boxes.
+  FAULT_CLEAR_ACK: 37,
 } as const;
 
 // Kept as the default export for existing 2.0 call sites — REQUEST_TYPES/ACK_TYPES have
@@ -120,6 +123,7 @@ export function findTopicACKByType(payload: any, version: PayloadVersion = "1.0"
     case 33: return "SCHEDULING_ACK";
     case 35: return "CALIBRATION_ACK";
     case 36: return "DEVICE_SERIAL_NUMBER_ALLOCATION_ACK";
+    case 37: return "FAULT_CLEAR_ACK"; // 2.0-only — see ACK_TYPES_V2
     case 38: return "DEVICE_RESET_ACK";
     case 39: return "LIVE_DATA_REQUEST_ACK";
     case 42: return "QUECTEL_FILE_DELETE_ACK";
