@@ -1,4 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { requestTypesFor } from "../../helpers/packet-types-helper.js";
+import { payloadVersionOf } from "../../helpers/payload-version-helper.js";
 import db from "../../database/configuration.js";
 import { benchedStarterParameters } from "../../database/schemas/benched-starter-parameters.js";
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
@@ -30,24 +32,22 @@ export async function addStarterWithTransaction(starterBoxPayload, userPayload, 
     const { id, created_at, updated_at, ...defaultSettingsData } = defaultSettings[0];
     const defaultSettingsLimitsData = await db.select().from(StarterDefaultSettingsLimits).limit(1);
     const { id: starterSettingsLimitsId, created_at: starterSettingsLimitsCreatedAt, updated_at: starterSettingsLimitsUpdatedAt, ...restDefaultSettingsLimitsData } = defaultSettingsLimitsData[0];
+    const { motorsList, ...starterInsertData } = preparedStarerData;
     return await db.transaction(async (trx) => {
-        const starter = await saveSingleRecord(starterBoxes, preparedStarerData, trx);
-        await saveSingleRecord(motors, { ...preparedStarerData.motorDetails, starter_id: starter.id }, trx);
+        const starter = await saveSingleRecord(starterBoxes, starterInsertData, trx);
+        for (const motor of motorsList) {
+            await saveSingleRecord(motors, { ...motor, starter_id: starter.id }, trx);
+        }
         await saveSingleRecord(starterSettings, { ...defaultSettingsData, starter_id: Number(starter.id), created_by: userPayload.id, acknowledgement: "TRUE" }, trx);
         await trx.update(starterDispatch).set({ starter_id: starter.id }).where(and(eq(starterDispatch.box_serial_no, preparedStarerData.starter_number), isNull(starterDispatch.starter_id)));
         await saveSingleRecord(starterSettingsLimits, { ...restDefaultSettingsLimitsData, starter_id: starter.id }, trx);
-        const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
+        const deviceInfoPayload = { T: requestTypesFor(payloadVersionOf(starter)).DEVICE_INFO_REQUEST, S: randomSequenceNumber(), D: 1 };
         publishMultipleTimesInBackground(deviceInfoPayload, starter);
         return starter;
     });
 }
 export async function assignStarterWithTransaction(payload, userPayload, starterBoxPayload, externalTrx) {
     const assignedAt = new Date();
-    const motorDetails = {
-        alias_name: payload.motor_name, hp: String(payload.hp), starter_id: starterBoxPayload.id,
-        location_id: payload.location_id, created_by: userPayload.id, assigned_at: assignedAt,
-    };
-    const existedMotorData = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterBoxPayload.id);
     const action = async (trx) => {
         const starterUpdateData = {
             user_id: userPayload.id, device_status: "ASSIGNED", location_id: payload.location_id, assigned_at: assignedAt,
@@ -57,10 +57,23 @@ export async function assignStarterWithTransaction(payload, userPayload, starter
             starterUpdateData.installation_photo_key = payload.installation_photo_key;
         }
         const updatedStarter = await updateRecordById(starterBoxes, starterBoxPayload.id, starterUpdateData, trx);
-        const updatedMotor = existedMotorData
-            ? (await trx.update(motors).set({ ...motorDetails }).where(eq(motors.id, existedMotorData.id)).returning())[0]
-            : null;
-        return { updatedStarter, updatedMotor };
+        const updatedMotors = [];
+        for (const input of payload.motors) {
+            // Resolve the exact motor by id, scoped to this starter (single = 1 entry, dual = 2).
+            const target = await getSingleRecordByMultipleColumnValues(motors, ["id", "starter_id", "status"], ["=", "=", "!="], [input.motor_id, starterBoxPayload.id, "ARCHIVED"]);
+            if (!target)
+                continue;
+            const motorUpdate = {
+                alias_name: input.motor_name, location_id: payload.location_id, created_by: userPayload.id, assigned_at: assignedAt,
+            };
+            if (input.hp !== undefined && input.hp !== null)
+                motorUpdate.hp = String(input.hp);
+            if (input.motor_reference !== undefined && input.motor_reference !== null)
+                motorUpdate.motor_reference = input.motor_reference;
+            const updated = (await trx.update(motors).set(motorUpdate).where(eq(motors.id, target.id)).returning())[0];
+            updatedMotors.push(updated);
+        }
+        return { updatedStarter, updatedMotors };
     };
     if (externalTrx) {
         return await action(externalTrx);
@@ -93,6 +106,9 @@ export async function getStarterByMacWithMotor(mac) {
             hardware_version: true,
             sim_recharge_expires_at: true,
             device_mobile_number: true,
+            motor_support_type: true,
+            payload_version: true,
+            starter_type: true,
         },
         with: {
             motors: {
@@ -106,6 +122,7 @@ export async function getStarterByMacWithMotor(mac) {
                     location_id: true,
                     created_by: true,
                     alias_name: true,
+                    motor_index: true,
                 },
             },
         },
@@ -130,6 +147,10 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             signal_quality: true,
             network_type: true,
             device_mobile_number: true,
+            starter_type: true,
+            motor_support_type: true,
+            payload_version: true,
+            motor_starter_type: true,
         },
         with: {
             gateway: {
@@ -142,6 +163,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             },
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,
@@ -149,6 +171,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                     state: true,
                     mode: true,
                     alias_name: true,
+                    motor_index: true,
                     test_run_status: true,
                 },
                 with: {
@@ -204,10 +227,17 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
             device_mobile_number: true,
             device_installed_location: true,
             installation_photo_key: true,
+            // Single vs multiple motors, plus both starter-type fields: starter_type is
+            // SINGLE_STARTER/MULTI_STARTER, motor_starter_type is STAR_RELAY/CONTACTOR/STAR_DELTA.
+            motor_support_type: true,
+            payload_version: true,
+            starter_type: true,
+            motor_starter_type: true,
         },
         with: {
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,
@@ -215,6 +245,9 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
                     state: true,
                     mode: true,
                     alias_name: true,
+                    motor_index: true,
+                    // m1 / m2 — lets the app map each motor to its device payload key.
+                    motor_reference: true,
                     test_run_status: true,
                     test_run_completed_at: true,
                 },
@@ -359,6 +392,12 @@ export async function starterConnectedMotors(starterId) {
             signal_quality: true,
             network_type: true,
             device_status: true,
+            motor_starter_type: true,
+            // The settings screen publishes T:4 itself, so it needs the same two columns
+            // publishDeviceSettings resolves the grammar from — without them the Admin
+            // Panel falls back to "1.0" and sends a V2.0 board the flat body.
+            payload_version: true,
+            motor_support_type: true,
             assigned_at: true,
             deployed_at: true,
             device_allocation: true,
@@ -385,6 +424,7 @@ export async function starterConnectedMotors(starterId) {
             },
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,
@@ -392,6 +432,7 @@ export async function starterConnectedMotors(starterId) {
                     state: true,
                     mode: true,
                     alias_name: true,
+                    motor_index: true,
                     test_run_completed_at: true,
                 },
             },
@@ -441,6 +482,20 @@ export async function getStarterByMac(mac) {
         },
     });
 }
+/**
+ * Cheapest lookup for the one thing MQTT ingestion needs before it can even classify an
+ * inbound packet: which tag-id table (packet-types-helper.ts) this box's firmware
+ * speaks. Matches by mac or pcb like getStarterByMacWithMotor, but selects nothing else
+ * — the full record is refetched downstream by whichever ack handler ends up routed to.
+ */
+export async function getStarterPayloadVersion(macOrPcb) {
+    const identifier = macOrPcb.trim().toUpperCase();
+    const starter = await db.query.starterBoxes.findFirst({
+        where: and(or(eq(starterBoxes.mac_address, identifier), eq(starterBoxes.pcb_number, identifier)), ne(starterBoxes.status, "ARCHIVED")),
+        columns: { payload_version: true },
+    });
+    return payloadVersionOf(starter);
+}
 export async function findStarterByPcbOrStarterNumber(key) {
     if (!key || typeof key !== "string") {
         return null;
@@ -448,6 +503,41 @@ export async function findStarterByPcbOrStarterNumber(key) {
     const searchTerm = key.trim().toUpperCase();
     return await db.query.starterBoxes.findFirst({
         where: and(or(eq(starterBoxes.pcb_number, searchTerm), eq(starterBoxes.starter_number, searchTerm)), ne(starterBoxes.status, "ARCHIVED")),
+    });
+}
+// Focused payload for the mobile "motors by PCB" screen: device type info + its motors (M1/M2...).
+// Deliberately narrow (no name/power/device_mobile_number/device_status/gateway/location) so it
+// stays separate from starterConnectedMotors used by GET /starters/:id/motors.
+export async function getStarterMotorsByPcb(pcbNumber) {
+    const searchTerm = pcbNumber.trim().toUpperCase();
+    return await db.query.starterBoxes.findFirst({
+        where: and(or(eq(starterBoxes.pcb_number, searchTerm), eq(starterBoxes.starter_number, searchTerm)), ne(starterBoxes.status, "ARCHIVED")),
+        columns: {
+            id: true,
+            pcb_number: true,
+            starter_number: true,
+            mac_address: true,
+            starter_type: true,
+            motor_starter_type: true,
+            motor_support_type: true,
+            payload_version: true,
+        },
+        with: {
+            motors: {
+                where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
+                columns: {
+                    id: true,
+                    name: true,
+                    hp: true,
+                    state: true,
+                    mode: true,
+                    alias_name: true,
+                    motor_index: true,
+                    test_run_completed_at: true,
+                },
+            },
+        },
     });
 }
 export async function getUniqueStarterIdsWithInTime(time) {
@@ -561,6 +651,7 @@ export async function getBasicStarterDetails(pageParams, search) {
         with: {
             motors: {
                 where: ne(motors.status, "ARCHIVED"),
+                orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
                     name: true,

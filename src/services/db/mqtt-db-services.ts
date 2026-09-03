@@ -6,15 +6,16 @@ import { deviceTemperature, type DeviceTemperatureTable } from "../../database/s
 import { motors, type MotorsTable } from "../../database/schemas/motors.js";
 import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters, type StarterBoxParametersTable } from "../../database/schemas/starter-parameters.js";
-import { pendingAckMap, schedulePartialAckMap } from "../../helpers/ack-tracker-hepler.js";
-import { controlMode } from "../../helpers/control-helpers.js";
+import { modeControlPendingAckMap, motorControlPendingAckMap, pendingAckMap, schedulePartialAckMap, settingsControlPendingAckMap, MAX_SETTINGS_SYNC_ATTEMPTS, clearSettingsSyncAttempts, getSettingsSyncAttempts, incrementSettingsSyncAttempts } from "../../helpers/ack-tracker-hepler.js";
 import { prepareAlertClearedNotificationData, prepareAlertNotificationData, prepareFaultClearedNotificationData, prepareFaultNotificationData, prepareSignalCodeChange, shouldPersistSignalCodeChange } from "../../helpers/fault-notification-helper.js";
 import { extractPreviousData, prepareMotorModeControlNotificationData, prepareMotorStateControlNotificationData, prepareMotorSyncChangeData } from "../../helpers/motor-helper.js";
+import { normalizeDeviceAckD, parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
 import { liveDataHandler } from "../../helpers/mqtt-helpers.js";
-import { prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
+import { prepareLiveDataPayload, prepareStarterParametersRecord } from "../../helpers/prepare-live-data-payload-helper.js";
 import { shouldSendNotification } from "../../helpers/notification-debounce.js";
-import { getValidNetwork, getValidStrength } from "../../helpers/packet-types-helper.js";
+import { getModeControlStatusDescription, getMotorControlStatusDescription, getValidNetwork, getValidStrength, isMotorControlStateCode, modeControlCodeToMode } from "../../helpers/packet-types-helper.js";
 import type { preparedLiveData, previousPreparedLiveData } from "../../types/app-types.js";
+import type { OrderByQueryData } from "../../types/db-types.js";
 import { logger } from "../../utils/logger.js";
 import { sendUserNotification } from "../fcm/fcm-service.js";
 import { mqttServiceInstance } from "../mqtt-service.js";
@@ -26,7 +27,7 @@ import { insertScheduleLog } from "./motor-schedule-logs-services.js";
 import { uploadLiveDataPacket } from "../s3/s3-service.js";
 import { hasMotorRunTimeRecord, trackDeviceRunTime, trackMotorRunTime } from "./motor-services.js";
 import { writeDeviceStatusHistoryIfChanged, writeMotorStatusHistoryIfChanged, writePowerStatusHistoryIfChanged } from "./status-history-services.js";
-import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc } from "./settings-services.js";
+import { publishDeviceSettings, updateLatestStarterSettings, updateLatestStarterSettingsFlc, updateMultiMotorSettingsAck } from "./settings-services.js";
 import { applyDeviceAllocation, getStarterByMacWithMotor } from "./starter-services.js";
 import { pushPendingSchedulesForStarter } from "../../helpers/schedule-sync-helper.js";
 // Postgres deadlock code. Concurrent MQTT messages for the same device can
@@ -104,6 +105,28 @@ export async function saveLiveDataTopic(insertedData: preparedLiveData, groupId:
   }
 }
 
+/**
+ * Inserts a starter_parameters record for an unmatched multi-motor block — the
+ * device is reporting live data for a motor slot (m1/m2) that has no motor
+ * currently attached at that motor_index. Bypasses the full updateStates/
+ * updateDevicePower... pipeline entirely (those short-circuit without motor_id
+ * for G02-G04, and would wrongly touch motors/alerts/runtime tables for G01) —
+ * this just records the raw reading with motor_id left null.
+ */
+export async function insertParametersForUnmatchedMotor(device: any, motorIndex: number, validated: any) {
+  const stubMotor = { id: null, state: 0, mode: "AUTO" };
+  const prepared = prepareLiveDataPayload(validated, device, stubMotor);
+  if (!prepared) return;
+
+  const record = prepareStarterParametersRecord(prepared);
+  try {
+    await saveSingleRecord<StarterBoxParametersTable>(starterBoxParameters, record);
+    logger.info(`[multi-motor] parameters-only insert starter_id=${device.id} motor_index=${motorIndex} (no motor attached at this slot)`);
+  } catch (err: any) {
+    logger.error(`[multi-motor] parameters-only insert failed starter_id=${device.id} motor_index=${motorIndex}`, err);
+  }
+}
+
 export async function selectTopicAck(topicType: string, payload: any, topic: string) {
 
   switch (topicType) {
@@ -139,6 +162,9 @@ export async function selectTopicAck(topicType: string, payload: any, topic: str
       break;
     case "SCHEDULING_ACK":
       await scheduleCreationAckResolver(payload, topic);
+      break;
+    case "FAULT_CLEAR_ACK":
+      await faultClearAckHandler(payload, topic);
       break;
     default:
       return null;
@@ -1147,10 +1173,13 @@ export async function updateDevicePowerAndMotorStateOFF(insertedData: preparedLi
 }
 
 
-// Motor control ack
+// Motor control ack — D is a map of one or more motor slots, e.g. { m1: 1, m2: 6 }.
+// Only STATUS_OFF(0)/STATUS_ON(1) are real state transitions; codes 2-8 are
+// rejection reasons (fault, already on/off, invalid request, ...) reported back
+// by the device instead of an actuation, and must not be written to motors.state.
 export async function motorControlAckHandler(message: any, topic: string) {
+  const macAddress = topic.split("/")[1];
   try {
-    const macAddress = topic.split("/")[1];
     if (!macAddress) {
       console.error("Invalid topic format: MAC address not found");
       return;
@@ -1162,54 +1191,91 @@ export async function motorControlAckHandler(message: any, topic: string) {
       return;
     }
 
-    const motor: any = validMac.motors[0];
+    // Multi-motor devices send D as a map ({ m1: 0, m2: 1 }); single-motor devices
+    // send a bare scalar (D: 0). Normalize both to the map form so single-motor state
+    // acks are actually persisted instead of silently dropped by Object.entries.
+    const ackData: Record<string, number> = normalizeDeviceAckD(message?.D);
+    const motorsByIndex = new Map(validMac.motors.map((m: any) => [m.motor_index ?? 1, m]));
     const starter_id = validMac.id;
-    const motor_id = motor.id;
-    const location_id = motor.location_id;
 
-    const mode_description = motor.mode;
-    const prevState = motor.state;
-    const newState = message.D;
+    const notifications: Array<{ userId: number; title: string; message: string; motorId: number; starterId: number }> = [];
+    const debouncedStateResults: Array<{ motorId: number; newState: number }> = [];
 
-    const stateChanged = newState !== prevState;
-    const shouldWriteMotorHistory = newState === 0 || newState === 1;
+    await db.transaction(async (trx) => {
+      for (const [key, rawState] of Object.entries(ackData)) {
+        const motorIndex = parseMotorKey(key);
+        const motor: any = motorIndex !== null ? motorsByIndex.get(motorIndex) : undefined;
+        if (!motor) {
+          logger.warn(`[motor-control-ack] Unknown motor slot "${key}" on starter ${macAddress} (starter_id=${starter_id}) — skipping`);
+          continue;
+        }
 
-    const notificationData = await db.transaction(async (trx) => {
-      // Update motor state ONLY if changed
-      if (stateChanged && (newState === 0 || newState === 1)) {
-        const updateData: any = { state: newState, updated_at: new Date() };
-        if (newState === 1) updateData.motor_last_on_at = new Date();
-        else if (newState === 0) updateData.motor_last_off_at = new Date();
-        await trx.update(motors).set(updateData).where(eq(motors.id, motor.id));
+        const newState = Number(rawState);
+        const motor_id = motor.id;
+        const location_id = motor.location_id;
+        const mode_description = motor.mode;
+        const prevState = motor.state;
+        const isStateCode = isMotorControlStateCode(newState);
+        const stateChanged = isStateCode && newState !== prevState;
 
-        await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
-      } else {
-        const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
-        if (isFirstRecord) {
+        if (stateChanged) {
+          const updateData: any = { state: newState, updated_at: new Date() };
+          if (newState === 1) updateData.motor_last_on_at = new Date();
+          else updateData.motor_last_off_at = new Date();
+          await trx.update(motors).set(updateData).where(eq(motors.id, motor_id));
+
           await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+
+          await writeMotorStatusHistoryIfChanged({
+            starter_id,
+            motor_id,
+            status: newState === 1 ? "ON" : "OFF",
+            time_stamp: new Date(),
+            trx,
+          });
+        } else if (isStateCode) {
+          const isFirstRecord = motor_id ? !(await hasMotorRunTimeRecord(motor_id, starter_id, trx)) : false;
+          if (isFirstRecord) {
+            await trackMotorRunTime({ starter_id, motor_id, location_id, previous_state: prevState, new_state: newState, mode_description }, trx);
+          }
+        } else {
+          // Rejection/error code (fault, already on/off, invalid request, ...) — log only.
+          logger.warn(`[motor-control-ack] starter=${starter_id} motor=${motor_id} (${key}) rejected: ${getMotorControlStatusDescription(newState)} (code=${newState})`);
+        }
+
+        // Always log the ACK itself (changed or not), same as before.
+        await ActivityService.writeMotorAckLogs(
+          motor.created_by || validMac.created_by,
+          motor_id,
+          { state: prevState, mode: mode_description },
+          { state: isStateCode ? newState : prevState, mode: mode_description },
+          "MOTOR_CONTROL_ACK",
+          trx,
+          starter_id,
+        );
+
+        if (stateChanged) {
+          const notificationData = prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, validMac.starter_number);
+          if (notificationData) {
+            notifications.push(notificationData);
+            debouncedStateResults.push({ motorId: motor_id, newState });
+          }
         }
       }
-
-      if (shouldWriteMotorHistory) {
-        await writeMotorStatusHistoryIfChanged({
-          starter_id,
-          motor_id,
-          status: newState === 1 ? "ON" : "OFF",
-          time_stamp: new Date(),
-          trx,
-        });
-      }
-
-      // Always log ACK (changed or not)
-      await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id, { state: prevState, mode: mode_description }, { state: newState, mode: mode_description }, "MOTOR_CONTROL_ACK", trx, starter_id);
-      return stateChanged ? prepareMotorStateControlNotificationData(motor, newState, mode_description, starter_id, validMac.starter_number) : null;
-
     });
 
-    // Send notification after transaction completes (debounced)
-    if (notificationData) {
-      if (shouldSendNotification(notificationData.motorId, "state", newState)) {
-        await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, starter_id);
+    // Resolve any in-flight REST request waiting on this ack (sendMotorControlCommand).
+    const pendingAck = motorControlPendingAckMap.get(macAddress);
+    if (pendingAck && pendingAck.sequenceNumber === message.S) {
+      pendingAck.resolve({ acked: true, data: ackData });
+    }
+
+    // Send notifications after the transaction commits (debounced per motor).
+    for (let i = 0; i < notifications.length; i++) {
+      const n = notifications[i];
+      const { newState } = debouncedStateResults[i];
+      if (shouldSendNotification(n.motorId, "state", newState)) {
+        await sendUserNotification(n.userId, n.title, n.message, n.motorId, n.starterId);
       }
     }
   } catch (error: any) {
@@ -1219,40 +1285,151 @@ export async function motorControlAckHandler(message: any, topic: string) {
   }
 }
 
-// Motor mode ack
+// Motor mode ack — D is a map of one or more motor slots, e.g. { m1: 1, m2: 6 }.
+// Only codes 0/1/2 (MANUAL/AUTO/SCHEDULE) are real mode transitions; codes 3-8 are
+// rejection reasons (fault, already manual/auto, invalid request, ...) reported
+// back by the device instead of a mode change, and must not be written to motors.mode.
 export async function motorModeChangeAckHandler(message: any, topic: string) {
+  const macAddress = topic.split("/")[1];
   try {
-    const validMac = await getStarterByMacWithMotor(topic.split("/")[1]);
+    const validMac = await getStarterByMacWithMotor(macAddress);
     if (!validMac?.id || !validMac.motors.length) {
       logger.error(`Any starter found with given MAC [${topic}]`)
       return null;
     };
 
-    const mode = controlMode(message.D);
-    const motor = validMac.motors[0];
+    // Multi-motor devices send D as a map ({ m1: 0, m2: 1 }); single-motor devices
+    // send a bare scalar (D: 0). Normalize both to the map form so single-motor mode
+    // acks are actually persisted instead of silently dropped by Object.entries.
+    const ackData: Record<string, number> = normalizeDeviceAckD(message?.D);
+    const motorsByIndex = new Map(validMac.motors.map((m: any) => [m.motor_index ?? 1, m]));
+    const starter_id = validMac.id;
+
+    const notifications: Array<{ userId: number; title: string; message: string; motorId: number; starterId: number }> = [];
+    const debouncedModeResults: Array<{ motorId: number; newMode: string }> = [];
 
     await db.transaction(async (trx) => {
-      if (mode !== motor.mode) {
-        if (mode == "MANUAL" || mode == "AUTO" || mode == "SCHEDULE") {
-          await trx.update(motors).set({ mode: mode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor.id));
+      for (const [key, rawCode] of Object.entries(ackData)) {
+        const motorIndex = parseMotorKey(key);
+        const motor: any = motorIndex !== null ? motorsByIndex.get(motorIndex) : undefined;
+        if (!motor) {
+          logger.warn(`[mode-control-ack] Unknown motor slot "${key}" on starter ${macAddress} (starter_id=${starter_id}) — skipping`);
+          continue;
+        }
+
+        const code = Number(rawCode);
+        const motor_id = motor.id;
+        const prevMode = motor.mode;
+        const newMode = modeControlCodeToMode(code);
+        const modeChanged = newMode !== null && newMode !== prevMode;
+
+        if (modeChanged) {
+          await trx.update(motors).set({ mode: newMode as any, last_mode_change_at: new Date(), updated_at: new Date() }).where(eq(motors.id, motor_id));
+        } else if (newMode === null) {
+          // Rejection/error code (fault, already manual/auto, invalid request, ...) — log only.
+          logger.warn(`[mode-control-ack] starter=${starter_id} motor=${motor_id} (${key}) rejected: ${getModeControlStatusDescription(code)} (code=${code})`);
+        }
+
+        // Always log the ACK itself (changed or not), same as before.
+        await ActivityService.writeMotorAckLogs(
+          motor.created_by || validMac.created_by,
+          motor_id,
+          { mode: prevMode },
+          { mode: newMode ?? prevMode },
+          "MOTOR_MODE_ACK",
+          trx,
+          starter_id,
+        );
+
+        if (modeChanged) {
+          const notificationData = prepareMotorModeControlNotificationData(motor, newMode, starter_id, validMac.starter_number);
+          if (notificationData) {
+            notifications.push(notificationData);
+            debouncedModeResults.push({ motorId: motor_id, newMode: newMode as string });
+          }
         }
       }
-
-      await ActivityService.writeMotorAckLogs(motor.created_by || validMac.created_by, motor.id,
-        { mode: motor.mode }, { mode: mode }, "MOTOR_MODE_ACK", trx, validMac.id);
     });
 
-    const modeChanged = mode !== motor.mode;
-    const notificationData = modeChanged ? prepareMotorModeControlNotificationData(motor, mode, validMac.id, validMac.starter_number) : null;
+    // Resolve any in-flight REST request waiting on this ack (sendModeControlCommand).
+    const pendingAck = modeControlPendingAckMap.get(macAddress);
+    if (pendingAck && pendingAck.sequenceNumber === message.S) {
+      pendingAck.resolve({ acked: true, data: ackData });
+    }
 
-    if (notificationData) {
-      if (shouldSendNotification(notificationData.motorId, "mode", mode)) {
-        await sendUserNotification(notificationData.userId, notificationData.title, notificationData.message, notificationData.motorId, notificationData.starterId);
+    // Send notifications after the transaction commits (debounced per motor).
+    for (let i = 0; i < notifications.length; i++) {
+      const n = notifications[i];
+      const { newMode } = debouncedModeResults[i];
+      if (shouldSendNotification(n.motorId, "mode", newMode)) {
+        await sendUserNotification(n.userId, n.title, n.message, n.motorId, n.starterId);
       }
     }
   } catch (error: any) {
     logger.error("Error at motor mode change ack handler", error);
     console.error("Error at motor mode change ack handler", error);
+    throw error;
+  }
+}
+
+
+// Fault-clear ack (2.0-only, T:37 — see ACK_TYPES_V2.FAULT_CLEAR_ACK). D is a map of the
+// motor slots the device is reporting on, e.g. { m1: 1 } or { m1: 1, m2: 1 }; a value of 1
+// means that motor's fault is cleared on the device side, so flip fault_cleared on its
+// latest active fault row. Scoped to starter_id AND motor_id — same query faultClearedHandler
+// (the manual "Clear Fault" REST endpoint) uses — so a dual-motor box's two motors are never
+// mixed up.
+export async function faultClearAckHandler(message: any, topic: string) {
+  const macAddress = topic.split("/")[1];
+  try {
+    if (!macAddress) {
+      logger.error("[fault-clear-ack] Invalid topic format: MAC address not found");
+      return;
+    }
+
+    const validMac = await getStarterByMacWithMotor(macAddress);
+    if (!validMac?.id || !validMac.motors || validMac.motors.length === 0) {
+      logger.error(`[fault-clear-ack] No starter found with MAC [${macAddress}] or no motors attached`);
+      return;
+    }
+
+    const ackData: Record<string, number> = normalizeDeviceAckD(message?.D);
+    const motorsByIndex = new Map(validMac.motors.map((m: any) => [m.motor_index ?? 1, m]));
+    const starter_id = validMac.id;
+    const orderBy: OrderByQueryData<StarterBoxParametersTable> = { columns: ["id"], values: ["desc"] };
+
+    for (const [key, rawValue] of Object.entries(ackData)) {
+      if (Number(rawValue) !== 1) continue; // only a "cleared" report acts; anything else is ignored
+
+      const motorIndex = parseMotorKey(key);
+      const motor: any = motorIndex !== null ? motorsByIndex.get(motorIndex) : undefined;
+      if (!motor) {
+        logger.warn(`[fault-clear-ack] Unknown motor slot "${key}" on starter ${macAddress} (starter_id=${starter_id}) — skipping`);
+        continue;
+      }
+
+      const faultRecord = await getSingleRecordByMultipleColumnValues<StarterBoxParametersTable>(starterBoxParameters,
+        ["starter_id", "motor_id", "fault", "fault_cleared"], ["=", "=", "!=", "="],
+        [starter_id, motor.id, 0, false], ["id"], orderBy
+      );
+
+      if (!faultRecord) {
+        logger.warn(`[fault-clear-ack] starter=${starter_id} motor=${motor.id} (${key}) acked but no active fault row found — skipping`);
+        continue;
+      }
+
+      await updateRecordById<StarterBoxParametersTable>(starterBoxParameters, faultRecord.id, { fault_cleared: true });
+      await ActivityService.logActivity({
+        performedBy: motor.created_by || validMac.created_by,
+        action: "FAULT_CLEARED_BY_DEVICE",
+        entityType: "STARTER",
+        entityId: starter_id,
+        newData: { motor_id: motor.id, fault_record_id: faultRecord.id, motor_name: motor.alias_name ?? motor.name },
+      });
+    }
+  } catch (error: any) {
+    logger.error("Error at fault clear ack handler", error);
+    console.error("Error at fault clear ack handler", error);
     throw error;
   }
 }
@@ -1290,7 +1467,25 @@ export async function heartbeatHandler(message: any, topic: string) {
     await db.transaction(async (trx) => {
       await updateRecordByIdWithTrx<StarterBoxTable>(starterBoxes, validMac.id, starterBoxUpdates, trx);
 
-      if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false") await publishDeviceSettings(validMac);
+      // Heartbeat-driven config sync, bounded. The gate below is the only automatic
+      // publisher of a box's stored (initially default) settings, and it re-fires on
+      // every heartbeat until the device acks — which for a box that never acks means
+      // forever, plus one new pending starter_settings row per cycle. Cap the number of
+      // cycles; the count is cleared on a successful ack, and an admin can re-arm a
+      // given box via PATCH /starters/:id (updateSettingsSyncStatusHandler).
+      if (message.D.s_q >= 2 && message.D.s_q <= 40 && validMac.synced_settings_status === "false") {
+        const syncAttempts = getSettingsSyncAttempts(validMac.id);
+        if (syncAttempts >= MAX_SETTINGS_SYNC_ATTEMPTS) {
+          // Log once, on the heartbeat that crosses the limit — not on every later one.
+          if (syncAttempts === MAX_SETTINGS_SYNC_ATTEMPTS) {
+            incrementSettingsSyncAttempts(validMac.id);
+            logger.warn(`Settings sync abandoned for starter ${validMac.id} after ${MAX_SETTINGS_SYNC_ATTEMPTS} unacknowledged attempts; re-arm to retry.`);
+          }
+        } else {
+          incrementSettingsSyncAttempts(validMac.id);
+          await publishDeviceSettings(validMac);
+        }
+      }
     });
 
     // Heartbeat-driven schedule push: whenever the device is online (signal 1–30),
@@ -1379,6 +1574,43 @@ export async function deviceSyncUpdate(message: any, topic: string) {
       return null;
     }
 
+    // MULTI_STARTER boxes send a per-motor ack (D: { m1: 0|1, m2: 0|1, ... }) instead
+    // of the scalar D:0|1 below — the shape itself is a safe discriminator, since
+    // SINGLE_STARTER firmware only ever sends the scalar and MULTI_STARTER firmware
+    // only ever sends the object. The scalar branch beneath this one is untouched.
+    if (message.D !== null && typeof message.D === "object") {
+      const pendingAck = settingsControlPendingAckMap.get(macFromTopic);
+
+      if (!pendingAck) {
+        logger.warn(`No pending multi-motor settings ACK found for ${macFromTopic}`);
+        return null;
+      }
+
+      if (pendingAck.sequenceNumber !== message.S) {
+        logger.warn(`Sequence number mismatch for multi-motor settings ACK ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
+        return null;
+      }
+
+      const ackData: Record<string, number> = message.D;
+      pendingAck.resolve({ acked: true, data: ackData });
+      settingsControlPendingAckMap.delete(macFromTopic);
+
+      const validMac = await getStarterByMacWithMotor(macFromTopic);
+      if (validMac?.id) {
+        const allAcked = await updateMultiMotorSettingsAck(validMac.id, ackData);
+        logger.info(`[multi-motor-settings] ack applied for starter=${validMac.id} allAcked=${allAcked}`);
+
+        if (allAcked && validMac.synced_settings_status === "false") {
+          await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
+        }
+        // Only a full ack counts as synced — a partial one leaves the count in place so
+        // the remaining motors still get their bounded retries.
+        if (allAcked) clearSettingsSyncAttempts(validMac.id);
+      }
+
+      return null;
+    }
+
     if (message.D === undefined || message.D === null || (message.D !== 0 && message.D !== 1)) {
       console.error(`Invalid message data in calibration ack [${message.D}]`);
       return null;
@@ -1388,6 +1620,32 @@ export async function deviceSyncUpdate(message: any, topic: string) {
     const pendingAck = pendingAckMap.get(macFromTopic);
 
     if (!pendingAck) {
+      // Shape/version mismatch: a V2.0 box published through the per-motor path (which
+      // registers in settingsControlPendingAckMap) but replied with the legacy scalar.
+      // Trust the device — resolve the per-motor wait with the scalar folded into slot 1
+      // rather than dropping the ack and republishing forever.
+      const pendingSettingsAck = settingsControlPendingAckMap.get(macFromTopic);
+      if (pendingSettingsAck) {
+        if (pendingSettingsAck.sequenceNumber !== message.S) {
+          logger.warn(`Sequence number mismatch for scalar settings ACK ${macFromTopic}: expected ${pendingSettingsAck.sequenceNumber}, received ${message.S}`);
+          return null;
+        }
+        const ackData = normalizeDeviceAckD(message.D);
+        pendingSettingsAck.resolve({ acked: true, data: ackData });
+        settingsControlPendingAckMap.delete(macFromTopic);
+        logger.warn(`[payload-version] ${macFromTopic} acked T:34 with a scalar on the per-motor path; honouring it as ${JSON.stringify(ackData)}`);
+
+        const validMac = await getStarterByMacWithMotor(macFromTopic);
+        if (validMac?.id) {
+          const allAcked = await updateMultiMotorSettingsAck(validMac.id, ackData);
+          if (allAcked && validMac.synced_settings_status === "false") {
+            await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
+          }
+          if (allAcked) clearSettingsSyncAttempts(validMac.id);
+        }
+        return null;
+      }
+
       logger.warn(`No pending ACK found for ${macFromTopic}`);
       return null;
     }
@@ -1412,6 +1670,7 @@ export async function deviceSyncUpdate(message: any, topic: string) {
         if (validMac.synced_settings_status === "false") {
           await updateRecordById<StarterBoxTable>(starterBoxes, validMac.id, { synced_settings_status: "true" });
         }
+        clearSettingsSyncAttempts(validMac.id);
       }
     } else {
       // ACK failed (D === 0) — resolve false, do NOT update DB
@@ -1421,11 +1680,16 @@ export async function deviceSyncUpdate(message: any, topic: string) {
     }
 
   } catch (error: any) {
-    // On error, reject the pending ACK so caller doesn't hang
+    // On error, reject whichever pending ACK was in flight so the caller doesn't hang.
     const pendingAck = pendingAckMap.get(macFromTopic);
     if (pendingAck) {
       pendingAck.resolve(false);
       pendingAckMap.delete(macFromTopic);
+    }
+    const pendingSettingsAck = settingsControlPendingAckMap.get(macFromTopic);
+    if (pendingSettingsAck) {
+      pendingSettingsAck.resolve({ acked: false });
+      settingsControlPendingAckMap.delete(macFromTopic);
     }
     console.error("Error at device sync update (calibration ack):", error);
     throw error;
@@ -1478,6 +1742,7 @@ export async function adminConfigDataRequestAckHandler(
         { synced_settings_status: "true" }
       );
     }
+    clearSettingsSyncAttempts(validMac.id);
 
   } catch (error: any) {
     console.error("Error at admin config ack handler:", error);
@@ -1602,14 +1867,29 @@ async function handleLateScheduleAck(macOrPcb: string, message: any): Promise<vo
       return;
     }
 
-    // Partial ACK bitmask: slot IDs confirmed by device
-    let confirmedSlots: Set<number> | null = null;
-    if (typeof message.D === "object" && message.D !== null && typeof message.D.ids === "number" && message.D.ids > 0) {
-      confirmedSlots = new Set<number>();
-      for (let bit = 0; bit < 16; bit++) {
-        if (Number(BigInt(message.D.ids) & (1n << BigInt(bit)))) confirmedSlots.add(bit + 1);
+    // Partial ACK bitmask: slot IDs confirmed by device. Flat `ids` (single-motor /
+    // legacy, always motor m1) plus per-motor `m1_ids` / `m2_ids` / ... (multi-motor).
+    // Each motor has its own independent slot table, so bitmasks are kept separate per
+    // motor reference rather than merged — a bare slot number is ambiguous otherwise.
+    let confirmedSlotsByMotor: Record<string, Set<number>> | null = null;
+    if (typeof message.D === "object" && message.D !== null) {
+      const masks: { key: string; mask: number }[] = [];
+      if (typeof message.D.ids === "number" && message.D.ids > 0) masks.push({ key: "ids", mask: message.D.ids });
+      for (const [key, val] of Object.entries(message.D)) {
+        if (/^m\d+_ids$/i.test(key) && typeof val === "number" && val > 0) masks.push({ key, mask: val });
       }
-      console.log(`[schedule-ack:LATE] mac=${macOrPcb} partial bitmask=${message.D.ids} → slots=[${[...confirmedSlots].join(",")}]`);
+      if (masks.length > 0) {
+        confirmedSlotsByMotor = {};
+        for (const { key, mask } of masks) {
+          const motorRef = key === "ids" ? "m1" : key.replace(/_ids$/i, "").toLowerCase();
+          const slots = confirmedSlotsByMotor[motorRef] ??= new Set<number>();
+          for (let bit = 0; bit < 16; bit++) {
+            if (Number(BigInt(mask) & (1n << BigInt(bit)))) slots.add(bit + 1);
+          }
+        }
+        const desc = Object.entries(confirmedSlotsByMotor).map(([ref, slots]) => `${ref}=[${[...slots].join(",")}]`).join(" ");
+        console.log(`[schedule-ack:LATE] mac=${macOrPcb} partial bitmasks → ${desc}`);
+      }
     }
 
     // Find PENDING records that were already dispatched (have device_schedule_id assigned)
@@ -1622,10 +1902,15 @@ async function handleLateScheduleAck(macOrPcb: string, message: any): Promise<vo
         isNotNull(ms.device_schedule_id),
       ),
       columns: { id: true, device_schedule_id: true },
+      with: { motor: { columns: { motor_reference: true } } },
     });
 
-    const toUpdate = confirmedSlots
-      ? pending.filter(r => r.device_schedule_id != null && confirmedSlots!.has(r.device_schedule_id))
+    const toUpdate = confirmedSlotsByMotor
+      ? pending.filter(r => {
+          if (r.device_schedule_id == null) return false;
+          const motorRef = (r as any).motor?.motor_reference?.toLowerCase() ?? "m1";
+          return confirmedSlotsByMotor![motorRef]?.has(r.device_schedule_id) ?? false;
+        })
       : pending;
 
     if (toUpdate.length === 0) {
@@ -1683,25 +1968,40 @@ async function scheduleCreationAckResolver(message: any, topic: string) {
 
   console.log(`[schedule-ack:PARSED] mac=${macFromTopic} S=${message.S} D_type=${typeof message.D} dValue=${dValue} ackSuccess=${ackSuccess}`);
 
-  // Partial ACK: ids is a bitmask from the device.
-  // schedule_id n → bit (n-1) → value 2^(n-1).
-  // e.g. ids=4 (binary 100) → bit 2 → schedule_id 3 confirmed.
+  // Partial ACK: a bitmask of confirmed device slots. slot n → bit (n-1) → value 2^(n-1).
+  // e.g. bitmask=4 (binary 100) → bit 2 → slot 3 confirmed.
+  //  - Single-motor / legacy boxes send a flat `ids` bitmask (motor m1).
+  //  - Multi-motor boxes send per-motor `m1_ids` / `m2_ids` / ... bitmasks.
+  // Each motor has its own independent slot table on the device, so bitmasks are kept
+  // separate per motor reference rather than merged into one global slot set.
   if (ackSuccess && message.D !== null && typeof message.D === "object") {
-    const rawIds = message.D.ids;
-    if (typeof rawIds === "number" && rawIds > 0) {
-      const acknowledgedIds: number[] = [];
-      for (let bit = 0; bit < 16; bit++) {
-        if (Number(BigInt(rawIds) & (1n << BigInt(bit)))) {
-          acknowledgedIds.push(bit + 1);
+    const bitmasks: { key: string; mask: number }[] = [];
+    if (typeof message.D.ids === "number" && message.D.ids > 0) {
+      bitmasks.push({ key: "ids", mask: message.D.ids });
+    }
+    for (const [key, val] of Object.entries(message.D)) {
+      if (/^m\d+_ids$/i.test(key) && typeof val === "number" && val > 0) {
+        bitmasks.push({ key, mask: val });
+      }
+    }
+
+    if (bitmasks.length > 0) {
+      const acknowledgedByMotor: Record<string, number[]> = {};
+      for (const { key, mask } of bitmasks) {
+        const motorRef = key === "ids" ? "m1" : key.replace(/_ids$/i, "").toLowerCase();
+        const slots = new Set<number>();
+        for (let bit = 0; bit < 16; bit++) {
+          if (Number(BigInt(mask) & (1n << BigInt(bit)))) slots.add(bit + 1);
         }
+        acknowledgedByMotor[motorRef] = [...slots].sort((a, b) => a - b);
       }
-      if (acknowledgedIds.length > 0) {
-        schedulePartialAckMap.set(macFromTopic, acknowledgedIds);
-        console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} bitmask=${rawIds} (0b${rawIds.toString(2)}) → slot_ids=[${acknowledgedIds.join(",")}]`);
-        logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: bitmask=${rawIds} (0b${rawIds.toString(2)}) → ids=[${acknowledgedIds.join(",")}]`);
-      }
+      schedulePartialAckMap.set(macFromTopic, acknowledgedByMotor);
+      const maskDesc = bitmasks.map(b => `${b.key}=${b.mask}(0b${b.mask.toString(2)})`).join(" ");
+      const idsDesc = Object.entries(acknowledgedByMotor).map(([ref, ids]) => `${ref}=[${ids.join(",")}]`).join(" ");
+      console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} ${maskDesc} → ${idsDesc}`);
+      logger.info(`[schedule-ack] partial ACK for ${macFromTopic}: ${maskDesc} → ${idsDesc}`);
     } else {
-      console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} D is object but ids=${rawIds} (not a positive number) → treated as full ACK`);
+      console.log(`[schedule-ack:PARTIAL] mac=${macFromTopic} D is object but no positive bitmask (ids / m*_ids) → treated as full ACK`);
     }
   } else if (ackSuccess) {
     console.log(`[schedule-ack:FULL] mac=${macFromTopic} D is plain number=${dValue} → full ACK, no bitmask`);

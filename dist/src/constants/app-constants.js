@@ -196,6 +196,20 @@ export const MOTOR_DETAILS_FETCHED = "Pump details fetched successfully";
 export const MOTOR_NAME_EXISTED = "Pump name already exist";
 export const MOTOR_NAME_ALREADY_LOCATION = "Pump name already exists in this location.";
 export const MOTOR_TEST_RUN_STATUS_UPDATED = "Pump test run status updated successfully";
+export const MOTOR_CONTROL_VALIDATION_CRITERIA = "Motor control details provided do not meet the required validation criteria";
+export const MOTOR_CONTROL_STATE_INVALID = "Motor state must be 0 (OFF) or 1 (ON)";
+export const MOTOR_CONTROL_MOTORS_NOT_FOUND = "One or more requested motors were not found on this starter";
+export const MOTOR_CONTROL_COMMAND_SENT = "Motor control command sent";
+export const MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED = "This starter supports only a single motor — only one motor can be controlled at a time";
+export const PAYLOAD_VERSION_DUAL_MOTOR_INVALID = "Dual motor device must use payload version 2.0";
+export const PAYLOAD_VERSION_MOTOR_CHANGE_NOT_ALLOWED = "Cannot change payload version and motor type together";
+export const DUAL_MOTOR_CONVERSION_REQUIRES_V2 = "Set payload version 2.0 before adding a second motor";
+export const DUAL_MOTOR_CONVERSION_ALREADY_DUAL = "Device already has two motors";
+export const DUAL_MOTOR_CONVERSION_NO_EXISTING_MOTOR = "Device has no motor to convert";
+export const DUAL_MOTOR_CONVERSION_DONE = "Motor added, device converted to dual motor";
+export const MOTOR_MODE_CONTROL_VALIDATION_CRITERIA = "Motor mode control details provided do not meet the required validation criteria";
+export const MOTOR_CONTROL_MODE_INVALID = "Motor mode must be MANUAL, AUTO or SCHEDULE";
+export const MOTOR_MODE_CONTROL_COMMAND_SENT = "Motor mode control command sent";
 // Starter Box
 export const STARTER_BOX_ADDED_SUCCESSFULLY = "Device box added successfully";
 export const STARTER_BOX_UPDATED_SUCCESSFULLY = "Device box updated successfully";
@@ -441,6 +455,23 @@ export const SETTINGS_FIELD_NAMES = {
     as_dly: "Auto start seed time",
     pr_flt_en: "Pre fault enable",
     tpf: "Time per fault",
+    /* ================= Multi-motor Configuration ================= */
+    v_flt_en: "Voltage fault enable (bitwise)",
+    sd_time: "Star-delta time",
+    step_delay: "Step delay",
+    start_time: "Start time",
+    transfer_time: "Transfer time",
+    /* ================= Trip timings ================= */
+    irt_time: "Inrush current trip time",
+    lvt_time: "Low voltage trip time",
+    hvt_time: "High voltage trip time",
+    ipt_time: "Input phase failure trip time",
+    drt_time: "Dry run trip time",
+    olt_time: "Overload trip time",
+    opt_time: "Output phase failure trip time",
+    cit_time: "Current imbalance trip time",
+    flt_en: "Motor fault enable (bitwise)",
+    motor_id: "Motor",
     /* ================= Enables ================= */
     v_en: "Voltage faults enable",
     c_en: "Current faults enable",

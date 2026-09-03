@@ -68,9 +68,12 @@ export async function bulkMotorsUpdate(motorsToUpdate: Array<{ id: number; name?
 
 
 export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsTable>, orderByQueryData: OrderByQueryData<MotorsTable>,
-  pageParams: { page: number; pageSize: number; offset: number }
+  pageParams: { page: number; pageSize: number; offset: number },
+  // Extra raw conditions the column/relation/value builder cannot express — currently the
+  // device-ownership scope. Merged before the count so records and total_records agree.
+  extraConditions: SQL[] = []
 ) {
-  const whereConditions = prepareWhereQueryConditions<MotorsTable>(motors, whereQueryData);
+  const whereConditions = [...(prepareWhereQueryConditions<MotorsTable>(motors, whereQueryData) ?? []), ...extraConditions];
   const whereQuery = whereConditions?.length ? and(...whereConditions) : undefined;
 
   const orderQuery = prepareOrderByQueryConditions<MotorsTable>(motors, orderByQueryData);
@@ -89,6 +92,7 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
       state: true,
       alias_name: true,
       test_run_status: true,
+      motor_reference: true,
     },
 
     with: {
@@ -110,29 +114,34 @@ export async function paginatedMotorsList(whereQueryData: WhereQueryData<MotorsT
           network_type: true,
           starter_number: true,
           device_allocation: true,
+          starter_type: true,
+          motor_starter_type: true,
+          motor_support_type: true,
+          payload_version: true,
         },
+      },
 
-        with: {
-          starterParameters: {
-            where: isNotNull(starterBoxParameters.time_stamp),
-            orderBy: [desc(starterBoxParameters.time_stamp)],
-            limit: 1,
+      // Motor-scoped relation (starterBoxParameters.motor_id), not the box-level one nested
+      // under `starter` — that one matches only on starter_id, so a dual-motor box's two
+      // motors both got the same "latest for either motor" fault row instead of their own.
+      starterParameters: {
+        where: isNotNull(starterBoxParameters.time_stamp),
+        orderBy: [desc(starterBoxParameters.time_stamp)],
+        limit: 1,
 
-            columns: {
-              id: true,
-              time_stamp: true,
-              fault: true,
-              fault_description: true,
-              fault_cleared: true,
-              line_voltage_r: true,
-              line_voltage_y: true,
-              line_voltage_b: true,
+        columns: {
+          id: true,
+          time_stamp: true,
+          fault: true,
+          fault_description: true,
+          fault_cleared: true,
+          line_voltage_r: true,
+          line_voltage_y: true,
+          line_voltage_b: true,
 
-              current_r: true,
-              current_y: true,
-              current_b: true,
-            },
-          },
+          current_r: true,
+          current_y: true,
+          current_b: true,
         },
       },
     },
@@ -869,4 +878,47 @@ export async function getMotorsActiveScheduleCount(motorIds: number[]): Promise<
     map[row.motor_id] = row.count;
   }
   return map;
+}
+
+/**
+ * Fetch motors by id, scoped to a single starter box, for a manual control request.
+ * Returns only motors that actually belong to `starterId` and aren't archived —
+ * callers must treat any requested id missing from the result as invalid.
+ */
+export async function getMotorsByIdsForStarter(starterId: number, motorIds: number[]) {
+  if (!motorIds.length) return [];
+
+  return await db.query.motors.findMany({
+    where: and(
+      eq(motors.starter_id, starterId),
+      inArray(motors.id, motorIds),
+      ne(motors.status, "ARCHIVED"),
+    ),
+    columns: {
+      id: true,
+      motor_index: true,
+      starter_id: true,
+      alias_name: true,
+      state: true,
+    },
+  });
+}
+
+/**
+ * Fetch all non-archived motors of a starter for a manual control request, so each
+ * request entry can be matched by motor_id OR motor_reference and mapped to its motor_index.
+ */
+export async function getMotorsForStarterControl(starterId: number) {
+  return await db.query.motors.findMany({
+    where: and(
+      eq(motors.starter_id, starterId),
+      ne(motors.status, "ARCHIVED"),
+    ),
+    columns: {
+      id: true,
+      motor_index: true,
+      motor_reference: true,
+      starter_id: true,
+    },
+  });
 }

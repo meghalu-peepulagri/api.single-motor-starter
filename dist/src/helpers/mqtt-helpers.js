@@ -1,8 +1,9 @@
 import { DEVICE_SCHEMA } from "../constants/app-constants.js";
-import { saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
+import { insertParametersForUnmatchedMotor, saveLiveDataTopic } from "../services/db/mqtt-db-services.js";
 import { getStarterByMacWithMotor } from "../services/db/starter-services.js";
 import { logger } from "../utils/logger.js";
 import { validateLiveDataContent, validateLiveDataFormat } from "./live-topic-helpers.js";
+import { extractMultiMotorBlocks, isMultiMotorPayload, resolveMotorsFromPayload } from "./multi-motor-live-data-helper.js";
 import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 // Serialize per-MAC to prevent concurrent transaction deadlocks.
 // starter_parameters has FK → both starter_boxes and motors; two concurrent
@@ -10,21 +11,7 @@ import { prepareLiveDataPayload } from "./prepare-live-data-payload-helper.js";
 // while the other holds a starter_boxes X-lock and each waits for the other's
 // row via FK ShareLock checks on INSERT into child tables.
 const liveDataQueues = new Map();
-async function processLiveData(parsedMessage, topic, mac) {
-    const validMac = await getStarterByMacWithMotor(mac);
-    if (!validMac) {
-        logger.error("Starter not found for MAC", undefined, { mac, topic });
-        return;
-    }
-    const formatted = validateLiveDataFormat(parsedMessage, topic);
-    if (!formatted)
-        return;
-    const validated = validateLiveDataContent(formatted);
-    if (!validated)
-        return;
-    const prepared = prepareLiveDataPayload(validated, validMac);
-    if (!prepared)
-        return;
+async function saveWithDeadlockRetry(prepared, validMac) {
     const MAX_DEADLOCK_RETRIES = 2;
     for (let attempt = 0; attempt <= MAX_DEADLOCK_RETRIES; attempt++) {
         try {
@@ -40,6 +27,58 @@ async function processLiveData(parsedMessage, topic, mac) {
             throw err;
         }
     }
+}
+// Multi-motor devices report m1/m2 blocks nested inside the group instead of one
+// flat motor at the group root. Each block is merged with the group's shared
+// fields into a flat object and run through the same single-motor validator and
+// prepareLiveDataPayload — the only difference is which motor row is passed in.
+async function processMultiMotorLiveData(parsedMessage, groupKey, rawGroupData, validMac) {
+    const blocks = extractMultiMotorBlocks(rawGroupData);
+    const { matched, unmatched } = resolveMotorsFromPayload(blocks, validMac.motors);
+    for (const { motorIndex, motor, mergedData } of matched) {
+        const syntheticPayload = { T: parsedMessage.T, S: parsedMessage.S, D: { [groupKey]: mergedData, ct: parsedMessage.D?.ct ?? null } };
+        const validated = validateLiveDataContent({ original: syntheticPayload, groups: { [groupKey]: mergedData } });
+        if (!validated) {
+            logger.warn(`[multi-motor] validation failed for motor_index=${motorIndex}`, { mac: validMac.mac_address });
+            continue;
+        }
+        const prepared = prepareLiveDataPayload(validated, validMac, motor);
+        if (!prepared)
+            continue;
+        await saveWithDeadlockRetry(prepared, validMac);
+    }
+    for (const { motorIndex, mergedData } of unmatched) {
+        const syntheticPayload = { T: parsedMessage.T, S: parsedMessage.S, D: { [groupKey]: mergedData, ct: parsedMessage.D?.ct ?? null } };
+        const validated = validateLiveDataContent({ original: syntheticPayload, groups: { [groupKey]: mergedData } });
+        if (!validated) {
+            logger.warn(`[multi-motor] validation failed for unmatched motor_index=${motorIndex}`, { mac: validMac.mac_address });
+            continue;
+        }
+        await insertParametersForUnmatchedMotor(validMac, motorIndex, validated);
+    }
+}
+async function processLiveData(parsedMessage, topic, mac) {
+    const validMac = await getStarterByMacWithMotor(mac);
+    if (!validMac) {
+        logger.error("Starter not found for MAC", undefined, { mac, topic });
+        return;
+    }
+    const formatted = validateLiveDataFormat(parsedMessage, topic);
+    if (!formatted)
+        return;
+    const groupKey = Object.keys(formatted.groups)[0];
+    const rawGroupData = groupKey ? parsedMessage?.D?.[groupKey] : null;
+    if (validMac.motor_support_type === "MULTIPLE_MOTORS" && groupKey && isMultiMotorPayload(rawGroupData)) {
+        await processMultiMotorLiveData(parsedMessage, groupKey, rawGroupData, validMac);
+        return;
+    }
+    const validated = validateLiveDataContent(formatted);
+    if (!validated)
+        return;
+    const prepared = prepareLiveDataPayload(validated, validMac);
+    if (!prepared)
+        return;
+    await saveWithDeadlockRetry(prepared, validMac);
 }
 export async function liveDataHandler(parsedMessage, topic) {
     if (!parsedMessage)

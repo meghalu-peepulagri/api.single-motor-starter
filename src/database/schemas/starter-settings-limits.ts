@@ -1,10 +1,15 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { starterBoxes } from "./starter-boxes.js";
+import type { MultiMotorSettingsLimitsConfig } from "../../types/multi-motor-settings-types.js";
 
 export const starterSettingsLimits = pgTable("starter_settings_limits", {
   id: serial("id").primaryKey(),
   starter_id: integer("starter_id").references(() => starterBoxes.id).notNull(),
+
+  // Present only for MULTI_STARTER boxes — see starter-settings.ts for the rationale
+  // behind storing per-motor data as JSON instead of a child table.
+  multi_motor_limits: jsonb("multi_motor_limits").$type<MultiMotorSettingsLimitsConfig>(),
 
   // ================= Device Configurations – Settings =================
 
@@ -16,6 +21,32 @@ export const starterSettingsLimits = pgTable("starter_settings_limits", {
 
   as_dly_min: integer("as_dly_min").default(5),
   as_dly_max: integer("as_dly_max"),
+
+  // Trip timing bounds (sec)
+  irt_time_min: real("irt_time_min").default(0),
+  irt_time_max: real("irt_time_max"),
+  lvt_time_min: real("lvt_time_min").default(0),
+  lvt_time_max: real("lvt_time_max"),
+  hvt_time_min: real("hvt_time_min").default(0),
+  hvt_time_max: real("hvt_time_max"),
+  ipt_time_min: real("ipt_time_min").default(0),
+  ipt_time_max: real("ipt_time_max"),
+  drt_time_min: real("drt_time_min").default(0),
+  drt_time_max: real("drt_time_max"),
+  olt_time_min: real("olt_time_min").default(0),
+  olt_time_max: real("olt_time_max"),
+  opt_time_min: real("opt_time_min").default(0),
+  opt_time_max: real("opt_time_max"),
+  cit_time_min: real("cit_time_min").default(0),
+  cit_time_max: real("cit_time_max"),
+
+  // Star-delta timing bounds
+  step_delay_min: integer("step_delay_min").default(0),
+  step_delay_max: integer("step_delay_max"),
+  start_time_min: integer("start_time_min").default(0),
+  start_time_max: integer("start_time_max"),
+  transfer_time_min: integer("transfer_time_min").default(0),
+  transfer_time_max: integer("transfer_time_max"),
 
   tpf_min: real("tpf_min").default(0),
   tpf_max: real("tpf_max").default(10),

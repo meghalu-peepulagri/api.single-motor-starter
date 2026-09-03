@@ -19,9 +19,10 @@ export type ValidatedRequest = ValidatedSignUpUser | ValidatedSignInEmail | Vali
   | ValidatedMotorScheduleArray | ValidatedUpdateMotorSchedule | ValidatedAddRepeatDays | validatedAssignStarter | validatedReplaceStarter | validatedAssignStarterWeb | validatedUpdateDeployedStatus | validatedAssignLocationToStarter | ValidatedUpdateDefaultSettings | ValidatedUpdateDefaultSettingsLimits | ValidatedAddStarterDispatch | ValidatedAddGateway | ValidatedUpdateGatewayLabel | ValidatedRenameGateway | ValidatedAssignGatewayToUser | ValidatedUpdateGatewayNumber | validatedUpdateInstalledLocation
   | CreateSubUserInput | UpdateSubUserInput | UpdatePermissionsInput | RemovePermissionsInput;
 
-export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
-  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-installed-location" |
-  "create-sub-user" | "update-sub-user" | "set-sub-user-permissions" | "remove-sub-user-permissions";
+export type AppActivity = "signup" | "signin-email" | "add-location" | "signin-phone" | "verify-otp" | "add-field" | "add-motor" | "update-motor" | "update-motor-test-run-status" | "add-starter" | "update-starter-details" | "create-motor-schedule" | "create-bulk-motor-schedule" | "update-motor-schedule" | "add-repeat-days" | "assign-starter" | "replace-starter" |
+  "assign-starter-web" | "update-deployed-status" | "assign-location-to-starter" | "update-default-settings" | "default-settings-starter-type" | "update-default-settings-limits" | "add-starter-dispatch" | "update-starter-dispatch" | "add-gateway" | "update-gateway-label" | "rename-gateway" | "assign-gateway" | "update-gateway-number" | "update-installed-location" |
+  "create-sub-user" | "update-sub-user" | "set-sub-user-permissions" | "remove-sub-user-permissions" | "control-motors" | "control-motors-mode" | "update-multi-motor-settings" |
+  "add-motor-to-starter";
 
 export interface IResp {
   status: ContentfulStatusCode;
@@ -61,6 +62,13 @@ export interface starterBoxPayloadType {
   starter_number: string;
   mac_address?: string | null | undefined;
   gateway_id?: number | null | undefined;
+  device_mobile_number?: string | null | undefined;
+  hardware_version?: string | null | undefined;
+  motor_support_type?: "SINGLE_MOTOR" | "MULTIPLE_MOTORS";
+  starter_type?: "SINGLE_STARTER" | "MULTI_STARTER";
+  motor_starter_type?: "STAR_RELAY" | "CONTACTOR" | "STAR_DELTA";
+  payload_version?: "1.0" | "2.0";
+  motors?: { name: string; hp: number; motor_reference?: string | null }[];
 }
 
 export interface ValidationOutput {
@@ -75,11 +83,11 @@ export interface ValidationOutput {
 
 export interface AssignStarterType {
   pcb_number: string;
-  motor_name: string;
   location_id: number;
-  hp: number;
   device_installed_location?: string | null;
   installation_photo_key?: string;
+  // Unified single & dual motor input: one entry per motor of the device.
+  motors: { motor_id: number; motor_name: string; hp?: number; motor_reference?: string | null }[];
 }
 
 export interface RetryOptions {

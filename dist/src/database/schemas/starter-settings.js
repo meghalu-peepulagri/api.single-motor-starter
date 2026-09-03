@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, pgEnum, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgEnum, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
 import { starterBoxes } from "./starter-boxes.js";
 import { users } from "./users.js";
 export const acknowledgementEnum = pgEnum("acknowledgement_enum", ["TRUE", "FALSE"]);
@@ -12,6 +12,22 @@ export const starterSettings = pgTable("starter_settings", {
     flc: real("flc").default(1.65), // Motor Full Load Current
     as_dly: integer("as_dly").default(5), // Auto Start Seed Time for Motor
     pr_flt_en: integer("pr_flt_en").default(0),
+    // ================= Trip timings (sec) =================
+    // real, not integer — trip times are fractional (e.g. 0.5).
+    irt_time: real("irt_time").default(0.5), // Inrush / locked rotor trip time
+    lvt_time: real("lvt_time").default(2), // Low voltage trip time
+    hvt_time: real("hvt_time").default(3), // High voltage trip time
+    ipt_time: real("ipt_time").default(2), // Input phase failure trip time
+    drt_time: real("drt_time").default(2), // Dry run trip time
+    olt_time: real("olt_time").default(3), // Overload trip time
+    opt_time: real("opt_time").default(2), // Output phase failure trip time
+    cit_time: real("cit_time").default(2), // Current imbalance trip time
+    // ================= Star-delta timings =================
+    // Device payload mapping: start_time -> sd_time, step_delay -> step_dly,
+    // transfer_time -> tf_time.
+    step_delay: integer("step_delay").default(0),
+    start_time: integer("start_time").default(0),
+    transfer_time: integer("transfer_time").default(0),
     tpf: real("tpf").default(0), // Time per fault
     // Enables (2 fields)
     v_en: integer("v_en").default(0), // Voltage faults enable
@@ -108,6 +124,13 @@ export const starterSettings = pgTable("starter_settings", {
     ivrs_en: integer("ivrs_en").default(0),
     sms_en: integer("sms_en").default(0),
     rmt_en: integer("rmt_en").default(0),
+    // ================= Multi-motor Configuration =================
+    // Present only for MULTI_STARTER boxes (starter_boxes.starter_type === "MULTI_STARTER").
+    // Holds the shared box-level fields new to multi-motor (v_flt_en, sd_time) plus one
+    // block per motor. Kept as a single JSON column, not a child table, so this feature
+    // never touches the columns/queries the existing SINGLE_STARTER flow already relies on,
+    // and so the per-motor field list can evolve without further schema migrations.
+    multi_motor_config: jsonb("multi_motor_config").$type(),
     time_stamp: timestamp("time_stamp").defaultNow(),
     is_new_configuration_saved: integer("is_new_configuration_saved").default(1),
     acknowledgement: acknowledgementEnum().default("FALSE"),

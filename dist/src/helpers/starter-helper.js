@@ -5,16 +5,41 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 // import { randomSequenceNumber } from "./mqtt-helpers.js";
 // import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
+import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID } from "../constants/app-constants.js";
 import { getStartersWithSimRechargeExpiry } from "../services/db/starter-services.js";
 export function prepareStarterData(starterBoxPayload, userPayload, dispatchDetails, gatewayId) {
-    const motorDetails = {
-        name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
-        hp: 2,
-    };
+    const { motors: motorsInput, ...starterFields } = starterBoxPayload;
+    // One row per motor from the "Motors" section (M1, M2...), each with its own motor_index.
+    // Fall back to the legacy single default motor when no motors are supplied.
+    const motorsList = Array.isArray(motorsInput) && motorsInput.length > 0
+        ? motorsInput.map((motor, index) => ({
+            name: motor.name,
+            hp: String(motor.hp),
+            motor_index: index + 1,
+            motor_reference: motor.motor_reference ?? null,
+        }))
+        : [{
+                name: `Pump 1 - ${starterBoxPayload.pcb_number}`,
+                hp: "2",
+                motor_index: 1,
+            }];
+    // Single vs multiple motor drives motor_support_type; starter_type honors the payload value
+    // when sent, otherwise falls back to the same single/multiple derivation.
+    const isMultiMotor = motorsList.length > 1;
+    const motor_support_type = isMultiMotor ? "MULTIPLE_MOTORS" : "SINGLE_MOTOR";
+    const starter_type = starterFields.starter_type ?? (isMultiMotor ? "MULTI_STARTER" : "SINGLE_STARTER");
+    // A dual-motor box has no 1.0 payload shape (nowhere to put m2), so it is always 2.0.
+    // A single-motor box honours the Admin Panel's choice and defaults to 1.0 — the safe
+    // assumption for a board whose firmware we haven't been told about.
+    if (isMultiMotor && starterFields.payload_version === "1.0") {
+        throw new BadRequestException(PAYLOAD_VERSION_DUAL_MOTOR_INVALID);
+    }
+    const payload_version = isMultiMotor ? "2.0" : (starterFields.payload_version ?? "1.0");
     return {
-        ...starterBoxPayload, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorDetails,
+        ...starterFields, status: "INACTIVE", device_status: "READY", created_by: userPayload.id, motorsList, motor_support_type, starter_type, payload_version,
         sim_recharge_expires_at: dispatchDetails?.sim_recharge_end_date, warranty_expiry_date: dispatchDetails?.warranty_end_date,
-        device_mobile_number: dispatchDetails?.sim_no, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
+        device_mobile_number: dispatchDetails?.sim_no ?? starterFields.device_mobile_number, hardware_version: dispatchDetails?.hardware_version, gateway_id: gatewayId
     };
 }
 ;
@@ -47,6 +72,23 @@ export function starterFilters(query, user) {
         filters.push(eq(starterBoxes.status, query.status));
     if (query.location_id)
         filters.push(eq(starterBoxes.location_id, query.location_id));
+    // Filter by motor type based on the ACTUAL number of (non-archived) motors, so it matches
+    // what the UI renders (single toggle vs M1/M2) — not the motor_support_type column, which
+    // can be out of sync with the real motor count.
+    // ?motor_type=single -> exactly 1 motor, ?motor_type=dual -> 2 or more motors.
+    if (query.motor_type) {
+        const motorType = String(query.motor_type).trim().toLowerCase();
+        const motorCount = sql `(
+      SELECT COUNT(*) FROM ${motors} AS m
+      WHERE m.starter_id = ${starterBoxes.id} AND m.status <> 'ARCHIVED'
+    )`;
+        if (motorType === "single") {
+            filters.push(sql `${motorCount} = 1`);
+        }
+        else if (motorType === "dual" || motorType === "multiple" || motorType === "multi") {
+            filters.push(sql `${motorCount} >= 2`);
+        }
+    }
     if (query.power) {
         const powerValue = query.power === "ON" ? 1 : query.power === "OFF" ? 0 : undefined;
         if (powerValue !== undefined) {

@@ -117,6 +117,7 @@ import type { ScheduleForEvaluation } from "../types/app-types.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { handleAppError } from "../utils/on-error.js";
 import { logger } from "../utils/logger.js";
+import { isV2Payload } from "../helpers/payload-version-helper.js";
 import { sendResponse } from "../utils/send-response.js";
 import type {
   ValidatedAddRepeatDays,
@@ -159,7 +160,24 @@ export class MotorScheduleHandler {
         entityType: "SCHEDULE",
         newData: logNewData,
       });
-      return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED);
+
+      // Return motor_reference (from the motor) + motor_support_type/starter_type (from the
+      // starter box) so the client knows which motor slot (m1/m2...) and box type this
+      // schedule belongs to. All schedules in a bulk create share one motor, so resolve once.
+      const firstReq = Array.isArray(reqData) ? reqData[0] : reqData;
+      const scheduleMeta: { motor_reference: string | null; motor_support_type: string | null; starter_type: string | null } =
+        { motor_reference: null, motor_support_type: null, starter_type: null };
+      if (firstReq?.motor_id) {
+        const motorForMeta = await getRecordById(motors, firstReq.motor_id, ["motor_reference"]) as { motor_reference: string | null } | null;
+        scheduleMeta.motor_reference = motorForMeta?.motor_reference ?? null;
+      }
+      if (firstReq?.starter_id) {
+        const starterForMeta = await getRecordById(starterBoxes, firstReq.starter_id, ["motor_support_type", "starter_type"]) as { motor_support_type: string | null; starter_type: string | null } | null;
+        scheduleMeta.motor_support_type = starterForMeta?.motor_support_type ?? null;
+        scheduleMeta.starter_type = starterForMeta?.starter_type ?? null;
+      }
+
+      return sendResponse(c, 201, isBulk ? MULTIPLE_SCHEDULES_CREATED : SCHEDULED_CREATED, scheduleMeta);
     } catch (error: any) {
       handleAppError(error, "create Motor Schedule");
     }
@@ -244,10 +262,17 @@ export class MotorScheduleHandler {
       await updateRecordById<MotorScheduleTable>(motorSchedules, scheduleId, { ...buildScheduleData(data, scheduleStartDate), edited_at: new Date() });
 
       let pcbForEditLog: string | null = null;
+      let motorSupportType: string | null = null;
+      let starterType: string | null = null;
       if (existed.starter_id) {
-        const starterForLog = await getRecordById(starterBoxes, existed.starter_id, ["pcb_number"]) as { pcb_number: string | null } | null;
+        const starterForLog = await getRecordById(starterBoxes, existed.starter_id, ["pcb_number", "motor_support_type", "starter_type"]) as { pcb_number: string | null; motor_support_type: string | null; starter_type: string | null } | null;
         pcbForEditLog = starterForLog?.pcb_number ?? null;
+        motorSupportType = starterForLog?.motor_support_type ?? null;
+        starterType = starterForLog?.starter_type ?? null;
       }
+      const motorForMeta = existed.motor_id
+        ? await getRecordById(motors, existed.motor_id, ["motor_reference"]) as { motor_reference: string | null } | null
+        : null;
       const changedParts: string[] = [];
       if (data.start_time !== existed.start_time) changedParts.push(`Start time: ${formatHHMM(existed.start_time)} → ${formatHHMM(data.start_time)}`);
       if (data.end_time !== existed.end_time) changedParts.push(`End time: ${formatHHMM(existed.end_time)} → ${formatHHMM(data.end_time)}`);
@@ -266,7 +291,11 @@ export class MotorScheduleHandler {
         oldData: { schedule_status: existed.schedule_status },
         newData: editLogNewData,
       });
-      return sendResponse(c, 200, SCHEDULE_UPDATED);
+      return sendResponse(c, 200, SCHEDULE_UPDATED, {
+        motor_reference: motorForMeta?.motor_reference ?? null,
+        motor_support_type: motorSupportType,
+        starter_type: starterType,
+      });
     } catch (error: any) {
       handleAppError(error, "edit motor Schedule");
     }
@@ -280,8 +309,8 @@ export class MotorScheduleHandler {
       paramsValidateException.validateId(scheduleId, "schedule id");
 
       const existed = await getRecordById<MotorScheduleTable>(motorSchedules, scheduleId, [
-        "id", "schedule_status", "acknowledgement", "start_time", "end_time", "schedule_start_date", "starter_id"
-      ]) as Pick<MotorSchedule, "id" | "schedule_status" | "acknowledgement" | "start_time" | "end_time" | "schedule_start_date" | "starter_id"> | null;
+        "id", "schedule_status", "acknowledgement", "start_time", "end_time", "schedule_start_date", "starter_id", "motor_id"
+      ]) as Pick<MotorSchedule, "id" | "schedule_status" | "acknowledgement" | "start_time" | "end_time" | "schedule_start_date" | "starter_id" | "motor_id"> | null;
       if (!existed) throw new BadRequestException(SCHEDULE_NOT_FOUND);
 
       let pcbForDeleteLog: string | null = null;
@@ -295,8 +324,8 @@ export class MotorScheduleHandler {
         schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false,
       });
 
-      if (existed.starter_id) {
-        syncLastDeviceScheduleId(existed.starter_id).catch(() => null);
+      if (existed.motor_id) {
+        syncLastDeviceScheduleId(existed.motor_id).catch(() => null);
       }
 
       if (existed.acknowledgement === 1) {
@@ -495,10 +524,11 @@ export class MotorScheduleHandler {
         throw new BadRequestException(BULK_SCHEDULE_IDS_REQUIRED);
       }
 
-      // Fetch starter_id so we can update last_device_schedule_id
+      // Fetch motor_id so we can update each motor's own last_device_schedule_id —
+      // each motor has its own independent slot table, not a shared per-starter one.
       const rows = await db.query.motorSchedules.findMany({
         where: inArray(motorSchedules.id, scheduleIds),
-        columns: { id: true, schedule_id: true, starter_id: true },
+        columns: { id: true, schedule_id: true, starter_id: true, motor_id: true },
       });
 
       await db.update(motorSchedules)
@@ -516,33 +546,33 @@ export class MotorScheduleHandler {
               .where(eq(motorSchedules.id, id));
           })
         );
-        // Update last_device_schedule_id to max slot used, grouped by starter.
-        const byStarter = new Map<number, number[]>();
+        // Update last_device_schedule_id to max slot used, grouped by motor.
+        const byMotor = new Map<number, number[]>();
         for (const row of rows) {
-          if (!row.starter_id) continue;
+          if (!row.motor_id) continue;
           const deviceId = slotMap[String(row.id)];
           if (deviceId == null) continue;
-          const list = byStarter.get(row.starter_id) ?? [];
+          const list = byMotor.get(row.motor_id) ?? [];
           list.push(deviceId);
-          byStarter.set(row.starter_id, list);
+          byMotor.set(row.motor_id, list);
         }
-        for (const [starterId, deviceIds] of byStarter) {
+        for (const [motorId, deviceIds] of byMotor) {
           const maxId = Math.max(...deviceIds);
-          await db.update(starterBoxes)
+          await db.update(motors)
             .set({ last_device_schedule_id: sql`GREATEST(last_device_schedule_id, ${maxId})` })
-            .where(eq(starterBoxes.id, starterId));
+            .where(eq(motors.id, motorId));
         }
       } else {
         // Fallback: assign device_schedule_id via last+1 increment (legacy / no slot_map provided).
-        const byStarter = new Map<number, { id: number; schedule_id: number }[]>();
+        const byMotor = new Map<number, { id: number; schedule_id: number }[]>();
         for (const row of rows) {
-          if (!row.starter_id) continue;
-          const list = byStarter.get(row.starter_id) ?? [];
+          if (!row.motor_id) continue;
+          const list = byMotor.get(row.motor_id) ?? [];
           list.push({ id: row.id, schedule_id: row.schedule_id });
-          byStarter.set(row.starter_id, list);
+          byMotor.set(row.motor_id, list);
         }
-        for (const [starterId, records] of byStarter) {
-          await assignDeviceScheduleIds(starterId, records);
+        for (const [motorId, records] of byMotor) {
+          await assignDeviceScheduleIds(motorId, records);
         }
       }
 
@@ -644,16 +674,17 @@ export class MotorScheduleHandler {
 
       const toDelete = await db.query.motorSchedules.findMany({
         where: inArray(motorSchedules.id, ids),
-        columns: { starter_id: true },
+        columns: { starter_id: true, motor_id: true },
       });
 
       await db.update(motorSchedules)
         .set({ schedule_status: "DELETED", deleted_by: userPayload.id, deleted_at: new Date(), status: "ARCHIVED", enabled: false, updated_at: new Date() })
         .where(inArray(motorSchedules.id, ids));
 
-      const starterIds = [...new Set(toDelete.map(r => r.starter_id).filter((id): id is number => id != null))];
-      for (const sid of starterIds) {
-        syncLastDeviceScheduleId(sid).catch(() => null);
+      // Each motor owns its own slot counter, so resync per motor, not per starter.
+      const motorIds = [...new Set(toDelete.map(r => r.motor_id).filter((id): id is number => id != null))];
+      for (const mid of motorIds) {
+        syncLastDeviceScheduleId(mid).catch(() => null);
       }
 
       await ActivityService.logActivity({
@@ -764,7 +795,9 @@ export class MotorScheduleHandler {
 
       if (records.length === 0) return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
 
-      // Delete expired schedules per starter and assign sequential device_schedule_ids from 1.
+      // Delete expired schedules per starter, then assign sequential device_schedule_ids
+      // from 1 PER MOTOR — each motor has its own independent slot table on the device,
+      // so a dual-motor box's m1 and m2 schedules are numbered independently.
       const starterIds = [...new Set(records.map(r => r.starter_id).filter((id): id is number => id != null))];
       for (const starterId of starterIds) {
         const freed = await findAndDeleteExpiredSchedules(starterId);
@@ -772,14 +805,24 @@ export class MotorScheduleHandler {
           logger.info(`[sync/pending] starter=${starterId} cleared ${freed.length} expired schedule(s)`);
         }
         const starterRecords = records.filter(r => r.starter_id === starterId);
-        await Promise.all(starterRecords.map((r, i) => {
-          (r as any).device_schedule_id = i + 1;
-          return db.update(motorSchedules)
-            .set({ device_schedule_id: i + 1 })
-            .where(eq(motorSchedules.id, r.id))
-            .catch(() => null);
-        }));
-        logger.info(`[sync/pending] starter=${starterId} assigned device_schedule_ids=[${starterRecords.map((_, i) => i + 1).join(",")}]`);
+        const byMotor = new Map<number, typeof starterRecords>();
+        for (const r of starterRecords) {
+          const motorId = (r as any).motor_id;
+          if (motorId == null) continue;
+          const list = byMotor.get(motorId) ?? [];
+          list.push(r);
+          byMotor.set(motorId, list);
+        }
+        for (const [motorId, motorRecords] of byMotor) {
+          await Promise.all(motorRecords.map((r, i) => {
+            (r as any).device_schedule_id = i + 1;
+            return db.update(motorSchedules)
+              .set({ device_schedule_id: i + 1 })
+              .where(eq(motorSchedules.id, r.id))
+              .catch(() => null);
+          }));
+          logger.info(`[sync/pending] starter=${starterId} motor=${motorId} assigned device_schedule_ids=[${motorRecords.map((_, i) => i + 1).join(",")}]`);
+        }
       }
 
       const ackedRows = starterIds.length > 0
@@ -794,7 +837,13 @@ export class MotorScheduleHandler {
       const ackedStarterSet = new Set(ackedRows.map(r => r.starter_id).filter((id): id is number => id != null))
       const firstSyncStarterIds = new Set(starterIds.filter(id => !ackedStarterSet.has(id)))
 
-      const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
+      // Single-motor boxes get the flat `sch` payload; multi-motor keeps the `m1` shape.
+      const singleMotorRows = starterIds.length > 0
+        ? await db.select({ id: starterBoxes.id, mst: starterBoxes.motor_support_type }).from(starterBoxes).where(inArray(starterBoxes.id, starterIds))
+        : [];
+      const singleMotorStarterIds = new Set(singleMotorRows.filter(r => r.mst === "SINGLE_MOTOR").map(r => r.id));
+
+      const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds, singleMotorStarterIds);
       const starters = await db.select().from(starterBoxes).where(inArray(starterBoxes.id, grouped.map(g => g.starter_id)));
       const starterMap = new Map(starters.map(s => [s.id, s]));
 
@@ -812,7 +861,7 @@ export class MotorScheduleHandler {
 
         totalDevices++;
         const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
-        for (const { payload, dbIds, scheduleIds } of chunks) {
+        for (const { payload, dbIds, scheduleIds, motorRefs } of chunks) {
           totalChunks++;
 
           // Re-verify these records are still PENDING before publishing.
@@ -826,21 +875,24 @@ export class MotorScheduleHandler {
           const stillPendingIds = new Set(stillPending.map(r => r.id));
           const verifiedDbIds = dbIds.filter(id => stillPendingIds.has(id));
           const verifiedScheduleIds = scheduleIds.filter((_, i) => stillPendingIds.has(dbIds[i]));
+          const verifiedMotorRefs = motorRefs.filter((_, i) => stillPendingIds.has(dbIds[i]));
 
           if (await publishMultipleTimesInBackground(payload, starter)) {
             // Read partial ACK bitmask — device may have confirmed only a subset of schedule_ids.
             const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
             if (publishKey) schedulePartialAckMap.delete(publishKey);
 
-            // Build (dbId, schedule_id) pairs from verified-still-PENDING records only.
-            const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i] }));
-            const confirmedPairs = partialIds && partialIds.length > 0
+            // Build (dbId, schedule_id, motor_ref) triples from verified-still-PENDING records
+            // only. Each motor has its own slot table, so schedule_id (the device slot) is only
+            // meaningful paired with which motor's ACK bitmask it should be matched against.
+            const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i], motor_ref: verifiedMotorRefs[i] }));
+            const confirmedPairs = partialIds && Object.keys(partialIds).length > 0
               ? (() => {
-                  const confirmedSet = new Set(partialIds);
-                  const matched = allPairs.filter(p => confirmedSet.has(p.schedule_id));
-                  const unmatched = scheduleIds.filter(sid => !confirmedSet.has(sid));
+                  const matched = allPairs.filter(p => partialIds[p.motor_ref]?.includes(p.schedule_id) ?? false);
+                  const confirmedDesc = Object.entries(partialIds).map(([ref, ids]) => `${ref}=[${ids.join(",")}]`).join(" ");
+                  const unmatched = scheduleIds.filter((sid, i) => !(partialIds[motorRefs[i]]?.includes(sid) ?? false));
                   if (unmatched.length > 0) {
-                    console.warn(`[schedule-sync] starter=${starter_id} partial ACK: confirmed=[${partialIds.join(",")}] unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
+                    console.warn(`[schedule-sync] starter=${starter_id} partial ACK: confirmed=${confirmedDesc} unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
                   }
                   return matched;
                 })()
@@ -911,12 +963,16 @@ export class MotorScheduleHandler {
         columns: { id: true },
       })
       const firstSyncStarterIds = ackedRow ? new Set<number>() : new Set([starterId])
-      const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
+      // Only V1.0 single-motor boxes get the legacy flat `m1: [...]` array; a V2.0 box uses
+      // the per-motor object form produced by the multi-motor branch. See schedule-sync-helper.
+      const starterMstA = await getRecordById(starterBoxes, starterId, ["motor_support_type", "payload_version"]) as { motor_support_type: string | null; payload_version: string | null } | null;
+      const singleMotorStarterIds = !isV2Payload(starterMstA) && starterMstA?.motor_support_type === "SINGLE_MOTOR" ? new Set([starterId]) : new Set<number>();
+      const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds, singleMotorStarterIds);
 
       let published = 0, failed = 0;
 
       for (const { chunks } of grouped) {
-        for (const { payload, dbIds, scheduleIds } of chunks) {
+        for (const { payload, dbIds, scheduleIds, motorRefs } of chunks) {
           // Re-verify still PENDING before publishing
           const stillPending = await db.query.motorSchedules.findMany({
             where: (ms, { and: a, inArray: inArr, eq: e }) =>
@@ -927,6 +983,7 @@ export class MotorScheduleHandler {
           const stillPendingIds = new Set(stillPending.map(r => r.id));
           const verifiedDbIds = dbIds.filter(id => stillPendingIds.has(id));
           const verifiedScheduleIds = scheduleIds.filter((_, i) => stillPendingIds.has(dbIds[i]));
+          const verifiedMotorRefs = motorRefs.filter((_, i) => stillPendingIds.has(dbIds[i]));
 
           // Don't let a mid-flight heartbeat publish cause this resync to be skipped.
           await waitForPublishSlot(starterId);
@@ -936,14 +993,15 @@ export class MotorScheduleHandler {
             const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
             if (publishKey) schedulePartialAckMap.delete(publishKey);
 
-            const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i] }));
-            const confirmedPairs = partialIds && partialIds.length > 0
+            // Each motor has its own slot table, so match confirmed slots per motor_ref.
+            const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i], motor_ref: verifiedMotorRefs[i] }));
+            const confirmedPairs = partialIds && Object.keys(partialIds).length > 0
               ? (() => {
-                  const confirmedSet = new Set(partialIds);
-                  const matched = allPairs.filter(p => confirmedSet.has(p.schedule_id));
-                  const unmatched = verifiedScheduleIds.filter(sid => !confirmedSet.has(sid));
+                  const matched = allPairs.filter(p => partialIds[p.motor_ref]?.includes(p.schedule_id) ?? false);
+                  const confirmedDesc = Object.entries(partialIds).map(([ref, ids]) => `${ref}=[${ids.join(",")}]`).join(" ");
+                  const unmatched = verifiedScheduleIds.filter((sid, i) => !(partialIds[verifiedMotorRefs[i]]?.includes(sid) ?? false));
                   if (unmatched.length > 0) {
-                    logger.warn(`[republish] starter=${starterId} partial ACK: confirmed=[${partialIds.join(",")}] unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
+                    logger.warn(`[republish] starter=${starterId} partial ACK: confirmed=${confirmedDesc} unmatched=[${unmatched.join(",")}] — unmatched stay PENDING`);
                   }
                   return matched;
                 })()
@@ -1101,11 +1159,15 @@ export class MotorScheduleHandler {
         columns: { id: true },
       });
       const firstSyncStarterIds = ackedRow ? new Set<number>() : new Set([starterId]);
-      const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds);
+      // Only V1.0 single-motor boxes get the legacy flat `m1: [...]` array; a V2.0 box uses
+      // the per-motor object form produced by the multi-motor branch. See schedule-sync-helper.
+      const starterMstB = await getRecordById(starterBoxes, starterId, ["motor_support_type", "payload_version"]) as { motor_support_type: string | null; payload_version: string | null } | null;
+      const singleMotorStarterIds = !isV2Payload(starterMstB) && starterMstB?.motor_support_type === "SINGLE_MOTOR" ? new Set([starterId]) : new Set<number>();
+      const grouped = buildDeviceSyncPayloads(records, firstSyncStarterIds, singleMotorStarterIds);
 
       let published = 0, failed = 0;
       for (const { chunks } of grouped) {
-        for (const { payload, dbIds, scheduleIds } of chunks) {
+        for (const { payload, dbIds, scheduleIds, motorRefs } of chunks) {
           // Re-verify still PENDING before publishing
           const stillPending = await db.query.motorSchedules.findMany({
             where: (ms, { and: a, inArray: inArr, eq: e }) => a(inArr(ms.id, dbIds), e(ms.acknowledgement, 0)),
@@ -1115,6 +1177,7 @@ export class MotorScheduleHandler {
           const stillPendingIds = new Set(stillPending.map(r => r.id));
           const verifiedDbIds = dbIds.filter(id => stillPendingIds.has(id));
           const verifiedScheduleIds = scheduleIds.filter((_, i) => stillPendingIds.has(dbIds[i]));
+          const verifiedMotorRefs = motorRefs.filter((_, i) => stillPendingIds.has(dbIds[i]));
 
           // Don't let a mid-flight heartbeat publish cause this resync to be skipped.
           await waitForPublishSlot(starterId);
@@ -1124,9 +1187,10 @@ export class MotorScheduleHandler {
             const partialIds = publishKey ? schedulePartialAckMap.get(publishKey) : undefined;
             if (publishKey) schedulePartialAckMap.delete(publishKey);
 
-            const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i] }));
-            const confirmedPairs = partialIds && partialIds.length > 0
-              ? allPairs.filter(p => new Set(partialIds).has(p.schedule_id))
+            // Each motor has its own slot table, so match confirmed slots per motor_ref.
+            const allPairs = verifiedDbIds.map((id, i) => ({ id, schedule_id: verifiedScheduleIds[i], motor_ref: verifiedMotorRefs[i] }));
+            const confirmedPairs = partialIds && Object.keys(partialIds).length > 0
+              ? allPairs.filter(p => partialIds[p.motor_ref]?.includes(p.schedule_id) ?? false)
               : allPairs;
             if (confirmedPairs.length === 0) continue;
             const confirmedDbIds = confirmedPairs.map(p => p.id);

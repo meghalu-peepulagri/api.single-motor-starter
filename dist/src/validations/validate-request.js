@@ -4,11 +4,12 @@ import { validationErrors } from "../utils/on-error.js";
 import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vAddMotorSchedule, vAddRepeatDays, vArrayOfMotorScheduleValidators, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
-import { vAddMotor, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
-import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation } from "./schema/starter-validations.js";
+import { vAddMotor, vAddMotorToStarter, vControlMotors, vControlMotorsMode, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
+import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation, vUpdateStarterDetails } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
-import { vUpdateDefaultSettings } from "./schema/default-settings.js";
+import { vDefaultSettingsStarterType, vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
+import { vUpdateMultiMotorSettings } from "./schema/multi-motor-settings-validations.js";
 import { vAddStarterDispatch } from "./schema/starter-dispatch-validations.js";
 import { vAddGateway, vAssignGatewayToUser, vRenameGateway, vUpdateGatewayLabel, vUpdateGatewayNumber } from "./schema/gateway-validations.js";
 import { createSubUserSchema, updateSubUserSchema, updatePermissionsSchema, removePermissionsSchema } from "./schema/sub-user-validations.js";
@@ -22,9 +23,13 @@ const schemaMap = {
     "verify-otp": vVerifyOtp,
     "add-field": vAddField,
     "add-motor": vAddMotor,
+    "add-motor-to-starter": vAddMotorToStarter,
     "update-motor": vUpdateMotor,
     "update-motor-test-run-status": vUpdateMotorTestRunStatus,
+    "control-motors": vControlMotors,
+    "control-motors-mode": vControlMotorsMode,
     "add-starter": vAddStarter,
+    "update-starter-details": vUpdateStarterDetails,
     "create-motor-schedule": vAddMotorSchedule,
     "create-bulk-motor-schedule": vArrayOfMotorScheduleValidators,
     "update-motor-schedule": vUpdateMotorSchedule,
@@ -35,7 +40,9 @@ const schemaMap = {
     "update-deployed-status": vUpdateDeployedStatus,
     "assign-location-to-starter": vAssignLocationToStarter,
     "update-default-settings": vUpdateDefaultSettings,
+    "default-settings-starter-type": vDefaultSettingsStarterType,
     "update-default-settings-limits": vUpdateDefaultSettingsLimits,
+    "update-multi-motor-settings": vUpdateMultiMotorSettings,
     "add-starter-dispatch": vAddStarterDispatch,
     "update-starter-dispatch": vAddStarterDispatch,
     "add-gateway": vAddGateway,

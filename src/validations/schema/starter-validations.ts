@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import { DEPLOYED_STATUS, DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, USER_ID_REQUIRED } from "../../constants/app-constants.js";
+import { DEPLOYED_STATUS, DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, MOTORS_ARRAY_REQUIRED, USER_ID_REQUIRED } from "../../constants/app-constants.js";
 import { hardwareVersion, hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, pcbOrSerialNumberValidator, requiredNumber, simNumberValidator, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
 const deviceStatusValidator = v.picklist(DEPLOYED_STATUS, "Invalid device status");
 
@@ -14,14 +14,74 @@ export const vAddStarter = v.object({
   hardware_version: hardwareVersion,
   device_mobile_number: v.nullish(v.optional(simNumberValidator)),
 
+  // "Motor Type" + "Starter Type" toggles and the per-motor list (M1, M2...) from the
+  // Add Device & Motors screen. All optional so existing single-motor callers that omit
+  // them keep working (they fall back to one default motor).
+  motor_support_type: v.optional(v.picklist(["SINGLE_MOTOR", "MULTIPLE_MOTORS"], "Invalid motor type")),
+  starter_type: v.optional(v.picklist(["SINGLE_STARTER", "MULTI_STARTER"], "Invalid starter type")),
+  motor_starter_type: v.optional(v.picklist(["STAR_RELAY", "CONTACTOR", "STAR_DELTA"], "Invalid motor starter type")),
+  // Which payload grammar the board's firmware speaks. Omitted -> derived from the
+  // motor count in prepareStarterData (dual must be 2.0; single defaults to 1.0).
+  payload_version: v.optional(v.picklist(["1.0", "2.0"], "Invalid payload version")),
+  motors: v.optional(v.pipe(
+    v.array(v.object({
+      name: motorNameValidator,
+      hp: hpValidator,
+      motor_reference: v.nullish(v.optional(v.string())),
+    })),
+    v.minLength(1, MOTORS_ARRAY_REQUIRED),
+    v.maxLength(2, "A device supports at most 2 motors"),
+  )),
 });
+
+/**
+ * Partial update for PATCH /starters/:id/details.
+ *
+ * The handler previously reused vAddStarter, whose pcb_number / starter_number /
+ * mac_address are required for creation — so a screen sending only the fields it changed
+ * got a 422 on those three, and the starter type never reached the database. Everything
+ * here is optional; the handler writes only the keys that actually arrived.
+ *
+ * `motors` is deliberately absent: it is not a column on starter_boxes, so letting it
+ * through would push an unknown key into the UPDATE statement.
+ */
+export const vUpdateStarterDetails = v.object({
+  name: v.optional(starterBoxTitleValidator),
+  pcb_number: v.optional(pcbNumberValidator),
+  starter_number: v.optional(starterNumberValidator),
+  mac_address: v.optional(macAddressValidator),
+
+  gateway_id: v.optional(v.union([v.number(), v.null()])),
+  hardware_version: v.optional(hardwareVersion),
+  device_mobile_number: v.nullish(v.optional(simNumberValidator)),
+
+  motor_support_type: v.optional(v.picklist(["SINGLE_MOTOR", "MULTIPLE_MOTORS"], "Invalid motor type")),
+  starter_type: v.optional(v.picklist(["SINGLE_STARTER", "MULTI_STARTER"], "Invalid starter type")),
+  motor_starter_type: v.optional(v.picklist(["STAR_RELAY", "CONTACTOR", "STAR_DELTA"], "Invalid motor starter type")),
+  // Switching a board between payload grammars. Valid both ways for a single-motor
+  // box; a dual box can never go to 1.0 (the handler rejects that pair). A change here
+  // forces a full re-sync so the device stops running the old format.
+  payload_version: v.optional(v.picklist(["1.0", "2.0"], "Invalid payload version")),
+});
+
+export type ValidatedUpdateStarterDetails = v.InferOutput<typeof vUpdateStarterDetails>;
 
 export const vAssignStarter = v.object({
   pcb_number: pcbOrSerialNumberValidator,
-  motor_name: motorNameValidator,
   location_id: requiredNumber(LOCATION_REQUIRED),
-  hp: hpValidator,
   device_installed_location: v.nullish(v.optional(v.string())),
+
+  // Unified single & dual motor input: one entry per motor (single = array of 1, dual = array of 2).
+  motors: v.pipe(
+    v.array(v.object({
+      motor_id: requiredNumber(MOTOR_ID_REQUIRED),
+      motor_name: motorNameValidator,
+      hp: v.optional(hpValidator),
+      motor_reference: v.nullish(v.optional(v.string())),
+    })),
+    v.minLength(1, MOTORS_ARRAY_REQUIRED),
+    v.maxLength(2, "A device supports at most 2 motors"),
+  ),
 });
 
 export const vReplaceStarter = v.object({

@@ -1,14 +1,22 @@
-import { MOTOR_ADDED, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA } from "../constants/app-constants.js";
+import { DUAL_MOTOR_CONVERSION_ALREADY_DUAL, DUAL_MOTOR_CONVERSION_DONE, DUAL_MOTOR_CONVERSION_NO_EXISTING_MOTOR, DUAL_MOTOR_CONVERSION_REQUIRES_V2, MOTOR_ADDED, MOTOR_CONTROL_COMMAND_SENT, MOTOR_CONTROL_MOTORS_NOT_FOUND, MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED, MOTOR_CONTROL_VALIDATION_CRITERIA, MOTOR_DELETED, MOTOR_DETAILS_FETCHED, MOTOR_MODE_CONTROL_COMMAND_SENT, MOTOR_MODE_CONTROL_VALIDATION_CRITERIA, MOTOR_NAME_EXISTED, MOTOR_NOT_FOUND, MOTOR_TEST_RUN_STATUS_UPDATED, MOTOR_UPDATED, MOTOR_VALIDATION_CRITERIA, STARTER_BOX_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { motors } from "../database/schemas/motors.js";
+import { isDualMotor, isV2Payload } from "../helpers/payload-version-helper.js";
+import { armSettingsResyncAfterConversion, convertStarterToDualMotor, findSingleLiveMotor } from "../services/db/motor-conversion-services.js";
+import { logger } from "../utils/logger.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
+import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
 import NotFoundException from "../exceptions/not-found-exception.js";
 import { ParamsValidateException } from "../exceptions/params-validate-exception.js";
-import { motorFilters } from "../helpers/motor-helper.js";
+import { motorFilters, motorStarterScopeCondition } from "../helpers/motor-helper.js";
+import { getModeControlStatusDescription, getMotorControlStatusDescription } from "../helpers/packet-types-helper.js";
+import { motorKey } from "../helpers/motor-control-payload-helper.js";
+import { sendMotorControlCommand } from "../helpers/motor-control-sync-helper.js";
+import { sendModeControlCommand } from "../helpers/mode-control-sync-helper.js";
 import { getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
-import { getMotorsLatestRuntime, getMotorsTotalRunOnTime, paginatedMotorsList } from "../services/db/motor-services.js";
+import { getMotorsForStarterControl, getMotorsLatestRuntime, getMotorsTotalRunOnTime, paginatedMotorsList } from "../services/db/motor-services.js";
 import { getMotorWithStarterDetails } from "../services/db/motor-starter-services.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseError } from "../utils/on-error.js";
@@ -50,6 +58,55 @@ export class MotorHandlers {
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
             console.error("Error at add motor :", error);
+            throw error;
+        }
+    };
+    /**
+     * Adds a second motor to an existing single-motor starter, converting it to dual motor.
+     *
+     * Deliberately a separate endpoint from addMotorHandler above, which creates a
+     * standalone motor row and is untouched.
+     *
+     * The box must already be on payload version 2.0: a dual-motor box has no 1.0 payload
+     * shape, and promoting the version here would change the box's payload grammar as a
+     * side effect of what looks like a data-entry action. Same "change one, then the other"
+     * rule the version-switch guard enforces.
+     */
+    addMotorToStarterHandler = async (c) => {
+        try {
+            const starterId = +(c.req.param("starterId") ?? 0);
+            paramsValidateException.validateId(starterId, "Device id");
+            const motorPayload = await c.req.json();
+            paramsValidateException.emptyBodyValidation(motorPayload);
+            const validMotorReq = await validatedRequest("add-motor-to-starter", motorPayload, MOTOR_VALIDATION_CRITERIA);
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            if (!isV2Payload(starter))
+                throw new BadRequestException(DUAL_MOTOR_CONVERSION_REQUIRES_V2);
+            if (isDualMotor(starter))
+                throw new BadRequestException(DUAL_MOTOR_CONVERSION_ALREADY_DUAL);
+            const { motors: liveMotors, only: existingMotor } = await findSingleLiveMotor(starter.id);
+            // The payload grammar defines m1 and m2 only, so two live motors is the ceiling.
+            if (liveMotors.length >= 2)
+                throw new BadRequestException(DUAL_MOTOR_CONVERSION_ALREADY_DUAL);
+            if (!existingMotor)
+                throw new BadRequestException(DUAL_MOTOR_CONVERSION_NO_EXISTING_MOTOR);
+            const { motor, settingsSeeded } = await convertStarterToDualMotor(starter, existingMotor, validMotorReq, c.get("performer_id"));
+            armSettingsResyncAfterConversion(starter.id);
+            if (!settingsSeeded) {
+                // The box has never had an acknowledged settings row, so there was nothing to seed
+                // a per-motor block from. It will publish once its settings are saved for the
+                // first time — until then the conversion is recorded but nothing reaches the device.
+                logger.warn(`[dual-motor-conversion] starter=${starter.id} has no acknowledged settings row; multi_motor_config not seeded`);
+            }
+            return sendResponse(c, 201, DUAL_MOTOR_CONVERSION_DONE, { motor_id: motor.id, settings_seeded: settingsSeeded });
+        }
+        catch (error) {
+            console.error("Error at add motor to starter :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            handleForeignKeyViolationError(error);
             throw error;
         }
     };
@@ -98,6 +155,146 @@ export class MotorHandlers {
             parseDatabaseError(error);
             handleForeignKeyViolationError(error);
             console.error("Error at update motor :", error);
+            throw error;
+        }
+    };
+    // Turns one or more motors on a starter box ON/OFF via MQTT (T:1) and waits for
+    // the device's ACK (T:31). A single-motor request is just a 1-element `motors`
+    // array — this is the one code path for both single and multi-motor control.
+    controlMotorsHandler = async (c) => {
+        try {
+            const starterId = +(c.req.param("starterId") ?? 0);
+            paramsValidateException.validateId(starterId, "starter id");
+            const requestBody = await c.req.json();
+            paramsValidateException.emptyBodyValidation(requestBody);
+            const validReq = await validatedRequest("control-motors", requestBody, MOTOR_CONTROL_VALIDATION_CRITERIA);
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            // Resolve each request entry to one of the starter's motors — motor_reference takes
+            // precedence when provided, otherwise motor_id — then publish keyed by that motor's
+            // motor_index (m1/m2...).
+            const starterMotors = await getMotorsForStarterControl(starterId);
+            const resolved = validReq.motors.map(m => {
+                const motor = m.motor_reference
+                    ? starterMotors.find(sm => sm.motor_reference === m.motor_reference)
+                    : starterMotors.find(sm => sm.id === m.motor_id);
+                return motor ? { motor, state: m.state } : null;
+            });
+            if (resolved.some(r => r === null)) {
+                throw new BadRequestException(MOTOR_CONTROL_MOTORS_NOT_FOUND);
+            }
+            const resolvedMotors = resolved;
+            const uniqueMotorIds = [...new Set(resolvedMotors.map(r => r.motor.id))];
+            if (starter.motor_support_type === "SINGLE_MOTOR" && uniqueMotorIds.length > 1) {
+                throw new BadRequestException(MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED);
+            }
+            // Persist the requested state immediately so it's stored (each motor) even if the device never acks.
+            const controlNow = new Date();
+            for (const r of resolvedMotors) {
+                await updateRecordById(motors, r.motor.id, {
+                    state: r.state,
+                    ...(r.state === 1 ? { motor_last_on_at: controlNow } : { motor_last_off_at: controlNow }),
+                });
+            }
+            const targets = resolvedMotors.map(r => ({
+                motor_index: r.motor.motor_index ?? 1,
+                state: r.state,
+            }));
+            const ackResult = await sendMotorControlCommand(starter, targets);
+            const results = resolvedMotors.map(r => {
+                const idx = r.motor.motor_index ?? 1;
+                const ackCode = ackResult.data?.[motorKey(idx)];
+                return {
+                    motor_id: r.motor.id,
+                    motor_reference: r.motor.motor_reference ?? null,
+                    motor_index: idx,
+                    requested_state: r.state,
+                    acked: ackCode !== undefined,
+                    ack_code: ackCode ?? null,
+                    ack_status: ackCode !== undefined ? getMotorControlStatusDescription(ackCode) : null,
+                };
+            });
+            const status = !ackResult.acked
+                ? "TIMEOUT"
+                : results.every(r => r.acked)
+                    ? "ACKED"
+                    : "PARTIAL_ACK";
+            return sendResponse(c, 200, MOTOR_CONTROL_COMMAND_SENT, { status, results });
+        }
+        catch (error) {
+            console.error("Error at control motors :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
+            throw error;
+        }
+    };
+    // Switches one or more motors on a starter box between MANUAL/AUTO via MQTT (T:2)
+    // and waits for the device's ACK (T:32). Same single/multi shape as controlMotorsHandler.
+    controlMotorsModeHandler = async (c) => {
+        try {
+            const starterId = +(c.req.param("starterId") ?? 0);
+            paramsValidateException.validateId(starterId, "starter id");
+            const requestBody = await c.req.json();
+            paramsValidateException.emptyBodyValidation(requestBody);
+            const validReq = await validatedRequest("control-motors-mode", requestBody, MOTOR_MODE_CONTROL_VALIDATION_CRITERIA);
+            const starter = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            if (!starter)
+                throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+            // Resolve each request entry to one of the starter's motors — motor_reference takes
+            // precedence when provided, otherwise motor_id — then publish keyed by motor_index (m1/m2...).
+            const starterMotors = await getMotorsForStarterControl(starterId);
+            const resolved = validReq.motors.map(m => {
+                const motor = m.motor_reference
+                    ? starterMotors.find(sm => sm.motor_reference === m.motor_reference)
+                    : starterMotors.find(sm => sm.id === m.motor_id);
+                return motor ? { motor, mode: m.mode } : null;
+            });
+            if (resolved.some(r => r === null)) {
+                throw new BadRequestException(MOTOR_CONTROL_MOTORS_NOT_FOUND);
+            }
+            const resolvedMotors = resolved;
+            const uniqueMotorIds = [...new Set(resolvedMotors.map(r => r.motor.id))];
+            if (starter.motor_support_type === "SINGLE_MOTOR" && uniqueMotorIds.length > 1) {
+                throw new BadRequestException(MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED);
+            }
+            // Persist the requested mode immediately so it's stored (each motor) even if the device never acks.
+            const modeNow = new Date();
+            for (const r of resolvedMotors) {
+                await updateRecordById(motors, r.motor.id, {
+                    mode: r.mode,
+                    last_mode_change_at: modeNow,
+                });
+            }
+            const targets = resolvedMotors.map(r => ({
+                motor_index: r.motor.motor_index ?? 1,
+                mode: r.mode,
+            }));
+            const ackResult = await sendModeControlCommand(starter, targets);
+            const results = resolvedMotors.map(r => {
+                const idx = r.motor.motor_index ?? 1;
+                const ackCode = ackResult.data?.[motorKey(idx)];
+                return {
+                    motor_id: r.motor.id,
+                    motor_reference: r.motor.motor_reference ?? null,
+                    motor_index: idx,
+                    requested_mode: r.mode,
+                    acked: ackCode !== undefined,
+                    ack_code: ackCode ?? null,
+                    ack_status: ackCode !== undefined ? getModeControlStatusDescription(ackCode) : null,
+                };
+            });
+            const status = !ackResult.acked
+                ? "TIMEOUT"
+                : results.every(r => r.acked)
+                    ? "ACKED"
+                    : "PARTIAL_ACK";
+            return sendResponse(c, 200, MOTOR_MODE_CONTROL_COMMAND_SENT, { status, results });
+        }
+        catch (error) {
+            console.error("Error at control motors mode :", error);
+            handleJsonParseError(error);
+            parseDatabaseError(error);
             throw error;
         }
     };
@@ -152,16 +349,25 @@ export class MotorHandlers {
             const paginationParams = getPaginationOffParams(query);
             const orderQueryData = parseOrderByQueryCondition(query.order_by, query.order_type, "assigned_at", "desc");
             const whereQueryData = motorFilters(query, userPayload);
-            const motorsData = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams);
+            // Scope to motors whose device the caller owns, so this list agrees with
+            // GET /starters/mobile instead of surfacing motors from unassigned boxes.
+            const starterScope = motorStarterScopeCondition(userPayload);
+            const motorsData = await paginatedMotorsList(whereQueryData, orderQueryData, paginationParams, starterScope ? [starterScope] : []);
             const motorIds = motorsData.records.map((m) => m.id).filter(Boolean);
             const latestRuntimeMap = await getMotorsLatestRuntime(motorIds);
-            const records = motorsData.records.map((motor) => ({
-                ...motor,
-                run_time: {
-                    last_state: latestRuntimeMap[motor.id]?.state,
-                    state_duration: latestRuntimeMap[motor.id]?.duration,
-                },
-            }));
+            const records = motorsData.records.map((motor) => {
+                // starterParameters comes back motor-scoped (see paginatedMotorsList) but the app
+                // expects it nested under starter, as it was when the query read the box-level relation.
+                const { starterParameters, starter, ...rest } = motor;
+                return {
+                    ...rest,
+                    starter: starter ? { ...starter, starterParameters: starterParameters ?? [] } : starter,
+                    run_time: {
+                        last_state: latestRuntimeMap[motor.id]?.state,
+                        state_duration: latestRuntimeMap[motor.id]?.duration,
+                    },
+                };
+            });
             return sendResponse(c, 200, MOTOR_DETAILS_FETCHED, {
                 ...motorsData,
                 records,

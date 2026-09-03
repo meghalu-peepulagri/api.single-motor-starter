@@ -519,6 +519,62 @@
       "when": 1782377013235,
       "tag": "0073_mushy_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1784131169450,
+      "tag": "0074_wise_valkyrie",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1784287265930,
+      "tag": "0075_productive_tombstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1785216604821,
+      "tag": "0076_mute_wong",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1785221185956,
+      "tag": "0077_brief_juggernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1785239611898,
+      "tag": "0078_yielding_zeigeist",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1785240571719,
+      "tag": "0079_marvelous_vivisector",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1785919650156,
+      "tag": "0080_great_taskmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1786711020748,
+      "tag": "0081_calm_hellcat",
+      "breakpoints": true
     }
   ]
 }

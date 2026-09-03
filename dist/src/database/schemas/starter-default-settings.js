@@ -1,12 +1,36 @@
 import { sql } from "drizzle-orm";
-import { integer, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, real, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { motorStarterTypeEnum } from "./starter-boxes.js";
 export const starterDefaultSettings = pgTable("starter_default_settings", {
     id: serial("id").primaryKey(),
+    // Global template block the admin UI pre-fills a new motor's settings form with —
+    // see starter-settings.ts for the rationale behind JSON instead of a child table.
+    multi_motor_defaults: jsonb("multi_motor_defaults").$type(),
     // ================= Device Configuration (35 fields) =================
     allflt_en: integer("allflt_en").default(0), // To enable and disable faults
     flc: real("flc").default(1.65), // Motor Full Load Current
     as_dly: integer("as_dly").default(5), // Auto Start Seed Time for Motor
     pr_flt_en: integer("pr_flt_en").default(0),
+    // Global default starter type, edited on the Default Settings screen via
+    // PATCH /settings/default/:id. Reuses the enum that starter_boxes.motor_starter_type
+    // already uses, so both carry the same three values.
+    motor_starter_type: motorStarterTypeEnum("motor_starter_type").default("CONTACTOR"),
+    // ================= Trip timings (sec) =================
+    // real, not integer — trip times are fractional (e.g. 0.5).
+    irt_time: real("irt_time").default(0.5), // Inrush / locked rotor trip time
+    lvt_time: real("lvt_time").default(2), // Low voltage trip time
+    hvt_time: real("hvt_time").default(3), // High voltage trip time
+    ipt_time: real("ipt_time").default(2), // Input phase failure trip time
+    drt_time: real("drt_time").default(2), // Dry run trip time
+    olt_time: real("olt_time").default(3), // Overload trip time
+    opt_time: real("opt_time").default(2), // Output phase failure trip time
+    cit_time: real("cit_time").default(2), // Current imbalance trip time
+    // ================= Star-delta timings =================
+    // Device payload mapping: start_time -> sd_time, step_delay -> step_dly,
+    // transfer_time -> tf_time.
+    step_delay: integer("step_delay").default(0),
+    start_time: integer("start_time").default(0),
+    transfer_time: integer("transfer_time").default(0),
     tpf: real("tpf").default(0), // Temperature Protection Factor
     // Enables (2 fields)
     v_en: integer("v_en").default(0), // Voltage faults enable

@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, numeric, pgEnum, pgTable, serial, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, numeric, pgEnum, pgTable, serial, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { statusEnum } from "../../constants/enum-types.js";
 import { locations } from "./locations.js";
 import { starterBoxes } from "./starter-boxes.js";
@@ -21,6 +21,11 @@ export const motors = pgTable("motors", {
     starter_id: integer("starter_id").references(() => starterBoxes.id),
     motor_index: integer("motor_index").default(1),
     motor_reference: varchar("motor_reference"),
+    // Device-assigned schedule slot counter, scoped to THIS motor — each motor has its
+    // own independent slot table on the device, so m1 and m2 both start from slot 1.
+    // Mirrors starter_boxes.last_device_schedule_id, which was device-wide before
+    // schedules were split into per-motor slot tables.
+    last_device_schedule_id: integer("last_device_schedule_id").notNull().default(0),
     status: statusEnum().default("ACTIVE"),
     test_run_status: testRunStatusEnum().default("IN_TEST"),
     test_run_completed_at: timestamp("test_run_completed_at"),
@@ -35,6 +40,8 @@ export const motors = pgTable("motors", {
     index("motor_idx").on(table.id),
     index("motor_alias_name_idx").on(table.alias_name),
     index("motor_test_run_status_idx").on(table.test_run_status),
+    // Guarantees m1/m2/... in a MOTOR_CONTROL ack unambiguously maps to one motor per starter.
+    uniqueIndex("unique_starter_motor_index").on(table.starter_id, table.motor_index).where(sql `${table.status} != 'ARCHIVED'`),
 ]);
 export const motorRelations = relations(motors, ({ one, many }) => ({
     created_by_user: one(users, {

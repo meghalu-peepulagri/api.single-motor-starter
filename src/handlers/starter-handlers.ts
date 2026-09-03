@@ -1,6 +1,7 @@
-import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { requestTypesFor } from "../helpers/packet-types-helper.js";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, PCB_NUMBER_REQUIRED, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
@@ -15,13 +16,17 @@ import { parseQueryDates } from "../helpers/dns-helpers.js";
 import { getPaginationData, getPaginationOffParams } from "../helpers/pagination-helper.js";
 import { processSimRechargeExpiryNotifications, starterCountFilters, starterFilters } from "../helpers/starter-helper.js";
 
+import { clearSettingsSyncAttempts } from "../helpers/ack-tracker-hepler.js";
+import { isDualMotor, isInvalidVersionMotorPair, payloadVersionOf } from "../helpers/payload-version-helper.js";
+import { motorSchedules } from "../database/schemas/motor-schedules.js";
+import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID, PAYLOAD_VERSION_MOTOR_CHANGE_NOT_ALLOWED } from "../constants/app-constants.js";
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
 import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
-import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
+import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterMotorsByPcb, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
 import { logger } from "../utils/logger.js";
@@ -33,7 +38,7 @@ import { starterBoxParameters, type StarterBoxParametersTable } from "../databas
 import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
 import { generateDownloadUrl, generateUploadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
-import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus } from "../validations/schema/starter-validations.js";
+import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus, ValidatedUpdateStarterDetails } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 
@@ -153,22 +158,27 @@ export class StarterHandlers {
       const starterBox = await findStarterByPcbOrStarterNumber(validatedReqData.pcb_number);
       if (!starterBox) throw new BadRequestException(STARTER_BOX_NOT_FOUND);
 
-      const lowerCaseTitle = validatedReqData.motor_name.trim().toLocaleLowerCase();
+      // Reject duplicate names within the same request.
+      const requestNames = validatedReqData.motors.map(m => m.motor_name.trim().toLocaleLowerCase());
+      if (new Set(requestNames).size !== requestNames.length) throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
 
-      const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["location_id", "alias_name", "status"], ["=", "LOWER", "!="], [validatedReqData.location_id, lowerCaseTitle, "ARCHIVED"]);
-      if (existedMotor) throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
+      // Reject any name already used by another motor at this location.
+      for (const lowerCaseTitle of requestNames) {
+        const existedMotor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["location_id", "alias_name", "status"], ["=", "LOWER", "!="], [validatedReqData.location_id, lowerCaseTitle, "ARCHIVED"]);
+        if (existedMotor) throw new ConflictException(MOTOR_NAME_ALREADY_LOCATION);
+      }
 
       const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
       if (starterBox.device_status === "ASSIGNED" && motorCount > 0) throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
       if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARTER_NOT_DEPLOYED);
 
       await db.transaction(async (trx) => {
-        const { updatedStarter, updatedMotor } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
+        const { updatedStarter, updatedMotors } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
 
         await ActivityService.writeStarterAssignedLog(c.get("performer_id"), starterBox.id, {
           user_id: c.get("performer_id"),
           location_id: updatedStarter.location_id,
-          motor_name: updatedMotor.alias_name
+          motor_name: updatedMotors.map((m: any) => m.alias_name).filter(Boolean).join(", ")
         }, trx);
       });
 
@@ -237,19 +247,42 @@ export class StarterHandlers {
         throw new UnauthorizedException("Unauthorized");
       }
 
-      const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      // EVERY live motor on the box, not just the first one. getSingleRecordByMultipleColumnValues
+      // returns a single row, so deleting a dual-motor device archived one motor and left the
+      // other alive pointing at a deleted box — which is why it kept appearing in the dashboard.
+      // motor_index/motor_reference are read too so the isUser branch below can reseed the same
+      // slots (m1, m2...) instead of collapsing a dual-motor box down to a single motor.
+      const liveMotors = await db.select({ id: motors.id, motor_index: motors.motor_index, motor_reference: motors.motor_reference }).from(motors)
+        .where(and(eq(motors.starter_id, starter.id), ne(motors.status, "ARCHIVED")))
+        .orderBy(motors.motor_index);
 
       await db.transaction(async (trx) => {
-        if (isUser) {
-          await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
-          await saveSingleRecord<MotorsTable>(motors, { name: `Pump 1 - ${starter.pcb_number}`, hp: String(2), starter_id: starterId }, trx);
-        } else {
-          await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
-          await updateRecordById<StarterDispatchTable>(starterDispatch, starterId, { status: "ARCHIVED" }, trx);
+        // Archive the old motors BEFORE inserting replacements: unique_starter_motor_index is a
+        // live-rows-only unique constraint on (starter_id, motor_index), so inserting a fresh
+        // motor at an index that's still occupied by a not-yet-archived row would violate it.
+        if (liveMotors.length > 0) {
+          await trx.update(motors).set({ status: "ARCHIVED" })
+            .where(inArray(motors.id, liveMotors.map((m) => m.id)));
         }
 
-        if (motor) {
-          await trx.update(motors).set({ status: "ARCHIVED" }).where(and(eq(motors.starter_id, starter.id), eq(motors.id, motor.id)));
+        if (isUser) {
+          await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { user_id: null, device_status: "DEPLOYED", location_id: null }, trx);
+          // Reseed one fresh motor per slot the box actually had (m1, m2...), so a dual-motor
+          // device stays dual in the admin panel instead of coming back as single-motor.
+          const motorSlots = liveMotors.length > 0 ? liveMotors : [{ motor_index: 1, motor_reference: null }];
+          for (const slot of motorSlots) {
+            const motorIndex = slot.motor_index ?? 1;
+            await saveSingleRecord<MotorsTable>(motors, {
+              name: `Pump ${motorIndex} - ${starter.pcb_number}`,
+              hp: String(2),
+              starter_id: starterId,
+              motor_index: motorIndex,
+              motor_reference: slot.motor_reference ?? undefined,
+            }, trx);
+          }
+        } else {
+          await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, { status: "ARCHIVED" }, trx);
+          await trx.update(starterDispatch).set({ status: "ARCHIVED" }).where(eq(starterDispatch.starter_id, starterId));
         }
 
         await ActivityService.logActivity({
@@ -474,6 +507,23 @@ export class StarterHandlers {
     }
   }
 
+  // Same payload as starterConnectedMotorsHandler (device + all its motors, M1/M2...),
+  // but resolves the device by PCB / starter number instead of the numeric id.
+  motorsByPcbNumberHandler = async (c: Context) => {
+    try {
+      const pcbNumber = c.req.param("pcbNumber");
+      if (!pcbNumber || !pcbNumber.trim()) throw new BadRequestException(PCB_NUMBER_REQUIRED);
+
+      const connectedMotors = await getStarterMotorsByPcb(pcbNumber);
+      if (!connectedMotors) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
+
+      return sendResponse(c, 200, STARTER_CONNECTED_MOTORS_FETCHED, connectedMotors);
+    } catch (error: any) {
+      console.error("Error at motors by pcb number :", error);
+      throw error;
+    }
+  }
+
   assignLocationToStarterHandler = async (c: Context) => {
     try {
       const userPayload: User = c.get("user_payload");
@@ -511,17 +561,63 @@ export class StarterHandlers {
       paramsValidateException.validateId(starterId, "Device id");
       paramsValidateException.emptyBodyValidation(reqData);
 
-      const validatedReqData = await validatedRequest<validatedAddStarter>("add-starter", reqData, STARTER_BOX_VALIDATION_CRITERIA);
+      const validatedReqData = await validatedRequest<ValidatedUpdateStarterDetails>("update-starter-details", reqData, STARTER_BOX_VALIDATION_CRITERIA);
       const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
+      // Partial payload: write only the keys that actually arrived, so a field the screen
+      // omits (or sends as null) keeps its stored value instead of being blanked.
+      const starterUpdates = Object.fromEntries(
+        Object.entries(validatedReqData).filter(([, value]) => value !== undefined && value !== null)
+      );
+
+      // A dual-motor box has no 1.0 payload shape, so reject the pair whichever half of
+      // it arrived in this request — the version, the motor count, or both.
+      const nextVersion = payloadVersionOf({ payload_version: validatedReqData.payload_version ?? starter.payload_version });
+      const nextDualMotor = isDualMotor({
+        motor_support_type: validatedReqData.motor_support_type ?? starter.motor_support_type,
+        starter_type: validatedReqData.starter_type ?? starter.starter_type,
+      });
+      if (isInvalidVersionMotorPair(nextVersion, nextDualMotor)) {
+        throw new BadRequestException(PAYLOAD_VERSION_DUAL_MOTOR_INVALID);
+      }
+
+      const versionChanged = validatedReqData.payload_version != null
+        && validatedReqData.payload_version !== starter.payload_version;
+
+      // A version switch must preserve the motor configuration: 1.0 single -> 2.0 single,
+      // never single -> dual in the same request. The two changes mean different things —
+      // the version says what grammar the firmware speaks, the motor count says what
+      // hardware is wired — and combining them republishes a box in a shape that was never
+      // reviewed against either fact on its own. Change one, then the other.
+      if (versionChanged) {
+        const motorSupportChanged = validatedReqData.motor_support_type != null
+          && validatedReqData.motor_support_type !== starter.motor_support_type;
+        const starterTypeChanged = validatedReqData.starter_type != null
+          && validatedReqData.starter_type !== starter.starter_type;
+        if (motorSupportChanged || starterTypeChanged) {
+          throw new BadRequestException(PAYLOAD_VERSION_MOTOR_CHANGE_NOT_ALLOWED);
+        }
+      }
+
+      // Changing the grammar means everything already on the device is in the old format.
+      // Clear the synced flag so the next heartbeat republishes settings, and drop the
+      // bounded-retry counter that would otherwise suppress that republish.
+      if (versionChanged) starterUpdates.synced_settings_status = "false";
+
       const userId = (c.get("user_payload") as User).id;
       await db.transaction(async (trx) => {
-        const updatedStarter = await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, validatedReqData, trx);
-        await updateRecordById<StarterDispatchTable>(starterDispatch, starter.id, {
-          pcb_number: validatedReqData.pcb_number, box_serial_no: validatedReqData.starter_number,
-          sim_no: validatedReqData.device_mobile_number
-        }, trx);
+        const updatedStarter = await updateRecordById<StarterBoxTable>(starterBoxes, starter.id, starterUpdates, trx);
+
+        // Same rule for the dispatch row — these three were previously written
+        // unconditionally, which blanked them whenever the payload omitted them.
+        const dispatchUpdates: Record<string, any> = {};
+        if (validatedReqData.pcb_number != null) dispatchUpdates.pcb_number = validatedReqData.pcb_number;
+        if (validatedReqData.starter_number != null) dispatchUpdates.box_serial_no = validatedReqData.starter_number;
+        if (validatedReqData.device_mobile_number != null) dispatchUpdates.sim_no = validatedReqData.device_mobile_number;
+        if (Object.keys(dispatchUpdates).length > 0) {
+          await updateRecordById<StarterDispatchTable>(starterDispatch, starter.id, dispatchUpdates, trx);
+        }
 
         await ActivityService.writeStarterUpdatedLog(userId, starterId,
           {
@@ -543,6 +639,23 @@ export class StarterHandlers {
           trx
         );
       });
+
+      if (versionChanged) {
+        // Settings: drop the bounded-retry counter so the next heartbeat actually
+        // republishes instead of being suppressed as "already tried enough times".
+        clearSettingsSyncAttempts(starter.id);
+        // Schedules: whatever the device already stored is in the old grammar, so mark
+        // this starter's still-pending schedules for resend. Scoped to PENDING/non-archived
+        // rows, so past and cancelled schedules are not resurrected.
+        await db.update(motorSchedules)
+          .set({ acknowledgement: 0, publish_attempts: 0 })
+          .where(and(
+            eq(motorSchedules.starter_id, starter.id),
+            eq(motorSchedules.schedule_status, "PENDING"),
+            ne(motorSchedules.status, "ARCHIVED"),
+          ));
+        logger.info(`[payload-version] starter=${starter.id} switched ${starter.payload_version} -> ${validatedReqData.payload_version}; settings and schedules queued for resend`);
+      }
 
       return sendResponse(c, 201, STARTER_DETAILS_UPDATED);
     } catch (error: any) {
@@ -669,6 +782,9 @@ export class StarterHandlers {
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       await updateRecordById<StarterBoxTable>(starterBoxes, starterId, { synced_settings_status: syncStatus });
+      // Re-arm the bounded heartbeat sync: without this, flipping the flag back to
+      // "false" on a box whose attempts are already exhausted would never republish.
+      clearSettingsSyncAttempts(starterId);
       await ActivityService.logActivity({
         performedBy: userPayload.id,
         action: "SETTINGS_SYNC_STATUS_OVERRIDE",
@@ -822,7 +938,7 @@ export class StarterHandlers {
           const batch = allDevices.slice(i, i + BATCH_SIZE);
 
           for (const device of batch) {
-            const deviceInfoPayload = { T: 10, S: randomSequenceNumber(), D: 1 };
+            const deviceInfoPayload = { T: requestTypesFor(payloadVersionOf(device)).DEVICE_INFO_REQUEST, S: randomSequenceNumber(), D: 1 };
             publishMultipleTimesInBackground(deviceInfoPayload, device);
           }
 

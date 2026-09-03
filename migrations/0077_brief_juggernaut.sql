@@ -1,0 +1,1 @@
+ALTER TABLE "starter_default_settings" ADD COLUMN "motor_starter_type" "motor_starter_type" DEFAULT 'CONTACTOR';

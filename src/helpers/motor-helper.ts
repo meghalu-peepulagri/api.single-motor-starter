@@ -12,7 +12,9 @@ import {
 } from "../constants/app-constants.js";
 
 import { benchedStarterParameters } from "../database/schemas/benched-starter-parameters.js";
-import type { Motor, MotorsTable } from "../database/schemas/motors.js";
+import { sql, type SQL } from "drizzle-orm";
+import { motors, type Motor, type MotorsTable } from "../database/schemas/motors.js";
+import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../database/schemas/starter-parameters.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
 import ConflictException from "../exceptions/conflict-exception.js";
@@ -68,6 +70,28 @@ export function motorFilters(query: any, user: any) {
   }
 
   return whereQueryData;
+}
+
+/**
+ * Restricts GET /motors to motors whose DEVICE the caller owns, the same rule
+ * starterFilters applies to GET /starters/mobile (starter_boxes.user_id = user.id).
+ *
+ * motorFilters alone scopes by motors.created_by, which is a different fact: a motor can
+ * carry a user's id while sitting on a box that was never assigned to them (or was
+ * unassigned later). That let the motors list show motors the device list did not — a box
+ * with 2 motors appearing as 3 motors, the extra one belonging to an unassigned device.
+ *
+ * Returns null for admins, who are unscoped in both endpoints today and stay that way.
+ */
+export function motorStarterScopeCondition(user: any): SQL | null {
+  if (!user?.id || user.user_type === "ADMIN" || user.user_type === "SUPER_ADMIN") return null;
+
+  return sql`EXISTS (
+    SELECT 1 FROM ${starterBoxes} AS sb
+     WHERE sb.id = ${motors.starter_id}
+       AND sb.status <> 'ARCHIVED'
+       AND sb.user_id = ${user.id}
+  )`;
 }
 
 

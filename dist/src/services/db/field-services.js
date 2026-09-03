@@ -59,24 +59,25 @@ export async function paginatedFieldsList(whereQueryData, orderByQueryData, page
                             id: true, name: true, status: true, mac_address: true,
                             signal_quality: true, power: true, network_type: true,
                         },
-                        with: {
-                            starterParameters: {
-                                where: isNotNull(starterBoxParameters.time_stamp),
-                                orderBy: [desc(starterBoxParameters.time_stamp)],
-                                limit: 1,
-                                columns: {
-                                    id: true,
-                                    time_stamp: true,
-                                    fault: true,
-                                    fault_description: true,
-                                    line_voltage_r: true,
-                                    line_voltage_y: true,
-                                    line_voltage_b: true,
-                                    current_r: true,
-                                    current_y: true,
-                                    current_b: true,
-                                },
-                            },
+                    },
+                    // Motor-scoped relation (starterBoxParameters.motor_id), not the box-level one
+                    // nested under `starter` — that one matches only on starter_id, so a dual-motor
+                    // box's two motors both got the same "latest for either motor" fault row.
+                    starterParameters: {
+                        where: isNotNull(starterBoxParameters.time_stamp),
+                        orderBy: [desc(starterBoxParameters.time_stamp)],
+                        limit: 1,
+                        columns: {
+                            id: true,
+                            time_stamp: true,
+                            fault: true,
+                            fault_description: true,
+                            line_voltage_r: true,
+                            line_voltage_y: true,
+                            line_voltage_b: true,
+                            current_r: true,
+                            current_y: true,
+                            current_b: true,
                         },
                     },
                 },
@@ -85,9 +86,18 @@ export async function paginatedFieldsList(whereQueryData, orderByQueryData, page
     });
     const totalRecords = await getRecordsCount(fields, whereConditions || []);
     const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
+    // starterParameters comes back motor-scoped (see query above) but callers expect it nested
+    // under starter, as it was when the query read the box-level relation.
+    const records = fieldsList.map((field) => ({
+        ...field,
+        motors: (field.motors ?? []).map((motor) => {
+            const { starterParameters, starter, ...rest } = motor;
+            return { ...rest, starter: starter ? { ...starter, starterParameters: starterParameters ?? [] } : starter };
+        }),
+    }));
     return {
         pagination_info: pagination,
-        records: fieldsList,
+        records,
     };
 }
 export async function updateFieldWithMotorTransaction(validData, fieldId, userPayload) {

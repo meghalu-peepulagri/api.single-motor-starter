@@ -391,11 +391,18 @@ export async function findSchedulesByFilters(
       starter_device_allocation: starterBoxes.device_allocation,
       starter_pcb_number: starterBoxes.pcb_number,
       starter_mac_address: starterBoxes.mac_address,
+      motor_support_type: starterBoxes.motor_support_type,
+      payload_version: starterBoxes.payload_version,
+      motor_reference: motors.motor_reference,
     })
     .from(motorSchedules)
     .leftJoin(
       starterBoxes,
       eq(motorSchedules.starter_id, starterBoxes.id)
+    )
+    .leftJoin(
+      motors,
+      eq(motorSchedules.motor_id, motors.id)
     )
     .where(whereClause)
     .orderBy(asc(motorSchedules.start_date_time))
@@ -466,6 +473,7 @@ export async function findPendingSchedulesForSync() {
     columns: {
       id: true,
       starter_id: true,
+      motor_id: true,
       schedule_id: true,
       device_schedule_id: true,
       schedule_type: true,
@@ -483,6 +491,8 @@ export async function findPendingSchedulesForSync() {
       power_loss_recovery_time: true,
       enabled: true,
     },
+    // motor_reference drives the per-motor payload key (m1/m2/...) on multi-motor boxes.
+    with: { motor: { columns: { motor_reference: true } } },
     orderBy: (ms, { asc }) => [asc(ms.starter_id), asc(ms.schedule_id)],
   });
 }
@@ -524,6 +534,7 @@ export async function findPendingSchedulesForStarter(starterId: number, motorId?
     columns: {
       id: true,
       starter_id: true,
+      motor_id: true,
       schedule_id: true,
       device_schedule_id: true,
       schedule_type: true,
@@ -541,6 +552,8 @@ export async function findPendingSchedulesForStarter(starterId: number, motorId?
       power_loss_recovery_time: true,
       enabled: true,
     },
+    // motor_reference drives the per-motor payload key (m1/m2/...) on multi-motor boxes.
+    with: { motor: { columns: { motor_reference: true } } },
     orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
   });
 }
@@ -566,6 +579,7 @@ export async function findPendingSchedulesForRepublish(starterId: number, motorI
     columns: {
       id: true,
       starter_id: true,
+      motor_id: true,
       schedule_id: true,
       device_schedule_id: true,
       schedule_type: true,
@@ -583,6 +597,8 @@ export async function findPendingSchedulesForRepublish(starterId: number, motorI
       power_loss_recovery_time: true,
       enabled: true,
     },
+    // motor_reference drives the per-motor payload key (m1/m2/...) on multi-motor boxes.
+    with: { motor: { columns: { motor_reference: true } } },
     orderBy: (ms, { asc }) => [asc(ms.schedule_id)],
   });
 }
@@ -903,14 +919,15 @@ export async function bulkCreateMotorSchedules(
 
   const result = await saveRecords(motorSchedules, finalPayload as any);
 
-  // Update last_device_schedule_id on the starter so the counter never goes backwards.
-  // This ensures subsequent creates start from the correct offset even if ACK never arrives.
-  const starterId = finalPayload[0]?.starter_id;
+  // Update last_device_schedule_id on the motor (its own slot table) so the counter
+  // never goes backwards. This ensures subsequent creates start from the correct
+  // offset even if ACK never arrives. All items in this batch share one motorId
+  // (enforced above), so a single motor-scoped update covers the whole batch.
   const maxDeviceId = Math.max(0, ...finalPayload.map((p: any) => p.device_schedule_id ?? 0).filter(Boolean));
-  if (starterId && maxDeviceId > 0) {
-    await db.update(starterBoxes)
+  if (maxDeviceId > 0) {
+    await db.update(motors)
       .set({ last_device_schedule_id: sql`GREATEST(last_device_schedule_id, ${maxDeviceId})` })
-      .where(eq(starterBoxes.id, starterId))
+      .where(eq(motors.id, motorId))
       .catch(() => null);
   }
 
@@ -920,15 +937,18 @@ export async function bulkCreateMotorSchedules(
 // =================== DEVICE SCHEDULE ID ASSIGNMENT ===================
 
 /**
- * Assign device_schedule_id to a batch of schedules for one starter.
+ * Assign device_schedule_id to a batch of schedules for one motor. Each motor has its
+ * own independent slot table on the device, so the counter is scoped to motorId, not
+ * the starter — a dual-motor box's m1 and m2 slot numbering is assigned separately.
  * Sorted by schedule_id ascending so device slot order is preserved.
  * Uses FOR UPDATE lock so concurrent heartbeats never double-assign.
  * Already-assigned rows (device_schedule_id IS NOT NULL) are skipped.
+ * Callers must ensure every record in `records` belongs to `motorId`.
  */
 const MAX_DEVICE_CAPACITY = 15;
 
 export async function assignDeviceScheduleIds(
-  starterId: number,
+  motorId: number,
   records: { id: number; schedule_id: number }[],
 ): Promise<void> {
   if (records.length === 0) return;
@@ -948,14 +968,14 @@ export async function assignDeviceScheduleIds(
     if (nullRows.length === 0) return;
     const toAssign = sorted.filter(r => nullRows.some(n => n.id === r.id));
 
-    // Lock the starter row and read the current counter.
-    const [starterRow] = await trx
-      .select({ last: starterBoxes.last_device_schedule_id })
-      .from(starterBoxes)
-      .where(eq(starterBoxes.id, starterId))
+    // Lock the motor row and read its own slot counter.
+    const [motorRow] = await trx
+      .select({ last: motors.last_device_schedule_id })
+      .from(motors)
+      .where(eq(motors.id, motorId))
       .for("update");
 
-    let counter = starterRow?.last ?? 0;
+    let counter = motorRow?.last ?? 0;
 
     for (const r of toAssign) {
       counter++;
@@ -969,26 +989,27 @@ export async function assignDeviceScheduleIds(
     }
 
     await trx
-      .update(starterBoxes)
+      .update(motors)
       .set({ last_device_schedule_id: counter })
-      .where(eq(starterBoxes.id, starterId));
+      .where(eq(motors.id, motorId));
   });
 }
 
-export async function syncLastDeviceScheduleId(starterId: number): Promise<void> {
+/** Recomputes a motor's slot counter from its own live schedules — its slot table is independent of any other motor on the same box. */
+export async function syncLastDeviceScheduleId(motorId: number): Promise<void> {
   const maxRow = await db
     .select({ maxId: sql<number>`COALESCE(MAX(${motorSchedules.device_schedule_id}), 0)` })
     .from(motorSchedules)
     .where(and(
-      eq(motorSchedules.starter_id, starterId),
+      eq(motorSchedules.motor_id, motorId),
       ne(motorSchedules.status, "ARCHIVED"),
       notInArray(motorSchedules.schedule_status, ["FAILED", "DELETED"]),
     ));
 
   const newMax = maxRow[0]?.maxId ?? 0;
-  await db.update(starterBoxes)
+  await db.update(motors)
     .set({ last_device_schedule_id: newMax })
-    .where(eq(starterBoxes.id, starterId));
+    .where(eq(motors.id, motorId));
 }
 
 // =================== PER-DAY BITMASK UPDATE ===================

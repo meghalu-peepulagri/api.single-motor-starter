@@ -12,7 +12,8 @@
     "db:studio": "npx drizzle-kit studio",
     "logs": "tsx src/scripts/view-logs.ts",
     "seed:history": "tsx src/scripts/seed-status-history.ts",
-    "seed:schedule-datetimes": "tsx src/scripts/seed-schedule-datetimes.ts"
+    "seed:schedule-datetimes": "tsx src/scripts/seed-schedule-datetimes.ts",
+    "cleanup:unacked-settings": "tsx src/scripts/cleanup-unacked-starter-settings.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1009.0",
