@@ -507,7 +507,7 @@ export function buildScheduleTimeline(record: any): any {
 // =================== COMPACT DEVICE SYNC PAYLOAD ===================
 
 const MAX_SCHEDULES_PER_DEVICE = 12;
-const MAX_ITEMS_PER_CHUNK = 6;
+const MAX_ITEMS_PER_CHUNK = 8;
 
 /**
  * Combine a YYMMDD date and HHMM time (both in IST) into a UTC epoch second.
@@ -599,14 +599,13 @@ function motorReferenceKey(record: any): string {
 /**
  * Build compact device sync payloads from schedule records.
  * Groups by starter_id, takes first 10 schedules per device,
- * splits into chunks of max 6 items each.
+ * splits into chunks of max 8 items each.
  *
  * Each chunk is a single payload object. Multi-motor boxes nest each motor's
- * schedules under its motor-reference key as { sch_cnt, sch: [...] } — no
- * top-level sch_cnt, since each motor group already carries its own count.
- * Single-motor boxes carry the schedule list as a flat array under `m1` with
- * `sch_cnt` as the schedule count:
- *   multi : { T: 3, S: seq, D: { idx, last, plr,
+ * schedules under its motor-reference key as { sch_cnt, sch: [...] }, with the
+ * top-level `sch_cnt` holding the number of motor groups. Single-motor boxes carry
+ * the schedule list as a flat array under `m1` with `sch_cnt` as the schedule count:
+ *   multi : { T: 3, S: seq, D: { idx, last, sch_cnt: <#motors>, plr,
  *                                m1: { sch_cnt: <#m1>, sch: [...] },
  *                                m2: { sch_cnt: <#m2>, sch: [...] } } }
  *   single: { T: 3, S: seq, D: { idx, last, sch_cnt: <#sch>, plr, m1: [...] } }
@@ -674,8 +673,8 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
       // schedule count.
       // Multi-motor: bucket by each schedule's motor_reference so a motor with
       // reference m2 is published under `m2` (not always `m1`); each motor becomes
-      // { sch_cnt: <its schedule count>, sch: [...] }. No top-level sch_cnt here —
-      // each motor group already carries its own count.
+      // { sch_cnt: <its schedule count>, sch: [...] } and the top-level sch_cnt holds
+      // the number of motor groups.
       let D: Record<string, any>;
       if (isSingleMotor) {
         D = { idx, last: isLast, sch_cnt: totalCount, plr, m1: slice };
@@ -689,7 +688,7 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
         for (const [key, items] of Object.entries(byMotor)) {
           motorGroups[key] = { sch_cnt: items.length, sch: items };
         }
-        D = { idx, last: isLast, plr, ...motorGroups };
+        D = { idx, last: isLast, sch_cnt: Object.keys(byMotor).length, plr, ...motorGroups };
       }
 
       chunks.push({
