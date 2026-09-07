@@ -104,6 +104,23 @@ export class StarterDefaultSettingsHandlers {
                 motor_support_type: starterData.motor_support_type,
                 payload_version: starterData.payload_version,
             };
+            // Collapse each motor's latest starter_parameters row (fetched via the
+            // motor-scoped relation, so a dual-motor box's two motors each get their
+            // own reading) into a clean current-fault summary.
+            if (Array.isArray(responseData.starter?.motors)) {
+                responseData.starter.motors = responseData.starter.motors.map((motor) => {
+                    const latestParams = motor.starterParameters?.[0];
+                    const { starterParameters, ...motorRest } = motor;
+                    return {
+                        ...motorRest,
+                        fault: {
+                            is_faulted: Boolean(latestParams && latestParams.fault && !latestParams.fault_cleared),
+                            fault_code: latestParams?.fault ?? null,
+                            fault_description: latestParams?.fault_description ?? null,
+                        },
+                    };
+                });
+            }
             return sendResponse(c, 200, SETTINGS_FETCHED, responseData);
         }
         catch (error) {

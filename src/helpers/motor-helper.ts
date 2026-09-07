@@ -237,7 +237,7 @@ export function prepareMotorSyncChangeData(params: {
   const { currentState, currentMode, incomingState, incomingMode, timeStamp } = params;
 
   const normalizedState = incomingState === 0 || incomingState === 1 ? incomingState : null;
-  const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" || incomingMode === "SCHEDULE" ? incomingMode : null;
+  const normalizedMode = incomingMode === "AUTO" || incomingMode === "MANUAL" || incomingMode === "SCHEDULE" || incomingMode === "BYPASS" ? incomingMode : null;
 
   const hasStateChanged = normalizedState !== null && normalizedState !== currentState;
   const hasModeChanged = normalizedMode !== null && normalizedMode !== currentMode;

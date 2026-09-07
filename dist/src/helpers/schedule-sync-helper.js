@@ -1,10 +1,10 @@
-import { and, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, sql } from "drizzle-orm";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
 import { starterBoxes } from "../database/schemas/starter-boxes.js";
 import { logger } from "../utils/logger.js";
-import { findAndDeleteExpiredSchedules, findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
+import { findAndDeleteExpiredSchedules, findPendingSchedulesForStarter, MAX_DEVICE_CAPACITY } from "../services/db/motor-schedules-services.js";
 import { buildDeviceSyncPayloads, dateToYYMMDD, todayAsYYMMDD } from "./motor-schedule-payload-helper.js";
 import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { publishingMap, schedulePartialAckMap } from "./ack-tracker-hepler.js";
@@ -20,10 +20,11 @@ async function waitForPublishLock(starterId, maxWaitMs = 30000, intervalMs = 500
 }
 /**
  * Push all unacknowledged PENDING schedules for ONE starter via MQTT.
- * device_schedule_id is assigned only to records that don't already have one, using an
- * ever-increasing counter scoped to EACH MOTOR (last_device_schedule_id on motors) —
- * every motor has its own independent slot table on the device, so a dual-motor box's
- * m1 and m2 schedules are numbered from their own counters, not a shared device one.
+ * device_schedule_id is assigned only to records that don't already have one, by
+ * picking the lowest free slot (1..MAX_DEVICE_CAPACITY) not currently used by a
+ * non-deleted, non-failed schedule for that motor — every motor has its own
+ * independent slot table on the device, so a dual-motor box's m1 and m2 schedules
+ * are numbered from their own slot pools, not a shared device one.
  */
 export async function pushPendingSchedulesForStarter(starter, motorId, filterIds, fromHeartbeat = false) {
     if (publishingMap.get(starter.id)) {
@@ -48,8 +49,8 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
             .filter(r => filterIds == null || filterIds.includes(r.id));
         if (records.length === 0)
             return { chunks: 0, acked: 0 };
-        // Step 3 — Assign device_schedule_id to records that don't have one yet, using an
-        // ever-increasing counter per MOTOR (never reuses freed IDs). Grouped by motor_id
+        // Step 3 — Assign device_schedule_id to records that don't have one yet, reusing
+        // the lowest free slot (1..MAX_DEVICE_CAPACITY) per MOTOR. Grouped by motor_id
         // first since each motor's slot table is independent of any other motor on the box.
         const unassigned = records.filter(r => r.device_schedule_id == null);
         if (unassigned.length > 0) {
@@ -64,24 +65,43 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
             }
             await db.transaction(async (trx) => {
                 for (const [motorRowId, motorUnassigned] of unassignedByMotor) {
-                    const [motorRow] = await trx
-                        .select({ last: motors.last_device_schedule_id })
-                        .from(motors)
-                        .where(eq(motors.id, motorRowId))
-                        .for("update");
-                    let counter = motorRow?.last ?? 0;
+                    // Lock the motor row so concurrent assignments for this motor serialize.
+                    await trx.select({ id: motors.id }).from(motors).where(eq(motors.id, motorRowId)).for("update");
+                    // Slots 1..MAX_DEVICE_CAPACITY currently in use by this motor's non-deleted,
+                    // non-failed schedules — reusing freed slots instead of an ever-increasing
+                    // counter keeps device_schedule_id within the device's real 1-15 slot table.
+                    const occupiedRows = await trx
+                        .select({ deviceScheduleId: motorSchedules.device_schedule_id })
+                        .from(motorSchedules)
+                        .where(and(eq(motorSchedules.motor_id, motorRowId), ne(motorSchedules.status, "ARCHIVED"), notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]), isNotNull(motorSchedules.device_schedule_id)));
+                    const occupied = new Set(occupiedRows.map(r => r.deviceScheduleId));
+                    let highestAssigned = 0;
                     for (const r of motorUnassigned) {
-                        counter++;
-                        r.device_schedule_id = counter;
+                        let slot = null;
+                        for (let candidate = 1; candidate <= MAX_DEVICE_CAPACITY; candidate++) {
+                            if (!occupied.has(candidate)) {
+                                slot = candidate;
+                                break;
+                            }
+                        }
+                        if (slot === null) {
+                            logger.warn(`[schedule-sync] motor=${motorRowId} has no free device slot (max ${MAX_DEVICE_CAPACITY}) for schedule id=${r.id} — leaving unassigned`);
+                            continue;
+                        }
+                        occupied.add(slot);
+                        highestAssigned = Math.max(highestAssigned, slot);
+                        r.device_schedule_id = slot;
                         await trx
                             .update(motorSchedules)
-                            .set({ device_schedule_id: counter })
+                            .set({ device_schedule_id: slot })
                             .where(and(eq(motorSchedules.id, r.id), isNull(motorSchedules.device_schedule_id)));
                     }
-                    await trx
-                        .update(motors)
-                        .set({ last_device_schedule_id: counter })
-                        .where(eq(motors.id, motorRowId));
+                    if (highestAssigned > 0) {
+                        await trx
+                            .update(motors)
+                            .set({ last_device_schedule_id: sql `GREATEST(${motors.last_device_schedule_id}, ${highestAssigned})` })
+                            .where(eq(motors.id, motorRowId));
+                    }
                 }
             }).catch(err => logger.warn(`[schedule-sync] device_schedule_id assignment failed: ${err?.message}`));
         }

@@ -117,12 +117,30 @@ export class StarterDefaultSettingsHandlers {
       // Surface the box's starter/support type and payload version at the top level too.
       // The nested `starter` object carries them as well, but a box with no acknowledged
       // settings row yet has no nested object at all, and the screen still needs them.
-      const responseData = {
+      const responseData: any = {
         ...(starterSettings ?? {}),
         motor_starter_type: starterData.motor_starter_type,
         motor_support_type: starterData.motor_support_type,
         payload_version: starterData.payload_version,
       };
+
+      // Collapse each motor's latest starter_parameters row (fetched via the
+      // motor-scoped relation, so a dual-motor box's two motors each get their
+      // own reading) into a clean current-fault summary.
+      if (Array.isArray(responseData.starter?.motors)) {
+        responseData.starter.motors = responseData.starter.motors.map((motor: any) => {
+          const latestParams = motor.starterParameters?.[0];
+          const { starterParameters, ...motorRest } = motor;
+          return {
+            ...motorRest,
+            fault: {
+              is_faulted: Boolean(latestParams && latestParams.fault && !latestParams.fault_cleared),
+              fault_code: latestParams?.fault ?? null,
+              fault_description: latestParams?.fault_description ?? null,
+            },
+          };
+        });
+      }
 
       return sendResponse(c, 200, SETTINGS_FETCHED, responseData);
     } catch (error: any) {
