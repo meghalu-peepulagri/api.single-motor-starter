@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lt, lte, ne, notInArray, or, SQL, sql, getTableColumns, desc } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
@@ -945,7 +945,7 @@ export async function bulkCreateMotorSchedules(
  * Already-assigned rows (device_schedule_id IS NOT NULL) are skipped.
  * Callers must ensure every record in `records` belongs to `motorId`.
  */
-const MAX_DEVICE_CAPACITY = 15;
+export const MAX_DEVICE_CAPACITY = 15;
 
 export async function assignDeviceScheduleIds(
   motorId: number,
@@ -968,30 +968,60 @@ export async function assignDeviceScheduleIds(
     if (nullRows.length === 0) return;
     const toAssign = sorted.filter(r => nullRows.some(n => n.id === r.id));
 
-    // Lock the motor row and read its own slot counter.
-    const [motorRow] = await trx
-      .select({ last: motors.last_device_schedule_id })
-      .from(motors)
-      .where(eq(motors.id, motorId))
-      .for("update");
+    // Lock the motor row so concurrent assignments for this motor serialize.
+    await trx.select({ id: motors.id }).from(motors).where(eq(motors.id, motorId)).for("update");
 
-    let counter = motorRow?.last ?? 0;
+    // Slots 1..MAX_DEVICE_CAPACITY currently in use by this motor's non-deleted,
+    // non-failed schedules (same exclusion findAndDeleteExpiredSchedules already
+    // uses to free a slot). Reusing freed slots instead of an ever-increasing
+    // counter is what keeps device_schedule_id within the device's real 1-15
+    // slot table.
+    const occupiedRows = await trx
+      .select({ deviceScheduleId: motorSchedules.device_schedule_id })
+      .from(motorSchedules)
+      .where(and(
+        eq(motorSchedules.motor_id, motorId),
+        ne(motorSchedules.status, "ARCHIVED"),
+        notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]),
+        isNotNull(motorSchedules.device_schedule_id),
+      ));
+    const occupied = new Set(occupiedRows.map(r => r.deviceScheduleId as number));
+
+    let highestAssigned = 0;
 
     for (const r of toAssign) {
-      counter++;
+      let slot: number | null = null;
+      for (let candidate = 1; candidate <= MAX_DEVICE_CAPACITY; candidate++) {
+        if (!occupied.has(candidate)) {
+          slot = candidate;
+          break;
+        }
+      }
+
+      if (slot === null) {
+        throw new BadRequestException(
+          `Motor ${motorId} already has ${MAX_DEVICE_CAPACITY} active schedules — no free device slot for schedule id ${r.schedule_id}. Stop or delete an existing schedule first.`
+        );
+      }
+
+      occupied.add(slot);
+      highestAssigned = Math.max(highestAssigned, slot);
+
       await trx
         .update(motorSchedules)
-        .set({ device_schedule_id: counter })
+        .set({ device_schedule_id: slot })
         .where(and(
           eq(motorSchedules.id, r.id),
           isNull(motorSchedules.device_schedule_id),
         ));
     }
 
-    await trx
-      .update(motors)
-      .set({ last_device_schedule_id: counter })
-      .where(eq(motors.id, motorId));
+    if (highestAssigned > 0) {
+      await trx
+        .update(motors)
+        .set({ last_device_schedule_id: sql`GREATEST(${motors.last_device_schedule_id}, ${highestAssigned})` })
+        .where(eq(motors.id, motorId));
+    }
   });
 }
 

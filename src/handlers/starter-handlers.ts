@@ -23,7 +23,7 @@ import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID, PAYLOAD_VERSION_MOTOR_CHANGE_NOT_AL
 import { publishMultipleTimesInBackground } from "../helpers/settings-helpers.js";
 import { ActivityService } from "../services/db/activity-service.js";
 import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsecutiveGroupsCount, getUnifiedLogsCount, getUnifiedLogsPaginated } from "../services/db/alerts-services.js";
-import { getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
+import { getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterMotorsByPcb, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
@@ -128,16 +128,30 @@ export class StarterHandlers {
       const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
       const assignedAtDate = assignedAt?.assigned_at ?? null;
 
-      const [data, totalRecords] = await Promise.all([
+      const [data, totalRecords, starterBox] = await Promise.all([
         getUnifiedLogsPaginated(starterId, motorId, offset, pageSize, assignedAtDate, logTypes),
         getUnifiedLogsCount(starterId, motorId, assignedAtDate, logTypes),
+        getRecordById<StarterBoxTable, "motor_support_type">(starterBoxes, starterId, ["motor_support_type"]),
       ]);
 
       const paginationInfo = getPaginationData(page, pageSize, totalRecords);
 
+      // Dual-motor starters share one log feed across both motors' entity-level
+      // (MOTOR) rows, so tag each with the motor's name to disambiguate which
+      // motor it's about. Single-motor starters are left byte-for-byte unchanged
+      // since there's only one motor and no ambiguity.
+      let records = data || [];
+      if (starterBox?.motor_support_type === "MULTIPLE_MOTORS") {
+        const motor = await getRecordById<MotorsTable, "alias_name" | "name">(motors, motorId, ["alias_name", "name"]);
+        const motorName = motor?.alias_name || motor?.name || null;
+        records = records.map((record: any) =>
+          record.entity_type === "MOTOR" ? { ...record, motor_name: motorName } : record
+        );
+      }
+
       const response = {
         pagination: paginationInfo,
-        records: data || [],
+        records,
       };
 
       return sendResponse(c, 200, "Logs fetched successfully", response);

@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { starterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
@@ -11,6 +11,7 @@ import { requestTypesFor } from "../../helpers/packet-types-helper.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { logger } from "../../utils/logger.js";
 import { motors } from "../../database/schemas/motors.js";
+import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
 import { sendMultiMotorSettingsCommand } from "../../helpers/multi-motor-settings-sync-helper.js";
 import { getMotorsForStarterControl } from "./motor-services.js";
@@ -39,11 +40,31 @@ export async function starterAcknowledgedSettings(starterId, filter) {
                 with: {
                     motors: {
                         where: ne(motors.status, "ARCHIVED"),
+                        orderBy: asc(motors.motor_index),
                         columns: {
                             id: true,
                             name: true,
                             hp: true,
                             alias_name: true,
+                            motor_index: true,
+                            motor_reference: true,
+                        },
+                        with: {
+                            // Motor-scoped relation (starterBoxParameters.motor_id), not the box-level
+                            // one keyed only on starter_id — that one would give a dual-motor box's
+                            // two motors the same "latest for either motor" fault row instead of
+                            // each motor's own latest reading.
+                            starterParameters: {
+                                where: isNotNull(starterBoxParameters.time_stamp),
+                                orderBy: [desc(starterBoxParameters.time_stamp)],
+                                limit: 1,
+                                columns: {
+                                    fault: true,
+                                    fault_description: true,
+                                    fault_cleared: true,
+                                    time_stamp: true,
+                                },
+                            },
                         },
                     },
                 },

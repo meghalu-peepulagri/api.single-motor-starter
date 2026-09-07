@@ -658,9 +658,12 @@ export class MotorScheduleHandler {
             }
             if (records.length === 0)
                 return sendResponse(c, 200, PENDING_SCHEDULES_FETCHED, []);
-            // Delete expired schedules per starter, then assign sequential device_schedule_ids
-            // from 1 PER MOTOR — each motor has its own independent slot table on the device,
-            // so a dual-motor box's m1 and m2 schedules are numbered independently.
+            // Delete expired schedules per starter, then assign device_schedule_ids PER MOTOR
+            // via the shared, slot-capped allocator (reuses the lowest free slot in
+            // 1..MAX_DEVICE_CAPACITY instead of a fresh unbounded 1..N renumber) — each motor
+            // has its own independent slot table on the device, so a dual-motor box's m1 and
+            // m2 schedules are numbered independently. Already-assigned (in-flight) rows are
+            // left untouched by the allocator.
             const starterIds = [...new Set(records.map(r => r.starter_id).filter((id) => id != null))];
             for (const starterId of starterIds) {
                 const freed = await findAndDeleteExpiredSchedules(starterId);
@@ -678,14 +681,23 @@ export class MotorScheduleHandler {
                     byMotor.set(motorId, list);
                 }
                 for (const [motorId, motorRecords] of byMotor) {
-                    await Promise.all(motorRecords.map((r, i) => {
-                        r.device_schedule_id = i + 1;
-                        return db.update(motorSchedules)
-                            .set({ device_schedule_id: i + 1 })
-                            .where(eq(motorSchedules.id, r.id))
-                            .catch(() => null);
-                    }));
-                    logger.info(`[sync/pending] starter=${starterId} motor=${motorId} assigned device_schedule_ids=[${motorRecords.map((_, i) => i + 1).join(",")}]`);
+                    try {
+                        await assignDeviceScheduleIds(motorId, motorRecords.map(r => ({ id: r.id, schedule_id: r.schedule_id })));
+                    }
+                    catch (err) {
+                        logger.warn(`[sync/pending] starter=${starterId} motor=${motorId} device_schedule_id assignment failed: ${err?.message}`);
+                    }
+                    // Re-read the actual assigned slots (the allocator skips already-assigned
+                    // rows) so the in-memory records carry the right value for buildDeviceSyncPayloads.
+                    const updatedRows = await db
+                        .select({ id: motorSchedules.id, device_schedule_id: motorSchedules.device_schedule_id })
+                        .from(motorSchedules)
+                        .where(inArray(motorSchedules.id, motorRecords.map(r => r.id)));
+                    const idToSlot = new Map(updatedRows.map(row => [row.id, row.device_schedule_id]));
+                    for (const r of motorRecords) {
+                        r.device_schedule_id = idToSlot.get(r.id) ?? r.device_schedule_id;
+                    }
+                    logger.info(`[sync/pending] starter=${starterId} motor=${motorId} assigned device_schedule_ids=[${motorRecords.map(r => r.device_schedule_id).join(",")}]`);
                 }
             }
             const ackedRows = starterIds.length > 0
