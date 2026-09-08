@@ -1583,10 +1583,32 @@ export async function deviceSyncUpdate(message: any, topic: string) {
     // the success signal, and updateMultiMotorSettingsAck copies its known fields into
     // that motor's stored settings.
     if (message.D !== null && typeof message.D === "object") {
+      const rawAckData: Record<string, number | Record<string, any>> = message.D;
+      const hasCalibrationResult = Object.values(rawAckData).some((v) => v !== null && typeof v === "object");
+
       const pendingAck = settingsControlPendingAckMap.get(macFromTopic);
 
       if (!pendingAck) {
-        logger.warn(`No pending multi-motor settings ACK found for ${macFromTopic}`);
+        // The Admin Panel can publish T:4 directly (bypassing sendMultiMotorSettingsCommand,
+        // so no entry is ever registered here) — but the device's real ack still arrives at
+        // this subscriber. A plain 0|1 ack with nothing to apply is safely dropped as before;
+        // a calibration-result object carries real test-run values that would otherwise be
+        // lost, so apply it directly instead of discarding it.
+        if (!hasCalibrationResult) {
+          logger.warn(`No pending multi-motor settings ACK found for ${macFromTopic}`);
+          return null;
+        }
+
+        logger.info(`[multi-motor-settings] calibration-result ack for ${macFromTopic} with no pending entry (likely Admin Panel direct publish) — applying directly`);
+        const validMacForCalibration = await getStarterByMacWithMotor(macFromTopic);
+        if (validMacForCalibration?.id) {
+          const allAcked = await updateMultiMotorSettingsAck(validMacForCalibration.id, rawAckData);
+          logger.info(`[multi-motor-settings] calibration-result ack applied for starter=${validMacForCalibration.id} allAcked=${allAcked}`);
+          if (allAcked && validMacForCalibration.synced_settings_status === "false") {
+            await updateRecordById<StarterBoxTable>(starterBoxes, validMacForCalibration.id, { synced_settings_status: "true" });
+          }
+          if (allAcked) clearSettingsSyncAttempts(validMacForCalibration.id);
+        }
         return null;
       }
 
@@ -1595,13 +1617,12 @@ export async function deviceSyncUpdate(message: any, topic: string) {
         return null;
       }
 
-      const ackData: Record<string, number | Record<string, any>> = message.D;
-      pendingAck.resolve({ acked: true, data: ackData });
+      pendingAck.resolve({ acked: true, data: rawAckData });
       settingsControlPendingAckMap.delete(macFromTopic);
 
       const validMac = await getStarterByMacWithMotor(macFromTopic);
       if (validMac?.id) {
-        const allAcked = await updateMultiMotorSettingsAck(validMac.id, ackData);
+        const allAcked = await updateMultiMotorSettingsAck(validMac.id, rawAckData);
         logger.info(`[multi-motor-settings] ack applied for starter=${validMac.id} allAcked=${allAcked}`);
 
         if (allAcked && validMac.synced_settings_status === "false") {
