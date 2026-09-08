@@ -1578,6 +1578,10 @@ export async function deviceSyncUpdate(message: any, topic: string) {
     // of the scalar D:0|1 below — the shape itself is a safe discriminator, since
     // SINGLE_STARTER firmware only ever sends the scalar and MULTI_STARTER firmware
     // only ever sends the object. The scalar branch beneath this one is untouched.
+    // A motor's value can also be a calibration-result object (e.g. after a test run:
+    // { flc, drf, olf, lrf, olr, lrr }) instead of a bare 0|1 — its presence is itself
+    // the success signal, and updateMultiMotorSettingsAck copies its known fields into
+    // that motor's stored settings.
     if (message.D !== null && typeof message.D === "object") {
       const pendingAck = settingsControlPendingAckMap.get(macFromTopic);
 
@@ -1591,7 +1595,7 @@ export async function deviceSyncUpdate(message: any, topic: string) {
         return null;
       }
 
-      const ackData: Record<string, number> = message.D;
+      const ackData: Record<string, number | Record<string, any>> = message.D;
       pendingAck.resolve({ acked: true, data: ackData });
       settingsControlPendingAckMap.delete(macFromTopic);
 

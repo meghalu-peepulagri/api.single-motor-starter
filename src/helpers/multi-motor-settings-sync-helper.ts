@@ -1,7 +1,7 @@
 import type { StarterBox } from "../database/schemas/starter-boxes.js";
 import type { StarterSettings } from "../database/schemas/starter-settings.js";
 import { logger } from "../utils/logger.js";
-import { settingsControlPendingAckMap, type DeviceCommandAckResult } from "./ack-tracker-hepler.js";
+import { settingsControlPendingAckMap, type SettingsAckResult } from "./ack-tracker-hepler.js";
 import { buildMultiMotorSettingsPayload } from "./multi-motor-settings-payload-helper.js";
 import { publishData } from "../services/db/mqtt-db-services.js";
 
@@ -10,7 +10,7 @@ import { publishData } from "../services/db/mqtt-db-services.js";
 const TOTAL_ATTEMPTS = 3;
 const ACK_WAIT_SECONDS = [10, 10, 10];
 
-function waitForSettingsControlAck(publishedKey: string, sequenceNumber: number, timeoutMs: number): Promise<DeviceCommandAckResult> {
+function waitForSettingsControlAck(publishedKey: string, sequenceNumber: number, timeoutMs: number): Promise<SettingsAckResult> {
   return new Promise((resolve) => {
     let timeoutRef: NodeJS.Timeout;
 
@@ -51,7 +51,7 @@ export async function sendMultiMotorSettingsCommand(
   settings: StarterSettings,
   motorIndexByMotorId: Map<number, number>,
   options: { singleMotor?: boolean } = {},
-): Promise<DeviceCommandAckResult> {
+): Promise<SettingsAckResult> {
   const publishedKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
   if (!publishedKey) {
     logger.error(`[multi-motor-settings] No valid publish key (mac/pcb) for starter ${starter.id}`);

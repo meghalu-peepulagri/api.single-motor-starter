@@ -380,6 +380,19 @@ export async function getLatestStarterSettingsRow(starterId) {
  * Returns true once every motor in the config has been acknowledged, so the caller
  * knows whether to mark the starter box as synced.
  */
+// Fields a device may echo back as calibration/test-run results inside a per-motor
+// CALIBRATION_ACK block (D.m<N> = { flc, drf, olf, lrf, olr, lrr, ... } instead of a
+// bare 0|1 code). Only these known numeric fields are copied — anything else in the
+// object is ignored rather than blindly merged into the stored settings.
+const CALIBRATION_RESULT_FIELDS = ["flc", "drf", "olf", "lrf", "olr", "lrr"];
+function extractCalibrationResultFields(value) {
+    const picked = {};
+    for (const field of CALIBRATION_RESULT_FIELDS) {
+        if (typeof value[field] === "number")
+            picked[field] = value[field];
+    }
+    return picked;
+}
 export async function updateMultiMotorSettingsAck(starterId, ackData) {
     const latestRow = await getLatestStarterSettingsRow(starterId);
     if (!latestRow)
@@ -397,14 +410,24 @@ export async function updateMultiMotorSettingsAck(starterId, ackData) {
     const starterMotors = await getMotorsForStarterControl(starterId);
     const motorIdByIndex = new Map(starterMotors.map((m) => [m.motor_index ?? 1, m.id]));
     const ackedMotorIds = new Set();
+    const calibrationResultsByMotorId = new Map();
     for (const [key, code] of Object.entries(ackData)) {
         const index = parseMotorKey(key);
         const motorId = index !== null ? motorIdByIndex.get(index) : undefined;
-        if (motorId !== undefined && Number(code) === 1)
+        if (motorId === undefined)
+            continue;
+        // A device that reports calibration results sends an object instead of a bare
+        // ack code — its presence IS the success signal (nothing to compare to 1).
+        if (code !== null && typeof code === "object") {
             ackedMotorIds.add(motorId);
+            calibrationResultsByMotorId.set(motorId, extractCalibrationResultFields(code));
+        }
+        else if (Number(code) === 1) {
+            ackedMotorIds.add(motorId);
+        }
     }
     const updatedMotors = latestRow.multi_motor_config.motors.map((motorBlock) => (ackedMotorIds.has(motorBlock.motor_id)
-        ? { ...motorBlock, acknowledgement: "TRUE" }
+        ? { ...motorBlock, ...calibrationResultsByMotorId.get(motorBlock.motor_id), acknowledgement: "TRUE" }
         : motorBlock));
     const allAcked = updatedMotors.length > 0 && updatedMotors.every((m) => m.acknowledgement === "TRUE");
     await db.update(starterSettings)
