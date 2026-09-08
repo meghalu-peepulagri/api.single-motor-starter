@@ -243,7 +243,7 @@ export async function updateStates(insertedData: preparedLiveData, previousData:
   if (!starter_id) return null;
 
   const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
-  if (isInTestRun && isInTestRun.test_run_status === "PROCESSING") await updateLatestStarterSettingsFlc(starter_id, motor_id, avg_current)
+  if (isInTestRun && isInTestRun.test_run_status === "PROCESSING") await updateLatestStarterSettingsFlc(starter_id, avg_current)
 
   const record = prepareStarterParametersRecord(insertedData);
   try {
@@ -627,7 +627,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData: preparedL
   if (!starter_id || !motor_id) return null;
 
   const isInTestRun = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
-  if (isInTestRun && isInTestRun.test_run_status === "PROCESSING") await updateLatestStarterSettingsFlc(starter_id, motor_id, avg_current);
+  if (isInTestRun && isInTestRun.test_run_status === "PROCESSING") await updateLatestStarterSettingsFlc(starter_id, avg_current);
 
   const record = prepareStarterParametersRecord(insertedData);
   const notificationData = await db.transaction(async (trx) => {
