@@ -46,6 +46,15 @@ export type DeviceCommandAckResult = {
   data?: Record<string, number>;
 };
 
+// Settings-control acks (CALIBRATION_ACK) differ from other command acks: a motor's
+// value can be a calibration-result object (e.g. { flc, drf, olf, lrf, olr, lrr })
+// instead of a bare code, following a test run — so this stays its own type rather
+// than widening the shared DeviceCommandAckResult used by unrelated ack flows.
+export type SettingsAckResult = {
+  acked: boolean;
+  data?: Record<string, number | Record<string, any>>;
+};
+
 // Multi-motor control (T:1 -> T:31) ack tracking.
 export type MotorControlAckResult = DeviceCommandAckResult;
 
@@ -69,6 +78,6 @@ export const modeControlPendingAckMap = new Map<
 // ack shapes can never resolve each other's promise.
 export const settingsControlPendingAckMap = new Map<
   string,
-  { resolve: (result: DeviceCommandAckResult) => void; sequenceNumber: number }
+  { resolve: (result: SettingsAckResult) => void; sequenceNumber: number }
 >();
 
