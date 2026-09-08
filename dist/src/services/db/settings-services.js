@@ -91,9 +91,24 @@ export async function updateLatestStarterSettings(starterId, isNewConfigurationS
         )
       `);
 }
-export async function updateLatestStarterSettingsFlc(starterId, avgCurrent) {
+export async function updateLatestStarterSettingsFlc(starterId, motorId, avgCurrent) {
     if (!starterId)
         return null;
+    // Dual-motor boxes keep flc per-motor inside multi_motor_config.motors[], not the flat
+    // column (see MotorSettingsBlock — current is measured per motor branch). Writing the
+    // flat column for these boxes silently updates a field the settings UI never reads.
+    const latestRow = await getLatestStarterSettingsRow(starterId);
+    if (latestRow?.multi_motor_config) {
+        if (!motorId)
+            return null;
+        const updatedMotors = latestRow.multi_motor_config.motors.map((motorBlock) => (motorBlock.motor_id === motorId ? { ...motorBlock, flc: avgCurrent } : motorBlock));
+        return db.update(starterSettings)
+            .set({
+            multi_motor_config: { ...latestRow.multi_motor_config, motors: updatedMotors },
+            updated_at: sql `CURRENT_TIMESTAMP`,
+        })
+            .where(eq(starterSettings.id, latestRow.id));
+    }
     return db
         .update(starterSettings)
         .set({
