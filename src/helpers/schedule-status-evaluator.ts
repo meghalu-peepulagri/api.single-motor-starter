@@ -107,7 +107,7 @@ function plannedDurationMinutes(
 
 // =================== TERMINAL STATUS RESOLVER ===================
 
-function resolveTerminalStatus(
+export function resolveTerminalStatus(
   schedule: ScheduleForEvaluation,
   startMinutes: number,
   endMinutes: number,
