@@ -83,7 +83,7 @@ function plannedDurationMinutes(schedule, startMinutes, endMinutes) {
         : (1440 - startMinutes) + endMinutes;
 }
 // =================== TERMINAL STATUS RESOLVER ===================
-function resolveTerminalStatus(schedule, startMinutes, endMinutes, now) {
+export function resolveTerminalStatus(schedule, startMinutes, endMinutes, now) {
     const planned = plannedDurationMinutes(schedule, startMinutes, endMinutes);
     const actual = schedule.actual_run_time ?? 0;
     if (!(schedule.actual_started_at ?? (schedule.actual_started_at ?? schedule.actual_start_time))) {
