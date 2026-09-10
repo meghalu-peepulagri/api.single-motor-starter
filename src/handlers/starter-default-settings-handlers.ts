@@ -331,6 +331,24 @@ export class StarterDefaultSettingsHandlers {
       "update-default-settings", dvc, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA
     );
 
+    // vg_r/vg_y/vg_b/ig_r/ig_y/ig_b (ADC calibration) and step_delay/transfer_time
+    // (star-delta timing) are optional on `dvc` — a Test Run's per-motor save typically
+    // only touches FLC and current-protection fields, never resending box-level ADC
+    // calibration. Carry the most recent row's real value forward instead of letting a
+    // missing field fall back to the column's raw DB default (0). Mirrors the same
+    // carry-forward already applied on the flat save path in insertStarterSettingHandler.
+    const CARRY_FORWARD_FIELDS = ["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b", "step_delay", "transfer_time"] as const;
+    const lastFieldsRow = await db.query.starterSettings.findFirst({
+      where: eq(starterSettings.starter_id, starter.id),
+      orderBy: desc(starterSettings.id),
+      columns: Object.fromEntries(CARRY_FORWARD_FIELDS.map((f) => [f, true])) as Record<typeof CARRY_FORWARD_FIELDS[number], true>,
+    });
+    for (const field of CARRY_FORWARD_FIELDS) {
+      if ((validatedDeviceSettings as any)[field] == null && lastFieldsRow?.[field] != null) {
+        (validatedDeviceSettings as any)[field] = lastFieldsRow[field];
+      }
+    }
+
     const starterMotors = await getMotorsForStarterControl(starter.id);
     const resolved = validatedBody.motors.map((entry) => {
       const motor = entry.motor_reference
