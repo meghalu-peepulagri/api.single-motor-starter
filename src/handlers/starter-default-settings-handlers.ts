@@ -193,15 +193,27 @@ export class StarterDefaultSettingsHandlers {
       // column's raw DB default (0), silently wiping the real calibration value. Carry
       // the most recent row's real value forward instead, mirroring how
       // multi_motor_config is preserved below.
+      // ADC_ZERO_INVALID fields additionally treat an explicit 0 as "not a real reading"
+      // (not just missing/null) — confirmed against starter_settings_limits, a genuine
+      // calibration value is never exactly 0 (e.g. vg_r_min ~1.36, ig_r_min ~4.25), so a
+      // literal 0 here is always a placeholder the caller didn't mean to send, same as if
+      // it had been omitted. step_delay/transfer_time are NOT in that set — 0 is a
+      // legitimate real value for a star-delta timing field, so only missing/null is
+      // treated as "carry forward" for those two.
       const CARRY_FORWARD_FIELDS = ["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b", "step_delay", "transfer_time"] as const;
+      const ADC_ZERO_INVALID = new Set(["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b"]);
       const lastFieldsRow = await db.query.starterSettings.findFirst({
         where: eq(starterSettings.starter_id, starter.id),
         orderBy: desc(starterSettings.id),
         columns: Object.fromEntries(CARRY_FORWARD_FIELDS.map((f) => [f, true])) as Record<typeof CARRY_FORWARD_FIELDS[number], true>,
       });
       for (const field of CARRY_FORWARD_FIELDS) {
-        if ((validatedBody as any)[field] == null && lastFieldsRow?.[field] != null) {
-          (validatedBody as any)[field] = lastFieldsRow[field];
+        const incoming = (validatedBody as any)[field];
+        const isMissing = incoming == null || (ADC_ZERO_INVALID.has(field) && incoming === 0);
+        const fallback = lastFieldsRow?.[field];
+        const fallbackIsUsable = fallback != null && !(ADC_ZERO_INVALID.has(field) && fallback === 0);
+        if (isMissing && fallbackIsUsable) {
+          (validatedBody as any)[field] = fallback;
         }
       }
 
@@ -337,15 +349,25 @@ export class StarterDefaultSettingsHandlers {
     // calibration. Carry the most recent row's real value forward instead of letting a
     // missing field fall back to the column's raw DB default (0). Mirrors the same
     // carry-forward already applied on the flat save path in insertStarterSettingHandler.
+    // ADC_ZERO_INVALID fields additionally treat an explicit 0 as "not a real reading"
+    // (not just missing/null) — a genuine calibration value is never exactly 0 (confirmed
+    // against starter_settings_limits, e.g. vg_r_min ~1.36, ig_r_min ~4.25), so a Test Run
+    // sending a literal 0 is a placeholder the same as if it had omitted the field.
+    // step_delay/transfer_time are NOT in that set — 0 is a legitimate real value there.
     const CARRY_FORWARD_FIELDS = ["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b", "step_delay", "transfer_time"] as const;
+    const ADC_ZERO_INVALID = new Set(["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b"]);
     const lastFieldsRow = await db.query.starterSettings.findFirst({
       where: eq(starterSettings.starter_id, starter.id),
       orderBy: desc(starterSettings.id),
       columns: Object.fromEntries(CARRY_FORWARD_FIELDS.map((f) => [f, true])) as Record<typeof CARRY_FORWARD_FIELDS[number], true>,
     });
     for (const field of CARRY_FORWARD_FIELDS) {
-      if ((validatedDeviceSettings as any)[field] == null && lastFieldsRow?.[field] != null) {
-        (validatedDeviceSettings as any)[field] = lastFieldsRow[field];
+      const incoming = (validatedDeviceSettings as any)[field];
+      const isMissing = incoming == null || (ADC_ZERO_INVALID.has(field) && incoming === 0);
+      const fallback = lastFieldsRow?.[field];
+      const fallbackIsUsable = fallback != null && !(ADC_ZERO_INVALID.has(field) && fallback === 0);
+      if (isMissing && fallbackIsUsable) {
+        (validatedDeviceSettings as any)[field] = fallback;
       }
     }
 
