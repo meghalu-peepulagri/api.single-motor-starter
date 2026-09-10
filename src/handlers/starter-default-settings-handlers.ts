@@ -187,6 +187,24 @@ export class StarterDefaultSettingsHandlers {
         [starter.id, "TRUE"]
       ) ?? {};
 
+      // vg_r/vg_y/vg_b/ig_r/ig_y/ig_b (ADC calibration) and step_delay/transfer_time
+      // (star-delta timing) are optional — a save that doesn't carry a real reading for
+      // them (e.g. a mobile Test Run posting only FLC) would otherwise fall back to the
+      // column's raw DB default (0), silently wiping the real calibration value. Carry
+      // the most recent row's real value forward instead, mirroring how
+      // multi_motor_config is preserved below.
+      const CARRY_FORWARD_FIELDS = ["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b", "step_delay", "transfer_time"] as const;
+      const lastFieldsRow = await db.query.starterSettings.findFirst({
+        where: eq(starterSettings.starter_id, starter.id),
+        orderBy: desc(starterSettings.id),
+        columns: Object.fromEntries(CARRY_FORWARD_FIELDS.map((f) => [f, true])) as Record<typeof CARRY_FORWARD_FIELDS[number], true>,
+      });
+      for (const field of CARRY_FORWARD_FIELDS) {
+        if ((validatedBody as any)[field] == null && lastFieldsRow?.[field] != null) {
+          (validatedBody as any)[field] = lastFieldsRow[field];
+        }
+      }
+
       // Every save inserts a NEW row, so any column the flat payload doesn't carry starts
       // out empty. For a MULTI_STARTER box that means multi_motor_config would land as
       // NULL and the per-motor block would be lost — which is what happens when the mobile
