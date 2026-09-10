@@ -37,13 +37,15 @@ export function controlMode(code) {
         case 2:
             return "ALREADY AUTO";
         case 3:
-            return "ALREADY MANUAL";
+            return "BYPASS";
         case 4:
             return "INVALID REQUEST";
         case 5:
             return "FEATURE NOT ENABLED";
         case 6:
             return "SCHEDULE";
+        case 10:
+            return "ALREADY MANUAL";
         default:
             return "Unknown mode";
     }

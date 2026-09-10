@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lt, lte, ne, notInArray, or, SQL, sql, getTableColumns, desc } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, SQL, sql, getTableColumns, desc } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import BadRequestException from "../../exceptions/bad-request-exception.js";
 
@@ -33,10 +33,17 @@ import {
 import { motors } from "../../database/schemas/motors.js";
 import type { ValidatedMotorSchedule, ValidatedMotorScheduleArray } from "../../validations/schema/motor-schedule-validators.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
-import { evaluateScheduleStatus } from "../../helpers/schedule-status-evaluator.js";
+import { evaluateScheduleStatus, resolveTerminalStatus } from "../../helpers/schedule-status-evaluator.js";
 import type { ScheduleForEvaluation } from "../../types/app-types.js";
+import { motorScheduleLogs } from "../../database/schemas/motor-schedule-logs.js";
 
 const ACTIVE_STATUSES = ["RUNNING", "PENDING", "SCHEDULED", "WAITING_NEXT_CYCLE", "STOPPED", "RESTARTED", "PARTIAL", "UNDELIVERED", "MISSED"] as const;
+
+// A schedule in one of these statuses is done with its device slot (device_schedule_id)
+// and its app-level slot (schedule_id) — whatever happened, it's over, so a new schedule
+// can reuse that slot number. STOPPED is deliberately excluded: a stopped schedule can
+// still be restarted into the same slot, so it keeps occupying it.
+export const SLOT_FREE_STATUSES = ["DELETED", "FAILED", "COMPLETED", "PARTIAL", "MISSED"] as const;
 
 export async function getNextScheduleIdForMotor(motorId: number): Promise<number> {
   const reusable = await db
@@ -443,7 +450,7 @@ export async function findMaxAckedEndDatePerStarter(todayNum: number): Promise<M
       eq(motorSchedules.acknowledgement, 1),
       gte(motorSchedules.schedule_end_date, todayNum),
       ne(motorSchedules.status, "ARCHIVED"),
-      notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]),
+      notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
     ))
     .groupBy(motorSchedules.starter_id);
 
@@ -606,8 +613,15 @@ export async function findPendingSchedulesForRepublish(starterId: number, motorI
 // =================== EXPIRED SCHEDULE CLEANUP ===================
 
 /**
- * Finds all schedules for a starter whose end date has passed and marks them DELETED.
- * Returns the freed device_schedule_ids so the caller can reuse those slots.
+ * Finds all schedules for a starter whose end date has passed and resolves each one to
+ * its real outcome (COMPLETED/PARTIAL/MISSED) via the same terminal-status logic the
+ * live evaluator uses — rather than blindly marking every one DELETED. DELETED is
+ * reserved for an actual user delete; overwriting every past-date schedule with it
+ * destroyed the real run outcome and made it permanently unrecoverable (a DELETED row
+ * is excluded from all later evaluation).
+ * Returns the freed device_schedule_ids so the caller can reuse those slots — any of
+ * these resolved statuses (see SLOT_FREE_STATUSES) frees the slot the same as DELETED
+ * did before.
  * Called before every publish so the device never holds stale past-date schedules.
  */
 export async function findAndDeleteExpiredSchedules(
@@ -620,7 +634,7 @@ export async function findAndDeleteExpiredSchedules(
     eq(motorSchedules.starter_id, starterId),
     lt(motorSchedules.schedule_end_date, todayNum),
     ne(motorSchedules.status, "ARCHIVED"),
-    notInArray(motorSchedules.schedule_status, ["DELETED", "FAILED"]),
+    notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
   ];
   if (motorId != null) {
     conditions.push(eq(motorSchedules.motor_id, motorId));
@@ -628,15 +642,53 @@ export async function findAndDeleteExpiredSchedules(
 
   const expired = await db.query.motorSchedules.findMany({
     where: and(...conditions),
-    columns: { id: true, device_schedule_id: true },
+    columns: {
+      id: true,
+      device_schedule_id: true,
+      schedule_status: true,
+      schedule_type: true,
+      start_time: true,
+      end_time: true,
+      runtime_minutes: true,
+      cycle_on_minutes: true,
+      cycle_off_minutes: true,
+      actual_started_at: true,
+      actual_start_time: true,
+      actual_run_time: true,
+    },
   });
 
   if (expired.length === 0) return [];
 
-  await db
-    .update(motorSchedules)
-    .set({ schedule_status: "DELETED", updated_at: new Date() })
-    .where(inArray(motorSchedules.id, expired.map(r => r.id)));
+  const now = new Date();
+  const resolvedById = new Map<number, MotorSchedule["schedule_status"]>();
+  for (const record of expired) {
+    const startMinutes = timeToMinutes(record.start_time);
+    const endMinutes = timeToMinutes(record.end_time);
+    const resolved = resolveTerminalStatus(record as unknown as ScheduleForEvaluation, startMinutes, endMinutes, now);
+    resolvedById.set(record.id, resolved.newStatus as MotorSchedule["schedule_status"]);
+  }
+
+  const groups = new Map<MotorSchedule["schedule_status"], number[]>();
+  for (const [id, status] of resolvedById) {
+    const list = groups.get(status) ?? [];
+    list.push(id);
+    groups.set(status, list);
+  }
+
+  await batchUpdateScheduleStatuses(
+    [...groups.entries()].map(([status, ids]) => ({ status: status as any, ids, last_stopped_at: now }))
+  );
+
+  await db.insert(motorScheduleLogs).values(
+    expired.map(record => ({
+      schedule_id: record.id,
+      event_type: "STATUS_CHANGED" as const,
+      actor_type: "system",
+      old_status: record.schedule_status,
+      new_status: resolvedById.get(record.id)!,
+    }))
+  );
 
   return expired
     .map(r => r.device_schedule_id)
@@ -896,7 +948,7 @@ export async function bulkCreateMotorSchedules(
       eq(motorSchedules.motor_id, motorId),
       inArray(motorSchedules.schedule_id, incomingSlots),
       ne(motorSchedules.status, "ARCHIVED"),
-      notInArray(motorSchedules.schedule_status, ["FAILED", "DELETED"]),
+      notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
     ));
 
   if (takenSlots.length > 0) {
@@ -945,7 +997,7 @@ export async function bulkCreateMotorSchedules(
  * Already-assigned rows (device_schedule_id IS NOT NULL) are skipped.
  * Callers must ensure every record in `records` belongs to `motorId`.
  */
-const MAX_DEVICE_CAPACITY = 15;
+export const MAX_DEVICE_CAPACITY = 15;
 
 export async function assignDeviceScheduleIds(
   motorId: number,
@@ -968,30 +1020,60 @@ export async function assignDeviceScheduleIds(
     if (nullRows.length === 0) return;
     const toAssign = sorted.filter(r => nullRows.some(n => n.id === r.id));
 
-    // Lock the motor row and read its own slot counter.
-    const [motorRow] = await trx
-      .select({ last: motors.last_device_schedule_id })
-      .from(motors)
-      .where(eq(motors.id, motorId))
-      .for("update");
+    // Lock the motor row so concurrent assignments for this motor serialize.
+    await trx.select({ id: motors.id }).from(motors).where(eq(motors.id, motorId)).for("update");
 
-    let counter = motorRow?.last ?? 0;
+    // Slots 1..MAX_DEVICE_CAPACITY currently in use by this motor's schedules that
+    // haven't reached a slot-freeing status yet (SLOT_FREE_STATUSES — same exclusion
+    // findAndDeleteExpiredSchedules uses to free a slot). Reusing freed slots instead
+    // of an ever-increasing counter is what keeps device_schedule_id within the
+    // device's real 1-15 slot table.
+    const occupiedRows = await trx
+      .select({ deviceScheduleId: motorSchedules.device_schedule_id })
+      .from(motorSchedules)
+      .where(and(
+        eq(motorSchedules.motor_id, motorId),
+        ne(motorSchedules.status, "ARCHIVED"),
+        notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
+        isNotNull(motorSchedules.device_schedule_id),
+      ));
+    const occupied = new Set(occupiedRows.map(r => r.deviceScheduleId as number));
+
+    let highestAssigned = 0;
 
     for (const r of toAssign) {
-      counter++;
+      let slot: number | null = null;
+      for (let candidate = 1; candidate <= MAX_DEVICE_CAPACITY; candidate++) {
+        if (!occupied.has(candidate)) {
+          slot = candidate;
+          break;
+        }
+      }
+
+      if (slot === null) {
+        throw new BadRequestException(
+          `Motor ${motorId} already has ${MAX_DEVICE_CAPACITY} active schedules — no free device slot for schedule id ${r.schedule_id}. Stop or delete an existing schedule first.`
+        );
+      }
+
+      occupied.add(slot);
+      highestAssigned = Math.max(highestAssigned, slot);
+
       await trx
         .update(motorSchedules)
-        .set({ device_schedule_id: counter })
+        .set({ device_schedule_id: slot })
         .where(and(
           eq(motorSchedules.id, r.id),
           isNull(motorSchedules.device_schedule_id),
         ));
     }
 
-    await trx
-      .update(motors)
-      .set({ last_device_schedule_id: counter })
-      .where(eq(motors.id, motorId));
+    if (highestAssigned > 0) {
+      await trx
+        .update(motors)
+        .set({ last_device_schedule_id: sql`GREATEST(${motors.last_device_schedule_id}, ${highestAssigned})` })
+        .where(eq(motors.id, motorId));
+    }
   });
 }
 
@@ -1003,7 +1085,7 @@ export async function syncLastDeviceScheduleId(motorId: number): Promise<void> {
     .where(and(
       eq(motorSchedules.motor_id, motorId),
       ne(motorSchedules.status, "ARCHIVED"),
-      notInArray(motorSchedules.schedule_status, ["FAILED", "DELETED"]),
+      notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
     ));
 
   const newMax = maxRow[0]?.maxId ?? 0;

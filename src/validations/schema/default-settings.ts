@@ -92,15 +92,20 @@ export const vUpdateDefaultSettings = v.object({
   ip_b: integerOnly("ip_b"),
 
   /* ================= ADC Calibrations ================= */
-  vg_r: realOnly("vg_r", { decimalPlaces: 5 }),
-  vg_y: realOnly("vg_y", { decimalPlaces: 5 }),
-  vg_b: realOnly("vg_b", { decimalPlaces: 5 }),
+  // Nullish (not required): a save that doesn't carry a real calibration reading
+  // (e.g. a mobile Test Run posting only FLC) omits these instead of being forced
+  // to invent a value — insertStarterSettingHandler carries the previous row's
+  // real value forward when they're absent, the same way it already does for
+  // multi_motor_config.
+  vg_r: v.nullish(realOnly("vg_r", { decimalPlaces: 5 })),
+  vg_y: v.nullish(realOnly("vg_y", { decimalPlaces: 5 })),
+  vg_b: v.nullish(realOnly("vg_b", { decimalPlaces: 5 })),
   vo_r: realOnly("vo_r"),
   vo_y: realOnly("vo_y"),
   vo_b: realOnly("vo_b"),
-  ig_r: realOnly("ig_r", { decimalPlaces: 5 }),
-  ig_y: realOnly("ig_y", { decimalPlaces: 5 }),
-  ig_b: realOnly("ig_b", { decimalPlaces: 5 }),
+  ig_r: v.nullish(realOnly("ig_r", { decimalPlaces: 5 })),
+  ig_y: v.nullish(realOnly("ig_y", { decimalPlaces: 5 })),
+  ig_b: v.nullish(realOnly("ig_b", { decimalPlaces: 5 })),
   io_r: realOnly("io_r"),
   io_y: realOnly("io_y"),
   io_b: realOnly("io_b"),

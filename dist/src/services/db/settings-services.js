@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import db from "../../database/configuration.js";
 import { starterDefaultSettings } from "../../database/schemas/starter-default-settings.js";
 import { starterSettings } from "../../database/schemas/starter-settings.js";
@@ -11,6 +11,7 @@ import { requestTypesFor } from "../../helpers/packet-types-helper.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { logger } from "../../utils/logger.js";
 import { motors } from "../../database/schemas/motors.js";
+import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { parseMotorKey } from "../../helpers/motor-control-payload-helper.js";
 import { sendMultiMotorSettingsCommand } from "../../helpers/multi-motor-settings-sync-helper.js";
 import { getMotorsForStarterControl } from "./motor-services.js";
@@ -39,11 +40,31 @@ export async function starterAcknowledgedSettings(starterId, filter) {
                 with: {
                     motors: {
                         where: ne(motors.status, "ARCHIVED"),
+                        orderBy: asc(motors.motor_index),
                         columns: {
                             id: true,
                             name: true,
                             hp: true,
                             alias_name: true,
+                            motor_index: true,
+                            motor_reference: true,
+                        },
+                        with: {
+                            // Motor-scoped relation (starterBoxParameters.motor_id), not the box-level
+                            // one keyed only on starter_id — that one would give a dual-motor box's
+                            // two motors the same "latest for either motor" fault row instead of
+                            // each motor's own latest reading.
+                            starterParameters: {
+                                where: isNotNull(starterBoxParameters.time_stamp),
+                                orderBy: [desc(starterBoxParameters.time_stamp)],
+                                limit: 1,
+                                columns: {
+                                    fault: true,
+                                    fault_description: true,
+                                    fault_cleared: true,
+                                    time_stamp: true,
+                                },
+                            },
                         },
                     },
                 },
@@ -70,9 +91,24 @@ export async function updateLatestStarterSettings(starterId, isNewConfigurationS
         )
       `);
 }
-export async function updateLatestStarterSettingsFlc(starterId, avgCurrent) {
+export async function updateLatestStarterSettingsFlc(starterId, motorId, avgCurrent) {
     if (!starterId)
         return null;
+    // Dual-motor boxes keep flc per-motor inside multi_motor_config.motors[], not the flat
+    // column (see MotorSettingsBlock — current is measured per motor branch). Writing the
+    // flat column for these boxes silently updates a field the settings UI never reads.
+    const latestRow = await getLatestStarterSettingsRow(starterId);
+    if (latestRow?.multi_motor_config) {
+        if (!motorId)
+            return null;
+        const updatedMotors = latestRow.multi_motor_config.motors.map((motorBlock) => (motorBlock.motor_id === motorId ? { ...motorBlock, flc: avgCurrent } : motorBlock));
+        return db.update(starterSettings)
+            .set({
+            multi_motor_config: { ...latestRow.multi_motor_config, motors: updatedMotors },
+            updated_at: sql `CURRENT_TIMESTAMP`,
+        })
+            .where(eq(starterSettings.id, latestRow.id));
+    }
     return db
         .update(starterSettings)
         .set({
@@ -344,6 +380,19 @@ export async function getLatestStarterSettingsRow(starterId) {
  * Returns true once every motor in the config has been acknowledged, so the caller
  * knows whether to mark the starter box as synced.
  */
+// Fields a device may echo back as calibration/test-run results inside a per-motor
+// CALIBRATION_ACK block (D.m<N> = { flc, drf, olf, lrf, olr, lrr, ... } instead of a
+// bare 0|1 code). Only these known numeric fields are copied — anything else in the
+// object is ignored rather than blindly merged into the stored settings.
+const CALIBRATION_RESULT_FIELDS = ["flc", "drf", "olf", "lrf", "olr", "lrr"];
+function extractCalibrationResultFields(value) {
+    const picked = {};
+    for (const field of CALIBRATION_RESULT_FIELDS) {
+        if (typeof value[field] === "number")
+            picked[field] = value[field];
+    }
+    return picked;
+}
 export async function updateMultiMotorSettingsAck(starterId, ackData) {
     const latestRow = await getLatestStarterSettingsRow(starterId);
     if (!latestRow)
@@ -361,14 +410,24 @@ export async function updateMultiMotorSettingsAck(starterId, ackData) {
     const starterMotors = await getMotorsForStarterControl(starterId);
     const motorIdByIndex = new Map(starterMotors.map((m) => [m.motor_index ?? 1, m.id]));
     const ackedMotorIds = new Set();
+    const calibrationResultsByMotorId = new Map();
     for (const [key, code] of Object.entries(ackData)) {
         const index = parseMotorKey(key);
         const motorId = index !== null ? motorIdByIndex.get(index) : undefined;
-        if (motorId !== undefined && Number(code) === 1)
+        if (motorId === undefined)
+            continue;
+        // A device that reports calibration results sends an object instead of a bare
+        // ack code — its presence IS the success signal (nothing to compare to 1).
+        if (code !== null && typeof code === "object") {
             ackedMotorIds.add(motorId);
+            calibrationResultsByMotorId.set(motorId, extractCalibrationResultFields(code));
+        }
+        else if (Number(code) === 1) {
+            ackedMotorIds.add(motorId);
+        }
     }
     const updatedMotors = latestRow.multi_motor_config.motors.map((motorBlock) => (ackedMotorIds.has(motorBlock.motor_id)
-        ? { ...motorBlock, acknowledgement: "TRUE" }
+        ? { ...motorBlock, ...calibrationResultsByMotorId.get(motorBlock.motor_id), acknowledgement: "TRUE" }
         : motorBlock));
     const allAcked = updatedMotors.length > 0 && updatedMotors.every((m) => m.acknowledgement === "TRUE");
     await db.update(starterSettings)

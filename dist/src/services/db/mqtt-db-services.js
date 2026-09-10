@@ -158,7 +158,7 @@ export async function selectTopicAck(topicType, payload, topic) {
             return null;
     }
 }
-const VALID_MODES = ["AUTO", "MANUAL", "SCHEDULE"];
+const VALID_MODES = ["AUTO", "MANUAL", "SCHEDULE", "BYPASS"];
 async function getLockedMotorSnapshot(trx, motorId) {
     const [motorRecord] = await trx
         .select({
@@ -217,7 +217,7 @@ export async function updateStates(insertedData, previousData) {
         return null;
     const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
     if (isInTestRun && isInTestRun.test_run_status === "PROCESSING")
-        await updateLatestStarterSettingsFlc(starter_id, avg_current);
+        await updateLatestStarterSettingsFlc(starter_id, motor_id, avg_current);
     const record = prepareStarterParametersRecord(insertedData);
     try {
         const notificationData = await db.transaction(async (trx) => {
@@ -499,7 +499,7 @@ export async function updateDevicePowerAndMotorStateToON(insertedData, previousD
         return null;
     const isInTestRun = await getSingleRecordByMultipleColumnValues(motors, ["starter_id", "id", "test_run_status"], ["=", "=", "="], [starter_id, motor_id, "PROCESSING"], ["test_run_status"]);
     if (isInTestRun && isInTestRun.test_run_status === "PROCESSING")
-        await updateLatestStarterSettingsFlc(starter_id, avg_current);
+        await updateLatestStarterSettingsFlc(starter_id, motor_id, avg_current);
     const record = prepareStarterParametersRecord(insertedData);
     const notificationData = await db.transaction(async (trx) => {
         // Lock the motor row FIRST to avoid the SHARE→UPDATE lock-upgrade deadlock (see updateStates).
@@ -1330,22 +1330,46 @@ export async function deviceSyncUpdate(message, topic) {
         // of the scalar D:0|1 below — the shape itself is a safe discriminator, since
         // SINGLE_STARTER firmware only ever sends the scalar and MULTI_STARTER firmware
         // only ever sends the object. The scalar branch beneath this one is untouched.
+        // A motor's value can also be a calibration-result object (e.g. after a test run:
+        // { flc, drf, olf, lrf, olr, lrr }) instead of a bare 0|1 — its presence is itself
+        // the success signal, and updateMultiMotorSettingsAck copies its known fields into
+        // that motor's stored settings.
         if (message.D !== null && typeof message.D === "object") {
+            const rawAckData = message.D;
+            const hasCalibrationResult = Object.values(rawAckData).some((v) => v !== null && typeof v === "object");
             const pendingAck = settingsControlPendingAckMap.get(macFromTopic);
             if (!pendingAck) {
-                logger.warn(`No pending multi-motor settings ACK found for ${macFromTopic}`);
+                // The Admin Panel can publish T:4 directly (bypassing sendMultiMotorSettingsCommand,
+                // so no entry is ever registered here) — but the device's real ack still arrives at
+                // this subscriber. A plain 0|1 ack with nothing to apply is safely dropped as before;
+                // a calibration-result object carries real test-run values that would otherwise be
+                // lost, so apply it directly instead of discarding it.
+                if (!hasCalibrationResult) {
+                    logger.warn(`No pending multi-motor settings ACK found for ${macFromTopic}`);
+                    return null;
+                }
+                logger.info(`[multi-motor-settings] calibration-result ack for ${macFromTopic} with no pending entry (likely Admin Panel direct publish) — applying directly`);
+                const validMacForCalibration = await getStarterByMacWithMotor(macFromTopic);
+                if (validMacForCalibration?.id) {
+                    const allAcked = await updateMultiMotorSettingsAck(validMacForCalibration.id, rawAckData);
+                    logger.info(`[multi-motor-settings] calibration-result ack applied for starter=${validMacForCalibration.id} allAcked=${allAcked}`);
+                    if (allAcked && validMacForCalibration.synced_settings_status === "false") {
+                        await updateRecordById(starterBoxes, validMacForCalibration.id, { synced_settings_status: "true" });
+                    }
+                    if (allAcked)
+                        clearSettingsSyncAttempts(validMacForCalibration.id);
+                }
                 return null;
             }
             if (pendingAck.sequenceNumber !== message.S) {
                 logger.warn(`Sequence number mismatch for multi-motor settings ACK ${macFromTopic}: expected ${pendingAck.sequenceNumber}, received ${message.S}`);
                 return null;
             }
-            const ackData = message.D;
-            pendingAck.resolve({ acked: true, data: ackData });
+            pendingAck.resolve({ acked: true, data: rawAckData });
             settingsControlPendingAckMap.delete(macFromTopic);
             const validMac = await getStarterByMacWithMotor(macFromTopic);
             if (validMac?.id) {
-                const allAcked = await updateMultiMotorSettingsAck(validMac.id, ackData);
+                const allAcked = await updateMultiMotorSettingsAck(validMac.id, rawAckData);
                 logger.info(`[multi-motor-settings] ack applied for starter=${validMac.id} allAcked=${allAcked}`);
                 if (allAcked && validMac.synced_settings_status === "false") {
                     await updateRecordById(starterBoxes, validMac.id, { synced_settings_status: "true" });

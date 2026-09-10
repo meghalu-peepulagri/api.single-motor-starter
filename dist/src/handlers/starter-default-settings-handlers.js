@@ -104,6 +104,23 @@ export class StarterDefaultSettingsHandlers {
                 motor_support_type: starterData.motor_support_type,
                 payload_version: starterData.payload_version,
             };
+            // Collapse each motor's latest starter_parameters row (fetched via the
+            // motor-scoped relation, so a dual-motor box's two motors each get their
+            // own reading) into a clean current-fault summary.
+            if (Array.isArray(responseData.starter?.motors)) {
+                responseData.starter.motors = responseData.starter.motors.map((motor) => {
+                    const latestParams = motor.starterParameters?.[0];
+                    const { starterParameters, ...motorRest } = motor;
+                    return {
+                        ...motorRest,
+                        fault: {
+                            is_faulted: Boolean(latestParams && latestParams.fault && !latestParams.fault_cleared),
+                            fault_code: latestParams?.fault ?? null,
+                            fault_description: latestParams?.fault_description ?? null,
+                        },
+                    };
+                });
+            }
             return sendResponse(c, 200, SETTINGS_FETCHED, responseData);
         }
         catch (error) {
@@ -135,6 +152,35 @@ export class StarterDefaultSettingsHandlers {
             }
             const validatedBody = await validatedRequest("update-default-settings", body, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
             const oldSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement"], ["=", "="], [starter.id, "TRUE"]) ?? {};
+            // vg_r/vg_y/vg_b/ig_r/ig_y/ig_b (ADC calibration) and step_delay/transfer_time
+            // (star-delta timing) are optional — a save that doesn't carry a real reading for
+            // them (e.g. a mobile Test Run posting only FLC) would otherwise fall back to the
+            // column's raw DB default (0), silently wiping the real calibration value. Carry
+            // the most recent row's real value forward instead, mirroring how
+            // multi_motor_config is preserved below.
+            // ADC_ZERO_INVALID fields additionally treat an explicit 0 as "not a real reading"
+            // (not just missing/null) — confirmed against starter_settings_limits, a genuine
+            // calibration value is never exactly 0 (e.g. vg_r_min ~1.36, ig_r_min ~4.25), so a
+            // literal 0 here is always a placeholder the caller didn't mean to send, same as if
+            // it had been omitted. step_delay/transfer_time are NOT in that set — 0 is a
+            // legitimate real value for a star-delta timing field, so only missing/null is
+            // treated as "carry forward" for those two.
+            const CARRY_FORWARD_FIELDS = ["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b", "step_delay", "transfer_time"];
+            const ADC_ZERO_INVALID = new Set(["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b"]);
+            const lastFieldsRow = await db.query.starterSettings.findFirst({
+                where: eq(starterSettings.starter_id, starter.id),
+                orderBy: desc(starterSettings.id),
+                columns: Object.fromEntries(CARRY_FORWARD_FIELDS.map((f) => [f, true])),
+            });
+            for (const field of CARRY_FORWARD_FIELDS) {
+                const incoming = validatedBody[field];
+                const isMissing = incoming == null || (ADC_ZERO_INVALID.has(field) && incoming === 0);
+                const fallback = lastFieldsRow?.[field];
+                const fallbackIsUsable = fallback != null && !(ADC_ZERO_INVALID.has(field) && fallback === 0);
+                if (isMissing && fallbackIsUsable) {
+                    validatedBody[field] = fallback;
+                }
+            }
             // Every save inserts a NEW row, so any column the flat payload doesn't carry starts
             // out empty. For a MULTI_STARTER box that means multi_motor_config would land as
             // NULL and the per-motor block would be lost — which is what happens when the mobile
@@ -238,6 +284,33 @@ export class StarterDefaultSettingsHandlers {
         // `dvc` is the flat body (top-level flat payload) or dvc_c contents — both hold device fields;
         // the m1/m2 objects it may also contain are simply stripped by the validator.
         const validatedDeviceSettings = await validatedRequest("update-default-settings", dvc, INSERT_STARTER_SETTINGS_VALIDATION_CRITERIA);
+        // vg_r/vg_y/vg_b/ig_r/ig_y/ig_b (ADC calibration) and step_delay/transfer_time
+        // (star-delta timing) are optional on `dvc` — a Test Run's per-motor save typically
+        // only touches FLC and current-protection fields, never resending box-level ADC
+        // calibration. Carry the most recent row's real value forward instead of letting a
+        // missing field fall back to the column's raw DB default (0). Mirrors the same
+        // carry-forward already applied on the flat save path in insertStarterSettingHandler.
+        // ADC_ZERO_INVALID fields additionally treat an explicit 0 as "not a real reading"
+        // (not just missing/null) — a genuine calibration value is never exactly 0 (confirmed
+        // against starter_settings_limits, e.g. vg_r_min ~1.36, ig_r_min ~4.25), so a Test Run
+        // sending a literal 0 is a placeholder the same as if it had omitted the field.
+        // step_delay/transfer_time are NOT in that set — 0 is a legitimate real value there.
+        const CARRY_FORWARD_FIELDS = ["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b", "step_delay", "transfer_time"];
+        const ADC_ZERO_INVALID = new Set(["vg_r", "vg_y", "vg_b", "ig_r", "ig_y", "ig_b"]);
+        const lastFieldsRow = await db.query.starterSettings.findFirst({
+            where: eq(starterSettings.starter_id, starter.id),
+            orderBy: desc(starterSettings.id),
+            columns: Object.fromEntries(CARRY_FORWARD_FIELDS.map((f) => [f, true])),
+        });
+        for (const field of CARRY_FORWARD_FIELDS) {
+            const incoming = validatedDeviceSettings[field];
+            const isMissing = incoming == null || (ADC_ZERO_INVALID.has(field) && incoming === 0);
+            const fallback = lastFieldsRow?.[field];
+            const fallbackIsUsable = fallback != null && !(ADC_ZERO_INVALID.has(field) && fallback === 0);
+            if (isMissing && fallbackIsUsable) {
+                validatedDeviceSettings[field] = fallback;
+            }
+        }
         const starterMotors = await getMotorsForStarterControl(starter.id);
         const resolved = validatedBody.motors.map((entry) => {
             const motor = entry.motor_reference

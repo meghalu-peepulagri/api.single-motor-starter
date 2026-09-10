@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, sql } from "drizzle-orm";
 import db from "../database/configuration.js";
 import { motorSchedules } from "../database/schemas/motor-schedules.js";
 import { motors } from "../database/schemas/motors.js";
@@ -6,7 +6,7 @@ import { starterBoxes, type StarterBox } from "../database/schemas/starter-boxes
 
 type StarterForPublish = Pick<StarterBox, "id" | "mac_address" | "pcb_number" | "device_allocation">;
 import { logger } from "../utils/logger.js";
-import { findAndDeleteExpiredSchedules, findPendingSchedulesForStarter } from "../services/db/motor-schedules-services.js";
+import { findAndDeleteExpiredSchedules, findPendingSchedulesForStarter, MAX_DEVICE_CAPACITY, SLOT_FREE_STATUSES } from "../services/db/motor-schedules-services.js";
 import { buildDeviceSyncPayloads, dateToYYMMDD, todayAsYYMMDD } from "./motor-schedule-payload-helper.js";
 import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { publishingMap, schedulePartialAckMap } from "./ack-tracker-hepler.js";
@@ -22,11 +22,42 @@ async function waitForPublishLock(starterId: number, maxWaitMs = 30000, interval
 }
 
 /**
+ * Latest end date among this starter's (or, when given, this motor's) currently
+ * acknowledged and still-active schedules — the "current batch" the device already
+ * has. Scoped per motor when motorId is given, since each motor's schedule slot
+ * table is independent of any other motor on the same box.
+ */
+async function findCurrentBatchEndDate(starterId: number, motorId?: number): Promise<number | null> {
+  const todayNum = todayAsYYMMDD();
+  const conditions = [
+    eq(motorSchedules.starter_id, starterId),
+    eq(motorSchedules.acknowledgement, 1),
+    gte(motorSchedules.schedule_end_date, todayNum),
+    ne(motorSchedules.status, "ARCHIVED"),
+    notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
+  ];
+  if (motorId != null) {
+    conditions.push(eq(motorSchedules.motor_id, motorId));
+  }
+
+  const [row] = await db
+    .select({ maxEndDate: sql<number>`MAX(${motorSchedules.schedule_end_date})` })
+    .from(motorSchedules)
+    .where(and(...conditions));
+
+  return row?.maxEndDate ?? null;
+}
+
+/**
  * Push all unacknowledged PENDING schedules for ONE starter via MQTT.
- * device_schedule_id is assigned only to records that don't already have one, using an
- * ever-increasing counter scoped to EACH MOTOR (last_device_schedule_id on motors) —
- * every motor has its own independent slot table on the device, so a dual-motor box's
- * m1 and m2 schedules are numbered from their own counters, not a shared device one.
+ * device_schedule_id is assigned only to records that don't already have one, by
+ * picking the lowest free slot (1..MAX_DEVICE_CAPACITY) not currently used by a
+ * non-deleted, non-failed schedule for that motor — every motor has its own
+ * independent slot table on the device, so a dual-motor box's m1 and m2 schedules
+ * are numbered from their own slot pools, not a shared device one.
+ * Also withholds any schedule starting after the currently-acknowledged batch's
+ * last day — see findCurrentBatchEndDate — so the device isn't handed a further-out
+ * batch while it's still working through the one it already has.
  */
 export async function pushPendingSchedulesForStarter(
   starter: StarterForPublish,
@@ -54,14 +85,21 @@ export async function pushPendingSchedulesForStarter(
     twoDaysLater.setDate(twoDaysLater.getDate() + 2);
     const windowEnd = dateToYYMMDD(twoDaysLater);
 
+    // Don't hand the device a further-out schedule while it's still working through
+    // an already-acknowledged batch — a record starting on/before that batch's last
+    // day (e.g. a same-day addition) still goes out immediately; anything starting
+    // after it waits until the current batch's dates have fully passed.
+    const currentBatchEndDate = await findCurrentBatchEndDate(starter.id, motorId);
+
     const allRecords = await findPendingSchedulesForStarter(starter.id, motorId);
     const records = (allRecords ?? [])
       .filter(r => r.schedule_start_date != null && r.schedule_start_date <= windowEnd)
+      .filter(r => currentBatchEndDate == null || (r.schedule_start_date != null && r.schedule_start_date <= currentBatchEndDate))
       .filter(r => filterIds == null || filterIds.includes(r.id));
     if (records.length === 0) return { chunks: 0, acked: 0 };
 
-    // Step 3 — Assign device_schedule_id to records that don't have one yet, using an
-    // ever-increasing counter per MOTOR (never reuses freed IDs). Grouped by motor_id
+    // Step 3 — Assign device_schedule_id to records that don't have one yet, reusing
+    // the lowest free slot (1..MAX_DEVICE_CAPACITY) per MOTOR. Grouped by motor_id
     // first since each motor's slot table is independent of any other motor on the box.
     const unassigned = records.filter(r => r.device_schedule_id == null);
     if (unassigned.length > 0) {
@@ -76,25 +114,54 @@ export async function pushPendingSchedulesForStarter(
 
       await db.transaction(async (trx) => {
         for (const [motorRowId, motorUnassigned] of unassignedByMotor) {
-          const [motorRow] = await trx
-            .select({ last: motors.last_device_schedule_id })
-            .from(motors)
-            .where(eq(motors.id, motorRowId))
-            .for("update");
+          // Lock the motor row so concurrent assignments for this motor serialize.
+          await trx.select({ id: motors.id }).from(motors).where(eq(motors.id, motorRowId)).for("update");
 
-          let counter = motorRow?.last ?? 0;
+          // Slots 1..MAX_DEVICE_CAPACITY currently in use by this motor's schedules that
+          // haven't reached a slot-freeing status yet — reusing freed slots instead of
+          // an ever-increasing counter keeps device_schedule_id within the device's
+          // real 1-15 slot table.
+          const occupiedRows = await trx
+            .select({ deviceScheduleId: motorSchedules.device_schedule_id })
+            .from(motorSchedules)
+            .where(and(
+              eq(motorSchedules.motor_id, motorRowId),
+              ne(motorSchedules.status, "ARCHIVED"),
+              notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
+              isNotNull(motorSchedules.device_schedule_id),
+            ));
+          const occupied = new Set(occupiedRows.map(r => r.deviceScheduleId as number));
+
+          let highestAssigned = 0;
           for (const r of motorUnassigned) {
-            counter++;
-            (r as any).device_schedule_id = counter;
+            let slot: number | null = null;
+            for (let candidate = 1; candidate <= MAX_DEVICE_CAPACITY; candidate++) {
+              if (!occupied.has(candidate)) {
+                slot = candidate;
+                break;
+              }
+            }
+
+            if (slot === null) {
+              logger.warn(`[schedule-sync] motor=${motorRowId} has no free device slot (max ${MAX_DEVICE_CAPACITY}) for schedule id=${r.id} — leaving unassigned`);
+              continue;
+            }
+
+            occupied.add(slot);
+            highestAssigned = Math.max(highestAssigned, slot);
+            (r as any).device_schedule_id = slot;
             await trx
               .update(motorSchedules)
-              .set({ device_schedule_id: counter })
+              .set({ device_schedule_id: slot })
               .where(and(eq(motorSchedules.id, r.id), isNull(motorSchedules.device_schedule_id)));
           }
-          await trx
-            .update(motors)
-            .set({ last_device_schedule_id: counter })
-            .where(eq(motors.id, motorRowId));
+
+          if (highestAssigned > 0) {
+            await trx
+              .update(motors)
+              .set({ last_device_schedule_id: sql`GREATEST(${motors.last_device_schedule_id}, ${highestAssigned})` })
+              .where(eq(motors.id, motorRowId));
+          }
         }
       }).catch(err => logger.warn(`[schedule-sync] device_schedule_id assignment failed: ${err?.message}`));
     }
