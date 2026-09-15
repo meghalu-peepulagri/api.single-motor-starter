@@ -43,6 +43,7 @@ export const UNIQUE_INDEX_MESSAGES = {
     "unique_motor_alias_name_per_location": "Pump name already exist.",
     "validate_device_mobile_number": "Mobile number already exist.",
     "motor_schedule_unique_idx": "Schedule already exists with a pump same type & time",
+    "unique_starter_motor_index": "This motor slot is already in use on this device.",
 };
 export const FOREIGN_KEY_MESSAGES = {
     "locations_user_id_users_id_fk": "User not found.",

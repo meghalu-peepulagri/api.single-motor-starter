@@ -64,7 +64,18 @@ export function parseUniqueConstraintError(error) {
     if (error?.code !== "23505")
         throw error;
     const idx = error.constraint;
-    const message = idx && UNIQUE_INDEX_MESSAGES[idx] ? UNIQUE_INDEX_MESSAGES[idx] : "Duplicate value exist.";
+    if (idx && UNIQUE_INDEX_MESSAGES[idx]) {
+        throw new ConflictException(UNIQUE_INDEX_MESSAGES[idx]);
+    }
+    // Constraint name isn't in our map (e.g. it was created outside our migrations, or
+    // renamed on the live database) — fall back to reading Postgres' own detail string
+    // (e.g. "Key (alias_name, location_id)=(single, 52) already exists.") instead of a
+    // dead-end generic message, mirroring how handleForeignKeyViolationError already
+    // does this for 23503 errors below.
+    const [, field, value] = error.detail?.match(/\((.*?)\)=\((.*?)\)/) || [];
+    const message = field && value
+        ? `Duplicate value: ${field} '${value}' already exists.`
+        : "Duplicate value exist.";
     throw new ConflictException(message);
 }
 export function parseDatabaseError(error) {
