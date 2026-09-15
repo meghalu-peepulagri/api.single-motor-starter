@@ -1,7 +1,8 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
-import dbConfig from "../config/db-config.js";
+import fs from "fs";
+import { env } from "process";
 import * as alertsFaultsSchema from "./schemas/alerts-faults.js";
 import * as benchedStarterParametersSchema from "./schemas/benched-starter-parameters.js";
 import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
@@ -31,16 +32,16 @@ import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
 
 const dbClient = new Pool({
-  // host: env.DB_HOST,
-  // port: Number(env.DB_PORT),
-  // user: env.DB_USER,
-  // password: env.DB_PASSWORD,
-  // database: env.DB_NAME,
-  // ssl: {
-  //   rejectUnauthorized: true,
-  //   ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
-  // },
-  connectionString: dbConfig.connectionString,
+  host: env.DB_HOST,
+  port: Number(env.DB_PORT),
+  user: env.DB_USER,
+  password: env.DB_PASSWORD,
+  database: env.DB_NAME,
+  ssl: {
+    rejectUnauthorized: true,
+    ca: fs.readFileSync(`${process.cwd()}/ca.pem`).toString(),
+  },
+  // connectionString: dbConfig.connectionString,
 });
 
 const db = drizzle(dbClient, {
