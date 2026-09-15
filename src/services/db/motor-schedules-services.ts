@@ -519,7 +519,13 @@ export async function findPendingSchedulesForStarter(starterId: number, motorId?
   const baseConditions = [
     eq(motorSchedules.starter_id, starterId),
     eq(motorSchedules.acknowledgement, 0),
-    eq(motorSchedules.publish_attempts, 0),
+    // publish_attempts is NOT filtered here — it's set to 1 on every heartbeat-driven
+    // attempt (schedule-sync-helper.ts) BEFORE the publish outcome is known, purely so
+    // an admin can see "this one has been tried." Requiring it to stay 0 meant a single
+    // unacknowledged attempt (a dropped packet, a brief connectivity blip) permanently
+    // excluded the schedule from every future heartbeat, even though the retry log
+    // message claims "will retry next heartbeat." acknowledgement=0 alone already
+    // correctly scopes "still needs to be (re)sent."
     ne(motorSchedules.status, "ARCHIVED"),
     inArray(motorSchedules.schedule_status, ["PENDING"]),
     // Normal 3-day window OR yesterday's cross-midnight schedules still within execution window

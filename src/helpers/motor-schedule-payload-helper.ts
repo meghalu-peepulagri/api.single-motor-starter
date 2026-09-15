@@ -638,8 +638,6 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
         p.compact !== null && typeof p.compact.cid === "number" && p.compact.cid > 0);
     const compactItems = compactPairs.map(p => p.compact);
     const validRecords = compactPairs.map(p => p.record);
-    // sch_cnt = total valid schedules being sent to this device in this sync call
-    const totalCount = compactItems.length;
 
     if (compactItems.length === 0) continue;
 
@@ -667,18 +665,28 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
       // so a slot number alone is ambiguous; callers need to know which motor (m1/m2/...)
       // it belongs to before matching it against the device's per-motor ACK bitmask.
       const motorRefs = isSingleMotor ? recordSlice.map(() => "m1") : recordSlice.map((r: any) => motorReferenceKey(r));
-      const idx = firstSyncStarterIds.has(starterId) ? 1 : 2;
-      const isLast = (i + MAX_ITEMS_PER_CHUNK) >= compactItems.length ? 1 : 0;
+      // 1-based position of THIS chunk within the current sync round — chunk 1 of a
+      // 12-schedule round is idx:1, chunk 2 is idx:2, and so on, so the device (and
+      // anyone reading the payload) can tell which piece of a multi-chunk sync this is.
+      const idx = i / MAX_ITEMS_PER_CHUNK + 1;
+      // Every chunk in a sync round is marked last:1 — each payload is treated as
+      // complete/self-contained on its own, regardless of how many other chunks are
+      // being sent alongside it in the same round.
+      const isLast = 1;
 
-      // Single-motor: schedule list as a flat array under `m1`, with sch_cnt =
-      // schedule count.
+      // Single-motor: schedule list as a flat array under `m1`, with sch_cnt = the
+      // count of items actually IN THIS CHUNK (slice.length), not the overall total
+      // being synced across every chunk this round — a 12-schedule backlog split into
+      // two 6-item chunks must report sch_cnt:6 on each one, matching what's actually
+      // in that chunk's `m1` array, the same way multi-motor already counts per motor
+      // group below.
       // Multi-motor: bucket by each schedule's motor_reference so a motor with
       // reference m2 is published under `m2` (not always `m1`); each motor becomes
       // { sch_cnt: <its schedule count>, sch: [...] }. No top-level sch_cnt here —
       // each motor group already carries its own count.
       let D: Record<string, any>;
       if (isSingleMotor) {
-        D = { idx, last: isLast, sch_cnt: totalCount, plr, m1: slice };
+        D = { idx, last: isLast, sch_cnt: slice.length, plr, m1: slice };
       } else {
         const byMotor: Record<string, any[]> = {};
         slice.forEach((item, j) => {
