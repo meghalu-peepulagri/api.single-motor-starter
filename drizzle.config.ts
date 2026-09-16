@@ -1,5 +1,5 @@
-import { defineConfig } from "drizzle-kit";
 
+import { defineConfig } from "drizzle-kit";
 // // aiven
 // export default defineConfig({
 //   dialect: "postgresql",
