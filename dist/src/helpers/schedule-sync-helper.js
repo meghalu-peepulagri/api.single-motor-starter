@@ -19,39 +19,15 @@ async function waitForPublishLock(starterId, maxWaitMs = 30000, intervalMs = 500
     return true;
 }
 /**
- * Latest end date among this starter's (or, when given, this motor's) currently
- * acknowledged and still-active schedules — the "current batch" the device already
- * has. Scoped per motor when motorId is given, since each motor's schedule slot
- * table is independent of any other motor on the same box.
- */
-async function findCurrentBatchEndDate(starterId, motorId) {
-    const todayNum = todayAsYYMMDD();
-    const conditions = [
-        eq(motorSchedules.starter_id, starterId),
-        eq(motorSchedules.acknowledgement, 1),
-        gte(motorSchedules.schedule_end_date, todayNum),
-        ne(motorSchedules.status, "ARCHIVED"),
-        notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
-    ];
-    if (motorId != null) {
-        conditions.push(eq(motorSchedules.motor_id, motorId));
-    }
-    const [row] = await db
-        .select({ maxEndDate: sql `MAX(${motorSchedules.schedule_end_date})` })
-        .from(motorSchedules)
-        .where(and(...conditions));
-    return row?.maxEndDate ?? null;
-}
-/**
  * Push all unacknowledged PENDING schedules for ONE starter via MQTT.
  * device_schedule_id is assigned only to records that don't already have one, by
  * picking the lowest free slot (1..MAX_DEVICE_CAPACITY) not currently used by a
  * non-deleted, non-failed schedule for that motor — every motor has its own
  * independent slot table on the device, so a dual-motor box's m1 and m2 schedules
  * are numbered from their own slot pools, not a shared device one.
- * Also withholds any schedule starting after the currently-acknowledged batch's
- * last day — see findCurrentBatchEndDate — so the device isn't handed a further-out
- * batch while it's still working through the one it already has.
+ * Any PENDING schedule inside the 3-day sync window (today..today+2) is published
+ * immediately — it is not held back on account of a further-out already-acked
+ * schedule existing for the same device.
  */
 export async function pushPendingSchedulesForStarter(starter, motorId, filterIds, fromHeartbeat = false) {
     if (publishingMap.get(starter.id)) {
@@ -70,15 +46,9 @@ export async function pushPendingSchedulesForStarter(starter, motorId, filterIds
         const twoDaysLater = new Date();
         twoDaysLater.setDate(twoDaysLater.getDate() + 2);
         const windowEnd = dateToYYMMDD(twoDaysLater);
-        // Don't hand the device a further-out schedule while it's still working through
-        // an already-acknowledged batch — a record starting on/before that batch's last
-        // day (e.g. a same-day addition) still goes out immediately; anything starting
-        // after it waits until the current batch's dates have fully passed.
-        const currentBatchEndDate = await findCurrentBatchEndDate(starter.id, motorId);
         const allRecords = await findPendingSchedulesForStarter(starter.id, motorId);
         const records = (allRecords ?? [])
             .filter(r => r.schedule_start_date != null && r.schedule_start_date <= windowEnd)
-            .filter(r => currentBatchEndDate == null || (r.schedule_start_date != null && r.schedule_start_date <= currentBatchEndDate))
             .filter(r => filterIds == null || filterIds.includes(r.id));
         if (records.length === 0)
             return { chunks: 0, acked: 0 };
