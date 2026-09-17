@@ -139,10 +139,23 @@ export async function pushPendingSchedulesForStarter(
 
     const publishKey = starter.device_allocation === "false" ? starter.mac_address : starter.pcb_number;
 
-    const ackedRow = await db.query.motorSchedules.findFirst({
-      where: (ms, { and: a, eq: e, ne: n }) => a(e(ms.starter_id, starter.id), e(ms.acknowledgement, 1), n(ms.status, "ARCHIVED")),
-      columns: { id: true },
-    });
+    // "First sync" means the device currently has nothing scheduled on it — not
+    // "has this starter ever had a schedule." A schedule that already expired,
+    // completed, or got deleted no longer occupies the device, so it must not count
+    // toward isFirstSync (otherwise idx stays stuck at 2 forever after the very first
+    // schedule the starter ever had, even once the device is completely clear again).
+    const todayNum = todayAsYYMMDD();
+    const [ackedRow] = await db
+      .select({ id: motorSchedules.id })
+      .from(motorSchedules)
+      .where(and(
+        eq(motorSchedules.starter_id, starter.id),
+        eq(motorSchedules.acknowledgement, 1),
+        ne(motorSchedules.status, "ARCHIVED"),
+        notInArray(motorSchedules.schedule_status, [...SLOT_FREE_STATUSES]),
+        gte(motorSchedules.schedule_end_date, todayNum),
+      ))
+      .limit(1);
     const isFirstSync = !ackedRow;
     const firstSyncStarterIds = isFirstSync ? new Set([starter.id]) : new Set<number>()
     // Only V1.0 single-motor boxes get the legacy flat `m1: [...]` array. A V2.0 box —
