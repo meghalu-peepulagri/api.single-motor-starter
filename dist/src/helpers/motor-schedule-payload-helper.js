@@ -601,10 +601,14 @@ export function buildDeviceSyncPayloads(records, firstSyncStarterIds = new Set()
             // so a slot number alone is ambiguous; callers need to know which motor (m1/m2/...)
             // it belongs to before matching it against the device's per-motor ACK bitmask.
             const motorRefs = isSingleMotor ? recordSlice.map(() => "m1") : recordSlice.map((r) => motorReferenceKey(r));
-            // 1-based position of THIS chunk within the current sync round — chunk 1 of a
-            // 12-schedule round is idx:1, chunk 2 is idx:2, and so on, so the device (and
-            // anyone reading the payload) can tell which piece of a multi-chunk sync this is.
-            const idx = i / MAX_ITEMS_PER_CHUNK + 1;
+            // idx starts at 1 if this starter has never had a schedule acknowledged before
+            // (true first sync), or at 2 if it already has an acked schedule on the device
+            // (this round is publishing an additional/later schedule) — then chunk position
+            // is added on top, so chunk 1 of a 12-schedule first-sync round is idx:1, chunk 2
+            // is idx:2, while chunk 1 of a later round (device already has a schedule) is
+            // idx:2, chunk 2 of that same round is idx:3, and so on.
+            const isFirstSync = firstSyncStarterIds.has(starterId);
+            const idx = (isFirstSync ? 1 : 2) + i / MAX_ITEMS_PER_CHUNK;
             // Every chunk in a sync round is marked last:1 — each payload is treated as
             // complete/self-contained on its own, regardless of how many other chunks are
             // being sent alongside it in the same round.
