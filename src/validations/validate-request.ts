@@ -6,7 +6,7 @@ import { vAddField } from "./schema/field-validations.js";
 import { vAddLocation } from "./schema/location-validations.js";
 import { vAddMotorSchedule, vAddRepeatDays, vArrayOfMotorScheduleValidators, vUpdateMotorSchedule } from "./schema/motor-schedule-validators.js";
 import { vAddMotor, vAddMotorToStarter, vControlMotors, vControlMotorsMode, vUpdateMotor, vUpdateMotorTestRunStatus } from "./schema/motor-validations.js";
-import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation, vUpdateStarterDetails } from "./schema/starter-validations.js";
+import { vAddStarter, vAssignLocationToStarter, vAssignStarter, vAssignStarterWeb, vReplaceBox, vReplacePcb, vReplaceStarter, vUpdateDeployedStatus, vUpdateInstalledLocation, vUpdateStarterDetails } from "./schema/starter-validations.js";
 import { vSignInEmail, vSignInPhone, vSignUp, vVerifyOtp } from "./schema/user-validations.js";
 import { vDefaultSettingsStarterType, vUpdateDefaultSettings } from "./schema/default-settings.js";
 import { vUpdateDefaultSettingsLimits } from "./schema/default-settings-limits.js";
@@ -38,6 +38,8 @@ const schemaMap: Record<AppActivity, BaseSchema<any, any, any>> = {
   "add-repeat-days": vAddRepeatDays,
   "assign-starter": vAssignStarter,
   "replace-starter": vReplaceStarter,
+  "replace-box": vReplaceBox,
+  "replace-pcb": vReplacePcb,
   "assign-starter-web": vAssignStarterWeb,
   "update-deployed-status": vUpdateDeployedStatus,
   "assign-location-to-starter": vAssignLocationToStarter,

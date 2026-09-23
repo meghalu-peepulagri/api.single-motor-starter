@@ -56,7 +56,17 @@ export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, use
 export function starterFilters(query: any, user: any) {
   const filters: any[] = [];
 
-  filters.push(ne(starterBoxes.status, "ARCHIVED"));
+  // REPLACED devices are archived by construction (Box replacement sets both status:
+  // "ARCHIVED" and device_status: "REPLACED" together) — the blanket exclusion below would
+  // hide every one of them from a ?device_status=REPLACED request. Skip it there, and push
+  // the ARCHIVED requirement explicitly instead (defensive — REPLACED should never appear on
+  // a non-archived row, but this keeps the filter correct even if that ever changes).
+  const isReplacedFilter = query.device_status === "REPLACED";
+  if (isReplacedFilter) {
+    filters.push(eq(starterBoxes.status, "ARCHIVED"));
+  } else {
+    filters.push(ne(starterBoxes.status, "ARCHIVED"));
+  }
 
   if (query.search_string?.trim()) {
     const s = `%${query.search_string.trim()}%`;
@@ -120,7 +130,12 @@ export function starterFilters(query: any, user: any) {
 export function starterCountFilters(query: any) {
   const filters: any[] = [];
 
-  filters.push(ne(starterBoxes.status, "ARCHIVED"));
+  // Same REPLACED exception as starterFilters above.
+  if (query.device_status === "REPLACED") {
+    filters.push(eq(starterBoxes.status, "ARCHIVED"));
+  } else {
+    filters.push(ne(starterBoxes.status, "ARCHIVED"));
+  }
 
   if (query.search_string?.trim()) {
     const s = `%${query.search_string.trim()}%`;
@@ -141,7 +156,7 @@ export function starterCountFilters(query: any) {
   }
 
   if (query.device_status) {
-    filters.push(eq(starterBoxes.device_status, query.device_status as "ASSIGNED" | "DEPLOYED" | "READY" | "TEST"));
+    filters.push(eq(starterBoxes.device_status, query.device_status as "ASSIGNED" | "DEPLOYED" | "READY" | "TEST" | "REPLACED"));
   }
 
   if (query.power) {

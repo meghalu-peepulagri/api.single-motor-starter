@@ -222,6 +222,8 @@ export const MOTOR_CONTROL_STATE_INVALID = "Motor state must be 0 (OFF) or 1 (ON
 export const MOTOR_CONTROL_MOTORS_NOT_FOUND = "One or more requested motors were not found on this starter";
 export const MOTOR_CONTROL_COMMAND_SENT = "Motor control command sent";
 export const MOTOR_CONTROL_MULTIPLE_NOT_SUPPORTED = "This starter supports only a single motor — only one motor can be controlled at a time";
+export const ASSIGN_SINGLE_MOTOR_DEVICE_ONLY_ONE = "This device supports only a single motor. Send exactly one motor in the assignment.";
+export const ASSIGN_DUAL_MOTOR_DEVICE_REQUIRES_BOTH = "This device has two motors (M1 and M2). Both must be included in the assignment.";
 export const PAYLOAD_VERSION_DUAL_MOTOR_INVALID = "Dual motor device must use payload version 2.0";
 export const PAYLOAD_VERSION_MOTOR_CHANGE_NOT_ALLOWED = "Cannot change payload version and motor type together";
 export const DUAL_MOTOR_CONVERSION_REQUIRES_V2 = "Set payload version 2.0 before adding a second motor";
@@ -288,6 +290,31 @@ export const STARTER_NOT_DEPLOYED = "Device not deployed yet";
 export const DEVICE_NOT_ALLOCATED = "Device not allocated";
 export const STARTER_LIST_FETCHED = "Device fetches successfully";
 export const STARTER_REPLACED_SUCCESSFULLY = "Device location updated successfully";
+
+// Device replacement (Box / PCB)
+export const REPLACE_DEVICE_VALIDATION_CRITERIA = "Replace device details provided do not meet the required validation criteria";
+export const BOX_REPLACED_SUCCESSFULLY = "Box replaced successfully";
+export const PCB_REPLACED_SUCCESSFULLY = "PCB replaced successfully";
+export const REPLACE_DEVICE_ASSIGNED = "Assigned devices cannot be replaced. Unassign the device first.";
+export const REPLACE_PCB_INVALID = "Enter a valid PCB Number.";
+export const REPLACE_PCB_SAME_AS_CURRENT = "New PCB Number is the same as the current one.";
+export const REPLACE_PCB_DUPLICATE = "PCB Number is already used by another device.";
+export const REPLACE_STARTER_NUMBER_DUPLICATE = "Starter Number is already used by another device.";
+export const REPLACE_PCB_MOTOR_TYPE_MISMATCH = "This PCB Number was previously used on a device of a different motor type (single/dual) and cannot be used here.";
+export const REPLACE_SPARE_DEVICE_ASSIGNED = "This device is assigned to a user and cannot be used as a replacement.";
+export const REPLACE_REASON_REQUIRED = "Select a reason for the replacement.";
+export const REPLACE_REASON_NOTE_REQUIRED = "Enter a note for the replacement reason.";
+
+// Reason codes accepted by the replace endpoints, mapped to the wording shown in the device logs.
+export const REPLACEMENT_REASONS = {
+  PCB_FAULTY: { label: "PCB faulty or not communicating", short: "PCB faulty" },
+  BOX_DAMAGED: { label: "Box damaged (water, burn, physical)", short: "Box damaged" },
+  WRONG_PCB_FITTED: { label: "Wrong PCB fitted at production", short: "Wrong PCB fitted at production" },
+  SERVICE_VISIT_SWAP: { label: "Device swapped during service visit", short: "Device swapped during service visit" },
+  OTHER: { label: "Other", short: "Other" },
+} as const;
+export type ReplacementReason = keyof typeof REPLACEMENT_REASONS;
+export const REPLACEMENT_REASON_CODES = Object.keys(REPLACEMENT_REASONS) as [ReplacementReason, ...ReplacementReason[]];
 export const STARTER_RUNTIME_FETCHED = "Motor runtime fetched successfully";
 export const MOTOR_STATUS_HISTORY_FETCHED = "Motor status history fetched successfully";
 export const POWER_STATUS_HISTORY_FETCHED = "Power status history fetched successfully";
