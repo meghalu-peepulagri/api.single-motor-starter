@@ -7,8 +7,9 @@ import { motors } from "./motors.js";
 import { starterBoxParameters } from "./starter-parameters.js";
 import { users } from "./users.js";
 import { starterDispatch } from "./starter-dispatch.js";
-// REPLACED is set only by Box replacement (device-replacement-services.ts), never by a plain
-// delete — that's what lets a "Replaced" filter distinguish devices retired via replacement
+// REPLACED is set only by a replacement (device-replacement-services.ts) — the old device in a
+// Box replacement, the spare whose PCB was taken in a PCB replacement — never by a plain
+// delete. That's what lets a "Replaced" filter distinguish devices retired via replacement
 // from devices that were just deleted. It always comes with status: "ARCHIVED".
 export const deviceStatusEnum = pgEnum("device_status", ["ASSIGNED", "DEPLOYED", "READY", "TEST", "REPLACED"]);
 export const starterType = pgEnum("starter_type", ["SINGLE_STARTER", "MULTI_STARTER"]);

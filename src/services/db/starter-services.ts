@@ -6,7 +6,7 @@ import { benchedStarterParameters } from "../../database/schemas/benched-starter
 import { deviceRunTime } from "../../database/schemas/device-runtime.js";
 import { locations } from "../../database/schemas/locations.js";
 import { motors, type Motor, type MotorsTable } from "../../database/schemas/motors.js";
-import { starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
+import { deviceStatusEnum, starterBoxes, type StarterBox, type StarterBoxTable } from "../../database/schemas/starter-boxes.js";
 import { starterDispatch, type StarterDispatchTable } from "../../database/schemas/starter-dispatch.js";
 import { StarterDefaultSettingsLimits } from "../../database/schemas/starter-default-settings-limits.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
@@ -787,6 +787,7 @@ export async function getBasicStarterDetails(
   pageParams: { page: number; pageSize: number; offset: number },
   search?: string,
   motorType?: string,
+  deviceStatus?: string,
 ) {
   const trimmedSearch = search?.trim();
 
@@ -808,6 +809,13 @@ export async function getBasicStarterDetails(
     return undefined;
   })();
 
+  // ?device_status=DEPLOYED lets the Replace Device dialog list only spares that can
+  // actually be used as a replacement.
+  const status = deviceStatus?.trim().toUpperCase();
+  const deviceStatusFilter = status && (deviceStatusEnum.enumValues as readonly string[]).includes(status)
+    ? eq(starterBoxes.device_status, status as StarterBox["device_status"])
+    : undefined;
+
   const whereCondition = and(
     ne(starterBoxes.status, "ARCHIVED"),
     ...(trimmedSearch ? [or(
@@ -816,6 +824,7 @@ export async function getBasicStarterDetails(
       ilike(starterBoxes.mac_address, `%${trimmedSearch}%`),
     )] : []),
     ...(motorTypeFilter ? [motorTypeFilter] : []),
+    ...(deviceStatusFilter ? [deviceStatusFilter] : []),
   );
 
   const records = await db.query.starterBoxes.findMany({
@@ -826,6 +835,7 @@ export async function getBasicStarterDetails(
       pcb_number: true,
       mac_address: true,
       device_allocation: true,
+      device_status: true,
     },
     with: {
       motors: {
@@ -852,6 +862,9 @@ export async function getBasicStarterDetails(
   }
   if (motorTypeFilter) {
     totalFilters.push(motorTypeFilter as any);
+  }
+  if (deviceStatusFilter) {
+    totalFilters.push(deviceStatusFilter);
   }
 
   const totalRecords = await getRecordsCount(starterBoxes, totalFilters);

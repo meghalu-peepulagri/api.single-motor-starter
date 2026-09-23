@@ -250,7 +250,7 @@ export async function publishDeviceSettings(starter) {
         return publishMultiMotorDeviceSettings(starter);
     }
     try {
-        const ackSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"]);
+        const ackSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"], undefined, { columns: ["created_at"], values: ["desc"] });
         // If no settings found, throw or return
         if (!ackSettings) {
             console.warn(`No ACK settings found for starter ${starter.id}`);
@@ -306,7 +306,7 @@ export async function publishMultiMotorDeviceSettings(starter) {
     publishingMap.set(starter.id, true);
     let scheduled = false;
     try {
-        const ackSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"]);
+        const ackSettings = await getSingleRecordByMultipleColumnValues(starterSettings, ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"], undefined, { columns: ["created_at"], values: ["desc"] });
         // A single-motor V2.0 box has no multi_motor_config — its motor settings live in the
         // flat columns and are projected into m1 at publish time. Only a dual box actually
         // requires the JSON block.
