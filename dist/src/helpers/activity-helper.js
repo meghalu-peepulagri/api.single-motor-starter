@@ -1,4 +1,4 @@
-import { SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
+import { REPLACEMENT_REASONS, SETTINGS_FIELD_NAMES } from "../constants/app-constants.js";
 import { ActivityService } from "../services/db/activity-service.js";
 function meaningfulLastOffOnStateMessage(state, mode, lastOnDesc, lastOffDesc) {
     const modeLabel = (mode === "AUTO" || mode === "MANUAL" || mode === "SCHEDULE") ? ` in ${mode} mode` : "";
@@ -141,6 +141,50 @@ export function prepareDeviceUpdateLogs(data) {
         }));
     }
     return logs;
+}
+/**
+ * Helper to prepare the single log entry every Box / PCB replacement attempt writes.
+ *
+ * Action is DEVICE_<BOX|PCB>_REPLACEMENT_<SUCCESS|BLOCKED|FAILED>. The structured values
+ * (old/new numbers, reason, note, result, failure reason) live in old_data / new_data as
+ * JSON and are also rendered into `message` in the wording the device logs view shows.
+ * `deviceId` is the device the entry belongs to (the new device for a successful box
+ * replacement, the existing device otherwise).
+ */
+export function prepareDeviceReplacementLog(data) {
+    const { type, result, old, next } = data;
+    const reasonLabel = REPLACEMENT_REASONS[data.reason].short;
+    const reasonText = data.reasonNote ? (data.reason === "OTHER" ? `Other: ${data.reasonNote}` : `${reasonLabel} (${data.reasonNote})`) : reasonLabel;
+    const typeLabel = type === "BOX" ? "Box" : "PCB";
+    let message;
+    if (result === "SUCCESS") {
+        message = type === "BOX"
+            ? `Box replaced: ${old.starter_number} / ${old.pcb_number} → ${next.starter_number} / ${next.pcb_number}. Reason: ${reasonText}. By ${data.performedByName}.`
+            : `PCB replaced on ${old.starter_number}: ${old.pcb_number} → ${next.pcb_number}. Reason: ${reasonText}. By ${data.performedByName}.`;
+    }
+    else if (result === "BLOCKED") {
+        message = `${typeLabel} replacement blocked on ${old.starter_number}: ${data.failureReason}.`;
+    }
+    else {
+        message = `${typeLabel} replacement failed: ${data.failureReason}.`;
+    }
+    return ActivityService.prepareActivityLog({
+        performedBy: data.performedBy,
+        action: `DEVICE_${type}_REPLACEMENT_${result}`,
+        entityType: "STARTER",
+        entityId: data.deviceId,
+        deviceId: data.deviceId,
+        oldData: { ...old },
+        newData: {
+            replacement_type: type,
+            result,
+            ...next,
+            reason: data.reason,
+            reason_note: data.reasonNote ?? null,
+            failure_reason: result === "SUCCESS" ? null : (data.failureReason ?? null),
+        },
+        message,
+    });
 }
 /**
  * Helper to prepare granular activity logs for motor updates

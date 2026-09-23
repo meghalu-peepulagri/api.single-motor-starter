@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { requestTypesFor } from "../../helpers/packet-types-helper.js";
 import { payloadVersionOf } from "../../helpers/payload-version-helper.js";
 import db from "../../database/configuration.js";
@@ -636,9 +636,29 @@ export async function getDeviceWithDispatchDetails(search) {
         },
     });
 }
-export async function getBasicStarterDetails(pageParams, search) {
+export async function getBasicStarterDetails(pageParams, search, motorType) {
     const trimmedSearch = search?.trim();
-    const whereCondition = and(ne(starterBoxes.status, "ARCHIVED"), ...(trimmedSearch ? [or(ilike(starterBoxes.starter_number, `%${trimmedSearch}%`), ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`), ilike(starterBoxes.mac_address, `%${trimmedSearch}%`))] : []));
+    // Same rule as starterFilters (starter-helper.ts): filter by the ACTUAL number of
+    // (non-archived) motors, not the motor_support_type column, which can be out of sync
+    // with the real motor count. ?motor_type=single -> exactly 1 motor, ?motor_type=dual
+    // (or multiple/multi) -> 2 or more motors. Used by the Replace Device dialog so New
+    // Starter Number / New PCB Number only ever list devices of the same motor type as the
+    // device being replaced.
+    const motorTypeFilter = (() => {
+        const t = motorType?.trim().toLowerCase();
+        if (!t)
+            return undefined;
+        const motorCount = sql `(
+      SELECT COUNT(*) FROM ${motors} AS m
+      WHERE m.starter_id = ${starterBoxes.id} AND m.status <> 'ARCHIVED'
+    )`;
+        if (t === "single")
+            return sql `${motorCount} = 1`;
+        if (t === "dual" || t === "multiple" || t === "multi")
+            return sql `${motorCount} >= 2`;
+        return undefined;
+    })();
+    const whereCondition = and(ne(starterBoxes.status, "ARCHIVED"), ...(trimmedSearch ? [or(ilike(starterBoxes.starter_number, `%${trimmedSearch}%`), ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`), ilike(starterBoxes.mac_address, `%${trimmedSearch}%`))] : []), ...(motorTypeFilter ? [motorTypeFilter] : []));
     const records = await db.query.starterBoxes.findMany({
         where: whereCondition,
         columns: {
@@ -665,6 +685,9 @@ export async function getBasicStarterDetails(pageParams, search) {
     const totalFilters = [ne(starterBoxes.status, "ARCHIVED")];
     if (trimmedSearch) {
         totalFilters.push(or(ilike(starterBoxes.starter_number, `%${trimmedSearch}%`), ilike(starterBoxes.pcb_number, `%${trimmedSearch}%`), ilike(starterBoxes.mac_address, `%${trimmedSearch}%`)));
+    }
+    if (motorTypeFilter) {
+        totalFilters.push(motorTypeFilter);
     }
     const totalRecords = await getRecordsCount(starterBoxes, totalFilters);
     const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
