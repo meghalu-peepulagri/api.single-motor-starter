@@ -288,7 +288,8 @@ export async function publishDeviceSettings(starter: any) {
 
   try {
     const ackSettings = await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(starterSettings,
-      ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"]
+      ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"],
+      undefined, { columns: ["created_at"], values: ["desc"] },
     );
 
     // If no settings found, throw or return
@@ -359,7 +360,8 @@ export async function publishMultiMotorDeviceSettings(starter: any) {
   let scheduled = false;
   try {
     const ackSettings = await getSingleRecordByMultipleColumnValues<StarterSettingsTable>(starterSettings,
-      ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"]
+      ["starter_id", "acknowledgement", "is_new_configuration_saved"], ["=", "=", "="], [starter.id, "TRUE", "1"],
+      undefined, { columns: ["created_at"], values: ["desc"] },
     );
 
     // A single-motor V2.0 box has no multi_motor_config — its motor settings live in the

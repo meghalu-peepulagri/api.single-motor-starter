@@ -709,8 +709,8 @@ export class StarterHandlers {
 
       const validatedReqData = await validatedRequest<ValidatedReplaceBox>("replace-box", reqData, REPLACE_DEVICE_VALIDATION_CRITERIA);
 
-      // Eligibility (not ASSIGNED), uniqueness and the device log — including BLOCKED and
-      // FAILED attempts — are handled together inside the service.
+      // Eligibility (old device ASSIGNED, spare DEPLOYED), the assignment hand-over and the
+      // device log — including BLOCKED and FAILED attempts — are handled inside the service.
       const { device, replacedDeviceId } = await replaceBoxWithTransaction({
         starterId,
         newStarterNumber: validatedReqData.new_starter_number,
@@ -730,7 +730,7 @@ export class StarterHandlers {
     }
   }
 
-  // POST /starters/:id/replace-pcb — changes only the PCB Number on the same device record.
+  // POST /starters/:id/replace-pcb — fits a spare DEPLOYED device's PCB into this assigned device.
   replacePcbHandler = async (c: Context) => {
     try {
       const userPayload: User = c.get("user_payload");
@@ -1129,7 +1129,7 @@ export class StarterHandlers {
       const query = c.req.query();
       const paginationParams = getPaginationOffParams(query);
       const search = query.search_string ?? query.search ?? "";
-      const basicDetails = await getBasicStarterDetails(paginationParams, search, query.motor_type);
+      const basicDetails = await getBasicStarterDetails(paginationParams, search, query.motor_type, query.device_status);
       return sendResponse(c, 200, "Basic device details fetched successfully", basicDetails);
     } catch (error: any) {
       console.error("Error at get basic device details handler:", error);
