@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { requestTypesFor } from "../helpers/packet-types-helper.js";
 import type { Context } from "hono";
-import { DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, PCB_NUMBER_REQUIRED, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
+import { ASSIGN_DUAL_MOTOR_DEVICE_REQUIRES_BOTH, ASSIGN_SINGLE_MOTOR_DEVICE_ONLY_ONE, BOX_REPLACED_SUCCESSFULLY, PCB_REPLACED_SUCCESSFULLY, REPLACE_DEVICE_VALIDATION_CRITERIA, DEPLOYED_STATUS_UPDATED, DEVICE_ANALYTICS_FETCHED, DEVICE_NOT_ALLOCATED, DEVICE_NOT_FOUND, DEVICE_RESET_SUCCESSFULLY, FAULT_CLEARED_SUCCESSFULLY, LATEST_PCB_NUMBER_FETCHED_SUCCESSFULLY, LOCATION_ASSIGNED, MOTOR_NAME_ALREADY_LOCATION, MOTOR_NOT_FOUND, NO_ACTIVE_FAULT_FOUND, PCB_NUMBER_REQUIRED, REPLACE_STARTER_BOX_VALIDATION_CRITERIA, SETTINGS_SYNC_STATUS_UPDATED, SIM_RECHARGE_EXPIRY_NOTIFICATIONS_SENT, STARTER_ALREADY_ASSIGNED, STARTER_ASSIGNED_SUCCESSFULLY, STARTER_BOX_ADDED_SUCCESSFULLY, STARTER_BOX_DELETED_SUCCESSFULLY, STARTER_BOX_NOT_FOUND, STARTER_BOX_STATUS_UPDATED, STARTER_BOX_VALIDATION_CRITERIA, STARTER_CONNECTED_MOTORS_FETCHED, STARTER_DETAILS_UPDATED, STARTER_LIST_FETCHED, STARTER_NOT_DEPLOYED, STARTER_REMOVED_SUCCESS, STARTER_REPLACED_SUCCESSFULLY, STARTER_RUNTIME_FETCHED, TEMPERATURE_FETCHED, USER_NOT_FOUND } from "../constants/app-constants.js";
 import db from "../database/configuration.js";
 import { deviceTemperature, type DeviceTemperatureTable } from "../database/schemas/device-temperature.js";
 import { motors, type MotorsTable } from "../database/schemas/motors.js";
@@ -26,6 +26,7 @@ import { getConsecutiveAlertsPaginated, getConsecutiveFaultsPaginated, getConsec
 import { getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "../services/db/base-db-services.js";
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
+import { replaceBoxWithTransaction, replacePcbWithTransaction } from "../services/db/device-replacement-services.js";
 import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterMotorsByPcb, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
@@ -38,7 +39,7 @@ import { starterBoxParameters, type StarterBoxParametersTable } from "../databas
 import { randomSequenceNumber } from "../helpers/mqtt-helpers.js";
 import { generateDownloadUrl, generateUploadUrl } from "../services/s3/s3-service.js";
 import { sendResponse } from "../utils/send-response.js";
-import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, validatedUpdateDeployedStatus, ValidatedUpdateStarterDetails } from "../validations/schema/starter-validations.js";
+import type { validatedAddStarter, validatedAssignLocationToStarter, validatedAssignStarter, validatedAssignStarterWeb, validatedReplaceStarter, ValidatedReplaceBox, ValidatedReplacePcb, validatedUpdateDeployedStatus, ValidatedUpdateStarterDetails } from "../validations/schema/starter-validations.js";
 import { validatedRequest } from "../validations/validate-request.js";
 const paramsValidateException = new ParamsValidateException();
 
@@ -185,6 +186,20 @@ export class StarterHandlers {
       const motorCount = await getRecordsCount(motors, [eq(motors.starter_id, starterBox.id), ne(motors.status, "ARCHIVED")]);
       if (starterBox.device_status === "ASSIGNED" && motorCount > 0) throw new BadRequestException(STARTER_ALREADY_ASSIGNED);
       if (starterBox.device_status !== "DEPLOYED") throw new BadRequestException(STARTER_NOT_DEPLOYED);
+
+      // motorCount is this starter's ACTUAL live motor rows — the ground truth of single(1)
+      // vs dual(2), regardless of what motor_support_type says. Without this, a payload
+      // shaped for the wrong device type doesn't get rejected: assignStarterWithTransaction
+      // resolves each entry by (motor_id, starter_id) and silently `continue`s past any
+      // entry that doesn't match a real motor on this starter, so a single-motor device
+      // sent 2 motor entries would just quietly drop the extra one instead of erroring, and
+      // a dual device sent only 1 would leave the other motor unassigned with no complaint.
+      // motorCount === 0 (no motor rows yet) is left unchecked here — nothing to match against.
+      if (motorCount > 0 && validatedReqData.motors.length !== motorCount) {
+        throw new BadRequestException(
+          motorCount === 1 ? ASSIGN_SINGLE_MOTOR_DEVICE_ONLY_ONE : ASSIGN_DUAL_MOTOR_DEVICE_REQUIRES_BOTH
+        );
+      }
 
       await db.transaction(async (trx) => {
         const { updatedStarter, updatedMotors } = await assignStarterWithTransaction(validatedReqData, userPayload, starterBox, trx);
@@ -683,6 +698,67 @@ export class StarterHandlers {
   }
 
 
+  // POST /starters/:id/replace-box — retires the device and creates a fresh one in its place.
+  replaceBoxHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const starterId = +(c.req.param("id") ?? 0);
+      const reqData = await c.req.json();
+      paramsValidateException.validateId(starterId, "Device id");
+      paramsValidateException.emptyBodyValidation(reqData);
+
+      const validatedReqData = await validatedRequest<ValidatedReplaceBox>("replace-box", reqData, REPLACE_DEVICE_VALIDATION_CRITERIA);
+
+      // Eligibility (not ASSIGNED), uniqueness and the device log — including BLOCKED and
+      // FAILED attempts — are handled together inside the service.
+      const { device, replacedDeviceId } = await replaceBoxWithTransaction({
+        starterId,
+        newStarterNumber: validatedReqData.new_starter_number,
+        newPcbNumber: validatedReqData.new_pcb_number,
+        reason: validatedReqData.reason,
+        reasonNote: validatedReqData.reason_note,
+        performer: userPayload,
+      });
+
+      return sendResponse(c, 200, BOX_REPLACED_SUCCESSFULLY, { ...device, replaced_device_id: replacedDeviceId });
+    } catch (error: any) {
+      console.error("Error at replace box :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
+  // POST /starters/:id/replace-pcb — changes only the PCB Number on the same device record.
+  replacePcbHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const starterId = +(c.req.param("id") ?? 0);
+      const reqData = await c.req.json();
+      paramsValidateException.validateId(starterId, "Device id");
+      paramsValidateException.emptyBodyValidation(reqData);
+
+      const validatedReqData = await validatedRequest<ValidatedReplacePcb>("replace-pcb", reqData, REPLACE_DEVICE_VALIDATION_CRITERIA);
+
+      const device = await replacePcbWithTransaction({
+        starterId,
+        newPcbNumber: validatedReqData.new_pcb_number,
+        reason: validatedReqData.reason,
+        reasonNote: validatedReqData.reason_note,
+        performer: userPayload,
+      });
+
+      return sendResponse(c, 200, PCB_REPLACED_SUCCESSFULLY, device);
+    } catch (error: any) {
+      console.error("Error at replace pcb :", error);
+      handleJsonParseError(error);
+      parseDatabaseError(error);
+      handleForeignKeyViolationError(error);
+      throw error;
+    }
+  }
+
   markStarterStatusHandler = async (c: Context) => {
     try {
       const timeStamp = new Date(new Date().getTime() - 3 * 60 * 1000); // 3 minutes below
@@ -820,15 +896,28 @@ export class StarterHandlers {
       const query = c.req.query();
       const baseFilters = starterCountFilters(query);
 
-      const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount] = await Promise.all([
+      // Each breakdown count below applies its OWN device_status. Reusing baseFilters
+      // as-is would AND that on top of whatever device_status the caller already passed
+      // in the query (e.g. ?device_status=REPLACED), producing an impossible condition
+      // (device_status = 'REPLACED' AND device_status = 'DEPLOYED') and silently zeroing
+      // out every breakdown count whenever the query itself carried a device_status. Build
+      // each breakdown's filters fresh, scoped to its own status, so it still respects the
+      // OTHER query params (search, location, user, power) without inheriting a conflicting
+      // device_status. starterCountFilters already knows REPLACED implies status: ARCHIVED
+      // (see helper), so the replaced count below doesn't need that spelled out separately.
+      const filtersFor = (deviceStatus: "READY" | "TEST" | "DEPLOYED" | "ASSIGNED" | "REPLACED") =>
+        starterCountFilters({ ...query, device_status: deviceStatus });
+
+      const [totalDevices, activeCount, powerOnCount, powerOffCount, readyCount, testCount, deployedCount, assignedCount, replacedCount] = await Promise.all([
         getRecordsCount(starterBoxes, [...baseFilters]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.status, "ACTIVE")]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.power, 1)]),
         getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.power, 0)]),
-        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "READY")]),
-        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "TEST")]),
-        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "DEPLOYED")]),
-        getRecordsCount(starterBoxes, [...baseFilters, eq(starterBoxes.device_status, "ASSIGNED")]),
+        getRecordsCount(starterBoxes, filtersFor("READY")),
+        getRecordsCount(starterBoxes, filtersFor("TEST")),
+        getRecordsCount(starterBoxes, filtersFor("DEPLOYED")),
+        getRecordsCount(starterBoxes, filtersFor("ASSIGNED")),
+        getRecordsCount(starterBoxes, filtersFor("REPLACED")),
       ]);
 
       return sendResponse(c, 200, "Starter count fetched successfully", {
@@ -840,6 +929,7 @@ export class StarterHandlers {
         test_count: testCount,
         deployed_count: deployedCount,
         assigned_count: assignedCount,
+        replaced_count: replacedCount,
       });
 
     } catch (error: any) {
@@ -1039,7 +1129,7 @@ export class StarterHandlers {
       const query = c.req.query();
       const paginationParams = getPaginationOffParams(query);
       const search = query.search_string ?? query.search ?? "";
-      const basicDetails = await getBasicStarterDetails(paginationParams, search);
+      const basicDetails = await getBasicStarterDetails(paginationParams, search, query.motor_type);
       return sendResponse(c, 200, "Basic device details fetched successfully", basicDetails);
     } catch (error: any) {
       console.error("Error at get basic device details handler:", error);

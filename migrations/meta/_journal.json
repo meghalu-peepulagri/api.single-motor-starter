@@ -582,6 +582,13 @@
       "when": 1788592098610,
       "tag": "0082_smiling_carmella_unuscione",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1790142276709,
+      "tag": "0083_curved_sunspot",
+      "breakpoints": true
     }
   ]
 }

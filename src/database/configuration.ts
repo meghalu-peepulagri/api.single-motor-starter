@@ -1,8 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
-import fs from "fs";
-import { env } from "process";
 import * as alertsFaultsSchema from "./schemas/alerts-faults.js";
 import * as benchedStarterParametersSchema from "./schemas/benched-starter-parameters.js";
 import * as DeviceRunTimeSchema from "./schemas/device-runtime.js";
@@ -30,6 +28,9 @@ import * as starterSettingsSchema from "./schemas/starter-settings.js";
 import * as subUserPermissionsSchema from "./schemas/sub-user-permissions.js";
 import * as userActivityLogsSchema from "./schemas/user-activity-logs.js";
 import * as usersSchema from "./schemas/users.js";
+
+import fs from "fs";
+import env from "../env.js";
 
 const dbClient = new Pool({
   host: env.DB_HOST,
