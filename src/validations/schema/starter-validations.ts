@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import { DEPLOYED_STATUS, DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, MOTORS_ARRAY_REQUIRED, USER_ID_REQUIRED } from "../../constants/app-constants.js";
+import { DEPLOYED_STATUS, DEVICE_ID_REQUIRED, LOCATION_REQUIRED, MOTOR_ID_REQUIRED, MOTORS_ARRAY_REQUIRED, REPLACEMENT_REASON_CODES, type ReplacementReason, REPLACE_PCB_INVALID, REPLACE_REASON_NOTE_REQUIRED, REPLACE_REASON_REQUIRED, USER_ID_REQUIRED } from "../../constants/app-constants.js";
 import { hardwareVersion, hpValidator, macAddressValidator, motorNameValidator, pcbNumberValidator, pcbOrSerialNumberValidator, requiredNumber, simNumberValidator, starterBoxTitleValidator, starterNumberValidator } from "./common-validations.js";
 const deviceStatusValidator = v.picklist(DEPLOYED_STATUS, "Invalid device status");
 
@@ -90,6 +90,42 @@ export const vReplaceStarter = v.object({
   location_id: requiredNumber(LOCATION_REQUIRED),
 })
 
+// Device replacement (Box / PCB). Same PCB/starter rules as add-device, with the wording the
+// replace dialog expects.
+const replacePcbNumberValidator = v.pipe(
+  v.string(REPLACE_PCB_INVALID),
+  v.trim(),
+  v.nonEmpty(REPLACE_PCB_INVALID),
+  v.regex(/^[A-Z0-9]+$/, REPLACE_PCB_INVALID),
+  v.minLength(3, REPLACE_PCB_INVALID),
+);
+
+const replacementReasonFields = {
+  // A missing key would otherwise surface valibot's generic "Invalid key" text; the empty
+  // default is validated by the picklist, so an omitted reason gets the same message as a wrong one.
+  reason: v.optional(v.picklist(REPLACEMENT_REASON_CODES, REPLACE_REASON_REQUIRED), "" as ReplacementReason),
+  reason_note: v.nullish(v.pipe(v.string(), v.trim(), v.maxLength(500, "Reason note can have at most 500 characters"))),
+};
+
+// "Other" is the only reason that has no meaning on its own, so both schemas below require a
+// note for it (inline in each pipe so the check is typed against that schema's own output).
+export const vReplaceBox = v.pipe(
+  v.object({
+    new_starter_number: starterNumberValidator,
+    new_pcb_number: replacePcbNumberValidator,
+    ...replacementReasonFields,
+  }),
+  v.forward(v.check((input) => input.reason !== "OTHER" || !!input.reason_note, REPLACE_REASON_NOTE_REQUIRED), ["reason_note"]),
+);
+
+export const vReplacePcb = v.pipe(
+  v.object({
+    new_pcb_number: replacePcbNumberValidator,
+    ...replacementReasonFields,
+  }),
+  v.forward(v.check((input) => input.reason !== "OTHER" || !!input.reason_note, REPLACE_REASON_NOTE_REQUIRED), ["reason_note"]),
+);
+
 export const vAssignStarterWeb = v.object({
   starter_id: requiredNumber(DEVICE_ID_REQUIRED),
   user_id: requiredNumber(USER_ID_REQUIRED)
@@ -120,3 +156,5 @@ export type validatedAssignStarterWeb = v.InferOutput<typeof vAssignStarterWeb>;
 export type validatedUpdateDeployedStatus = v.InferOutput<typeof vUpdateDeployedStatus>;
 export type validatedAssignLocationToStarter = v.InferOutput<typeof vAssignLocationToStarter>;
 export type validatedUpdateInstalledLocation = v.InferOutput<typeof vUpdateInstalledLocation>;
+export type ValidatedReplaceBox = v.InferOutput<typeof vReplaceBox>;
+export type ValidatedReplacePcb = v.InferOutput<typeof vReplacePcb>;

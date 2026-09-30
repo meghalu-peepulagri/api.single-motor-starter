@@ -58,6 +58,8 @@ const onError = (err, c) => {
         status: statusCode,
         message: err.message || "Internal server error",
         errors: err.errData,
+        // Duplicate-number conflicts name the offending form field so the UI can highlight it.
+        ...(typeof err.errData?.field === "string" && { field: err.errData.field }),
     }, statusCode);
 };
 export function parseUniqueConstraintError(error) {

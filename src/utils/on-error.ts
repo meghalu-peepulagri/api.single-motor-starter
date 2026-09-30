@@ -73,6 +73,8 @@ const onError: ErrorHandler = (err: Error & { status?: number; errData?: unknown
       status: statusCode,
       message: err.message || "Internal server error",
       errors: err.errData,
+      // Duplicate-number conflicts name the offending form field so the UI can highlight it.
+      ...(typeof (err.errData as { field?: unknown } | undefined)?.field === "string" && { field: (err.errData as { field: string }).field }),
     },
     statusCode as ContentfulStatusCode,
   );

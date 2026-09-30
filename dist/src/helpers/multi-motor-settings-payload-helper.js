@@ -16,6 +16,18 @@ import { REQUEST_TYPES } from "./packet-types-helper.js";
  * live motor_index; a motor_id with no current match (e.g. motor since reassigned)
  * is silently skipped rather than sent with a stale index.
  */
+/**
+ * Drops multi_motor_config.motors[] blocks whose motor_id is no longer one of the box's
+ * live (non-ARCHIVED) motors. Reassigning a box archives its motors and creates new ones,
+ * but every settings save copies the stored block forward, so without this the archived
+ * motors' blocks ride along next to the new ones and the app shows M1, M1, M2, M2.
+ */
+export function pruneStaleMotorBlocks(config, liveMotorIds) {
+    if (!config || !Array.isArray(config.motors))
+        return config;
+    const live = new Set(liveMotorIds);
+    return { ...config, motors: config.motors.filter((block) => live.has(block.motor_id)) };
+}
 export function buildMultiMotorSettingsPayload(settings, motorIndexByMotorId, options = {}) {
     const config = settings.multi_motor_config;
     const dvc_c = {

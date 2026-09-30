@@ -1,5 +1,5 @@
 import { userActivityLogs, type NewUserActivityLog } from "../../database/schemas/user-activity-logs.js";
-import { prepareActionLog, prepareDeletionLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserDeletedLog, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
+import { prepareActionLog, prepareDeletionLog, prepareDeviceReplacementLog, prepareDeviceUpdateLogs, prepareMotorAckLogs, prepareMotorSyncLogs, prepareMotorUpdateLogs, prepareSettingsUpdateLogs, prepareUserDeletedLog, prepareUserUpdateLogs } from "../../helpers/activity-helper.js";
 import { buildActivityMessage } from "../../constants/activity-messages.js";
 import { logger } from "../../utils/logger.js";
 import { saveRecords } from "./base-db-services.js";
@@ -198,6 +198,17 @@ export class ActivityService {
       newData: data
     });
     await this.saveActivityLogs([log], trx);
+  }
+
+  /**
+   * Logs a Box / PCB replacement attempt (SUCCESS, BLOCKED or FAILED).
+   *
+   * Pass the transaction for SUCCESS so the change and its log commit together. BLOCKED and
+   * FAILED entries must be written OUTSIDE the failed transaction (no `trx`) — inside it they
+   * would be rolled back together with the change they describe.
+   */
+  static async writeDeviceReplacementLog(data: Parameters<typeof prepareDeviceReplacementLog>[0], trx?: Transaction) {
+    await this.saveActivityLogs([prepareDeviceReplacementLog(data)], trx);
   }
 
   /**
