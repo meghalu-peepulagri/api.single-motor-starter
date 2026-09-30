@@ -11,6 +11,7 @@ import { ActivityService } from "../services/db/activity-service.js";
 import { getRecordById, getRecordsConditionally, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, getTableColumnsWithDefaults, saveSingleRecord, updateRecordById } from "../services/db/base-db-services.js";
 import { getAcknowledgedStarterSettings, getStarterDefaultSettings, starterAcknowledgedSettings } from "../services/db/settings-services.js";
 import { getMotorsForStarterControl } from "../services/db/motor-services.js";
+import { pruneStaleMotorBlocks } from "../helpers/multi-motor-settings-payload-helper.js";
 import { handleJsonParseError } from "../utils/on-error.js";
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
@@ -104,6 +105,11 @@ export class StarterDefaultSettingsHandlers {
                 motor_support_type: starterData.motor_support_type,
                 payload_version: starterData.payload_version,
             };
+            // Rows saved before stale blocks were pruned on write can still hold archived motors.
+            if (responseData.multi_motor_config) {
+                const liveMotors = await getMotorsForStarterControl(starterId);
+                responseData.multi_motor_config = pruneStaleMotorBlocks(responseData.multi_motor_config, liveMotors.map((m) => m.id));
+            }
             // Collapse each motor's latest starter_parameters row (fetched via the
             // motor-scoped relation, so a dual-motor box's two motors each get their
             // own reading) into a clean current-fault summary.
@@ -236,6 +242,12 @@ export class StarterDefaultSettingsHandlers {
                     motors: mergedMotors,
                 };
             }
+            // Both the stored block and the app's echoed-back block can still hold motors archived
+            // by a reassignment — keep only the box's live motors.
+            if (nextConfig) {
+                const liveMotors = await getMotorsForStarterControl(starter.id);
+                nextConfig = pruneStaleMotorBlocks(nextConfig, liveMotors.map((m) => m.id));
+            }
             const carriedConfig = nextConfig ? { multi_motor_config: nextConfig } : {};
             await db.transaction(async (trx) => {
                 await saveSingleRecord(starterSettings, { ...validatedBody, ...carriedConfig, starter_id: starter.id, created_by: user.id }, trx);
@@ -329,7 +341,9 @@ export class StarterDefaultSettingsHandlers {
             ?? { v_flt_en: 0, sd_time: 0, motors: [] };
         // Keep only keys the request actually sent, so a diff overlays without wiping the rest.
         const definedOnly = (obj) => Object.fromEntries(Object.entries(obj).filter(([, val]) => val !== undefined));
-        const mergedMotors = existingConfig.motors.map((m) => ({ ...m }));
+        // Blocks for motors archived by a reassignment are dropped, not carried forward.
+        const liveMotorIds = new Set(starterMotors.map((sm) => sm.id));
+        const mergedMotors = existingConfig.motors.filter((m) => liveMotorIds.has(m.motor_id)).map((m) => ({ ...m }));
         for (const { motor, entry } of resolvedMotors) {
             const changed = definedOnly({
                 flt_en: entry.flt_en, flc: entry.flc, f_dr: entry.f_dr, f_ol: entry.f_ol, f_lr: entry.f_lr,
@@ -438,6 +452,10 @@ export class StarterDefaultSettingsHandlers {
             }
             const columnsToFetchObj = columnsToFetch.reduce((obj, column) => { obj[column] = true; return obj; }, {});
             const response = await getAcknowledgedStarterSettings(starterId, columnsToFetchObj);
+            if (response?.multi_motor_config) {
+                const liveMotors = await getMotorsForStarterControl(starterId);
+                response.multi_motor_config = pruneStaleMotorBlocks(response.multi_motor_config, liveMotors.map((m) => m.id));
+            }
             // payload_version lives on starter_boxes, not on the settings row, so it is merged in
             // from the box already loaded above — that also keeps it present for a starter with
             // no acknowledged settings row yet, where `response` is undefined.
