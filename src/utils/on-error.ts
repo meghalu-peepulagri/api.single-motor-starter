@@ -95,10 +95,13 @@ export function parseUniqueConstraintError(error: Error & { code?: string; const
   // (e.g. "Key (alias_name, location_id)=(single, 52) already exists.") instead of a
   // dead-end generic message, mirroring how handleForeignKeyViolationError already
   // does this for 23503 errors below.
+  // Raw column expressions (e.g. "lower(name::text), location_id") mean nothing to a user,
+  // so only plain column names are echoed back.
   const [, field, value] = error.detail?.match(/\((.*?)\)=\((.*?)\)/) || [];
-  const message = field && value
-    ? `Duplicate value: ${field} '${value}' already exists.`
-    : "Duplicate value exist.";
+  const isPlainField = !!field && /^[a-z_]+(, [a-z_]+)*$/.test(field);
+  const message = isPlainField && value
+    ? `${field.replace(/_/g, " ")} '${value}' already exists.`
+    : "This value already exists. Please use a different value.";
   throw new ConflictException(message)
 }
 

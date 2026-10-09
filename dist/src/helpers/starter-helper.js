@@ -6,8 +6,30 @@ import { starterBoxes } from "../database/schemas/starter-boxes.js";
 // import { publishMultipleTimesInBackground } from "./settings-helpers.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
 import BadRequestException from "../exceptions/bad-request-exception.js";
-import { PAYLOAD_VERSION_DUAL_MOTOR_INVALID } from "../constants/app-constants.js";
+import { DEVICE_OFFLINE_THRESHOLD_MS, PAYLOAD_VERSION_DUAL_MOTOR_INVALID } from "../constants/app-constants.js";
 import { getStartersWithSimRechargeExpiry } from "../services/db/starter-services.js";
+// The ON/OFF, power and signal values read from starter_boxes/motors are only ever written
+// reactively — on an incoming MQTT packet, or by the periodic PATCH /starters/update-status
+// sweep (driven by an external cron). If that sweep's trigger misses a cycle (or stops
+// entirely), a device that has gone silent keeps showing its last known "online, motor ON"
+// state indefinitely, because nothing else ever re-evaluates it. This recomputes connectivity
+// live, from last_signal_received_at, at read time — so the API never reports a device as
+// online/running past DEVICE_OFFLINE_THRESHOLD_MS of silence, regardless of whether the sweep
+// ran. It does not touch the stored columns; the sweep still owns those for history/runtime
+// tracking purposes.
+export function withLiveConnectivity(starter) {
+    const lastSignalMs = starter.last_signal_received_at ? new Date(starter.last_signal_received_at).getTime() : NaN;
+    const is_online = !isNaN(lastSignalMs) && (Date.now() - lastSignalMs) <= DEVICE_OFFLINE_THRESHOLD_MS;
+    if (is_online)
+        return { ...starter, is_online };
+    return {
+        ...starter,
+        is_online,
+        power: 0,
+        signal_quality: 0,
+        motors: starter.motors?.map(motor => motor ? { ...motor, state: 0 } : motor) ?? starter.motors,
+    };
+}
 export function prepareStarterData(starterBoxPayload, userPayload, dispatchDetails, gatewayId) {
     const { motors: motorsInput, ...starterFields } = starterBoxPayload;
     // One row per motor from the "Motors" section (M1, M2...), each with its own motor_index.
