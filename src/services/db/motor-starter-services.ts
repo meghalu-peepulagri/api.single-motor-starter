@@ -4,6 +4,7 @@ import { locations } from "../../database/schemas/locations.js";
 import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
+import { withLiveMotorConnectivity } from "../../helpers/starter-helper.js";
 
 export async function getMotorWithStarterDetails(motorId: number) {
   if (!motorId) return null;
@@ -38,6 +39,7 @@ export async function getMotorWithStarterDetails(motorId: number) {
           mac_address: true,
           starter_number: true,
           signal_quality: true,
+          last_signal_received_at: true,
           power: true,
           network_type: true,
           device_allocation: true,
@@ -79,5 +81,5 @@ export async function getMotorWithStarterDetails(motorId: number) {
   // starterParameters comes back motor-scoped (see query above) but callers expect it nested
   // under starter, as it was when the query read the box-level relation.
   const { starterParameters, starter, ...rest } = motor as any;
-  return { ...rest, starter: starter ? { ...starter, starterParameters: starterParameters ?? [] } : starter };
+  return withLiveMotorConnectivity({ ...rest, starter: starter ? { ...starter, starterParameters: starterParameters ?? [] } : starter });
 }

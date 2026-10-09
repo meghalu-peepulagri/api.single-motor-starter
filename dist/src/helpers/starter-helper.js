@@ -30,6 +30,15 @@ export function withLiveConnectivity(starter) {
         motors: starter.motors?.map(motor => motor ? { ...motor, state: 0 } : motor) ?? starter.motors,
     };
 }
+// Motor-shaped variant for the /motors endpoints the mobile dashboard reads: the starter is
+// nested under motor.starter and the ON/OFF state lives on the motor itself, so apply the same
+// live check to the nested starter and force the motor OFF when its device is offline.
+export function withLiveMotorConnectivity(motor) {
+    if (!motor?.starter)
+        return motor;
+    const starter = withLiveConnectivity(motor.starter);
+    return starter.is_online ? { ...motor, starter } : { ...motor, starter, state: 0 };
+}
 export function prepareStarterData(starterBoxPayload, userPayload, dispatchDetails, gatewayId) {
     const { motors: motorsInput, ...starterFields } = starterBoxPayload;
     // One row per motor from the "Motors" section (M1, M2...), each with its own motor_index.

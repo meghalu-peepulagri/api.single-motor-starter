@@ -42,6 +42,20 @@ export function withLiveConnectivity<T extends {
   };
 }
 
+// Motor-shaped variant for the /motors endpoints the mobile dashboard reads: the starter is
+// nested under motor.starter and the ON/OFF state lives on the motor itself, so apply the same
+// live check to the nested starter and force the motor OFF when its device is offline.
+export function withLiveMotorConnectivity<T extends {
+  state?: number | null;
+  starter?: { last_signal_received_at?: Date | string | null;[key: string]: any } | null;
+  [key: string]: any;
+}>(motor: T): T {
+  if (!motor?.starter) return motor;
+
+  const starter = withLiveConnectivity(motor.starter);
+  return starter.is_online ? { ...motor, starter } : { ...motor, starter, state: 0 };
+}
+
 
 export function prepareStarterData(starterBoxPayload: starterBoxPayloadType, userPayload: User, dispatchDetails?: StarterDispatch | null, gatewayId?: number) {
 
