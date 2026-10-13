@@ -10,6 +10,7 @@ import { starterBoxParameters } from "../../database/schemas/starter-parameters.
 import { formatDuration, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
 import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
+import { withLiveMotorConnectivity } from "../../helpers/starter-helper.js";
 import { prepareOrderByQueryConditions, prepareWhereQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount } from "./base-db-services.js";
 import { writeDeviceStatusHistoryIfChanged } from "./status-history-services.js";
@@ -87,6 +88,7 @@ extraConditions = []) {
                     mac_address: true,
                     pcb_number: true,
                     signal_quality: true,
+                    last_signal_received_at: true,
                     power: true,
                     network_type: true,
                     starter_number: true,
@@ -125,7 +127,7 @@ extraConditions = []) {
     const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
     return {
         pagination_info: pagination,
-        records: motorsList,
+        records: motorsList.map(withLiveMotorConnectivity),
     };
 }
 /**

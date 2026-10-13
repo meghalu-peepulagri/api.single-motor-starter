@@ -16,7 +16,7 @@ import { users } from "../../database/schemas/users.js";
 import { formatDuration, getUTCFromDateAndToDate, parseDurationToSeconds } from "../../helpers/dns-helpers.js";
 import { buildAnalyticsFilter, formatAnalyticsData } from "../../helpers/motor-helper.js";
 import { getPaginationData } from "../../helpers/pagination-helper.js";
-import { prepareStarterData } from "../../helpers/starter-helper.js";
+import { prepareStarterData, withLiveConnectivity } from "../../helpers/starter-helper.js";
 import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-helper.js";
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
@@ -70,6 +70,12 @@ export async function assignStarterWithTransaction(payload, userPayload, starter
                 motorUpdate.hp = String(input.hp);
             if (input.motor_reference !== undefined && input.motor_reference !== null)
                 motorUpdate.motor_reference = input.motor_reference;
+            // Older dual-motor boxes were created with generic names ("Motor 1", "Motor 2"), so two
+            // such boxes at one location collide on the live unique_motor_per_location index
+            // (lower(name), location_id). Give them the per-device name new boxes already get.
+            if (/^motor \d+$/i.test(target.name ?? "")) {
+                motorUpdate.name = `Pump ${target.motor_index ?? 1} - ${starterBoxPayload.pcb_number}`;
+            }
             const updated = (await trx.update(motors).set(motorUpdate).where(eq(motors.id, target.id)).returning())[0];
             updatedMotors.push(updated);
         }
@@ -145,6 +151,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
             power: true,
             device_status: true,
             signal_quality: true,
+            last_signal_received_at: true,
             network_type: true,
             device_mobile_number: true,
             starter_type: true,
@@ -202,7 +209,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
     const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
     return {
         pagination_info: pagination,
-        records: starterList,
+        records: starterList.map(withLiveConnectivity),
     };
 }
 export async function paginatedStarterListForMobile(WhereQueryData, orderByQueryData, pageParams) {
@@ -221,6 +228,7 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
             starter_number: true,
             power: true,
             signal_quality: true,
+            last_signal_received_at: true,
             network_type: true,
             device_allocation: true,
             sim_recharge_expires_at: true,
@@ -264,7 +272,7 @@ export async function paginatedStarterListForMobile(WhereQueryData, orderByQuery
     const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
     return {
         pagination_info: pagination,
-        records: starterList,
+        records: starterList.map(withLiveConnectivity),
     };
 }
 export async function replaceStarterWithTransaction(motor, starter, locationId) {
@@ -380,7 +388,7 @@ export async function assignStarterWebWithTransaction(starterDetails, requestBod
     return await db.transaction(action);
 }
 export async function starterConnectedMotors(starterId) {
-    return await db.query.starterBoxes.findFirst({
+    const starter = await db.query.starterBoxes.findFirst({
         where: and(eq(starterBoxes.id, starterId), ne(starterBoxes.status, "ARCHIVED")),
         columns: {
             id: true,
@@ -389,6 +397,7 @@ export async function starterConnectedMotors(starterId) {
             pcb_number: true,
             starter_number: true,
             power: true,
+            last_signal_received_at: true,
             signal_quality: true,
             network_type: true,
             device_status: true,
@@ -466,6 +475,7 @@ export async function starterConnectedMotors(starterId) {
             },
         },
     });
+    return starter ? withLiveConnectivity(starter) : starter;
 }
 export async function getStarterByMac(mac) {
     return await db.query.starterBoxes.findFirst({

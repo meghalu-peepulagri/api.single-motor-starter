@@ -45,6 +45,8 @@ export const UNIQUE_INDEX_MESSAGES: Record<string, string> = {
   "validate_gateway_mac_address": "Gateway MAC address already exist.",
   "validate_gateway_pcb_number": "Gateway PCB Number already exist.",
   "unique_motor_alias_name_per_location": "Pump name already exist.",
+  // Legacy index on lower(name), location_id that still exists on the live database.
+  "unique_motor_per_location": "Pump name already exists in this location. Please use a different pump name.",
   "validate_device_mobile_number": "Mobile number already exist.",
   "motor_schedule_unique_idx": "Schedule already exists with a pump same type & time",
   "unique_starter_motor_index": "This motor slot is already in use on this device.",
@@ -485,6 +487,11 @@ export const SCHEDULE_REPUBLISHED = "Schedule republished to device successfully
 export const SCHEDULE_REPUBLISH_FAILED = "Failed to publish schedule to device — device may be offline";
 export const SCHEDULE_REPUBLISH_NOT_ALLOWED = "Republish not allowed for this schedule status";
 export const SCHEDULE_DEVICE_OFFLINE = "Device offline. Schedule will sync when online";
+
+// Matches the window markStarterStatusHandler sweeps on. Also used to recompute connectivity
+// live at read time (see withLiveConnectivity), so a stale power/signal/state never displays
+// as online just because the sweep's own cron trigger missed a cycle.
+export const DEVICE_OFFLINE_THRESHOLD_MS = 3 * 60 * 1000;
 
 export const All_USER_TYPES = ["OWNER", "MANAGER", "SUPERVISOR", "USER"];
 export const ALL_ADMIN_TYPES = ["ADMIN", "SUPER_ADMIN"];
