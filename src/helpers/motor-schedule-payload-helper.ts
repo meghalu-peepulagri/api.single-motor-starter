@@ -629,13 +629,18 @@ export function buildDeviceSyncPayloads(records: any[], firstSyncStarterIds: Set
   for (const [starterId, schedules] of grouped) {
     // Limit to first MAX_SCHEDULES_PER_DEVICE schedules per device, skip invalid
     const limited = schedules.slice(0, MAX_SCHEDULES_PER_DEVICE);
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const compactPairs = limited
       .map((r: any) => ({ record: r, compact: toCompactSchedule(r) }))
       // Drop records that produced no compact item OR have no device slot (cid).
       // The payload `id` field is the absolute device slot (1–15) and the ACK
       // bitmask references it, so a null cid would emit a meaningless slot.
+      // Also drop schedules whose window has already closed (ed_ep in the past) —
+      // the device never ACKs them, so they would stay PENDING and get re-published
+      // on every heartbeat for the rest of the day.
       .filter((p): p is { record: any; compact: Record<string, any> } =>
-        p.compact !== null && typeof p.compact.cid === "number" && p.compact.cid > 0);
+        p.compact !== null && typeof p.compact.cid === "number" && p.compact.cid > 0 &&
+        p.compact.ed_ep > nowEpochSeconds);
     const compactItems = compactPairs.map(p => p.compact);
     const validRecords = compactPairs.map(p => p.record);
 
