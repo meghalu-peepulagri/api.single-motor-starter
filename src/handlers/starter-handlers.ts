@@ -27,6 +27,9 @@ import { getRecordById, getRecordsConditionally, getRecordsCount, getSingleRecor
 import { gatewayConflicts } from "../services/db/gateway-services.js";
 import { getMotorRunTime, updateStarterStatusWithTransaction } from "../services/db/motor-services.js";
 import { replaceBoxWithTransaction, replacePcbWithTransaction } from "../services/db/device-replacement-services.js";
+import { getReadableMotor, getReadableStarter } from "../services/db/replaced-device-read-services.js";
+import { unassignStarterWithTransaction } from "../services/db/device-unassign-services.js";
+import { DEVICE_UNASSIGNED_SUCCESSFULLY } from "../constants/app-constants.js";
 import { addStarterWithTransaction, applyDeviceAllocation, assignStarterWebWithTransaction, assignStarterWithTransaction, findStarterByPcbOrStarterNumber, getBasicStarterDetails, getDeviceWithDispatchDetails, getStarterMotorsByPcb, getStarterAnalytics, getStarterRunTime, getUniqueStarterIdsWithInTime, paginatedStarterList, paginatedStarterListForMobile, replaceStarterWithTransaction, starterConnectedMotors } from "../services/db/starter-services.js";
 import type { OrderByQueryData, WhereQueryData } from "../types/db-types.js";
 import { parseOrderByQueryCondition } from "../utils/db-utils.js";
@@ -86,7 +89,7 @@ export class StarterHandlers {
       paramsValidateException.validateId(motorId, "Motor id");
 
       const { page, pageSize, offset } = getPaginationOffParams(query);
-      const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
+      const assignedAt = query.is_assigned === "true" ? await getReadableStarter(starterId) : null;
 
       const assignedAtDate = assignedAt?.assigned_at ?? null;
 
@@ -126,7 +129,7 @@ export class StarterHandlers {
         ? query.log_type.split(",").map((t: string) => t.trim().toLowerCase())
         : null;
       const { page, pageSize, offset } = getPaginationOffParams(query);
-      const assignedAt = query.is_assigned === "true" ? await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"], ["assigned_at"]) : null;
+      const assignedAt = query.is_assigned === "true" ? await getReadableStarter(starterId) : null;
       const assignedAtDate = assignedAt?.assigned_at ?? null;
 
       const [data, totalRecords, starterBox] = await Promise.all([
@@ -379,11 +382,11 @@ export class StarterHandlers {
       paramsValidateException.validateId(starterId, "Device id");
       if (motorId) paramsValidateException.validateId(motorId, "Motor id");
 
-      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      const starter = await getReadableStarter(starterId);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       if (motorId) {
-        const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+        const motor = await getReadableMotor(motorId);
         if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
       }
 
@@ -407,11 +410,11 @@ export class StarterHandlers {
 
       if (motorId) paramsValidateException.validateId(motorId, "Motor id");
 
-      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      const starter = await getReadableStarter(starterId);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       if (motorId) {
-        const motor = await getSingleRecordByMultipleColumnValues<MotorsTable>(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"]);
+        const motor = await getReadableMotor(motorId);
         if (!motor) throw new NotFoundException(MOTOR_NOT_FOUND);
       }
 
@@ -463,6 +466,21 @@ export class StarterHandlers {
     }
   }
 
+
+  /** Super Admin: take an ASSIGNED device away from its user and back to Deployable. */
+  unassignStarterHandler = async (c: Context) => {
+    try {
+      const userPayload: User = c.get("user_payload");
+      const starterId = +(c.req.param("id") ?? 0);
+      paramsValidateException.validateId(starterId, "Device id");
+
+      const device = await unassignStarterWithTransaction(starterId, userPayload);
+      return sendResponse(c, 200, DEVICE_UNASSIGNED_SUCCESSFULLY, { id: device.id, device_status: device.device_status });
+    } catch (error: any) {
+      console.error("Error at unassign starter :", error);
+      throw error;
+    }
+  }
 
   updateDeployStatusHandler = async (c: Context) => {
     try {
@@ -517,7 +535,7 @@ export class StarterHandlers {
     try {
       const starterId = +(c.req.param("id") ?? 0);
       paramsValidateException.validateId(starterId, "Device id");
-      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      const starter = await getReadableStarter(starterId);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
       const connectedMotors = await starterConnectedMotors(starterId) as any;
 
@@ -801,7 +819,7 @@ export class StarterHandlers {
 
       const { fromDateUTC, toDateUTC } = parseQueryDates(query);
 
-      const starter = await getSingleRecordByMultipleColumnValues<StarterBoxTable>(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+      const starter = await getReadableStarter(starterId);
       if (!starter) throw new NotFoundException(STARTER_BOX_NOT_FOUND);
 
       const where: WhereQueryData<DeviceTemperatureTable> = { columns: ["device_id"], relations: ["="], values: [starter.id] }
