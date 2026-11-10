@@ -832,8 +832,24 @@ export async function updateStarterStatusWithTransaction(starterIds: number[]) {
     };
   };
 
-  const result = await db.transaction(action);
-  return result;
+  // This job locks many starter/motor rows at once while live MQTT traffic updates the same
+  // rows, so Postgres can abort it with a deadlock or lock timeout. The whole transaction is
+  // rolled back in that case, so it is safe to simply run it again.
+  const RETRYABLE_CODES = ["40P01", "40001", "55P03"];
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const result = await db.transaction(action);
+      return result;
+    }
+    catch (error: any) {
+      const code = error?.cause?.code ?? error?.code;
+      if (!RETRYABLE_CODES.includes(code) || attempt >= MAX_ATTEMPTS)
+        throw error;
+      console.warn(`updateStarterStatusWithTransaction: retrying after ${code} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+      await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+    }
+  }
 }
 
 export async function getMotorBasedStarterDetails(motorId: number) {

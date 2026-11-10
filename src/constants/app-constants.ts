@@ -315,7 +315,7 @@ export const REPLACEMENT_REASONS = {
   PCB_FAULTY: { label: "PCB faulty or not communicating", short: "PCB faulty" },
   BOX_DAMAGED: { label: "Box damaged (water, burn, physical)", short: "Box damaged" },
   WRONG_PCB_FITTED: { label: "Wrong PCB fitted at production", short: "Wrong PCB fitted at production" },
-  SERVICE_VISIT_SWAP: { label: "Device swapped during service visit", short: "Device swapped during service visit" },
+  SERVICE_SWAP: { label: "Device swapped during service visit", short: "Device swapped during service visit" },
   OTHER: { label: "Other", short: "Other" },
 } as const;
 export type ReplacementReason = keyof typeof REPLACEMENT_REASONS;

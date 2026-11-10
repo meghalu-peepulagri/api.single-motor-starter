@@ -177,14 +177,27 @@ export const prepareStarterSettingsData = (dynamicPayload) => {
     };
 };
 export async function syncQuery(batchSize) {
-    return await db.transaction(async (trx) => {
-        await trx.execute(sql `
-      WITH records_to_move AS (
-          SELECT *,
-                 MAX(created_at) OVER (PARTITION BY starter_id, motor_id) - INTERVAL '1 hours' AS cutoff_time
-          FROM starter_parameters
-      )
-      INSERT INTO benched_starter_parameters (
+    // Delete and insert in one statement so both act on exactly the same rows. Separate
+    // INSERT ... LIMIT / DELETE ... LIMIT queries could pick different rows (no ORDER BY),
+    // leaving rows copied but not deleted, which then hit the pkey on the next batch.
+    // ON CONFLICT skips rows already benched by that earlier bug; they are still deleted.
+    const result = await db.execute(sql `
+      WITH moved AS (
+          DELETE FROM starter_parameters
+          WHERE id IN (
+              SELECT id
+              FROM (
+                  SELECT id, created_at,
+                         MAX(created_at) OVER (PARTITION BY starter_id, motor_id) - INTERVAL '1 hours' AS cutoff_time
+                  FROM starter_parameters
+              ) candidates
+              WHERE created_at < cutoff_time
+              LIMIT ${batchSize}
+          )
+          RETURNING *
+      ),
+      inserted AS (
+          INSERT INTO benched_starter_parameters (
              id, payload_version, packet_number,
              line_voltage_r, line_voltage_s, line_voltage_b, avg_voltage,
              current_r, current_s, current_b, avg_current,
@@ -199,8 +212,8 @@ export async function syncQuery(batchSize) {
              schedule_type, schedule_missed_minutes, schedule_failure_at, schedule_failure_reason, schedule_failure_code,
              schedule_status,
              created_at, updated_at
-      )
-      SELECT id, payload_version, packet_number,
+          )
+          SELECT id, payload_version, packet_number,
              line_voltage_r, line_voltage_s, line_voltage_b, avg_voltage,
              current_r, current_s, current_b, avg_current,
              power_present,
@@ -214,26 +227,12 @@ export async function syncQuery(batchSize) {
              schedule_type, schedule_missed_minutes, schedule_failure_at, schedule_failure_reason, schedule_failure_code,
              schedule_status,
              created_at, updated_at
-      FROM records_to_move
-      WHERE created_at < cutoff_time
-      LIMIT ${batchSize};
-    `);
-        const deleteResult = await trx.execute(sql `
-      WITH records_to_delete AS (
-          SELECT id, starter_id, motor_id, created_at,
-                 MAX(created_at) OVER (PARTITION BY starter_id, motor_id) - INTERVAL '1 hours' AS cutoff_time
-          FROM starter_parameters
+          FROM moved
+          ON CONFLICT (id) DO NOTHING
       )
-      DELETE FROM starter_parameters
-      WHERE id IN (
-          SELECT id
-          FROM records_to_delete
-          WHERE created_at < cutoff_time
-          LIMIT ${batchSize}
-      );
+      SELECT COUNT(*)::int AS count FROM moved;
     `);
-        return deleteResult.rowCount || 0;
-    });
+    return result.rows[0].count;
 }
 export async function publishDeviceSettings(starter) {
     // The board's payload_version decides the grammar — NOT starter_type, which describes

@@ -767,7 +767,7 @@ export class StarterHandlers {
       return sendResponse(c, 200, STARTER_BOX_STATUS_UPDATED);
     }
     catch (error: any) {
-      console.error("Error at mark starter inactive:", error.message);
+      console.error("Error at mark starter inactive:", error.message, error.cause);
       throw error;
     }
   };
