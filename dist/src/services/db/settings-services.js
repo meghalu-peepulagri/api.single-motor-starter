@@ -17,6 +17,7 @@ import { sendMultiMotorSettingsCommand } from "../../helpers/multi-motor-setting
 import { getMotorsForStarterControl } from "./motor-services.js";
 import { publishingMap } from "../../helpers/ack-tracker-hepler.js";
 import { isDualMotor, isV2Payload, payloadVersionOf } from "../../helpers/payload-version-helper.js";
+import { readableStarterCondition, visibleMotorCondition } from "./replaced-device-read-services.js";
 export async function getStarterDefaultSettings() {
     return await db.select().from(starterDefaultSettings).limit(1);
 }
@@ -26,7 +27,7 @@ export async function starterAcknowledgedSettings(starterId, filter) {
         orderBy: desc(starterSettings.created_at),
         with: {
             starter: {
-                where: ne(starterBoxes.status, "ARCHIVED"),
+                where: readableStarterCondition(),
                 columns: {
                     id: true,
                     name: true,
@@ -39,7 +40,7 @@ export async function starterAcknowledgedSettings(starterId, filter) {
                 },
                 with: {
                     motors: {
-                        where: ne(motors.status, "ARCHIVED"),
+                        where: visibleMotorCondition(),
                         orderBy: asc(motors.motor_index),
                         columns: {
                             id: true,

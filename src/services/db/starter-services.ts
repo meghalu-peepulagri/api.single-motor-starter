@@ -502,6 +502,8 @@ export async function starterConnectedMotors(starterId: number) {
       device_installed_location: true,
       warranty_expiry_date: true,
       last_device_schedule_id: true,
+      // A replacement stamps updated_at; the Admin Panel uses it as the replaced date.
+      updated_at: true,
     },
     with: {
       gateway: {
