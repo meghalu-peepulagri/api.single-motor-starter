@@ -1,6 +1,6 @@
 import factory from "../factory.js";
 import { StarterHandlers } from "../handlers/starter-handlers.js";
-import { isSuperAdminOrAdmin } from "../middlewares/guards/guardUser.js";
+import { isSuperAdmin, isSuperAdminOrAdmin } from "../middlewares/guards/guardUser.js";
 import { isAuthorized } from "../middlewares/isAuthorized.js";
 
 const starterHandlers = new StarterHandlers();
@@ -33,6 +33,7 @@ starterRoutes.get("/:starter_id/motors/:motor_id/alerts-faults", isAuthorized, s
 starterRoutes.get("/:starter_id/motors/:motor_id/logs", isAuthorized, starterHandlers.getUnifiedLogsHandler);
 starterRoutes.patch("/:starter_id/motors/:motor_id/fault-clear", isAuthorized, starterHandlers.faultClearedHandler);
 starterRoutes.patch("/:id/deploy-status", isAuthorized, starterHandlers.updateDeployStatusHandler);
+starterRoutes.patch("/:id/unassign", isAuthorized, isSuperAdmin, starterHandlers.unassignStarterHandler);
 starterRoutes.patch("/:id/details", isAuthorized, starterHandlers.updateStarterDetailsHandler);
 starterRoutes.patch("/:id/allocation", isAuthorized, starterHandlers.updateDeviceAllocationHandler);
 starterRoutes.patch("/:id/settings-sync", isAuthorized, starterHandlers.updateSettingsSyncStatusHandler);
