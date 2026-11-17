@@ -23,6 +23,7 @@ import { handleForeignKeyViolationError, handleJsonParseError, parseDatabaseErro
 import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { ActivityService } from "../services/db/activity-service.js";
+import { getReadableMotor } from "../services/db/replaced-device-read-services.js";
 import { prepareMotorStateControlNotificationData, prepareMotorModeControlNotificationData } from "../helpers/motor-helper.js";
 import { sendUserNotification } from "../services/fcm/fcm-service.js";
 const paramsValidateException = new ParamsValidateException();
@@ -309,7 +310,8 @@ export class MotorHandlers {
                 const extraColumns = query.columns.split(",");
                 motorColumns = getTableColumnsWithDefaults(motors, defaultColumns, extraColumns);
             }
-            const motor = await getSingleRecordByMultipleColumnValues(motors, ["id", "status"], ["=", "!="], [motorId, "ARCHIVED"], [...motorColumns]);
+            // Also serves a replaced device's retired motors, read-only.
+            const motor = await getReadableMotor(motorId);
             if (!motor)
                 throw new NotFoundException(MOTOR_NOT_FOUND);
             const motorWithStarterDetails = await getMotorWithStarterDetails(motor.id);

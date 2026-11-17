@@ -5,11 +5,12 @@ import { motors } from "../../database/schemas/motors.js";
 import { starterBoxes } from "../../database/schemas/starter-boxes.js";
 import { starterBoxParameters } from "../../database/schemas/starter-parameters.js";
 import { withLiveMotorConnectivity } from "../../helpers/starter-helper.js";
+import { isReadOnlyDevice, readableStarterCondition, visibleMotorCondition } from "./replaced-device-read-services.js";
 export async function getMotorWithStarterDetails(motorId) {
     if (!motorId)
         return null;
     const motor = await db.query.motors.findFirst({
-        where: and(eq(motors.id, motorId), ne(motors.status, 'ARCHIVED')),
+        where: and(eq(motors.id, motorId), visibleMotorCondition()),
         columns: {
             id: true,
             name: true,
@@ -29,11 +30,12 @@ export async function getMotorWithStarterDetails(motorId) {
                 },
             },
             starter: {
-                where: ne(starterBoxes.status, 'ARCHIVED'),
+                where: readableStarterCondition(),
                 columns: {
                     id: true,
                     name: true,
                     status: true,
+                    device_status: true,
                     pcb_number: true,
                     mac_address: true,
                     starter_number: true,
@@ -78,5 +80,9 @@ export async function getMotorWithStarterDetails(motorId) {
     // starterParameters comes back motor-scoped (see query above) but callers expect it nested
     // under starter, as it was when the query read the box-level relation.
     const { starterParameters, starter, ...rest } = motor;
-    return withLiveMotorConnectivity({ ...rest, starter: starter ? { ...starter, starterParameters: starterParameters ?? [] } : starter });
+    return withLiveMotorConnectivity({
+        ...rest,
+        is_read_only: isReadOnlyDevice(starter),
+        starter: starter ? { ...starter, starterParameters: starterParameters ?? [] } : starter,
+    });
 }

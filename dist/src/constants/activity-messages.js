@@ -19,6 +19,12 @@ export function buildActivityMessage(action, oldData, newData, entityId) {
             const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
             return pcb ? `Starter '${pcb}' removed from account` : "Starter removed from account";
         }
+        case "DEVICE_UNASSIGNED": {
+            const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
+            const userId = oldData?.user_id;
+            const from = userId ? ` from user #${userId}` : "";
+            return pcb ? `Device '${pcb}' unassigned${from} — back to Deployable` : `Device unassigned${from} — back to Deployable`;
+        }
         case "DEVICE_RESET_TRIGGERED": {
             const pcb = (newData?.pcb_number ?? oldData?.pcb_number);
             return pcb ? `Device '${pcb}' reset triggered` : (entityId ? `Device #${entityId} reset triggered` : "Device reset triggered");
