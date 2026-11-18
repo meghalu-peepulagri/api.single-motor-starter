@@ -38,4 +38,13 @@ const isSuperAdminOrAdmin = createMiddleware(async (c, next) => {
         throw new ForbiddenException(FORBIDDEN);
     }
 });
-export { isAdmin, isUser, isUserOrAdmin, isSuperAdminOrAdmin };
+const isSuperAdmin = createMiddleware(async (c, next) => {
+    const userPayload = await getUserDetailsFromToken(c);
+    if (userPayload.user_type === "SUPER_ADMIN") {
+        await next();
+    }
+    else {
+        throw new ForbiddenException(FORBIDDEN);
+    }
+});
+export { isAdmin, isUser, isUserOrAdmin, isSuperAdmin, isSuperAdminOrAdmin };

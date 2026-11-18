@@ -21,6 +21,7 @@ import { splitRuntimeRecordsByDate } from "../../helpers/runtime-date-split-help
 import { prepareOrderByQueryConditions } from "../../utils/db-utils.js";
 import { getRecordsCount, getSingleRecordByAColumnValue, getSingleRecordByMultipleColumnValues, saveSingleRecord, updateRecordById, updateRecordByIdWithTrx } from "./base-db-services.js";
 import { ActivityService } from "./activity-service.js";
+import { isReadOnlyDevice, readableStarterCondition, visibleMotorCondition } from "./replaced-device-read-services.js";
 import { getStarterDefaultSettings } from "./settings-services.js";
 import { publishMultipleTimesInBackground } from "../../helpers/settings-helpers.js";
 import { randomSequenceNumber } from "../../helpers/mqtt-helpers.js";
@@ -169,7 +170,8 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
                 columns: { id: true, full_name: true },
             },
             motors: {
-                where: ne(motors.status, "ARCHIVED"),
+                // Live motors, plus a replaced device's retired motors (read-only history).
+                where: visibleMotorCondition(),
                 orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
@@ -209,7 +211,7 @@ export async function paginatedStarterList(WhereQueryData, orderByQueryData, pag
     const pagination = getPaginationData(pageParams.page, pageParams.pageSize, totalRecords);
     return {
         pagination_info: pagination,
-        records: starterList.map(withLiveConnectivity),
+        records: starterList.map((starter) => ({ ...withLiveConnectivity(starter), is_read_only: isReadOnlyDevice(starter) })),
     };
 }
 export async function paginatedStarterListForMobile(WhereQueryData, orderByQueryData, pageParams) {
@@ -378,18 +380,23 @@ export async function getStarterRunTime(starterId, fromDate, toDate, motorId, po
     };
 }
 export async function assignStarterWebWithTransaction(starterDetails, requestBody) {
-    const existingMotor = await getSingleRecordByAColumnValue(motors, "starter_id", "=", starterDetails.id);
     const assignedAt = new Date();
     const action = async (trx) => {
         const updatedStarter = await updateRecordById(starterBoxes, starterDetails.id, { user_id: requestBody.user_id, device_status: "ASSIGNED", assigned_at: assignedAt }, trx);
-        const updatedMotor = existingMotor ? await updateRecordById(motors, existingMotor.id, { created_by: requestBody.user_id, assigned_at: assignedAt }, trx) : null;
-        return { updatedStarter, updatedMotor };
+        // Every LIVE motor of the box (M1, or M1 + M2). Looking up "the" motor by starter_id
+        // alone could pick an archived one — e.g. the previous owner's motor after an
+        // unassign — and leave the live motors without an owner.
+        const updatedMotors = await trx.update(motors)
+            .set({ created_by: requestBody.user_id, assigned_at: assignedAt })
+            .where(and(eq(motors.starter_id, starterDetails.id), ne(motors.status, "ARCHIVED")))
+            .returning();
+        return { updatedStarter, updatedMotor: updatedMotors[0] ?? null, updatedMotors };
     };
     return await db.transaction(action);
 }
 export async function starterConnectedMotors(starterId) {
     const starter = await db.query.starterBoxes.findFirst({
-        where: and(eq(starterBoxes.id, starterId), ne(starterBoxes.status, "ARCHIVED")),
+        where: and(eq(starterBoxes.id, starterId), readableStarterCondition()),
         columns: {
             id: true,
             name: true,
@@ -420,6 +427,8 @@ export async function starterConnectedMotors(starterId) {
             device_installed_location: true,
             warranty_expiry_date: true,
             last_device_schedule_id: true,
+            // A replacement stamps updated_at; the Admin Panel uses it as the replaced date.
+            updated_at: true,
         },
         with: {
             gateway: {
@@ -432,7 +441,8 @@ export async function starterConnectedMotors(starterId) {
                 },
             },
             motors: {
-                where: ne(motors.status, "ARCHIVED"),
+                // Live motors, plus a replaced device's retired motors (read-only history).
+                where: visibleMotorCondition(),
                 orderBy: [asc(motors.motor_index)],
                 columns: {
                     id: true,
@@ -475,7 +485,7 @@ export async function starterConnectedMotors(starterId) {
             },
         },
     });
-    return starter ? withLiveConnectivity(starter) : starter;
+    return starter ? { ...withLiveConnectivity(starter), is_read_only: isReadOnlyDevice(starter) } : starter;
 }
 export async function getStarterByMac(mac) {
     return await db.query.starterBoxes.findFirst({

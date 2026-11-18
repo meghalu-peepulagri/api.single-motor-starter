@@ -17,6 +17,7 @@ import { sendResponse } from "../utils/send-response.js";
 import { validatedRequest } from "../validations/validate-request.js";
 import { logger } from "../utils/logger.js";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { getReadableStarter, getVisibleMotorsOfStarter, isReadOnlyDevice } from "../services/db/replaced-device-read-services.js";
 const paramsValidateException = new ParamsValidateException();
 export class StarterDefaultSettingsHandlers {
     getStarterDefaultSettingsHandler = async (c) => {
@@ -92,7 +93,7 @@ export class StarterDefaultSettingsHandlers {
     getAcknowledgedStarterSettingsHandler = async (c) => {
         try {
             const starterId = +(c.req.param("starter_id") ?? 0);
-            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            const starterData = await getReadableStarter(starterId);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             const starterSettings = await starterAcknowledgedSettings(starterId);
@@ -104,10 +105,11 @@ export class StarterDefaultSettingsHandlers {
                 motor_starter_type: starterData.motor_starter_type,
                 motor_support_type: starterData.motor_support_type,
                 payload_version: starterData.payload_version,
+                is_read_only: isReadOnlyDevice(starterData),
             };
             // Rows saved before stale blocks were pruned on write can still hold archived motors.
             if (responseData.multi_motor_config) {
-                const liveMotors = await getMotorsForStarterControl(starterId);
+                const liveMotors = await getVisibleMotorsOfStarter(starterId);
                 responseData.multi_motor_config = pruneStaleMotorBlocks(responseData.multi_motor_config, liveMotors.map((m) => m.id));
             }
             // Collapse each motor's latest starter_parameters row (fetched via the
@@ -374,7 +376,7 @@ export class StarterDefaultSettingsHandlers {
     getStarterSettingsLimitsHandler = async (c) => {
         try {
             const starterId = +(c.req.param("starter_id") ?? 0);
-            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            const starterData = await getReadableStarter(starterId);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             const limits = await getSingleRecordByAColumnValue(starterSettingsLimits, "starter_id", "=", starterData.id);
@@ -421,7 +423,7 @@ export class StarterDefaultSettingsHandlers {
     getStarterAckHistoryHandler = async (c) => {
         try {
             const starterId = +(c.req.param("starter_id") ?? 0);
-            const starterData = await getSingleRecordByMultipleColumnValues(starterBoxes, ["id", "status"], ["=", "!="], [starterId, "ARCHIVED"]);
+            const starterData = await getReadableStarter(starterId);
             if (!starterData)
                 throw new BadRequestException(DEVICE_NOT_FOUND);
             const whereQuery = {

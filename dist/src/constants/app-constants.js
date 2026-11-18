@@ -272,6 +272,8 @@ export const STARTER_REPLACED_SUCCESSFULLY = "Device location updated successful
 export const REPLACE_DEVICE_VALIDATION_CRITERIA = "Replace device details provided do not meet the required validation criteria";
 export const BOX_REPLACED_SUCCESSFULLY = "Box replaced successfully";
 export const PCB_REPLACED_SUCCESSFULLY = "PCB replaced successfully";
+export const DEVICE_UNASSIGNED_SUCCESSFULLY = "Device unassigned successfully. It is now Deployable and can be assigned to another user.";
+export const UNASSIGN_DEVICE_NOT_ASSIGNED = "Only a device that is assigned to a user can be unassigned.";
 export const REPLACE_DEVICE_NOT_ASSIGNED = "Only devices assigned to a user can be replaced. For an unassigned device, delete it and add the new device instead.";
 export const REPLACE_PCB_INVALID = "Enter a valid PCB Number.";
 export const REPLACE_PCB_SAME_AS_CURRENT = "New PCB Number is the same as the current one.";
@@ -289,7 +291,7 @@ export const REPLACEMENT_REASONS = {
     PCB_FAULTY: { label: "PCB faulty or not communicating", short: "PCB faulty" },
     BOX_DAMAGED: { label: "Box damaged (water, burn, physical)", short: "Box damaged" },
     WRONG_PCB_FITTED: { label: "Wrong PCB fitted at production", short: "Wrong PCB fitted at production" },
-    SERVICE_VISIT_SWAP: { label: "Device swapped during service visit", short: "Device swapped during service visit" },
+    SERVICE_SWAP: { label: "Device swapped during service visit", short: "Device swapped during service visit" },
     OTHER: { label: "Other", short: "Other" },
 };
 export const REPLACEMENT_REASON_CODES = Object.keys(REPLACEMENT_REASONS);
